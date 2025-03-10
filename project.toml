@@ -1,0 +1,10 @@
+name = "My Awesome Project"
+
+[viewport]
+clear_color = [0.1, 0.1, 0.1, 1.0]
+
+[shader]
+name = "PhongShader"
+type = "glsl"
+vertex_shader = "assets/vs.glsl"
+fragment_shader = "assets/frag.glsl"
