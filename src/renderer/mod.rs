@@ -8,6 +8,7 @@ use crate::renderer::egui_renderer::EguiRenderer;
 use anyhow::Context;
 use std::sync::Arc;
 use wgpu::util::DeviceExt;
+use winit::dpi::PhysicalSize;
 
 pub struct Renderer {
     window: Arc<winit::window::Window>,
@@ -31,10 +32,11 @@ impl Renderer {
     pub async fn new(
         window: winit::window::Window,
         project: &Project,
-        width: u32,
-        height: u32,
+        window_size: PhysicalSize<u32>,
     ) -> anyhow::Result<Self> {
         let window = Arc::new(window);
+        let width = window_size.width.max(1);
+        let height = window_size.height.max(1);
 
         let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor::default());
         let surface = instance
@@ -54,8 +56,8 @@ impl Renderer {
             .request_device(
                 &wgpu::DeviceDescriptor {
                     label: Some("Main Device"),
-                    required_features: Default::default(),
-                    required_limits: wgpu::Limits::default().using_resolution(adapter.limits()),
+                    required_features: wgpu::Features::empty(),
+                    required_limits: wgpu::Limits::downlevel_webgl2_defaults(),
                     memory_hints: Default::default(),
                 },
                 None,
@@ -147,12 +149,11 @@ impl Renderer {
         })
     }
 
-    pub fn resize(&mut self, new_size: winit::dpi::PhysicalSize<u32>) {
-        if new_size.width > 0 && new_size.height > 0 {
-            self.config.width = new_size.width;
-            self.config.height = new_size.height;
-            self.surface.configure(&self.device, &self.config);
-        }
+    pub fn resize(&mut self, new_size: PhysicalSize<u32>) {
+        self.config.width = new_size.width.max(1);
+        self.config.height = new_size.height.max(1);
+        self.surface.configure(&self.device, &self.config);
+        self.window.request_redraw();
     }
 
     pub fn window(&self) -> Arc<winit::window::Window> {

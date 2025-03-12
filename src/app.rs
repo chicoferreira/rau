@@ -1,7 +1,6 @@
 use crate::project::Project;
 use crate::renderer::Renderer;
 use anyhow::Context;
-use log::info;
 use winit::application::ApplicationHandler;
 use winit::event::WindowEvent;
 use winit::event_loop::ActiveEventLoop;
@@ -37,67 +36,60 @@ impl ApplicationHandler for App {
         let mut window_attributes = winit::window::WindowAttributes::default();
 
         #[allow(unused_assignments)]
-        let (mut width, mut height) = (0, 0);
-
         #[cfg(not(target_arch = "wasm32"))]
         {
             window_attributes = window_attributes.with_title("Rau");
         }
 
+        #[allow(unused_assignments)]
+        let mut canvas_size = (0, 0);
+
         #[cfg(target_arch = "wasm32")]
         {
             use wasm_bindgen::JsCast;
             use winit::platform::web::WindowAttributesExtWebSys;
-            let canvas = wgpu::web_sys::window()
+            let canvas = web_sys::window()
                 .unwrap()
                 .document()
                 .unwrap()
                 .get_element_by_id("canvas")
                 .unwrap()
-                .dyn_into::<wgpu::web_sys::HtmlCanvasElement>()
+                .dyn_into::<web_sys::HtmlCanvasElement>()
                 .unwrap();
 
-            width = canvas.width();
-            height = canvas.height();
-
+            canvas_size = (canvas.client_width(), canvas.client_height());
             window_attributes = window_attributes.with_canvas(Some(canvas));
         }
 
         let window = event_loop.create_window(window_attributes).unwrap();
         #[cfg(not(target_arch = "wasm32"))]
         {
-            env_logger::init();
-
-            let inner_size = window.inner_size();
-            width = inner_size.width;
-            height = inner_size.height;
-
+            canvas_size = (window.inner_size().width, window.inner_size().height);
             self.renderer = Some(
-                pollster::block_on(Renderer::new(window, &self.current_project, width, height))
-                    .expect("Failed to initialize renderer"),
+                pollster::block_on(Renderer::new(
+                    window,
+                    &self.current_project,
+                    canvas_size.into(),
+                ))
+                .expect("Failed to initialize renderer"),
             );
         }
         #[cfg(target_arch = "wasm32")]
         {
-            std::panic::set_hook(Box::new(console_error_panic_hook::hook));
-            console_log::init().expect("could not initialize logger");
-
             let (sender, receiver) = futures::channel::oneshot::channel();
             self.renderer_receiver = Some(receiver);
 
             let project = self.current_project.clone();
 
             wasm_bindgen_futures::spawn_local(async move {
-                let renderer = Renderer::new(window, &project, width, height)
+                let renderer = Renderer::new(window, &project, canvas_size.into())
                     .await
                     .expect("Failed to initialize renderer");
-
-                info!("Sending renderer to main thread");
 
                 if sender.send(renderer).is_err() {
                     log::error!("Failed to send renderer to main thread");
                 }
-            })
+            });
         }
     }
 
@@ -107,7 +99,6 @@ impl ApplicationHandler for App {
         _window_id: winit::window::WindowId,
         event: WindowEvent,
     ) {
-        info!("Received window event: {:?}", event);
         #[cfg(target_arch = "wasm32")]
         {
             let mut renderer_received = false;
@@ -147,6 +138,7 @@ impl ApplicationHandler for App {
             }
             WindowEvent::Resized(size) => {
                 renderer.resize(size);
+                renderer.window().request_redraw();
             }
             _ => {}
         }

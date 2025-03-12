@@ -29,12 +29,14 @@
 
         .main-canvas {
             display: block;
+            width: 100% !important;
+            height: 100% !important;
         }
     </style>
 </head>
 
 <body>
-<link data-trunk rel="rust" href="Cargo.toml" data-target-name="rau"/>
+<link data-trunk rel="rust"/>
 <link data-trunk rel="copy-file" href="project.toml"/>
 <link data-trunk rel="copy-file" href="frag.glsl"/>
 <link data-trunk rel="copy-file" href="vs.glsl"/>
@@ -42,15 +44,5 @@
 <div class="root">
     <canvas class="main-canvas" id="canvas"></canvas>
 </div>
-<script>
-  function resizeCanvas() {
-    const canvas = document.getElementById("canvas");
-    canvas.width = window.innerWidth;
-    canvas.height = window.innerHeight;
-  }
-
-  window.addEventListener("resize", resizeCanvas);
-  window.addEventListener("load", resizeCanvas);
-</script>
 </body>
 </html>
