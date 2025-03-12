@@ -6,13 +6,24 @@ edition = "2024"
 [dependencies]
 anyhow = "1.0"
 bytemuck = { version = "1.22.0", features = ["derive"] }
-env_logger = "0.11"
-pollster = "0.4"
 serde = { version = "1.0", features = ["derive"] }
 toml = "0.8.20"
 wgpu = { version = "24.0.1", features = ["glsl"] }
 winit = "0.30.9"
 log = "0.4"
 egui = "0.31.1"
-egui-winit = "0.31.1"
 egui-wgpu = "0.31.1"
+futures = "0.3.31"
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+env_logger = "0.11.6"
+egui-winit = "0.31.1"
+pollster = "0.4.0"
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+console_error_panic_hook = "0.1.7"
+console_log = "1.0.0"
+egui-winit = { version = "0.31.0", default-features = false }
+wasm-bindgen = "0.2.100"
+wasm-bindgen-futures = "0.4.50"
+web-sys = { version = "0.3.77", features = ["Request", "RequestInit", "RequestMode", "Response"] }

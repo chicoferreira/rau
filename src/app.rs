@@ -1,7 +1,7 @@
 use crate::project::Project;
 use crate::renderer::Renderer;
 use anyhow::Context;
-use pollster::FutureExt;
+use log::info;
 use winit::application::ApplicationHandler;
 use winit::event::WindowEvent;
 use winit::event_loop::ActiveEventLoop;
@@ -9,6 +9,8 @@ use winit::event_loop::ActiveEventLoop;
 pub struct App {
     current_project: Project,
     renderer: Option<Renderer>,
+    #[cfg(target_arch = "wasm32")]
+    renderer_receiver: Option<futures::channel::oneshot::Receiver<Renderer>>,
 }
 
 impl App {
@@ -16,6 +18,8 @@ impl App {
         App {
             current_project: project,
             renderer: None,
+            #[cfg(target_arch = "wasm32")]
+            renderer_receiver: None,
         }
     }
 
@@ -24,24 +28,76 @@ impl App {
             winit::event_loop::EventLoop::new().context("Failed to create event loop")?;
 
         event_loop.set_control_flow(winit::event_loop::ControlFlow::Poll);
-
         event_loop.run_app(self).context("Failed to run app")
     }
 }
 
 impl ApplicationHandler for App {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
-        let window_attributes = winit::window::WindowAttributes::default().with_title("Rau");
+        let mut window_attributes = winit::window::WindowAttributes::default();
+
+        #[allow(unused_assignments)]
+        let (mut width, mut height) = (0, 0);
+
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            window_attributes = window_attributes.with_title("Rau");
+        }
+
+        #[cfg(target_arch = "wasm32")]
+        {
+            use wasm_bindgen::JsCast;
+            use winit::platform::web::WindowAttributesExtWebSys;
+            let canvas = wgpu::web_sys::window()
+                .unwrap()
+                .document()
+                .unwrap()
+                .get_element_by_id("canvas")
+                .unwrap()
+                .dyn_into::<wgpu::web_sys::HtmlCanvasElement>()
+                .unwrap();
+
+            width = canvas.width();
+            height = canvas.height();
+
+            window_attributes = window_attributes.with_canvas(Some(canvas));
+        }
+
         let window = event_loop.create_window(window_attributes).unwrap();
-        let renderer = Renderer::new(window, &self.current_project).block_on();
-        match renderer {
-            Ok(renderer) => {
-                self.renderer = Some(renderer);
-            }
-            Err(e) => {
-                eprintln!("{:?}", e);
-                event_loop.exit();
-            }
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            env_logger::init();
+
+            let inner_size = window.inner_size();
+            width = inner_size.width;
+            height = inner_size.height;
+
+            self.renderer = Some(
+                pollster::block_on(Renderer::new(window, &self.current_project, width, height))
+                    .expect("Failed to initialize renderer"),
+            );
+        }
+        #[cfg(target_arch = "wasm32")]
+        {
+            std::panic::set_hook(Box::new(console_error_panic_hook::hook));
+            console_log::init().expect("could not initialize logger");
+
+            let (sender, receiver) = futures::channel::oneshot::channel();
+            self.renderer_receiver = Some(receiver);
+
+            let project = self.current_project.clone();
+
+            wasm_bindgen_futures::spawn_local(async move {
+                let renderer = Renderer::new(window, &project, width, height)
+                    .await
+                    .expect("Failed to initialize renderer");
+
+                info!("Sending renderer to main thread");
+
+                if sender.send(renderer).is_err() {
+                    log::error!("Failed to send renderer to main thread");
+                }
+            })
         }
     }
 
@@ -51,36 +107,49 @@ impl ApplicationHandler for App {
         _window_id: winit::window::WindowId,
         event: WindowEvent,
     ) {
+        info!("Received window event: {:?}", event);
+        #[cfg(target_arch = "wasm32")]
+        {
+            let mut renderer_received = false;
+            if let Some(receiver) = self.renderer_receiver.as_mut() {
+                if let Ok(Some(renderer)) = receiver.try_recv() {
+                    self.renderer = Some(renderer);
+                    renderer_received = true;
+                }
+            }
+            if renderer_received {
+                self.renderer_receiver = None;
+            }
+        }
+
+        let Some(renderer) = self.renderer.as_mut() else {
+            return;
+        };
+
         match event {
             WindowEvent::CloseRequested => {
                 event_loop.exit();
             }
             WindowEvent::RedrawRequested => {
-                if let Some(renderer) = &mut self.renderer {
-                    renderer.window().request_redraw();
+                renderer.window().request_redraw();
 
-                    match renderer.render() {
-                        Ok(_) => {}
-                        // Reconfigure the surface if it is lost or outdated
-                        Err(wgpu::SurfaceError::Lost | wgpu::SurfaceError::Outdated) => {
-                            renderer.resize(renderer.window().inner_size())
-                        }
-                        // The system is out of memory, we should probably quit
-                        Err(wgpu::SurfaceError::OutOfMemory) => event_loop.exit(),
-                        Err(wgpu::SurfaceError::Timeout) => log::warn!("Surface timeout"),
-                        Err(wgpu::SurfaceError::Other) => log::error!("Other surface error"),
+                match renderer.render() {
+                    Ok(_) => {}
+                    // Reconfigure the surface if it is lost or outdated
+                    Err(wgpu::SurfaceError::Lost | wgpu::SurfaceError::Outdated) => {
+                        // renderer.resize(renderer.window().inner_size())
                     }
+                    // The system is out of memory, we should probably quit
+                    Err(wgpu::SurfaceError::OutOfMemory) => event_loop.exit(),
+                    Err(wgpu::SurfaceError::Timeout) => log::warn!("Surface timeout"),
+                    Err(wgpu::SurfaceError::Other) => log::error!("Other surface error"),
                 }
             }
             WindowEvent::Resized(size) => {
-                if let Some(renderer) = &mut self.renderer {
-                    renderer.resize(size);
-                }
+                renderer.resize(size);
             }
             _ => {}
         }
-        if let Some(renderer) = &mut self.renderer {
-            renderer.handle_input(&event);
-        }
+        renderer.handle_input(&event);
     }
 }

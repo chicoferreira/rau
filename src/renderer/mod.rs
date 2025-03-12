@@ -28,9 +28,12 @@ pub struct RendererProject {
 }
 
 impl Renderer {
-    pub async fn new(window: winit::window::Window, project: &Project) -> anyhow::Result<Self> {
-        let size = window.inner_size();
-
+    pub async fn new(
+        window: winit::window::Window,
+        project: &Project,
+        width: u32,
+        height: u32,
+    ) -> anyhow::Result<Self> {
         let window = Arc::new(window);
 
         let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor::default());
@@ -52,7 +55,7 @@ impl Renderer {
                 &wgpu::DeviceDescriptor {
                     label: Some("Main Device"),
                     required_features: Default::default(),
-                    required_limits: Default::default(),
+                    required_limits: wgpu::Limits::default().using_resolution(adapter.limits()),
                     memory_hints: Default::default(),
                 },
                 None,
@@ -74,9 +77,9 @@ impl Renderer {
             wgpu::SurfaceConfiguration {
                 usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
                 format: surface_format,
-                width: size.width,
-                height: size.height,
-                present_mode: surface_capabilities.present_modes[0],
+                width,
+                height,
+                present_mode: wgpu::PresentMode::AutoNoVsync,
                 alpha_mode: surface_capabilities.alpha_modes[0],
                 view_formats: vec![],
                 desired_maximum_frame_latency: 2,
@@ -93,8 +96,9 @@ impl Renderer {
                     push_constant_ranges: &[],
                 });
 
-            let shader =
-                shader::Shader::load(&device, &project.shader).context("Failed to load shader")?;
+            let shader = shader::Shader::load(&device, &project.shader)
+                .await
+                .context("Failed to load shader")?;
 
             create_render_pipeline(
                 "Render Pipeline",
@@ -197,12 +201,7 @@ impl Renderer {
             pixels_per_point: self.window().scale_factor() as f32,
         };
 
-        EguiRenderer::draw(
-            self,
-            &mut encoder,
-            &view,
-            screen_descriptor,
-        );
+        EguiRenderer::draw(self, &mut encoder, &view, screen_descriptor);
 
         self.queue.submit(std::iter::once(encoder.finish()));
         output.present();

@@ -1,4 +1,4 @@
-use crate::renderer::{gui, Renderer};
+use crate::renderer::{Renderer, gui};
 
 pub struct EguiRenderer {
     pub context: egui::Context,
@@ -15,6 +15,12 @@ impl EguiRenderer {
         window: &winit::window::Window,
     ) -> Self {
         let context = egui::Context::default();
+
+        #[cfg(target_arch = "wasm32")]
+        {
+            context.set_pixels_per_point(window.scale_factor() as f32);
+        }
+
         let id = context.viewport_id();
         let state = egui_winit::State::new(context.clone(), id, &window, None, None, None);
 

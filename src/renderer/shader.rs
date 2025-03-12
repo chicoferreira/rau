@@ -1,7 +1,5 @@
-use crate::project;
 use crate::project::ShaderType;
-use anyhow::Context;
-use std::path::Path;
+use crate::{file, project};
 
 pub enum Shader {
     Wgsl(wgpu::ShaderModule),
@@ -9,18 +7,14 @@ pub enum Shader {
 }
 
 impl Shader {
-    pub fn load(device: &wgpu::Device, shader: &project::Shader) -> anyhow::Result<Self> {
-        fn load_file(file: impl AsRef<Path>) -> anyhow::Result<String> {
-            std::fs::read_to_string(file).context("Failed to load file")
-        }
-
+    pub async fn load(device: &wgpu::Device, shader: &project::Shader) -> anyhow::Result<Self> {
         match &shader.shader_type {
             ShaderType::Glsl {
                 vertex_shader,
                 fragment_shader,
             } => {
-                let vertex_shader = load_file(vertex_shader)?;
-                let fragment_shader = load_file(fragment_shader)?;
+                let vertex_shader = file::load_file(vertex_shader).await?;
+                let fragment_shader = file::load_file(fragment_shader).await?;
 
                 let vertex_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
                     label: Some("Vertex Shader"),
@@ -43,7 +37,7 @@ impl Shader {
                 Ok(Shader::Glsl(vertex_shader, fragment_shader))
             }
             ShaderType::Wgsl { shader } => {
-                let shader = load_file(shader)?;
+                let shader = file::load_file(shader).await?;
 
                 let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
                     label: Some("Shader"),
