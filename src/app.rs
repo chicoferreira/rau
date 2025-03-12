@@ -104,6 +104,7 @@ impl ApplicationHandler for App {
             let mut renderer_received = false;
             if let Some(receiver) = self.renderer_receiver.as_mut() {
                 if let Ok(Some(renderer)) = receiver.try_recv() {
+                    renderer.window().request_redraw();
                     self.renderer = Some(renderer);
                     renderer_received = true;
                 }
@@ -138,7 +139,6 @@ impl ApplicationHandler for App {
             }
             WindowEvent::Resized(size) => {
                 renderer.resize(size);
-                renderer.window().request_redraw();
             }
             _ => {}
         }
