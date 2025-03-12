@@ -11,30 +11,34 @@ permissions:
   contents: write
 
 jobs:
-  build-github-pages:
+  build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
-      - uses: actions/checkout@v2
-      - uses: actions-rs/toolchain@v1
+      - uses: actions/checkout@v3
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
         with:
-          profile: minimal
-          toolchain: stable
-          target: wasm32-unknown-unknown
-          override: true
-
+          targets: wasm32-unknown-unknown
       - name: Rust Cache
         uses: Swatinem/rust-cache@v1
-
       - name: Download and install Trunk binary
         uses: jetli/trunk-action@v0.5.0
         with:
           version: 'latest'
-
       - name: Build
         run: trunk build --release
-
-      - name: Deploy
-        uses: JamesIves/github-pages-deploy-action@v4
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
         with:
-          folder: dist
-          single-commit: true
+          path: dist
+  deploy:
+    runs-on: ubuntu-latest
+    needs: build
+    permissions:
+      pages: write
+      id-token: write
+    steps:
+      - name: Deploy to GitHub Pages
+        uses: actions/deploy-pages@v4
