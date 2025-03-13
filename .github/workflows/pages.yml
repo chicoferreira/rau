@@ -28,7 +28,7 @@ jobs:
         with:
           version: 'latest'
       - name: Build
-        run: trunk build --release
+        run: trunk build --release --features "wgpu/webgl"
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:

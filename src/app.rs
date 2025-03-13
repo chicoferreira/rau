@@ -103,8 +103,8 @@ impl ApplicationHandler for App {
         {
             let mut renderer_received = false;
             if let Some(receiver) = self.renderer_receiver.as_mut() {
-                if let Ok(Some(renderer)) = receiver.try_recv() {
-                    renderer.window().request_redraw();
+                if let Ok(Some(mut renderer)) = receiver.try_recv() {
+                    renderer.resize(renderer.window().inner_size());
                     self.renderer = Some(renderer);
                     renderer_received = true;
                 }

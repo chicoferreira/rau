@@ -38,7 +38,13 @@ impl Renderer {
         let width = window_size.width.max(1);
         let height = window_size.height.max(1);
 
-        let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor::default());
+        let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
+            #[cfg(target_arch = "wasm32")]
+            backends: wgpu::Backends::GL,
+            #[cfg(not(target_arch = "wasm32"))]
+            backends: wgpu::Backends::PRIMARY,
+            ..Default::default()
+        });
         let surface = instance
             .create_surface(window.clone())
             .context("Failed to create surface")?;
@@ -52,12 +58,20 @@ impl Renderer {
             .await
             .context("Failed to request adapter")?;
 
+        #[cfg(target_arch = "wasm32")]
+        let required_limits = wgpu::Limits {
+            max_texture_dimension_2d: 8192,
+            ..wgpu::Limits::downlevel_webgl2_defaults()
+        };
+        #[cfg(not(target_arch = "wasm32"))]
+        let required_limits = wgpu::Limits::default();
+
         let (device, queue) = adapter
             .request_device(
                 &wgpu::DeviceDescriptor {
                     label: Some("Main Device"),
                     required_features: wgpu::Features::empty(),
-                    required_limits: wgpu::Limits::downlevel_webgl2_defaults(),
+                    required_limits,
                     memory_hints: Default::default(),
                 },
                 None,
@@ -150,6 +164,9 @@ impl Renderer {
     }
 
     pub fn resize(&mut self, new_size: PhysicalSize<u32>) {
+        self.egui
+            .context
+            .set_zoom_factor(self.window.scale_factor() as f32);
         self.config.width = new_size.width.max(1);
         self.config.height = new_size.height.max(1);
         self.surface.configure(&self.device, &self.config);
