@@ -1,4 +1,4 @@
-use crate::renderer::{Renderer, gui};
+use crate::renderer::{gui, Renderer};
 
 pub struct EguiRenderer {
     pub context: egui::Context,
@@ -43,8 +43,8 @@ impl EguiRenderer {
         &mut self,
         window: &winit::window::Window,
         event: &winit::event::WindowEvent,
-    ) {
-        let _ = self.state.on_window_event(window, event);
+    ) -> bool {
+        self.state.on_window_event(window, event).consumed
     }
 
     pub fn draw(

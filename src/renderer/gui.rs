@@ -1,5 +1,6 @@
 use crate::renderer::Renderer;
 use egui::color_picker::Alpha;
+use enum2egui::GuiInspect;
 
 pub fn render_gui(renderer: &mut Renderer) {
     let context = &mut renderer.egui.context;
@@ -27,5 +28,7 @@ pub fn render_gui(renderer: &mut Renderer) {
                     };
                 };
             });
+            ui.heading("Camera");
+            renderer.renderer_project.camera.ui_mut(ui);
         });
 }

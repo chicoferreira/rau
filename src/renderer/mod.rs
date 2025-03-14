@@ -1,14 +1,22 @@
+mod camera;
 mod egui_renderer;
 mod gui;
 mod shader;
+mod uniform;
 mod vertex;
 
 use crate::project::Project;
 use crate::renderer::egui_renderer::EguiRenderer;
+use crate::renderer::uniform::GpuUniformAcessor;
 use anyhow::Context;
+use cgmath::{Deg, Point3, Rad};
+use log::warn;
 use std::sync::Arc;
 use wgpu::util::DeviceExt;
 use winit::dpi::PhysicalSize;
+use winit::event::WindowEvent;
+use winit::event_loop::ActiveEventLoop;
+use winit::window::CursorGrabMode;
 
 pub struct Renderer {
     window: Arc<winit::window::Window>,
@@ -18,6 +26,8 @@ pub struct Renderer {
     config: wgpu::SurfaceConfiguration,
     renderer_project: RendererProject,
     egui: EguiRenderer,
+    last_render_time: instant::Instant,
+    mouse_pressed: bool,
 }
 
 pub struct RendererProject {
@@ -26,6 +36,7 @@ pub struct RendererProject {
     index_buffer: wgpu::Buffer,
     num_indices: u32,
     viewport_clear_color: wgpu::Color,
+    camera: camera::Camera,
 }
 
 impl Renderer {
@@ -58,20 +69,19 @@ impl Renderer {
             .await
             .context("Failed to request adapter")?;
 
-        #[cfg(target_arch = "wasm32")]
-        let required_limits = wgpu::Limits {
-            max_texture_dimension_2d: 8192,
-            ..wgpu::Limits::downlevel_webgl2_defaults()
-        };
-        #[cfg(not(target_arch = "wasm32"))]
-        let required_limits = wgpu::Limits::default();
-
         let (device, queue) = adapter
             .request_device(
                 &wgpu::DeviceDescriptor {
                     label: Some("Main Device"),
                     required_features: wgpu::Features::empty(),
-                    required_limits,
+                    required_limits: if cfg!(target_arch = "wasm32") {
+                        wgpu::Limits {
+                            max_texture_dimension_2d: 8192,
+                            ..wgpu::Limits::downlevel_webgl2_defaults()
+                        }
+                    } else {
+                        wgpu::Limits::default()
+                    },
                     memory_hints: Default::default(),
                 },
                 None,
@@ -104,11 +114,40 @@ impl Renderer {
 
         surface.configure(&device, &config);
 
+        let camera_bind_group_layout =
+            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                entries: &[wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: wgpu::ShaderStages::VERTEX | wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                }],
+                label: Some("camera_bind_group_layout"),
+            });
+
+        let camera = camera::Camera::new(
+            Point3::new(0.0, 0.0, 5.0),
+            Deg(-90.0),
+            Rad(0.0),
+            config.width,
+            config.height,
+            Deg(45.0),
+            0.1,
+            100.0,
+            &device,
+            &camera_bind_group_layout,
+            0,
+        );
+
         let render_pipeline = {
             let render_pipeline_layout =
                 device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                     label: Some("Render Pipeline Layout"),
-                    bind_group_layouts: &[],
+                    bind_group_layouts: &[&camera_bind_group_layout],
                     push_constant_ranges: &[],
                 });
 
@@ -159,18 +198,18 @@ impl Renderer {
                     b: project.viewport.clear_color[2],
                     a: project.viewport.clear_color[3],
                 },
+                camera,
             },
+            last_render_time: instant::Instant::now(),
+            mouse_pressed: false,
         })
     }
 
-    pub fn resize(&mut self, new_size: PhysicalSize<u32>) {
-        self.egui
-            .context
-            .set_zoom_factor(self.window.scale_factor() as f32);
-        self.config.width = new_size.width.max(1);
-        self.config.height = new_size.height.max(1);
+    pub fn resize(&mut self, size: &PhysicalSize<u32>) {
+        self.renderer_project.camera.resize(size.width, size.height);
+        self.config.width = size.width.max(1);
+        self.config.height = size.height.max(1);
         self.surface.configure(&self.device, &self.config);
-        self.window.request_redraw();
     }
 
     pub fn window(&self) -> Arc<winit::window::Window> {
@@ -211,6 +250,7 @@ impl Renderer {
                 self.renderer_project.index_buffer.slice(..),
                 wgpu::IndexFormat::Uint16,
             );
+            render_pass.set_bind_group(0, self.renderer_project.camera.get_bind_group(), &[]);
             render_pass.draw_indexed(0..self.renderer_project.num_indices, 0, 0..1);
         }
 
@@ -227,8 +267,93 @@ impl Renderer {
         Ok(())
     }
 
-    pub fn handle_input(&mut self, event: &winit::event::WindowEvent) {
-        self.egui.handle_input(&self.window, event);
+    pub fn update_from_last_render_time(&mut self) {
+        let now = instant::Instant::now();
+        let dt = now - self.last_render_time;
+        self.last_render_time = now;
+
+        self.renderer_project.camera.update_camera(dt);
+        self.renderer_project.camera.upload_gpu_uniform(&self.queue);
+    }
+
+    pub fn handle_window_event(
+        &mut self,
+        event: &WindowEvent,
+        event_loop: &ActiveEventLoop,
+    ) -> bool {
+        if self.egui.handle_input(&self.window, event) {
+            return true;
+        }
+
+        match event {
+            WindowEvent::KeyboardInput {
+                event:
+                    winit::event::KeyEvent {
+                        physical_key: winit::keyboard::PhysicalKey::Code(key),
+                        state,
+                        ..
+                    },
+                ..
+            } => self.renderer_project.camera.process_keyboard(*key, *state),
+            WindowEvent::MouseInput { state, button, .. } => {
+                if *button == winit::event::MouseButton::Left {
+                    self.mouse_pressed = *state == winit::event::ElementState::Pressed;
+                    if self.mouse_pressed {
+                        self.window
+                            .set_cursor_grab(CursorGrabMode::Confined)
+                            .or_else(|_e| self.window.set_cursor_grab(CursorGrabMode::Locked))
+                            .unwrap();
+
+                        self.window.set_cursor_visible(false);
+                    } else {
+                        self.window.set_cursor_grab(CursorGrabMode::None).unwrap();
+                        self.window.set_cursor_visible(true);
+                    }
+                    return true;
+                }
+                false
+            }
+            WindowEvent::CloseRequested => {
+                event_loop.exit();
+                true
+            }
+            WindowEvent::RedrawRequested => {
+                self.window().request_redraw();
+                self.update_from_last_render_time();
+
+                match self.render() {
+                    Ok(_) => {}
+                    // Reconfigure the surface if it is lost or outdated
+                    Err(wgpu::SurfaceError::Lost | wgpu::SurfaceError::Outdated) => {
+                        warn!("Surface lost or outdated, reconfiguring");
+                        // self.resize(&self.window().inner_size())
+                    }
+                    // The system is out of memory, we should probably quit
+                    Err(wgpu::SurfaceError::OutOfMemory) => event_loop.exit(),
+                    Err(wgpu::SurfaceError::Timeout) => log::warn!("Surface timeout"),
+                    Err(wgpu::SurfaceError::Other) => log::error!("Other surface error"),
+                }
+                true
+            }
+            WindowEvent::Resized(size) => {
+                self.resize(size);
+                true
+            }
+            _ => false,
+        }
+    }
+
+    pub fn handle_device_event(&mut self, event: &winit::event::DeviceEvent) -> bool {
+        match event {
+            winit::event::DeviceEvent::MouseMotion { delta } => {
+                if self.mouse_pressed {
+                    self.renderer_project.camera.process_mouse(delta.0, delta.1);
+                    return true;
+                }
+                false
+            }
+            _ => false,
+        }
     }
 }
 

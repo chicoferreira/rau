@@ -14,6 +14,9 @@ log = "0.4"
 egui = "0.31.1"
 egui-wgpu = "0.31.1"
 futures = "0.3.31"
+cgmath = { version = "0.18.0", features = ["serde"] }
+enum2egui = "0.3.11"
+instant = "0.1"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 env_logger = "0.11.6"
@@ -26,4 +29,10 @@ console_log = "1.0.0"
 egui-winit = { version = "0.31.1", default-features = false }
 wasm-bindgen = "0.2.100"
 wasm-bindgen-futures = "0.4.50"
-web-sys = { version = "0.3.77", features = ["Request", "RequestInit", "RequestMode", "Response"] }
+web-sys = { version = "0.3.77", features = [
+    "Request",
+    "RequestInit",
+    "RequestMode",
+    "Response",
+] }
+instant = { version = "0.1", features = ["wasm-bindgen"] }

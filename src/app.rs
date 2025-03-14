@@ -2,7 +2,7 @@ use crate::project::Project;
 use crate::renderer::Renderer;
 use anyhow::Context;
 use winit::application::ApplicationHandler;
-use winit::event::WindowEvent;
+use winit::event::{DeviceEvent, DeviceId, WindowEvent};
 use winit::event_loop::ActiveEventLoop;
 
 pub struct App {
@@ -103,8 +103,8 @@ impl ApplicationHandler for App {
         {
             let mut renderer_received = false;
             if let Some(receiver) = self.renderer_receiver.as_mut() {
-                if let Ok(Some(mut renderer)) = receiver.try_recv() {
-                    renderer.resize(renderer.window().inner_size());
+                if let Ok(Some(renderer)) = receiver.try_recv() {
+                    renderer.window().request_redraw();
                     self.renderer = Some(renderer);
                     renderer_received = true;
                 }
@@ -118,30 +118,19 @@ impl ApplicationHandler for App {
             return;
         };
 
-        match event {
-            WindowEvent::CloseRequested => {
-                event_loop.exit();
-            }
-            WindowEvent::RedrawRequested => {
-                renderer.window().request_redraw();
+        renderer.handle_window_event(&event, event_loop);
+    }
 
-                match renderer.render() {
-                    Ok(_) => {}
-                    // Reconfigure the surface if it is lost or outdated
-                    Err(wgpu::SurfaceError::Lost | wgpu::SurfaceError::Outdated) => {
-                        // renderer.resize(renderer.window().inner_size())
-                    }
-                    // The system is out of memory, we should probably quit
-                    Err(wgpu::SurfaceError::OutOfMemory) => event_loop.exit(),
-                    Err(wgpu::SurfaceError::Timeout) => log::warn!("Surface timeout"),
-                    Err(wgpu::SurfaceError::Other) => log::error!("Other surface error"),
-                }
-            }
-            WindowEvent::Resized(size) => {
-                renderer.resize(size);
-            }
-            _ => {}
-        }
-        renderer.handle_input(&event);
+    fn device_event(
+        &mut self,
+        _event_loop: &ActiveEventLoop,
+        _device_id: DeviceId,
+        event: DeviceEvent,
+    ) {
+        let Some(renderer) = self.renderer.as_mut() else {
+            return;
+        };
+
+        renderer.handle_device_event(&event);
     }
 }
