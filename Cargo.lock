@@ -495,6 +495,27 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "96a6ac251f4a2aca6b3f91340350eab87ae57c3f127ffeb585e92bd336717991"
 
 [[package]]
+name = "default-from-serde"
+version = "0.1.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1c5155e51d19a68bb8bc3b1a1ec0d5aff5c24791343dc15fa051424316c267e7"
+dependencies = [
+ "derive-default-from-serde",
+ "serde",
+]
+
+[[package]]
+name = "derive-default-from-serde"
+version = "0.1.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d87f19b90ebc996d8100cabf45b0b177772844c8a911533f55239a430a964f06"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.100",
+]
+
+[[package]]
 name = "dispatch"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1879,6 +1900,7 @@ dependencies = [
  "cgmath",
  "console_error_panic_hook",
  "console_log",
+ "default-from-serde",
  "egui",
  "egui-wgpu",
  "egui-winit",
@@ -1889,6 +1911,7 @@ dependencies = [
  "log",
  "pollster",
  "serde",
+ "serde-inline-default",
  "toml",
  "wasm-bindgen",
  "wasm-bindgen-futures",
@@ -2022,6 +2045,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5f0e2c6ed6606019b4e29e69dbaba95b11854410e5347d525002456dbbb786b6"
 dependencies = [
  "serde_derive",
+]
+
+[[package]]
+name = "serde-inline-default"
+version = "0.2.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "59fb1bedd774187d304179493b0d3c41fbe97b04b14305363f68d2bdf5e47cb9"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.100",
 ]
 
 [[package]]

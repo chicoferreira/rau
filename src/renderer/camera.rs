@@ -1,5 +1,7 @@
+use crate::project;
 use crate::renderer::uniform::{GpuUniform, GpuUniformAcessor};
 use cgmath::{InnerSpace, Matrix4, Point3, Rad, Vector3, Zero};
+use egui::widgets::DragValue;
 use enum2egui::GuiInspect;
 use std::f32::consts::FRAC_PI_2;
 use std::time::Duration;
@@ -63,33 +65,28 @@ struct CameraInput {
 }
 
 impl Camera {
-    pub fn new<P: Into<Point3<f32>>, F: Into<Rad<f32>>, Y: Into<Rad<f32>>, W: Into<Rad<f32>>>(
-        position: P,
-        yaw: Y,
-        pitch: W,
+    pub fn from_project_camera(
+        camera: project::Camera,
         width: u32,
         height: u32,
-        fovy: F,
-        znear: f32,
-        zfar: f32,
         uniform_device: &wgpu::Device,
         uniform_bind_group_layout: &wgpu::BindGroupLayout,
         uniform_binding: u32,
     ) -> Self {
         Self {
-            position: position.into(),
-            yaw: yaw.into(),
-            pitch: pitch.into(),
+            position: camera.position,
+            yaw: camera.yaw.into(),
+            pitch: camera.pitch.into(),
             up: Vector3::unit_y(),
             aspect: width as f32 / height as f32,
-            fovy: fovy.into(),
-            znear,
-            zfar,
-            sensitivity: 0.5,
+            fovy: camera.fovy.into(),
+            znear: camera.znear,
+            zfar: camera.zfar,
+            sensitivity: camera.sensitivity,
             speed: Vector3::zero(),
-            max_speed_per_second: 10.0,
-            acceleration_per_second: 100.0,
-            friction_per_second: 20.0,
+            max_speed_per_second: camera.max_speed_per_second,
+            acceleration_per_second: camera.acceleration_per_second,
+            friction_per_second: camera.friction_per_second,
             input: CameraInput::default(),
             gpu_uniform: GpuUniform::new(
                 uniform_device,
@@ -218,34 +215,26 @@ impl GuiInspect for Camera {
     fn ui_mut(&mut self, ui: &mut egui::Ui) {
         ui.horizontal(|ui| {
             ui.label("Position");
-            ui.add(egui::widgets::DragValue::new(&mut self.position.x));
-            ui.add(egui::widgets::DragValue::new(&mut self.position.y));
-            ui.add(egui::widgets::DragValue::new(&mut self.position.z));
+            ui.add(DragValue::new(&mut self.position.x));
+            ui.add(DragValue::new(&mut self.position.y));
+            ui.add(DragValue::new(&mut self.position.z));
         });
 
         ui.horizontal(|ui| {
             ui.label("Speed");
-            ui.add(egui::widgets::DragValue::new(&mut self.speed.x));
-            ui.add(egui::widgets::DragValue::new(&mut self.speed.y));
-            ui.add(egui::widgets::DragValue::new(&mut self.speed.z));
+            ui.add(DragValue::new(&mut self.speed.x));
+            ui.add(DragValue::new(&mut self.speed.y));
+            ui.add(DragValue::new(&mut self.speed.z));
         });
 
         ui.horizontal(|ui| {
             ui.label("Yaw");
-            ui.add(
-                egui::widgets::DragValue::new(&mut self.yaw.0)
-                    .suffix(" rad")
-                    .speed(0.05),
-            );
+            ui.add(DragValue::new(&mut self.yaw.0).suffix(" rad").speed(0.05));
         });
 
         ui.horizontal(|ui| {
             ui.label("Pitch");
-            ui.add(
-                egui::widgets::DragValue::new(&mut self.pitch.0)
-                    .suffix(" rad")
-                    .speed(0.05),
-            );
+            ui.add(DragValue::new(&mut self.pitch.0).suffix(" rad").speed(0.05));
         });
 
         fn show_degrees(value: &mut Rad<f32>) -> impl FnMut(Option<f64>) -> f64 {
@@ -267,12 +256,21 @@ impl GuiInspect for Camera {
 
         ui.horizontal(|ui| {
             ui.label("Near");
-            ui.add(egui::widgets::DragValue::new(&mut self.znear).range(0.1..=999.0));
+            ui.add(DragValue::new(&mut self.znear).range(0.1..=999.0));
         });
 
         ui.horizontal(|ui| {
             ui.label("Far");
-            ui.add(egui::widgets::DragValue::new(&mut self.zfar).range(self.znear..=999.0));
+            ui.add(DragValue::new(&mut self.zfar).range(self.znear..=999.0));
+        });
+
+        ui.horizontal(|ui| {
+            ui.label("Sensitivity");
+            ui.add(
+                DragValue::new(&mut self.sensitivity)
+                    .range(0.01..=5.0)
+                    .speed(0.01),
+            );
         });
     }
 }

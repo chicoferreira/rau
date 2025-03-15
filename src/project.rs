@@ -1,6 +1,9 @@
 use crate::file;
 use anyhow::Context;
+use cgmath::{Deg, Point3, Zero};
+use default_from_serde::SerdeDefault;
 use serde::{Deserialize, Serialize};
+use serde_inline_default::serde_inline_default;
 use std::path::PathBuf;
 
 #[derive(Deserialize, Serialize, Clone)]
@@ -8,6 +11,8 @@ pub struct Project {
     pub name: String,
     pub viewport: Viewport,
     pub shader: Shader,
+    #[serde(default)]
+    pub camera: Camera,
 }
 
 #[derive(Deserialize, Serialize, Clone)]
@@ -33,6 +38,32 @@ pub enum ShaderType {
     Wgsl {
         shader: PathBuf,
     },
+}
+
+#[serde_inline_default]
+#[derive(Deserialize, Serialize, SerdeDefault, Clone)]
+pub struct Camera {
+    #[serde_inline_default(Point3::new(0.0, 0.0, 5.0))]
+    pub position: Point3<f32>,
+    #[serde_inline_default(Deg(-90.0))]
+    pub yaw: Deg<f32>,
+    #[serde(default = "Deg::zero")]
+    pub pitch: Deg<f32>,
+    #[serde_inline_default(Deg(60.0))]
+    #[serde(alias = "fov")]
+    pub fovy: Deg<f32>,
+    #[serde_inline_default(0.1)]
+    pub znear: f32,
+    #[serde_inline_default(100.0)]
+    pub zfar: f32,
+    #[serde_inline_default(1.5)]
+    pub sensitivity: f32,
+    #[serde_inline_default(10.0)]
+    pub max_speed_per_second: f32,
+    #[serde_inline_default(100.0)]
+    pub acceleration_per_second: f32,
+    #[serde_inline_default(20.0)]
+    pub friction_per_second: f32,
 }
 
 impl Project {

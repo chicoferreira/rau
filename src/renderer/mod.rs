@@ -9,7 +9,6 @@ use crate::project::Project;
 use crate::renderer::egui_renderer::EguiRenderer;
 use crate::renderer::uniform::GpuUniformAcessor;
 use anyhow::Context;
-use cgmath::{Deg, Point3, Rad};
 use log::warn;
 use std::sync::Arc;
 use wgpu::util::DeviceExt;
@@ -129,15 +128,10 @@ impl Renderer {
                 label: Some("camera_bind_group_layout"),
             });
 
-        let camera = camera::Camera::new(
-            Point3::new(0.0, 0.0, 5.0),
-            Deg(-90.0),
-            Rad(0.0),
-            config.width,
-            config.height,
-            Deg(45.0),
-            0.1,
-            100.0,
+        let camera = camera::Camera::from_project_camera(
+            project.camera.clone(),
+            width,
+            height,
             &device,
             &camera_bind_group_layout,
             0,

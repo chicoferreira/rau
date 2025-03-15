@@ -17,7 +17,7 @@ impl Shader {
                 let fragment_shader = file::load_file(fragment_shader).await?;
 
                 let vertex_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-                    label: Some("Vertex Shader"),
+                    label: Some(&format!("{} Vertex Shader", shader.name)),
                     source: wgpu::ShaderSource::Glsl {
                         shader: vertex_shader.into(),
                         stage: wgpu::naga::ShaderStage::Vertex,
@@ -26,7 +26,7 @@ impl Shader {
                 });
 
                 let fragment_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-                    label: Some("Fragment Shader"),
+                    label: Some(&format!("{} Fragment Shader", shader.name)),
                     source: wgpu::ShaderSource::Glsl {
                         shader: fragment_shader.into(),
                         stage: wgpu::naga::ShaderStage::Fragment,
@@ -36,12 +36,14 @@ impl Shader {
 
                 Ok(Shader::Glsl(vertex_shader, fragment_shader))
             }
-            ShaderType::Wgsl { shader } => {
-                let shader = file::load_file(shader).await?;
+            ShaderType::Wgsl {
+                shader: shader_path,
+            } => {
+                let shader_content = file::load_file(shader_path).await?;
 
                 let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-                    label: Some("Shader"),
-                    source: wgpu::ShaderSource::Wgsl(shader.into()),
+                    label: Some(&format!("{} Shader", shader.name)),
+                    source: wgpu::ShaderSource::Wgsl(shader_content.into()),
                 });
 
                 Ok(Shader::Wgsl(shader))

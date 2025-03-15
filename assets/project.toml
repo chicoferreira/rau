@@ -8,3 +8,7 @@ name = "PhongShader"
 type = "glsl"
 vertex_shader = "assets/vs.glsl"
 fragment_shader = "assets/frag.glsl"
+
+[camera]
+position = [0.0, 0.0, 2.0]
+fov = 70

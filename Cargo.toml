@@ -17,6 +17,8 @@ futures = "0.3.31"
 cgmath = { version = "0.18.0", features = ["serde"] }
 enum2egui = "0.3.11"
 instant = "0.1"
+serde-inline-default = "0.2.3"
+default-from-serde = "0.1.3"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 env_logger = "0.11.6"
