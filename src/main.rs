@@ -9,7 +9,7 @@ mod renderer;
 fn main() -> anyhow::Result<()> {
     env_logger::init();
     use pollster::FutureExt;
-    let project = project::Project::from_file("project.toml")
+    let project = project::Project::from_file("assets/project.toml")
         .block_on()
         .context("Failed to load project")?;
     let mut app = app::App::new(project);
@@ -24,7 +24,7 @@ async fn main() -> anyhow::Result<()> {
     std::panic::set_hook(Box::new(console_error_panic_hook::hook));
     console_log::init().expect("could not initialize logger");
 
-    let project = project::Project::from_file("project.toml")
+    let project = project::Project::from_file("assets/project.toml")
         .await
         .context("Failed to load project")?;
     let mut app = app::App::new(project);

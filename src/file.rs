@@ -3,7 +3,8 @@ use std::path::Path;
 #[cfg(not(target_arch = "wasm32"))]
 pub async fn load_file(file: impl AsRef<Path>) -> anyhow::Result<String> {
     use anyhow::Context;
-    std::fs::read_to_string(file).context("Failed to load file")
+    let file = file.as_ref();
+    std::fs::read_to_string(file).context(format!("Failed to load file: {}", file.display()))
 }
 
 #[cfg(target_arch = "wasm32")]
