@@ -4,11 +4,14 @@ name = "My Awesome Project"
 clear_color = [0.1, 0.1, 0.1, 1.0]
 
 [shader]
-name = "PhongShader"
+name = "Shader"
 type = "glsl"
 vertex_shader = "assets/vs.glsl"
 fragment_shader = "assets/frag.glsl"
 
 [camera]
-position = [0.0, 0.0, 2.0]
+position = [-3.0, 2.0, 20.0]
 fov = 70
+
+[[model]]
+path = "assets/models/teapot.obj"

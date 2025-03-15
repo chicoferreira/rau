@@ -1,9 +1,9 @@
 mod camera;
 mod egui_renderer;
 mod gui;
+mod model;
 mod shader;
 mod uniform;
-mod vertex;
 
 use crate::project::Project;
 use crate::renderer::egui_renderer::EguiRenderer;
@@ -11,7 +11,6 @@ use crate::renderer::uniform::GpuUniformAcessor;
 use anyhow::Context;
 use log::warn;
 use std::sync::Arc;
-use wgpu::util::DeviceExt;
 use winit::dpi::PhysicalSize;
 use winit::event::WindowEvent;
 use winit::event_loop::ActiveEventLoop;
@@ -31,9 +30,7 @@ pub struct Renderer {
 
 pub struct RendererProject {
     render_pipeline: wgpu::RenderPipeline,
-    vertex_buffer: wgpu::Buffer,
-    index_buffer: wgpu::Buffer,
-    num_indices: u32,
+    models: Vec<model::Model>,
     viewport_clear_color: wgpu::Color,
     camera: camera::Camera,
 }
@@ -137,6 +134,12 @@ impl Renderer {
             0,
         );
 
+        let mut models = vec![];
+        for model in &project.models {
+            let model = model::load_model_from_obj(&model.path, &device).await?;
+            models.push(model);
+        }
+
         let render_pipeline = {
             let render_pipeline_layout =
                 device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
@@ -155,22 +158,10 @@ impl Renderer {
                 &render_pipeline_layout,
                 config.format,
                 None,
-                &[vertex::Vertex::desc()],
+                &[model::Vertex::layout()],
                 (shader.vertex(), shader.fragment()),
             )
         };
-
-        let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Vertex Buffer"),
-            contents: bytemuck::cast_slice(vertex::VERTICES),
-            usage: wgpu::BufferUsages::VERTEX,
-        });
-        let index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Index Buffer"),
-            contents: bytemuck::cast_slice(vertex::INDICES),
-            usage: wgpu::BufferUsages::INDEX,
-        });
-        let num_indices = vertex::INDICES.len() as u32;
 
         let egui = EguiRenderer::new(&device, config.format, None, 1, &window);
 
@@ -183,9 +174,7 @@ impl Renderer {
             config,
             renderer_project: RendererProject {
                 render_pipeline,
-                vertex_buffer,
-                index_buffer,
-                num_indices,
+                models,
                 viewport_clear_color: wgpu::Color {
                     r: project.viewport.clear_color[0],
                     g: project.viewport.clear_color[1],
@@ -238,14 +227,18 @@ impl Renderer {
                 timestamp_writes: None,
             });
 
-            render_pass.set_pipeline(&self.renderer_project.render_pipeline);
-            render_pass.set_vertex_buffer(0, self.renderer_project.vertex_buffer.slice(..));
-            render_pass.set_index_buffer(
-                self.renderer_project.index_buffer.slice(..),
-                wgpu::IndexFormat::Uint16,
-            );
+            // set camera uniform
             render_pass.set_bind_group(0, self.renderer_project.camera.get_bind_group(), &[]);
-            render_pass.draw_indexed(0..self.renderer_project.num_indices, 0, 0..1);
+
+            render_pass.set_pipeline(&self.renderer_project.render_pipeline);
+            for model in &self.renderer_project.models {
+                for mesh in &model.meshes {
+                    render_pass.set_vertex_buffer(0, mesh.vertex_buffer.slice(..));
+                    render_pass
+                        .set_index_buffer(mesh.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
+                    render_pass.draw_indexed(0..mesh.num_elements, 0, 0..1);
+                }
+            }
         }
 
         let screen_descriptor = egui_wgpu::ScreenDescriptor {

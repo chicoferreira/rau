@@ -8,7 +8,7 @@ anyhow = "1.0"
 bytemuck = { version = "1.22.0", features = ["derive"] }
 serde = { version = "1.0", features = ["derive"] }
 toml = "0.8.20"
-wgpu = { version = "24.0.1", features = ["glsl", "webgl"] }
+wgpu = { version = "24.0.1", features = ["glsl"] }
 winit = "0.30.9"
 log = "0.4"
 egui = "0.31.1"
@@ -19,6 +19,8 @@ enum2egui = "0.3.11"
 instant = "0.1"
 serde-inline-default = "0.2.3"
 default-from-serde = "0.1.3"
+reqwest = "0.12.12"
+tobj = "4.0.3"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 env_logger = "0.11.6"
@@ -26,15 +28,17 @@ egui-winit = "0.31.1"
 pollster = "0.4.0"
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
+wgpu = { version = "24.0.1", features = ["glsl", "webgl"] }
 console_error_panic_hook = "0.1.7"
 console_log = "1.0.0"
 egui-winit = { version = "0.31.1", default-features = false }
 wasm-bindgen = "0.2.100"
 wasm-bindgen-futures = "0.4.50"
 web-sys = { version = "0.3.77", features = [
-    "Request",
-    "RequestInit",
-    "RequestMode",
-    "Response",
+    "Document",
+    "Window",
+    "Element",
+    "Location",
 ] }
 instant = { version = "0.1", features = ["wasm-bindgen"] }
+getrandom = { version = "0.2", features = ["js"] }

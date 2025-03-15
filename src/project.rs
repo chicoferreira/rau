@@ -13,6 +13,8 @@ pub struct Project {
     pub shader: Shader,
     #[serde(default)]
     pub camera: Camera,
+    #[serde(alias = "model")]
+    pub models: Vec<Model>,
 }
 
 #[derive(Deserialize, Serialize, Clone)]
@@ -64,6 +66,11 @@ pub struct Camera {
     pub acceleration_per_second: f32,
     #[serde_inline_default(20.0)]
     pub friction_per_second: f32,
+}
+
+#[derive(Deserialize, Serialize, Clone)]
+pub struct Model {
+    pub path: PathBuf,
 }
 
 impl Project {

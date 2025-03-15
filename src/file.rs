@@ -1,42 +1,49 @@
+use anyhow::Context;
 use std::path::Path;
 
-#[cfg(not(target_arch = "wasm32"))]
 pub async fn load_file(file: impl AsRef<Path>) -> anyhow::Result<String> {
-    use anyhow::Context;
-    let file = file.as_ref();
-    std::fs::read_to_string(file).context(format!("Failed to load file: {}", file.display()))
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        let file = file.as_ref();
+        std::fs::read_to_string(file).context(format!("Failed to load file: {}", file.display()))
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    {
+        let url = format_url(file.as_ref());
+        Ok(reqwest::get(url)
+            .await
+            .context("Failed to fetch file")?
+            .text()
+            .await
+            .context("Failed to read text")?)
+    }
+}
+
+pub async fn load_file_bytes(file: impl AsRef<Path>) -> anyhow::Result<Vec<u8>> {
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        let file = file.as_ref();
+        std::fs::read(file).context(format!("Failed to load file: {}", file.display()))
+    }
+    #[cfg(target_arch = "wasm32")]
+    {
+        let url = format_url(file.as_ref());
+        Ok(reqwest::get(url)
+            .await
+            .context("Failed to fetch file")?
+            .bytes()
+            .await
+            .context("Failed to read bytes")?
+            .to_vec())
+    }
 }
 
 #[cfg(target_arch = "wasm32")]
-pub async fn load_file(file: impl AsRef<Path>) -> anyhow::Result<String> {
-    use wasm_bindgen::JsCast;
-    use wasm_bindgen_futures::JsFuture;
-    use web_sys::{Request, RequestInit, RequestMode, window};
-
-    let url = file.as_ref();
-    let window = window().ok_or_else(|| anyhow::anyhow!("No global `window` exists"))?;
-
-    let opts = RequestInit::new();
-    opts.set_method("GET");
-    opts.set_mode(RequestMode::Cors);
-
-    let request = Request::new_with_str_and_init(url.to_str().unwrap(), &opts)
-        .map_err(|err| anyhow::anyhow!("Failed to create request: {:?}", err))?;
-
-    let resp_value = JsFuture::from(window.fetch_with_request(&request))
-        .await
-        .map_err(|err| anyhow::anyhow!("Failed to execute request: {:?}", err))?;
-
-    let resp: web_sys::Response = resp_value
-        .dyn_into()
-        .map_err(|_| anyhow::anyhow!("Failed to convert to Response"))?;
-
-    let result = resp.text().map_err(|err| anyhow::anyhow!("{:?}", err))?;
-    let text_value = JsFuture::from(result)
-        .await
-        .map_err(|err| anyhow::anyhow!("{:?}", err))?;
-
-    text_value
-        .as_string()
-        .ok_or_else(|| anyhow::anyhow!("Failed to convert response to string"))
+fn format_url(file_name: &Path) -> reqwest::Url {
+    let window = web_sys::window().unwrap();
+    let location = window.location();
+    let origin = location.origin().unwrap();
+    let base = reqwest::Url::parse(&format!("{}/", origin)).unwrap();
+    base.join(file_name.to_string_lossy().as_ref()).unwrap()
 }
