@@ -14,7 +14,11 @@ pub struct Project {
     #[serde(default)]
     pub camera: Camera,
     #[serde(alias = "model")]
+    #[serde(default)]
     pub models: Vec<Model>,
+    #[serde(alias = "texture")]
+    #[serde(default)]
+    pub textures: Vec<Texture>,
 }
 
 #[derive(Deserialize, Serialize, Clone)]
@@ -70,6 +74,11 @@ pub struct Camera {
 
 #[derive(Deserialize, Serialize, Clone)]
 pub struct Model {
+    pub path: PathBuf,
+}
+
+#[derive(Deserialize, Serialize, Clone)]
+pub struct Texture {
     pub path: PathBuf,
 }
 

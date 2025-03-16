@@ -3,13 +3,13 @@ mod egui_renderer;
 mod gui;
 mod model;
 mod shader;
+mod texture;
 mod uniform;
 
-use crate::project::Project;
 use crate::renderer::egui_renderer::EguiRenderer;
 use crate::renderer::uniform::GpuUniformAcessor;
+use crate::{file, project};
 use anyhow::Context;
-use log::warn;
 use std::sync::Arc;
 use winit::dpi::PhysicalSize;
 use winit::event::WindowEvent;
@@ -31,6 +31,9 @@ pub struct Renderer {
 pub struct RendererProject {
     render_pipeline: wgpu::RenderPipeline,
     models: Vec<model::Model>,
+    textures: Vec<texture::Texture>,
+    // textures index -> egui texture id
+    textures_egui: Vec<egui::TextureId>,
     viewport_clear_color: wgpu::Color,
     camera: camera::Camera,
 }
@@ -38,7 +41,7 @@ pub struct RendererProject {
 impl Renderer {
     pub async fn new(
         window: winit::window::Window,
-        project: &Project,
+        project: &project::Project,
         window_size: PhysicalSize<u32>,
     ) -> anyhow::Result<Self> {
         let window = Arc::new(window);
@@ -134,17 +137,59 @@ impl Renderer {
             0,
         );
 
+        let texture_bind_group_layout =
+            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                entries: &[
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 0,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Texture {
+                            multisampled: false,
+                            view_dimension: wgpu::TextureViewDimension::D2,
+                            sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                        },
+                        count: None,
+                    },
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 1,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        // This should match the filterable field of the
+                        // corresponding Texture entry above.
+                        ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                        count: None,
+                    },
+                ],
+                label: Some("texture_bind_group_layout"),
+            });
+
         let mut models = vec![];
         for model in &project.models {
             let model = model::load_model_from_obj(&model.path, &device).await?;
             models.push(model);
         }
 
+        let mut textures = vec![];
+        for texture in &project.textures {
+            let texture_bytes = file::load_file_bytes(&texture.path)
+                .await
+                .expect("Failed to load texture");
+            let texture = texture::Texture::from_bytes(
+                &device,
+                &queue,
+                &texture_bind_group_layout,
+                &texture_bytes,
+                texture.path.to_string_lossy().to_string(),
+            )
+            .context("Failed to load texture")?;
+
+            textures.push(texture);
+        }
+
         let render_pipeline = {
             let render_pipeline_layout =
                 device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                     label: Some("Render Pipeline Layout"),
-                    bind_group_layouts: &[&camera_bind_group_layout],
+                    bind_group_layouts: &[&camera_bind_group_layout, &texture_bind_group_layout],
                     push_constant_ranges: &[],
                 });
 
@@ -163,7 +208,12 @@ impl Renderer {
             )
         };
 
-        let egui = EguiRenderer::new(&device, config.format, None, 1, &window);
+        let mut egui = EguiRenderer::new(&device, config.format, None, 1, &window);
+
+        let textures_egui = textures
+            .iter()
+            .map(|texture| egui.register_texture(&device, texture))
+            .collect();
 
         Ok(Renderer {
             egui,
@@ -175,6 +225,8 @@ impl Renderer {
             renderer_project: RendererProject {
                 render_pipeline,
                 models,
+                textures_egui,
+                textures,
                 viewport_clear_color: wgpu::Color {
                     r: project.viewport.clear_color[0],
                     g: project.viewport.clear_color[1],
@@ -227,8 +279,8 @@ impl Renderer {
                 timestamp_writes: None,
             });
 
-            // set camera uniform
             render_pass.set_bind_group(0, self.renderer_project.camera.get_bind_group(), &[]);
+            render_pass.set_bind_group(1, &self.renderer_project.textures[0].bind_group, &[]);
 
             render_pass.set_pipeline(&self.renderer_project.render_pipeline);
             for model in &self.renderer_project.models {
@@ -312,7 +364,7 @@ impl Renderer {
                     Ok(_) => {}
                     // Reconfigure the surface if it is lost or outdated
                     Err(wgpu::SurfaceError::Lost | wgpu::SurfaceError::Outdated) => {
-                        warn!("Surface lost or outdated, reconfiguring");
+                        log::warn!("Surface lost or outdated, reconfiguring");
                         // self.resize(&self.window().inner_size())
                     }
                     // The system is out of memory, we should probably quit

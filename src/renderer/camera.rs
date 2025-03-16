@@ -248,10 +248,10 @@ impl GuiInspect for Camera {
 
         ui.horizontal(|ui| {
             ui.label("Fov");
-            ui.add(egui::widgets::Slider::from_get_set(
-                30.0..=150.0,
-                show_degrees(&mut self.fovy),
-            ));
+            ui.add(
+                egui::widgets::Slider::from_get_set(30.0..=150.0, show_degrees(&mut self.fovy))
+                    .suffix("º"),
+            );
         });
 
         ui.horizontal(|ui| {
@@ -261,7 +261,7 @@ impl GuiInspect for Camera {
 
         ui.horizontal(|ui| {
             ui.label("Far");
-            ui.add(DragValue::new(&mut self.zfar).range(self.znear..=999.0));
+            ui.add(DragValue::new(&mut self.zfar).range(5.0..=999.0));
         });
 
         ui.horizontal(|ui| {

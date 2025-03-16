@@ -1,4 +1,4 @@
-use crate::renderer::{gui, Renderer};
+use crate::renderer::{gui, texture, Renderer};
 
 pub struct EguiRenderer {
     pub context: egui::Context,
@@ -45,6 +45,15 @@ impl EguiRenderer {
         event: &winit::event::WindowEvent,
     ) -> bool {
         self.state.on_window_event(window, event).consumed
+    }
+
+    pub fn register_texture(
+        &mut self,
+        device: &wgpu::Device,
+        texture: &texture::Texture,
+    ) -> egui::TextureId {
+        self.renderer
+            .register_native_texture(device, &texture.view, wgpu::FilterMode::Nearest)
     }
 
     pub fn draw(

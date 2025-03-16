@@ -1,9 +1,11 @@
 #version 450
 
-in vec2 v_tex_coords;
+layout(set = 1, binding = 0) uniform texture2D t_diffuse;
+layout(set = 1, binding = 1) uniform sampler s_diffuse;
 
-out vec4 color;
+layout(location = 0) in vec2 tex_coords;
+layout(location = 0) out vec4 fragColor;
 
 void main() {
-    color = vec4(v_tex_coords.x, v_tex_coords.y, 0.0, 1.0);
+    fragColor = texture(sampler2D(t_diffuse, s_diffuse), tex_coords);
 }

@@ -29,6 +29,7 @@ impl Vertex {
 }
 
 pub struct Model {
+    pub name: String,
     pub meshes: Vec<Mesh>,
 }
 
@@ -110,7 +111,13 @@ pub async fn load_model_from_obj(
         })
         .collect();
 
-    Ok(Model { meshes })
+    let name = path
+        .as_ref()
+        .file_name()
+        .map(|s| s.to_string_lossy().to_string())
+        .unwrap_or_default();
+
+    Ok(Model { name, meshes })
 }
 
 fn get_or_default<T: Copy + Default>(slice: &[T], index: usize) -> T {

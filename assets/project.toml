@@ -15,3 +15,6 @@ fov = 70
 
 [[model]]
 path = "assets/models/teapot.obj"
+
+[[texture]]
+path = "assets/models/teapot.jpg"
