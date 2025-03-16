@@ -22,6 +22,7 @@ pub struct Renderer {
     device: wgpu::Device,
     queue: wgpu::Queue,
     config: wgpu::SurfaceConfiguration,
+    depth_texture: texture::DepthTexture,
     renderer_project: RendererProject,
     egui: EguiRenderer,
     last_render_time: instant::Instant,
@@ -185,6 +186,9 @@ impl Renderer {
             textures.push(texture);
         }
 
+        let depth_texture =
+            texture::DepthTexture::create_depth_texture(&device, &config, "Depth Texture");
+
         let render_pipeline = {
             let render_pipeline_layout =
                 device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
@@ -202,7 +206,7 @@ impl Renderer {
                 &device,
                 &render_pipeline_layout,
                 config.format,
-                None,
+                Some(texture::DepthTexture::DEPTH_FORMAT),
                 &[model::Vertex::layout()],
                 (shader.vertex(), shader.fragment()),
             )
@@ -222,6 +226,7 @@ impl Renderer {
             device,
             queue,
             config,
+            depth_texture,
             renderer_project: RendererProject {
                 render_pipeline,
                 models,
@@ -245,6 +250,11 @@ impl Renderer {
         self.config.width = size.width.max(1);
         self.config.height = size.height.max(1);
         self.surface.configure(&self.device, &self.config);
+        self.depth_texture = texture::DepthTexture::create_depth_texture(
+            &self.device,
+            &self.config,
+            "Depth Texture",
+        );
     }
 
     pub fn window(&self) -> Arc<winit::window::Window> {
@@ -274,7 +284,14 @@ impl Renderer {
                         store: wgpu::StoreOp::Store,
                     },
                 })],
-                depth_stencil_attachment: None,
+                depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+                    view: &self.depth_texture.view,
+                    depth_ops: Some(wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(1.0),
+                        store: wgpu::StoreOp::Store,
+                    }),
+                    stencil_ops: None,
+                }),
                 occlusion_query_set: None,
                 timestamp_writes: None,
             });
