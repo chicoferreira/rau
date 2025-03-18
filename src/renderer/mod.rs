@@ -27,6 +27,7 @@ pub struct Renderer {
     renderer_project: RendererProject,
     egui: EguiRenderer,
     last_render_time: instant::Instant,
+    start_time: instant::Instant,
     mouse_pressed: bool,
 }
 
@@ -38,6 +39,7 @@ pub struct RendererProject {
     textures_egui: Vec<egui::TextureId>,
     viewport_clear_color: wgpu::Color,
     camera: camera::Camera,
+    time_uniform: uniform::time::TimeUniform,
 }
 
 pub struct ProjectRenderPipeline {
@@ -48,6 +50,7 @@ pub struct ProjectRenderPipeline {
 pub enum BindGroupIdentifierType {
     Camera,
     Texture { texture_index: usize },
+    Time,
 }
 
 impl Renderer {
@@ -87,6 +90,12 @@ impl Renderer {
         let depth_texture =
             texture::DepthTexture::create_depth_texture(&device, &config, "Depth Texture");
 
+        let time_uniform_layout =
+            Self::create_vertex_fragment_bind_group_layout(&device, Some("time_uniform_layout"));
+
+        let time_uniform =
+            uniform::time::TimeUniform::new(&device, &time_uniform_layout, 0, Some("time_uniform"));
+
         let project_render_pipeline = Self::create_project_render_pipeline(
             project,
             &shaders,
@@ -94,6 +103,7 @@ impl Renderer {
             config.format,
             &camera_bind_group_layout,
             &texture_bind_group_layout,
+            &time_uniform_layout,
             &textures,
         )?;
 
@@ -124,8 +134,10 @@ impl Renderer {
                     a: project.viewport.clear_color[3],
                 },
                 camera,
+                time_uniform,
             },
             last_render_time: instant::Instant::now(),
+            start_time: instant::Instant::now(),
             mouse_pressed: false,
         })
     }
@@ -150,7 +162,7 @@ impl Renderer {
     ) -> anyhow::Result<Vec<model::Model>> {
         let mut result = vec![];
         for model in models {
-            let model = model::load_model_from_obj(&model.path, &device).await?;
+            let model = model::load_model_from_obj(&model.path, device).await?;
             result.push(model);
         }
         Ok(result)
@@ -183,6 +195,13 @@ impl Renderer {
     }
 
     fn create_camera_bind_group_layout(device: &wgpu::Device) -> wgpu::BindGroupLayout {
+        Self::create_vertex_fragment_bind_group_layout(device, Some("camera_bind_group_layout"))
+    }
+
+    fn create_vertex_fragment_bind_group_layout(
+        device: &wgpu::Device,
+        label: Option<&str>,
+    ) -> wgpu::BindGroupLayout {
         device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             entries: &[wgpu::BindGroupLayoutEntry {
                 binding: 0,
@@ -194,7 +213,7 @@ impl Renderer {
                 },
                 count: None,
             }],
-            label: Some("camera_bind_group_layout"),
+            label,
         })
     }
 
@@ -309,6 +328,7 @@ impl Renderer {
         color_format: wgpu::TextureFormat,
         camera_bind_group_layout: &wgpu::BindGroupLayout,
         texture_bind_group_layout: &wgpu::BindGroupLayout,
+        time_bind_group_layout: &wgpu::BindGroupLayout,
         textures: &[texture::Texture],
     ) -> anyhow::Result<ProjectRenderPipeline> {
         let mut bind_groups = project.render_pipeline.bind_groups.clone();
@@ -327,6 +347,7 @@ impl Renderer {
             .map(|identifier| match &identifier.bind_group_type {
                 project::BindGroupIdentifierType::Camera => camera_bind_group_layout,
                 project::BindGroupIdentifierType::Texture { .. } => texture_bind_group_layout,
+                &project::BindGroupIdentifierType::Time => time_bind_group_layout,
             })
             .collect();
 
@@ -365,6 +386,7 @@ impl Renderer {
                             .with_context(|| format!("Failed to find texture: {}", texture_name))?;
                         BindGroupIdentifierType::Texture { texture_index }
                     }
+                    project::BindGroupIdentifierType::Time => BindGroupIdentifierType::Time,
                 };
                 Ok((identifier.index, id_type))
             })
@@ -438,6 +460,11 @@ impl Renderer {
                     BindGroupIdentifierType::Texture { texture_index, .. } => {
                         &self.renderer_project.textures[*texture_index].bind_group
                     }
+                    &BindGroupIdentifierType::Time => self
+                        .renderer_project
+                        .time_uniform
+                        .gpu_uniform
+                        .get_bind_group(),
                 };
                 render_pass.set_bind_group(*index, bind_group, &[]);
             }
@@ -472,6 +499,10 @@ impl Renderer {
 
         self.renderer_project.camera.update_camera(dt);
         self.renderer_project.camera.upload_gpu_uniform(&self.queue);
+
+        self.renderer_project
+            .time_uniform
+            .update_time(&self.queue, self.start_time.elapsed().as_secs_f32());
     }
 
     pub fn handle_window_event(

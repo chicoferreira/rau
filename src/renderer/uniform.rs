@@ -56,3 +56,40 @@ pub trait GpuUniformAcessor {
     fn get_bind_group(&self) -> &wgpu::BindGroup;
     fn upload_gpu_uniform(&mut self, queue: &wgpu::Queue);
 }
+
+pub mod time {
+    use crate::renderer::uniform::GpuUniform;
+
+    #[derive(Debug, Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
+    #[repr(C)]
+    pub struct Time {
+        pub time: f32,
+        _padding: [u32; 3],
+    }
+
+    pub struct TimeUniform {
+        pub gpu_uniform: GpuUniform<Time>,
+    }
+
+    impl TimeUniform {
+        pub fn new(
+            device: &wgpu::Device,
+            bind_group_layout: &wgpu::BindGroupLayout,
+            binding: u32,
+            label: Option<&str>,
+        ) -> Self {
+            let gpu_uniform = GpuUniform::new(
+                device,
+                Time { time: 0.0, _padding: [0; 3] },
+                bind_group_layout,
+                binding,
+                label,
+            );
+            Self { gpu_uniform }
+        }
+
+        pub fn update_time(&mut self, queue: &wgpu::Queue, time: f32) {
+            self.gpu_uniform.write_to_queue(queue, Time { time, _padding: [0; 3] });
+        }
+    }
+}

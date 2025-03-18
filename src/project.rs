@@ -114,6 +114,7 @@ pub struct BindGroupIdentifier {
 pub enum BindGroupIdentifierType {
     Camera,
     Texture { texture_name: String },
+    Time,
 }
 
 impl Project {
