@@ -16,11 +16,6 @@ impl EguiRenderer {
     ) -> Self {
         let context = egui::Context::default();
 
-        #[cfg(target_arch = "wasm32")]
-        {
-            context.set_pixels_per_point(window.scale_factor() as f32);
-        }
-
         let id = context.viewport_id();
         let state = egui_winit::State::new(context.clone(), id, &window, None, None, None);
 
@@ -56,12 +51,21 @@ impl EguiRenderer {
             .register_native_texture(device, &texture.view, wgpu::FilterMode::Nearest)
     }
 
+    pub fn resize(&mut self, scale_factor: f32) {
+        self.context.set_pixels_per_point(scale_factor);
+    }
+
     pub fn draw(
         renderer: &mut Renderer,
         encoder: &mut wgpu::CommandEncoder,
         window_surface_view: &wgpu::TextureView,
         screen_descriptor: egui_wgpu::ScreenDescriptor,
     ) {
+        renderer
+            .egui
+            .context
+            .set_pixels_per_point(renderer.window().scale_factor() as f32);
+
         let raw_input = renderer.egui.state.take_egui_input(&renderer.window);
 
         renderer.egui.context.begin_pass(raw_input);

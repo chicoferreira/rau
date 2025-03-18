@@ -410,6 +410,10 @@ impl Renderer {
         );
     }
 
+    pub fn scale_factor_changed(&mut self, scale_factor: f64) {
+        self.egui.resize(scale_factor as f32)
+    }
+
     pub fn window(&self) -> Arc<winit::window::Window> {
         self.window.clone()
     }
@@ -566,6 +570,10 @@ impl Renderer {
             }
             WindowEvent::Resized(size) => {
                 self.resize(size);
+                true
+            }
+            WindowEvent::ScaleFactorChanged { scale_factor, .. } => {
+                self.scale_factor_changed(*scale_factor);
                 true
             }
             _ => false,

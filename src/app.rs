@@ -48,16 +48,23 @@ impl ApplicationHandler for App {
         {
             use wasm_bindgen::JsCast;
             use winit::platform::web::WindowAttributesExtWebSys;
-            let canvas = web_sys::window()
-                .unwrap()
-                .document()
-                .unwrap()
+            let window = web_sys::window().unwrap();
+            let document = window.document().unwrap();
+            let canvas = document
                 .get_element_by_id("canvas")
                 .unwrap()
                 .dyn_into::<web_sys::HtmlCanvasElement>()
                 .unwrap();
 
-            canvas_size = (canvas.client_width(), canvas.client_height());
+            // Get the current device pixel ratio.
+            let dpr = window.device_pixel_ratio();
+            // Set the canvas's intrinsic width/height based on the client size times the DPR.
+            let width = (canvas.client_width() as f64 * dpr) as u32;
+            let height = (canvas.client_height() as f64 * dpr) as u32;
+            canvas.set_width(width);
+            canvas.set_height(height);
+
+            canvas_size = (width, height);
             window_attributes = window_attributes.with_canvas(Some(canvas));
         }
 

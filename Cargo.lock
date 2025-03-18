@@ -634,6 +634,7 @@ dependencies = [
  "type-map",
  "web-time",
  "wgpu",
+ "winit",
 ]
 
 [[package]]
