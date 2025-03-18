@@ -3,9 +3,16 @@
 layout(set = 1, binding = 0) uniform texture2D t_diffuse;
 layout(set = 1, binding = 1) uniform sampler s_diffuse;
 
+layout(set = 2, binding = 0) uniform texture2D t_diffuse2;
+layout(set = 2, binding = 1) uniform sampler s_diffuse2;
+
 layout(location = 0) in vec2 tex_coords;
 layout(location = 0) out vec4 fragColor;
 
 void main() {
-    fragColor = texture(sampler2D(t_diffuse, s_diffuse), tex_coords);
+    if (tex_coords.x < 0.5) {
+        fragColor = texture(sampler2D(t_diffuse, s_diffuse), tex_coords);
+    } else {
+        fragColor = texture(sampler2D(t_diffuse2, s_diffuse2), tex_coords);
+    }
 }

@@ -10,6 +10,7 @@ use crate::renderer::egui_renderer::EguiRenderer;
 use crate::renderer::uniform::GpuUniformAcessor;
 use crate::{file, project};
 use anyhow::Context;
+use std::collections::HashMap;
 use std::sync::Arc;
 use winit::dpi::PhysicalSize;
 use winit::event::WindowEvent;
@@ -30,13 +31,23 @@ pub struct Renderer {
 }
 
 pub struct RendererProject {
-    render_pipeline: wgpu::RenderPipeline,
+    project_render_pipeline: ProjectRenderPipeline,
     models: Vec<model::Model>,
     textures: Vec<texture::Texture>,
     // textures index -> egui texture id
     textures_egui: Vec<egui::TextureId>,
     viewport_clear_color: wgpu::Color,
     camera: camera::Camera,
+}
+
+pub struct ProjectRenderPipeline {
+    pipeline: wgpu::RenderPipeline,
+    bind_groups: Vec<(u32, BindGroupIdentifierType)>, // bind_group index, bind group type
+}
+
+pub enum BindGroupIdentifierType {
+    Camera,
+    Texture { texture_index: usize },
 }
 
 impl Renderer {
@@ -46,9 +57,160 @@ impl Renderer {
         window_size: PhysicalSize<u32>,
     ) -> anyhow::Result<Self> {
         let window = Arc::new(window);
+        let (_instance, surface, _adapter, device, queue, config) =
+            Self::init_wgpu(&window, window_size).await?;
+
+        let camera_bind_group_layout = Self::create_camera_bind_group_layout(&device);
+        let texture_bind_group_layout = Self::create_texture_bind_group_layout(&device);
+
+        let camera = camera::Camera::from_project_camera(
+            project.camera.clone(),
+            config.width,
+            config.height,
+            &device,
+            &camera_bind_group_layout,
+            0,
+        );
+
+        let models = Self::load_models(&project.models, &device).await?;
+
+        let textures = Self::load_textures(
+            &project.textures,
+            &device,
+            &queue,
+            &texture_bind_group_layout,
+        )
+        .await?;
+
+        let shaders = Self::load_shaders(&project.shaders, &device).await?;
+
+        let depth_texture =
+            texture::DepthTexture::create_depth_texture(&device, &config, "Depth Texture");
+
+        let project_render_pipeline = Self::create_project_render_pipeline(
+            project,
+            &shaders,
+            &device,
+            config.format,
+            &camera_bind_group_layout,
+            &texture_bind_group_layout,
+            &textures,
+        )?;
+
+        let mut egui = EguiRenderer::new(&device, config.format, None, 1, &window);
+
+        let textures_egui = textures
+            .iter()
+            .map(|texture| egui.register_texture(&device, texture))
+            .collect();
+
+        Ok(Renderer {
+            egui,
+            window,
+            surface,
+            device,
+            queue,
+            config,
+            depth_texture,
+            renderer_project: RendererProject {
+                project_render_pipeline,
+                models,
+                textures_egui,
+                textures,
+                viewport_clear_color: wgpu::Color {
+                    r: project.viewport.clear_color[0],
+                    g: project.viewport.clear_color[1],
+                    b: project.viewport.clear_color[2],
+                    a: project.viewport.clear_color[3],
+                },
+                camera,
+            },
+            last_render_time: instant::Instant::now(),
+            mouse_pressed: false,
+        })
+    }
+
+    async fn load_shaders(
+        shaders: &[project::Shader],
+        device: &wgpu::Device,
+    ) -> anyhow::Result<HashMap<String, shader::Shader>> {
+        let mut result = HashMap::new();
+        for project_shader in shaders {
+            let shader = shader::Shader::load(device, project_shader)
+                .await
+                .context("Failed to load shader")?;
+            result.insert(project_shader.name.clone(), shader);
+        }
+        Ok(result)
+    }
+
+    async fn load_models(
+        models: &[project::Model],
+        device: &wgpu::Device,
+    ) -> anyhow::Result<Vec<model::Model>> {
+        let mut result = vec![];
+        for model in models {
+            let model = model::load_model_from_obj(&model.path, &device).await?;
+            result.push(model);
+        }
+        Ok(result)
+    }
+
+    fn create_texture_bind_group_layout(device: &wgpu::Device) -> wgpu::BindGroupLayout {
+        device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            entries: &[
+                wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Texture {
+                        multisampled: false,
+                        view_dimension: wgpu::TextureViewDimension::D2,
+                        sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                    },
+                    count: None,
+                },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 1,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    // This should match the filterable field of the
+                    // corresponding Texture entry above.
+                    ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                    count: None,
+                },
+            ],
+            label: Some("texture_bind_group_layout"),
+        })
+    }
+
+    fn create_camera_bind_group_layout(device: &wgpu::Device) -> wgpu::BindGroupLayout {
+        device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            entries: &[wgpu::BindGroupLayoutEntry {
+                binding: 0,
+                visibility: wgpu::ShaderStages::VERTEX | wgpu::ShaderStages::FRAGMENT,
+                ty: wgpu::BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Uniform,
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
+                },
+                count: None,
+            }],
+            label: Some("camera_bind_group_layout"),
+        })
+    }
+
+    async fn init_wgpu(
+        window: &Arc<winit::window::Window>,
+        window_size: PhysicalSize<u32>,
+    ) -> anyhow::Result<(
+        wgpu::Instance,
+        wgpu::Surface<'static>,
+        wgpu::Adapter,
+        wgpu::Device,
+        wgpu::Queue,
+        wgpu::SurfaceConfiguration,
+    )> {
         let width = window_size.width.max(1);
         let height = window_size.height.max(1);
-
         let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
             #[cfg(target_arch = "wasm32")]
             backends: wgpu::Backends::GL,
@@ -59,7 +221,6 @@ impl Renderer {
         let surface = instance
             .create_surface(window.clone())
             .context("Failed to create surface")?;
-
         let adapter = instance
             .request_adapter(&wgpu::RequestAdapterOptions {
                 power_preference: wgpu::PowerPreference::default(),
@@ -68,7 +229,6 @@ impl Renderer {
             })
             .await
             .context("Failed to request adapter")?;
-
         let (device, queue) = adapter
             .request_device(
                 &wgpu::DeviceDescriptor {
@@ -89,159 +249,130 @@ impl Renderer {
             .await
             .context("Failed to request device")?;
 
-        let config = {
-            let surface_capabilities = surface.get_capabilities(&adapter);
-            // Shader code in this tutorial assumes an Srgb surface texture. Using a different
-            // one will result all the colors comming out darker. If you want to support non
-            // Srgb surfaces, you'll need to account for that when drawing to the frame.
-            let surface_format = surface_capabilities
-                .formats
-                .iter()
-                .find(|f| f.is_srgb())
-                .cloned()
-                .unwrap_or(surface_capabilities.formats[0]);
-            wgpu::SurfaceConfiguration {
-                usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
-                format: surface_format,
-                width,
-                height,
-                present_mode: wgpu::PresentMode::AutoNoVsync,
-                alpha_mode: surface_capabilities.alpha_modes[0],
-                view_formats: vec![],
-                desired_maximum_frame_latency: 2,
-            }
-        };
-
-        surface.configure(&device, &config);
-
-        let camera_bind_group_layout =
-            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                entries: &[wgpu::BindGroupLayoutEntry {
-                    binding: 0,
-                    visibility: wgpu::ShaderStages::VERTEX | wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Uniform,
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
-                    },
-                    count: None,
-                }],
-                label: Some("camera_bind_group_layout"),
-            });
-
-        let camera = camera::Camera::from_project_camera(
-            project.camera.clone(),
+        let surface_capabilities = surface.get_capabilities(&adapter);
+        let surface_format = surface_capabilities
+            .formats
+            .iter()
+            .find(|f| f.is_srgb())
+            .cloned()
+            .unwrap_or(surface_capabilities.formats[0]);
+        let config = wgpu::SurfaceConfiguration {
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+            format: surface_format,
             width,
             height,
-            &device,
-            &camera_bind_group_layout,
-            0,
-        );
+            present_mode: wgpu::PresentMode::AutoNoVsync,
+            alpha_mode: surface_capabilities.alpha_modes[0],
+            view_formats: vec![],
+            desired_maximum_frame_latency: 2,
+        };
+        surface.configure(&device, &config);
 
-        let texture_bind_group_layout =
-            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                entries: &[
-                    wgpu::BindGroupLayoutEntry {
-                        binding: 0,
-                        visibility: wgpu::ShaderStages::FRAGMENT,
-                        ty: wgpu::BindingType::Texture {
-                            multisampled: false,
-                            view_dimension: wgpu::TextureViewDimension::D2,
-                            sample_type: wgpu::TextureSampleType::Float { filterable: true },
-                        },
-                        count: None,
-                    },
-                    wgpu::BindGroupLayoutEntry {
-                        binding: 1,
-                        visibility: wgpu::ShaderStages::FRAGMENT,
-                        // This should match the filterable field of the
-                        // corresponding Texture entry above.
-                        ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
-                        count: None,
-                    },
-                ],
-                label: Some("texture_bind_group_layout"),
-            });
+        Ok((instance, surface, adapter, device, queue, config))
+    }
 
-        let mut models = vec![];
-        for model in &project.models {
-            let model = model::load_model_from_obj(&model.path, &device).await?;
-            models.push(model);
-        }
-
-        let mut textures = vec![];
-        for texture in &project.textures {
+    async fn load_textures(
+        textures: &[project::Texture],
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        texture_bind_group_layout: &wgpu::BindGroupLayout,
+    ) -> anyhow::Result<Vec<texture::Texture>> {
+        let mut result = vec![];
+        for texture in textures {
             let texture_bytes = file::load_file_bytes(&texture.path)
                 .await
-                .expect("Failed to load texture");
+                .context("Failed to load texture")?;
+
+            let label = texture
+                .name
+                .clone()
+                .unwrap_or_else(|| texture.path.to_string_lossy().to_string());
+
             let texture = texture::Texture::from_bytes(
-                &device,
-                &queue,
-                &texture_bind_group_layout,
+                device,
+                queue,
+                texture_bind_group_layout,
                 &texture_bytes,
-                texture.path.to_string_lossy().to_string(),
+                label,
             )
             .context("Failed to load texture")?;
 
-            textures.push(texture);
+            result.push(texture);
         }
+        Ok(result)
+    }
 
-        let depth_texture =
-            texture::DepthTexture::create_depth_texture(&device, &config, "Depth Texture");
-
-        let render_pipeline = {
-            let render_pipeline_layout =
-                device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-                    label: Some("Render Pipeline Layout"),
-                    bind_group_layouts: &[&camera_bind_group_layout, &texture_bind_group_layout],
-                    push_constant_ranges: &[],
-                });
-
-            let shader = shader::Shader::load(&device, &project.shader)
-                .await
-                .context("Failed to load shader")?;
-
-            create_render_pipeline(
-                "Render Pipeline",
-                &device,
-                &render_pipeline_layout,
-                config.format,
-                Some(texture::DepthTexture::DEPTH_FORMAT),
-                &[model::Vertex::layout()],
-                (shader.vertex(), shader.fragment()),
-            )
-        };
-
-        let mut egui = EguiRenderer::new(&device, config.format, None, 1, &window);
-
-        let textures_egui = textures
+    fn create_project_render_pipeline(
+        project: &project::Project,
+        shaders: &HashMap<String, shader::Shader>,
+        device: &wgpu::Device,
+        color_format: wgpu::TextureFormat,
+        camera_bind_group_layout: &wgpu::BindGroupLayout,
+        texture_bind_group_layout: &wgpu::BindGroupLayout,
+        textures: &[texture::Texture],
+    ) -> anyhow::Result<ProjectRenderPipeline> {
+        let mut bind_groups = project.render_pipeline.bind_groups.clone();
+        bind_groups.sort_by_key(|b| b.index);
+        for (expected, bind_group) in bind_groups.iter().enumerate() {
+            if expected != bind_group.index as usize {
+                anyhow::bail!(
+                    "Bind groups must be contiguous. Jump at index {}. Expected {}",
+                    bind_group.index,
+                    expected,
+                );
+            }
+        }
+        let bind_group_layouts: Vec<_> = bind_groups
             .iter()
-            .map(|texture| egui.register_texture(&device, texture))
+            .map(|identifier| match &identifier.bind_group_type {
+                project::BindGroupIdentifierType::Camera => camera_bind_group_layout,
+                project::BindGroupIdentifierType::Texture { .. } => texture_bind_group_layout,
+            })
             .collect();
 
-        Ok(Renderer {
-            egui,
-            window,
-            surface,
+        let render_pipeline_layout =
+            device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                label: Some("Render Pipeline Layout"),
+                bind_group_layouts: &bind_group_layouts,
+                push_constant_ranges: &[],
+            });
+
+        let shader = shaders
+            .get(&project.render_pipeline.shader.shader_name)
+            .context(format!(
+                "Failed to find shader: {}",
+                project.render_pipeline.shader.shader_name
+            ))?;
+        let render_pipeline = create_render_pipeline(
+            "Render Pipeline",
             device,
-            queue,
-            config,
-            depth_texture,
-            renderer_project: RendererProject {
-                render_pipeline,
-                models,
-                textures_egui,
-                textures,
-                viewport_clear_color: wgpu::Color {
-                    r: project.viewport.clear_color[0],
-                    g: project.viewport.clear_color[1],
-                    b: project.viewport.clear_color[2],
-                    a: project.viewport.clear_color[3],
-                },
-                camera,
-            },
-            last_render_time: instant::Instant::now(),
-            mouse_pressed: false,
+            &render_pipeline_layout,
+            color_format,
+            Some(texture::DepthTexture::DEPTH_FORMAT),
+            &[model::Vertex::layout()],
+            (shader.vertex(), shader.fragment()),
+        );
+
+        let bind_groups = bind_groups
+            .into_iter()
+            .map(|identifier| {
+                let id_type = match identifier.bind_group_type {
+                    project::BindGroupIdentifierType::Camera => BindGroupIdentifierType::Camera,
+                    project::BindGroupIdentifierType::Texture { texture_name } => {
+                        let texture_index = textures
+                            .iter()
+                            .position(|t| t.name == texture_name)
+                            .with_context(|| format!("Failed to find texture: {}", texture_name))?;
+                        BindGroupIdentifierType::Texture { texture_index }
+                    }
+                };
+                Ok((identifier.index, id_type))
+            })
+            .collect::<anyhow::Result<Vec<_>>>()?;
+
+        Ok(ProjectRenderPipeline {
+            pipeline: render_pipeline,
+            bind_groups,
         })
     }
 
@@ -296,10 +427,21 @@ impl Renderer {
                 timestamp_writes: None,
             });
 
-            render_pass.set_bind_group(0, self.renderer_project.camera.get_bind_group(), &[]);
-            render_pass.set_bind_group(1, &self.renderer_project.textures[0].bind_group, &[]);
+            let pipeline = &self.renderer_project.project_render_pipeline;
+            render_pass.set_pipeline(&pipeline.pipeline);
 
-            render_pass.set_pipeline(&self.renderer_project.render_pipeline);
+            for (index, bind_group_identifier) in &pipeline.bind_groups {
+                let bind_group = match bind_group_identifier {
+                    BindGroupIdentifierType::Camera => {
+                        self.renderer_project.camera.get_bind_group()
+                    }
+                    BindGroupIdentifierType::Texture { texture_index, .. } => {
+                        &self.renderer_project.textures[*texture_index].bind_group
+                    }
+                };
+                render_pass.set_bind_group(*index, bind_group, &[]);
+            }
+
             for model in &self.renderer_project.models {
                 for mesh in &model.meshes {
                     render_pass.set_vertex_buffer(0, mesh.vertex_buffer.slice(..));

@@ -3,7 +3,7 @@ name = "My Awesome Project"
 [viewport]
 clear_color = [0.1, 0.1, 0.1, 1.0]
 
-[shader]
+[[shader]]
 name = "Shader"
 type = "glsl"
 vertex_shader = "assets/vs.glsl"
@@ -17,4 +17,27 @@ fov = 70
 path = "assets/models/teapot.obj"
 
 [[texture]]
+name = "teapot1"
 path = "assets/models/teapot.jpg"
+
+[[texture]]
+name = "teapot2"
+path = "assets/models/teapot2.jpg"
+
+[render_pipeline]
+name = "my_pipeline"
+shader_name = "Shader"
+
+[[render_pipeline.bind_group]]
+index = 0
+type = "camera"
+
+[[render_pipeline.bind_group]]
+index = 1
+type = "texture"
+texture_name = "teapot1"
+
+[[render_pipeline.bind_group]]
+index = 2
+type = "texture"
+texture_name = "teapot2"

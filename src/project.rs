@@ -10,7 +10,8 @@ use std::path::PathBuf;
 pub struct Project {
     pub name: String,
     pub viewport: Viewport,
-    pub shader: Shader,
+    #[serde(alias = "shader")]
+    pub shaders: Vec<Shader>,
     #[serde(default)]
     pub camera: Camera,
     #[serde(alias = "model")]
@@ -19,6 +20,8 @@ pub struct Project {
     #[serde(alias = "texture")]
     #[serde(default)]
     pub textures: Vec<Texture>,
+    #[serde(alias = "render_pipeline")]
+    pub render_pipeline: RenderPipeline,
 }
 
 #[derive(Deserialize, Serialize, Clone)]
@@ -79,7 +82,38 @@ pub struct Model {
 
 #[derive(Deserialize, Serialize, Clone)]
 pub struct Texture {
+    #[serde(default)]
+    pub name: Option<String>,
     pub path: PathBuf,
+}
+
+#[derive(Deserialize, Serialize, Clone)]
+pub struct RenderPipeline {
+    pub name: String,
+    #[serde(flatten)]
+    pub shader: ShaderIdentifier,
+    #[serde(alias = "bind_group")]
+    pub bind_groups: Vec<BindGroupIdentifier>,
+}
+
+#[derive(Deserialize, Serialize, Clone)]
+pub struct ShaderIdentifier {
+    pub shader_name: String,
+}
+
+#[derive(Deserialize, Serialize, Clone)]
+pub struct BindGroupIdentifier {
+    pub index: u32,
+    #[serde(flatten)]
+    pub bind_group_type: BindGroupIdentifierType,
+}
+
+#[derive(Deserialize, Serialize, Clone)]
+#[serde(tag = "type")]
+#[serde(rename_all = "lowercase")]
+pub enum BindGroupIdentifierType {
+    Camera,
+    Texture { texture_name: String },
 }
 
 impl Project {
