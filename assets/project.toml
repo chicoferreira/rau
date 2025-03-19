@@ -20,10 +20,8 @@ path = "assets/models/teapot.obj"
 name = "my_pipeline"
 shader_name = "Shader"
 
-[[render_pipeline.bind_group]]
-index = 0
-type = "camera"
-
-[[render_pipeline.bind_group]]
-index = 1
-type = "time"
+[render_pipeline.bind_groups]
+camera = { set = 0, type = "camera" }
+time = { set = 1, type = "time" }
+custom = { set = 2, type = "custom", custom_type = "vec4" }
+base_color = { set = 3, type = "custom", custom_type = "color" }

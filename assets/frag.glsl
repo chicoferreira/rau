@@ -9,6 +9,9 @@ layout(set = 1, binding = 0) uniform TimeUniform {
     float pad3;
 };
 
+layout(set = 2, binding = 0) uniform vec4 custom;
+layout(set = 3, binding = 0) uniform vec4 base_color;
+
 layout(location = 0) in vec2 tex_coords;
 layout(location = 0) out vec4 fragColor;
 
@@ -19,5 +22,5 @@ void main() {
         p.x += sin(p.y + i + time * 0.3);
         p *= mat2(6, -8, 8, 6) / 8.0;
     }
-    fragColor = sin(p.xyxy * 0.3 + vec4(0, 1, 2, 3)) * 0.5 + 0.5;
+    fragColor = base_color + sin(p.xyxy * 0.3 + custom) * 0.5 + 0.5;
 }

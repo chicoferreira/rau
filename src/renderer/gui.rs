@@ -1,6 +1,10 @@
+use crate::renderer::uniform::{
+    BindingResourceType, CustomUniform, TimeUniformData, UniformResourceType,
+};
 use crate::renderer::Renderer;
 use egui::color_picker::Alpha;
-use egui::RichText;
+use egui::text::LayoutJob;
+use egui::{RichText, Style};
 use enum2egui::GuiInspect;
 
 pub fn render_gui(renderer: &mut Renderer) {
@@ -58,5 +62,204 @@ pub fn render_gui(renderer: &mut Renderer) {
                     }
                 });
             }
+
+            ui.heading("Render Pipeline");
+            ui.collapsing(RichText::from("Uniforms").strong(), |ui| {
+                // Borrow only the storage mutably.
+                let storage = &mut renderer
+                    .renderer_project
+                    .project_render_pipeline
+                    .render_resource_storage;
+                // Also extract an immutable reference to the queue.
+                let queue = &renderer.queue;
+
+                for render_bindings in &mut storage.render_bindings {
+                    let index = render_bindings.set;
+                    let type_name = get_render_binding_type(&render_bindings.provider_type);
+                    let title = generate_two_part_title(
+                        ui.style(),
+                        &render_bindings.name,
+                        format!("(index={index}, type={type_name})"),
+                    );
+
+                    ui.collapsing(title, |ui| match &mut render_bindings.provider_type {
+                        BindingResourceType::Uniform(uniform_type) => match uniform_type {
+                            UniformResourceType::Camera(uniform_buffer) => {
+                                let mut data = *uniform_buffer.get();
+
+                                let view_position_title = generate_two_part_title(
+                                    ui.style(),
+                                    "View Position",
+                                    "(binding=0, type=vec4)",
+                                );
+                                ui.collapsing(view_position_title, |ui| {
+                                    ui.horizontal(|ui| {
+                                        for col in 0..4 {
+                                            ui.add(egui::DragValue::new(
+                                                &mut data.view_position[col],
+                                            ))
+                                            .changed();
+                                        }
+                                    });
+                                });
+
+                                let view_proj_title = generate_two_part_title(
+                                    ui.style(),
+                                    "View Projection",
+                                    "(binding=1, type=mat4)",
+                                );
+                                ui.collapsing(view_proj_title, |ui| {
+                                    for row in 0..4 {
+                                        ui.horizontal(|ui| {
+                                            for col in 0..4 {
+                                                ui.add(egui::DragValue::new(
+                                                    &mut data.view_proj[row][col],
+                                                ))
+                                                .changed();
+                                            }
+                                        });
+                                    }
+                                });
+                            }
+                            UniformResourceType::Time(uniform_buffer) => {
+                                ui.horizontal(|ui| {
+                                    let time_title = generate_two_part_title(
+                                        ui.style(),
+                                        "Time",
+                                        "(binding=0, type=float)",
+                                    );
+                                    ui.collapsing(time_title, |ui| {
+                                        let mut time = uniform_buffer.get().time;
+                                        if ui
+                                            .add(egui::DragValue::new(&mut time).speed(0.05))
+                                            .changed()
+                                        {
+                                            uniform_buffer.write(queue, TimeUniformData::new(time));
+                                        }
+                                    });
+                                });
+                            }
+                            UniformResourceType::Custom(custom_uniform) => match custom_uniform {
+                                CustomUniform::Color(uniform_buffer) => {
+                                    let title = generate_two_part_title(
+                                        ui.style(),
+                                        "Custom Color",
+                                        "(binding=0, type=vec4)",
+                                    );
+                                    ui.collapsing(title, |ui| {
+                                        ui_edit_uniform(ui, queue, uniform_buffer, edit_color);
+                                    });
+                                }
+                                CustomUniform::Vec4(uniform_buffer) => {
+                                    let title = generate_two_part_title(
+                                        ui.style(),
+                                        "Custom Vec4",
+                                        "(binding=0, type=vec4)",
+                                    );
+                                    ui.collapsing(title, |ui| {
+                                        ui_edit_uniform(ui, queue, uniform_buffer, edit_vec4);
+                                    });
+                                }
+                                CustomUniform::Mat4(uniform_buffer) => {
+                                    let title = generate_two_part_title(
+                                        ui.style(),
+                                        "Custom Mat4",
+                                        "(binding=0, type=mat4)",
+                                    );
+                                    ui.collapsing(title, |ui| {
+                                        ui_edit_uniform(ui, queue, uniform_buffer, edit_mat4);
+                                    });
+                                }
+                            },
+                        },
+                        BindingResourceType::Texture(texture_index) => {
+                            ui.label(format!("Texture {}", texture_index));
+                        }
+                    });
+                }
+            });
         });
+
+    fn generate_two_part_title(
+        style: &Style,
+        strong: impl Into<String>,
+        weak: impl Into<String>,
+    ) -> LayoutJob {
+        let mut title = LayoutJob::default();
+        RichText::from(strong.into()).strong().append_to(
+            &mut title,
+            style,
+            Default::default(),
+            Default::default(),
+        );
+        title.append("", 5.0, Default::default());
+        RichText::from(weak.into()).weak().append_to(
+            &mut title,
+            style,
+            Default::default(),
+            Default::default(),
+        );
+        title
+    }
+
+    fn get_render_binding_type(resource_type: &BindingResourceType) -> &'static str {
+        match resource_type {
+            BindingResourceType::Uniform(uniform) => match uniform {
+                UniformResourceType::Camera(_) => "Camera",
+                UniformResourceType::Time(_) => "Time",
+                UniformResourceType::Custom(custom_uniform) => match custom_uniform {
+                    CustomUniform::Color(_) => "Custom Color",
+                    CustomUniform::Vec4(_) => "Custom Vec4",
+                    CustomUniform::Mat4(_) => "Custom Mat4",
+                },
+            },
+            BindingResourceType::Texture(_) => "Texture",
+        }
+    }
+}
+
+fn ui_edit_uniform<T: bytemuck::Pod + Copy>(
+    ui: &mut egui::Ui,
+    queue: &wgpu::Queue,
+    uniform_buffer: &mut crate::renderer::uniform::UniformBuffer<T>,
+    edit_fn: impl Fn(&mut egui::Ui, &mut T) -> bool,
+) {
+    let mut data = *uniform_buffer.get();
+    if edit_fn(ui, &mut data) {
+        uniform_buffer.write(queue, data);
+    }
+}
+
+fn edit_color(ui: &mut egui::Ui, data: &mut [f32; 4]) -> bool {
+    let mut rgba = egui::Rgba::from_rgba_premultiplied(data[0], data[1], data[2], data[3]);
+    let response = egui::color_picker::color_edit_button_rgba(ui, &mut rgba, Alpha::OnlyBlend);
+    if response.changed() {
+        data[0] = rgba[0];
+        data[1] = rgba[1];
+        data[2] = rgba[2];
+        data[3] = rgba[3];
+        true
+    } else {
+        false
+    }
+}
+
+fn edit_vec4(ui: &mut egui::Ui, data: &mut [f32; 4]) -> bool {
+    let mut changed = false;
+    ui.horizontal(|ui| {
+        for v in data {
+            if ui.add(egui::DragValue::new(v).speed(0.1)).changed() {
+                changed = true;
+            }
+        }
+    });
+    changed
+}
+
+fn edit_mat4(ui: &mut egui::Ui, data: &mut [[f32; 4]; 4]) -> bool {
+    let mut changed = false;
+    for row in data {
+        changed |= edit_vec4(ui, row);
+    }
+    changed
 }

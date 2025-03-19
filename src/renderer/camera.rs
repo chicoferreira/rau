@@ -1,5 +1,4 @@
 use crate::project;
-use crate::renderer::uniform::{GpuUniform, GpuUniformAcessor};
 use cgmath::{InnerSpace, Matrix4, Point3, Rad, Vector3, Zero};
 use egui::widgets::DragValue;
 use enum2egui::GuiInspect;
@@ -7,22 +6,6 @@ use std::f32::consts::FRAC_PI_2;
 use std::time::Duration;
 use winit::event::*;
 use winit::keyboard::KeyCode;
-
-#[repr(C)]
-#[derive(Copy, Clone, Debug, Default, bytemuck::Pod, bytemuck::Zeroable)]
-pub struct CameraUniform {
-    pub view_position: [f32; 4],
-    pub view_proj: [[f32; 4]; 4],
-}
-
-impl CameraUniform {
-    pub fn from_camera(camera: &Camera) -> Self {
-        Self {
-            view_position: camera.position.to_homogeneous().into(),
-            view_proj: camera.calc_matrix().into(),
-        }
-    }
-}
 
 #[rustfmt::skip]
 pub const OPENGL_TO_WGPU_MATRIX: Matrix4<f32> = Matrix4::new(
@@ -50,7 +33,6 @@ pub struct Camera {
     acceleration_per_second: f32,
     friction_per_second: f32,
     input: CameraInput,
-    gpu_uniform: GpuUniform<CameraUniform>,
 }
 
 #[derive(Debug, Default)]
@@ -65,14 +47,7 @@ struct CameraInput {
 }
 
 impl Camera {
-    pub fn from_project_camera(
-        camera: project::Camera,
-        width: u32,
-        height: u32,
-        uniform_device: &wgpu::Device,
-        uniform_bind_group_layout: &wgpu::BindGroupLayout,
-        uniform_binding: u32,
-    ) -> Self {
+    pub fn from_project_camera(camera: project::Camera, width: u32, height: u32) -> Self {
         Self {
             position: camera.position,
             yaw: camera.yaw.into(),
@@ -88,14 +63,11 @@ impl Camera {
             acceleration_per_second: camera.acceleration_per_second,
             friction_per_second: camera.friction_per_second,
             input: CameraInput::default(),
-            gpu_uniform: GpuUniform::new(
-                uniform_device,
-                CameraUniform::default(),
-                uniform_bind_group_layout,
-                uniform_binding,
-                Some("Camera"),
-            ),
         }
+    }
+
+    pub fn position(&self) -> Point3<f32> {
+        self.position
     }
 
     pub fn calc_matrix(&self) -> Matrix4<f32> {
@@ -193,17 +165,6 @@ impl Camera {
     pub fn process_mouse(&mut self, mouse_dx: f64, mouse_dy: f64) {
         self.input.offset_input.0 = mouse_dx as f32;
         self.input.offset_input.1 = mouse_dy as f32;
-    }
-}
-
-impl GpuUniformAcessor for Camera {
-    fn get_bind_group(&self) -> &wgpu::BindGroup {
-        self.gpu_uniform.get_bind_group()
-    }
-
-    fn upload_gpu_uniform(&mut self, queue: &wgpu::Queue) {
-        let camera_uniform = CameraUniform::from_camera(self);
-        self.gpu_uniform.write_to_queue(queue, camera_uniform);
     }
 }
 

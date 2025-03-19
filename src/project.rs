@@ -4,6 +4,7 @@ use cgmath::{Deg, Point3, Zero};
 use default_from_serde::SerdeDefault;
 use serde::{Deserialize, Serialize};
 use serde_inline_default::serde_inline_default;
+use std::collections::HashMap;
 use std::path::PathBuf;
 
 #[derive(Deserialize, Serialize, Clone)]
@@ -93,7 +94,7 @@ pub struct RenderPipeline {
     #[serde(flatten)]
     pub shader: ShaderIdentifier,
     #[serde(alias = "bind_group")]
-    pub bind_groups: Vec<BindGroupIdentifier>,
+    pub bind_groups: HashMap<String, BindGroupIdentifier>,
 }
 
 #[derive(Deserialize, Serialize, Clone)]
@@ -103,6 +104,7 @@ pub struct ShaderIdentifier {
 
 #[derive(Deserialize, Serialize, Clone)]
 pub struct BindGroupIdentifier {
+    #[serde(alias = "set")]
     pub index: u32,
     #[serde(flatten)]
     pub bind_group_type: BindGroupIdentifierType,
@@ -115,6 +117,16 @@ pub enum BindGroupIdentifierType {
     Camera,
     Texture { texture_name: String },
     Time,
+    Custom(CustomUniformType),
+}
+
+#[derive(Deserialize, Serialize, Clone)]
+#[serde(tag = "custom_type")]
+#[serde(rename_all = "lowercase")]
+pub enum CustomUniformType {
+    Color,
+    Vec4,
+    Mat4,
 }
 
 impl Project {

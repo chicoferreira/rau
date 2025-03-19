@@ -7,7 +7,6 @@ mod texture;
 mod uniform;
 
 use crate::renderer::egui_renderer::EguiRenderer;
-use crate::renderer::uniform::GpuUniformAcessor;
 use crate::{file, project};
 use anyhow::Context;
 use std::collections::HashMap;
@@ -27,7 +26,6 @@ pub struct Renderer {
     renderer_project: RendererProject,
     egui: EguiRenderer,
     last_render_time: instant::Instant,
-    start_time: instant::Instant,
     mouse_pressed: bool,
 }
 
@@ -39,18 +37,11 @@ pub struct RendererProject {
     textures_egui: Vec<egui::TextureId>,
     viewport_clear_color: wgpu::Color,
     camera: camera::Camera,
-    time_uniform: uniform::time::TimeUniform,
 }
 
 pub struct ProjectRenderPipeline {
     pipeline: wgpu::RenderPipeline,
-    bind_groups: Vec<(u32, BindGroupIdentifierType)>, // bind_group index, bind group type
-}
-
-pub enum BindGroupIdentifierType {
-    Camera,
-    Texture { texture_index: usize },
-    Time,
+    render_resource_storage: uniform::RenderResourceStorage,
 }
 
 impl Renderer {
@@ -63,16 +54,12 @@ impl Renderer {
         let (_instance, surface, _adapter, device, queue, config) =
             Self::init_wgpu(&window, window_size).await?;
 
-        let camera_bind_group_layout = Self::create_camera_bind_group_layout(&device);
         let texture_bind_group_layout = Self::create_texture_bind_group_layout(&device);
 
         let camera = camera::Camera::from_project_camera(
             project.camera.clone(),
             config.width,
             config.height,
-            &device,
-            &camera_bind_group_layout,
-            0,
         );
 
         let models = Self::load_models(&project.models, &device).await?;
@@ -90,20 +77,16 @@ impl Renderer {
         let depth_texture =
             texture::DepthTexture::create_depth_texture(&device, &config, "Depth Texture");
 
-        let time_uniform_layout =
-            Self::create_vertex_fragment_bind_group_layout(&device, Some("time_uniform_layout"));
-
-        let time_uniform =
-            uniform::time::TimeUniform::new(&device, &time_uniform_layout, 0, Some("time_uniform"));
+        let uniform_bind_group_layout = Self::create_uniform_bind_group_layout(&device);
 
         let project_render_pipeline = Self::create_project_render_pipeline(
             project,
+            &camera,
             &shaders,
             &device,
             config.format,
-            &camera_bind_group_layout,
             &texture_bind_group_layout,
-            &time_uniform_layout,
+            &uniform_bind_group_layout,
             &textures,
         )?;
 
@@ -134,11 +117,25 @@ impl Renderer {
                     a: project.viewport.clear_color[3],
                 },
                 camera,
-                time_uniform,
             },
             last_render_time: instant::Instant::now(),
-            start_time: instant::Instant::now(),
             mouse_pressed: false,
+        })
+    }
+
+    fn create_uniform_bind_group_layout(device: &wgpu::Device) -> wgpu::BindGroupLayout {
+        device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            entries: &[wgpu::BindGroupLayoutEntry {
+                binding: 0,
+                visibility: wgpu::ShaderStages::VERTEX | wgpu::ShaderStages::FRAGMENT,
+                ty: wgpu::BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Uniform,
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
+                },
+                count: None,
+            }],
+            label: Some("Default Bind Group Layout"),
         })
     }
 
@@ -191,29 +188,6 @@ impl Renderer {
                 },
             ],
             label: Some("texture_bind_group_layout"),
-        })
-    }
-
-    fn create_camera_bind_group_layout(device: &wgpu::Device) -> wgpu::BindGroupLayout {
-        Self::create_vertex_fragment_bind_group_layout(device, Some("camera_bind_group_layout"))
-    }
-
-    fn create_vertex_fragment_bind_group_layout(
-        device: &wgpu::Device,
-        label: Option<&str>,
-    ) -> wgpu::BindGroupLayout {
-        device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            entries: &[wgpu::BindGroupLayoutEntry {
-                binding: 0,
-                visibility: wgpu::ShaderStages::VERTEX | wgpu::ShaderStages::FRAGMENT,
-                ty: wgpu::BindingType::Buffer {
-                    ty: wgpu::BufferBindingType::Uniform,
-                    has_dynamic_offset: false,
-                    min_binding_size: None,
-                },
-                count: None,
-            }],
-            label,
         })
     }
 
@@ -323,17 +297,22 @@ impl Renderer {
 
     fn create_project_render_pipeline(
         project: &project::Project,
+        camera: &camera::Camera,
         shaders: &HashMap<String, shader::Shader>,
         device: &wgpu::Device,
         color_format: wgpu::TextureFormat,
-        camera_bind_group_layout: &wgpu::BindGroupLayout,
         texture_bind_group_layout: &wgpu::BindGroupLayout,
-        time_bind_group_layout: &wgpu::BindGroupLayout,
+        default_bind_group_layout: &wgpu::BindGroupLayout,
         textures: &[texture::Texture],
     ) -> anyhow::Result<ProjectRenderPipeline> {
-        let mut bind_groups = project.render_pipeline.bind_groups.clone();
-        bind_groups.sort_by_key(|b| b.index);
-        for (expected, bind_group) in bind_groups.iter().enumerate() {
+        let mut bind_groups: Vec<_> = project
+            .render_pipeline
+            .bind_groups
+            .clone()
+            .into_iter()
+            .collect();
+        bind_groups.sort_by_key(|(_name, b)| b.index);
+        for (expected, (_name, bind_group)) in bind_groups.iter().enumerate() {
             if expected != bind_group.index as usize {
                 anyhow::bail!(
                     "Bind groups must be contiguous. Jump at index {}. Expected {}",
@@ -344,10 +323,9 @@ impl Renderer {
         }
         let bind_group_layouts: Vec<_> = bind_groups
             .iter()
-            .map(|identifier| match &identifier.bind_group_type {
-                project::BindGroupIdentifierType::Camera => camera_bind_group_layout,
+            .map(|(_name, identifier)| match &identifier.bind_group_type {
                 project::BindGroupIdentifierType::Texture { .. } => texture_bind_group_layout,
-                &project::BindGroupIdentifierType::Time => time_bind_group_layout,
+                _ => default_bind_group_layout,
             })
             .collect();
 
@@ -374,27 +352,90 @@ impl Renderer {
             (shader.vertex(), shader.fragment()),
         );
 
-        let bind_groups = bind_groups
+        macro_rules! create_uniform_buffer {
+            ($name:expr) => {
+                uniform::UniformBuffer::new(
+                    device,
+                    $name,
+                    default_bind_group_layout,
+                    0,
+                    Some("custom_uniform"),
+                )
+            };
+            () => {
+                create_uniform_buffer!(Default::default())
+            };
+        }
+
+        let render_bindings = bind_groups
             .into_iter()
-            .map(|identifier| {
-                let id_type = match identifier.bind_group_type {
-                    project::BindGroupIdentifierType::Camera => BindGroupIdentifierType::Camera,
+            .map(|(name, identifier)| {
+                let resource_type = match identifier.bind_group_type {
+                    project::BindGroupIdentifierType::Camera => {
+                        let camera_uniform_data = uniform::CameraUniformData::from_camera(camera);
+                        let uniform_buffer = uniform::UniformBuffer::new(
+                            device,
+                            camera_uniform_data,
+                            default_bind_group_layout,
+                            0,
+                            Some("camera_uniform"),
+                        );
+                        uniform::BindingResourceType::Uniform(uniform::UniformResourceType::Camera(
+                            uniform_buffer,
+                        ))
+                    }
                     project::BindGroupIdentifierType::Texture { texture_name } => {
                         let texture_index = textures
                             .iter()
                             .position(|t| t.name == texture_name)
                             .with_context(|| format!("Failed to find texture: {}", texture_name))?;
-                        BindGroupIdentifierType::Texture { texture_index }
+                        uniform::BindingResourceType::Texture(texture_index)
                     }
-                    project::BindGroupIdentifierType::Time => BindGroupIdentifierType::Time,
+                    project::BindGroupIdentifierType::Time => {
+                        let time = Default::default();
+                        let uniform_buffer = uniform::UniformBuffer::new(
+                            device,
+                            time,
+                            default_bind_group_layout,
+                            0,
+                            Some("time_uniform"),
+                        );
+                        uniform::BindingResourceType::Uniform(uniform::UniformResourceType::Time(
+                            uniform_buffer,
+                        ))
+                    }
+                    project::BindGroupIdentifierType::Custom(project::CustomUniformType::Vec4) => {
+                        let custom_uniform = create_uniform_buffer!();
+                        uniform::BindingResourceType::Uniform(uniform::UniformResourceType::Custom(
+                            uniform::CustomUniform::Vec4(custom_uniform),
+                        ))
+                    }
+
+                    project::BindGroupIdentifierType::Custom(project::CustomUniformType::Color) => {
+                        let custom_uniform = create_uniform_buffer!([0.0, 0.0, 0.0, 1.0]);
+                        uniform::BindingResourceType::Uniform(uniform::UniformResourceType::Custom(
+                            uniform::CustomUniform::Color(custom_uniform),
+                        ))
+                    }
+
+                    project::BindGroupIdentifierType::Custom(project::CustomUniformType::Mat4) => {
+                        let custom_uniform = create_uniform_buffer!();
+                        uniform::BindingResourceType::Uniform(uniform::UniformResourceType::Custom(
+                            uniform::CustomUniform::Mat4(custom_uniform),
+                        ))
+                    }
                 };
-                Ok((identifier.index, id_type))
+                Ok(uniform::RenderBinding {
+                    name,
+                    set: identifier.index,
+                    provider_type: resource_type,
+                })
             })
             .collect::<anyhow::Result<Vec<_>>>()?;
 
         Ok(ProjectRenderPipeline {
             pipeline: render_pipeline,
-            bind_groups,
+            render_resource_storage: uniform::RenderResourceStorage::from(render_bindings),
         })
     }
 
@@ -456,21 +497,16 @@ impl Renderer {
             let pipeline = &self.renderer_project.project_render_pipeline;
             render_pass.set_pipeline(&pipeline.pipeline);
 
-            for (index, bind_group_identifier) in &pipeline.bind_groups {
-                let bind_group = match bind_group_identifier {
-                    BindGroupIdentifierType::Camera => {
-                        self.renderer_project.camera.get_bind_group()
-                    }
-                    BindGroupIdentifierType::Texture { texture_index, .. } => {
+            for render_binding in &pipeline.render_resource_storage.render_bindings {
+                let bind_group = match &render_binding.provider_type {
+                    uniform::BindingResourceType::Texture(texture_index) => {
                         &self.renderer_project.textures[*texture_index].bind_group
                     }
-                    &BindGroupIdentifierType::Time => self
-                        .renderer_project
-                        .time_uniform
-                        .gpu_uniform
-                        .get_bind_group(),
+                    uniform::BindingResourceType::Uniform(uniform_type) => {
+                        uniform_type.get_bind_group()
+                    }
                 };
-                render_pass.set_bind_group(*index, bind_group, &[]);
+                render_pass.set_bind_group(render_binding.set, bind_group, &[]);
             }
 
             for model in &self.renderer_project.models {
@@ -502,11 +538,15 @@ impl Renderer {
         self.last_render_time = now;
 
         self.renderer_project.camera.update_camera(dt);
-        self.renderer_project.camera.upload_gpu_uniform(&self.queue);
+        self.renderer_project
+            .project_render_pipeline
+            .render_resource_storage
+            .upload_camera_uniform(&self.queue, &self.renderer_project.camera);
 
         self.renderer_project
-            .time_uniform
-            .update_time(&self.queue, self.start_time.elapsed().as_secs_f32());
+            .project_render_pipeline
+            .render_resource_storage
+            .upload_time_delta_uniform(&self.queue, dt);
     }
 
     pub fn handle_window_event(
