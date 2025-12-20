@@ -1,0 +1,33 @@
+[package]
+name = "rau"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[[bin]]
+# use a different name here to avoid duplicate name
+# see https://github.com/rust-lang/cargo/issues/6313
+name = "rau-bin"
+path = "src/main.rs"
+
+[dependencies]
+anyhow = "1.0.100"
+env_logger = "0.11.8"
+log = "0.4.29"
+pollster = "0.4.0"
+wgpu = "27.0.1"
+winit = { version = "0.30.12", features = ["android-native-activity"] }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+console_error_panic_hook = "0.1.6"
+console_log = "1.0"
+wgpu = { version = "27.0.0", features = ["webgl"]}
+wasm-bindgen = "0.2"
+wasm-bindgen-futures = "0.4.30"
+web-sys = { version = "0.3", features = [
+    "Document",
+    "Window",
+    "Element",
+]}
