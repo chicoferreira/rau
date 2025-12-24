@@ -20,6 +20,7 @@ env_logger = "0.11.8"
 image = { version = "0.25.9", default-features = false, features = ["png", "jpeg"] }
 log = "0.4.29"
 pollster = "0.4.0"
+tobj = { version = "4.0.3", default-features = false, features = ["async"] }
 wgpu = "27.0.1"
 winit = { version = "0.30.12", features = ["android-native-activity"] }
 
@@ -33,4 +34,11 @@ web-sys = { version = "0.3", features = [
     "Document",
     "Window",
     "Element",
+    "Location",
 ]}
+reqwest = "0.12"
+
+[build-dependencies]
+anyhow = "1.0"
+fs_extra = "1.2"
+glob = "0.3"
