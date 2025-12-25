@@ -149,7 +149,7 @@ struct LightUniform {
     _padding2: u32,
 }
 
-const NUM_INSTANCES_PER_ROW: u32 = 1;
+const NUM_INSTANCES_PER_ROW: u32 = 10;
 
 struct Instance {
     position: cgmath::Vector3<f32>,

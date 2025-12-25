@@ -9,10 +9,10 @@ fn format_url(file_name: &str) -> reqwest::Url {
     let window = web_sys::window().unwrap();
     let location = window.location();
     let mut origin = location.origin().unwrap();
-    if !origin.ends_with("learn-wgpu") {
-        origin = format!("{}/learn-wgpu", origin);
+    if !origin.ends_with("res") {
+        origin = format!("{}/res", origin);
     }
-    let base = reqwest::Url::parse(&format!("{}/", origin,)).unwrap();
+    let base = reqwest::Url::parse(&format!("{}/", origin)).unwrap();
     base.join(file_name).unwrap()
 }
 
@@ -66,18 +66,17 @@ pub async fn load_model(
     layout: &wgpu::BindGroupLayout,
 ) -> anyhow::Result<model::Model> {
     let obj_text = load_string(file_name).await?;
-    let obj_cursor = Cursor::new(obj_text);
-    let mut obj_reader = BufReader::new(obj_cursor);
+    let obj_bytes = obj_text.as_bytes();
 
-    let (models, obj_materials) = tobj::load_obj_buf_async(
-        &mut obj_reader,
+    let (models, obj_materials) = tobj::futures::load_obj_buf(
+        obj_bytes,
         &tobj::LoadOptions {
             triangulate: true,
             single_index: true,
             ..Default::default()
         },
         |p| async move {
-            let mat_text = load_string(&p).await.unwrap();
+            let mat_text = load_string(&p.to_string_lossy()).await.unwrap();
             tobj::load_mtl_buf(&mut BufReader::new(Cursor::new(mat_text)))
         },
     )
