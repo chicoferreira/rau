@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use cgmath::{InnerSpace, Rotation3, Zero};
+use cgmath::{InnerSpace, Matrix, Rotation3, SquareMatrix, Zero};
 use wgpu::util::DeviceExt;
 use winit::{
     application::ApplicationHandler,
@@ -19,6 +19,7 @@ use crate::{
 };
 
 mod camera;
+mod hdr;
 mod model;
 mod resources;
 mod texture;
@@ -27,7 +28,10 @@ mod texture;
 #[derive(Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
 struct CameraUniform {
     view_position: [f32; 4],
+    view: [[f32; 4]; 4],
     view_proj: [[f32; 4]; 4],
+    inv_proj: [[f32; 4]; 4],
+    inv_view: [[f32; 4]; 4],
 }
 
 impl CameraUniform {
@@ -35,13 +39,22 @@ impl CameraUniform {
         use cgmath::SquareMatrix;
         Self {
             view_position: [0.0; 4],
+            view: cgmath::Matrix4::identity().into(),
             view_proj: cgmath::Matrix4::identity().into(),
+            inv_proj: cgmath::Matrix4::identity().into(),
+            inv_view: cgmath::Matrix4::identity().into(),
         }
     }
 
     fn update_view_proj(&mut self, camera: &camera::Camera, projection: &camera::Projection) {
         self.view_position = camera.position.to_homogeneous().into();
-        self.view_proj = (projection.calc_matrix() * camera.calc_matrix()).into();
+        let proj = projection.calc_matrix();
+        let view = camera.calc_matrix();
+        let view_proj = proj * view;
+        self.view = view.into();
+        self.view_proj = view_proj.into();
+        self.inv_proj = proj.invert().unwrap().into();
+        self.inv_view = view.transpose().into();
     }
 }
 
@@ -154,6 +167,9 @@ pub struct State {
     window: Arc<Window>,
     last_render_time: instant::Instant,
     mouse_pressed: bool,
+    hdr: hdr::HdrPipeline,
+    environment_bind_group: wgpu::BindGroup,
+    sky_pipeline: wgpu::RenderPipeline,
 }
 
 impl State {
@@ -165,7 +181,7 @@ impl State {
             #[cfg(not(target_arch = "wasm32"))]
             backends: wgpu::Backends::PRIMARY,
             #[cfg(target_arch = "wasm32")]
-            backends: wgpu::Backends::GL,
+            backends: wgpu::Backends::BROWSER_WEBGPU,
             ..Default::default()
         });
 
@@ -189,7 +205,7 @@ impl State {
                 required_features: wgpu::Features::empty(),
                 experimental_features: wgpu::ExperimentalFeatures::disabled(),
                 required_limits: if cfg!(target_arch = "wasm32") {
-                    wgpu::Limits::downlevel_webgl2_defaults()
+                    wgpu::Limits::downlevel_defaults()
                 } else {
                     wgpu::Limits::default()
                 },
@@ -210,11 +226,11 @@ impl State {
         let config = wgpu::SurfaceConfiguration {
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
             format: surface_format,
-            width: size.width,
-            height: size.height,
-            present_mode: wgpu::PresentMode::AutoVsync,
+            width: size.width.max(1),
+            height: size.height.max(1),
+            present_mode: surface_caps.present_modes[0],
             alpha_mode: surface_caps.alpha_modes[0],
-            view_formats: vec![],
+            view_formats: vec![surface_format.add_srgb_suffix()],
             desired_maximum_frame_latency: 2,
         };
 
@@ -275,6 +291,36 @@ impl State {
             label: Some("Camera Buffer"),
             contents: bytemuck::cast_slice(&[camera_uniform]),
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        });
+
+        const SPACE_BETWEEN: f32 = 3.0;
+        let instances = (0..NUM_INSTANCES_PER_ROW)
+            .flat_map(|z| {
+                (0..NUM_INSTANCES_PER_ROW).map(move |x| {
+                    let x = SPACE_BETWEEN * (x as f32 - NUM_INSTANCES_PER_ROW as f32 / 2.0);
+                    let z = SPACE_BETWEEN * (z as f32 - NUM_INSTANCES_PER_ROW as f32 / 2.0);
+
+                    let position = cgmath::Vector3 { x, y: 0.0, z };
+
+                    let rotation = if position.is_zero() {
+                        cgmath::Quaternion::from_axis_angle(
+                            cgmath::Vector3::unit_z(),
+                            cgmath::Deg(0.0),
+                        )
+                    } else {
+                        cgmath::Quaternion::from_axis_angle(position.normalize(), cgmath::Deg(45.0))
+                    };
+
+                    Instance { position, rotation }
+                })
+            })
+            .collect::<Vec<_>>();
+
+        let instance_data = instances.iter().map(Instance::to_raw).collect::<Vec<_>>();
+        let instance_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Instance Buffer"),
+            contents: bytemuck::cast_slice(&instance_data),
+            usage: wgpu::BufferUsages::VERTEX,
         });
 
         let camera_bind_group_layout =
@@ -343,6 +389,56 @@ impl State {
                 .await
                 .unwrap();
 
+        let hdr = hdr::HdrPipeline::new(&device, &config);
+
+        let hdr_loader = resources::HdrLoader::new(&device);
+        let sky_bytes = resources::load_binary("pure-sky.hdr").await?;
+        let sky_texture = hdr_loader.from_equirectangular_bytes(
+            &device,
+            &queue,
+            &sky_bytes,
+            1080,
+            Some("Sky Texture"),
+        )?;
+
+        let environment_layout =
+            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                label: Some("environment_layout"),
+                entries: &[
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 0,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Texture {
+                            sample_type: wgpu::TextureSampleType::Float { filterable: false },
+                            view_dimension: wgpu::TextureViewDimension::Cube,
+                            multisampled: false,
+                        },
+                        count: None,
+                    },
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 1,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::NonFiltering),
+                        count: None,
+                    },
+                ],
+            });
+
+        let environment_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("environment_bind_group"),
+            layout: &environment_layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureView(&sky_texture.view()),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::Sampler(sky_texture.sampler()),
+                },
+            ],
+        });
+
         let render_pipeline_layout =
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("Render Pipeline Layout"),
@@ -350,6 +446,7 @@ impl State {
                     &texture_bind_group_layout,
                     &camera_bind_group_layout,
                     &light_bind_group_layout,
+                    &environment_layout,
                 ],
                 push_constant_ranges: &[],
             });
@@ -362,9 +459,10 @@ impl State {
             create_render_pipeline(
                 &device,
                 &render_pipeline_layout,
-                config.format,
+                hdr.format(),
                 Some(texture::Texture::DEPTH_FORMAT),
                 &[model::ModelVertex::desc(), InstanceRaw::desc()],
+                wgpu::PrimitiveTopology::TriangleList,
                 shader,
             )
         };
@@ -382,42 +480,31 @@ impl State {
             create_render_pipeline(
                 &device,
                 &layout,
-                config.format,
+                hdr.format(),
                 Some(texture::Texture::DEPTH_FORMAT),
                 &[model::ModelVertex::desc()],
+                wgpu::PrimitiveTopology::TriangleList,
                 shader,
             )
         };
 
-        const SPACE_BETWEEN: f32 = 3.0;
-        let instances = (0..NUM_INSTANCES_PER_ROW)
-            .flat_map(|z| {
-                (0..NUM_INSTANCES_PER_ROW).map(move |x| {
-                    let x = SPACE_BETWEEN * (x as f32 - NUM_INSTANCES_PER_ROW as f32 / 2.0);
-                    let z = SPACE_BETWEEN * (z as f32 - NUM_INSTANCES_PER_ROW as f32 / 2.0);
-
-                    let position = cgmath::Vector3 { x, y: 0.0, z };
-
-                    let rotation = if position.is_zero() {
-                        cgmath::Quaternion::from_axis_angle(
-                            cgmath::Vector3::unit_z(),
-                            cgmath::Deg(0.0),
-                        )
-                    } else {
-                        cgmath::Quaternion::from_axis_angle(position.normalize(), cgmath::Deg(45.0))
-                    };
-
-                    Instance { position, rotation }
-                })
-            })
-            .collect::<Vec<_>>();
-
-        let instance_data = instances.iter().map(Instance::to_raw).collect::<Vec<_>>();
-        let instance_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Instance Buffer"),
-            contents: bytemuck::cast_slice(&instance_data),
-            usage: wgpu::BufferUsages::VERTEX,
-        });
+        let sky_pipeline = {
+            let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                label: Some("Sky Pipeline Layout"),
+                bind_group_layouts: &[&camera_bind_group_layout, &environment_layout],
+                push_constant_ranges: &[],
+            });
+            let shader = wgpu::include_wgsl!("sky.wgsl");
+            create_render_pipeline(
+                &device,
+                &layout,
+                hdr.format(),
+                Some(texture::Texture::DEPTH_FORMAT),
+                &[],
+                wgpu::PrimitiveTopology::TriangleList,
+                shader,
+            )
+        };
 
         Ok(Self {
             surface,
@@ -443,6 +530,9 @@ impl State {
             window,
             last_render_time: instant::Instant::now(),
             mouse_pressed: false,
+            hdr,
+            environment_bind_group,
+            sky_pipeline,
         })
     }
 
@@ -454,6 +544,7 @@ impl State {
             self.projection.resize(width, height);
             self.depth_texture =
                 Texture::create_depth_texture(&self.device, &self.config, "depth texture");
+            self.hdr.resize(&self.device, width, height);
             self.is_surface_configured = true;
         }
     }
@@ -490,9 +581,10 @@ impl State {
 
         let output = self.surface.get_current_texture()?;
 
-        let view = output
-            .texture
-            .create_view(&wgpu::TextureViewDescriptor::default());
+        let view = output.texture.create_view(&wgpu::TextureViewDescriptor {
+            format: Some(self.config.format.add_srgb_suffix()),
+            ..Default::default()
+        });
 
         let mut encoder = self
             .device
@@ -504,7 +596,7 @@ impl State {
             let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("Render Pass"),
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view: &view,
+                    view: &self.hdr.view(),
                     resolve_target: None,
                     ops: wgpu::Operations {
                         load: wgpu::LoadOp::Clear(wgpu::Color {
@@ -543,8 +635,16 @@ impl State {
                 0..self.instances.len() as u32,
                 &self.camera_bind_group,
                 &self.light_bind_group,
+                &self.environment_bind_group,
             );
+
+            render_pass.set_pipeline(&self.sky_pipeline);
+            render_pass.set_bind_group(0, &self.camera_bind_group, &[]);
+            render_pass.set_bind_group(1, &self.environment_bind_group, &[]);
+            render_pass.draw(0..3, 0..1);
         }
+
+        self.hdr.process(&mut encoder, &view);
 
         self.queue.submit(std::iter::once(encoder.finish()));
         output.present();
@@ -559,6 +659,7 @@ fn create_render_pipeline(
     color_format: wgpu::TextureFormat,
     depth_format: Option<wgpu::TextureFormat>,
     vertex_layouts: &[wgpu::VertexBufferLayout],
+    topology: wgpu::PrimitiveTopology,
     shader: wgpu::ShaderModuleDescriptor,
 ) -> wgpu::RenderPipeline {
     let shader = device.create_shader_module(shader);
@@ -586,7 +687,7 @@ fn create_render_pipeline(
             compilation_options: Default::default(),
         }),
         primitive: wgpu::PrimitiveState {
-            topology: wgpu::PrimitiveTopology::TriangleList,
+            topology,
             strip_index_format: None,
             front_face: wgpu::FrontFace::Ccw,
             cull_mode: Some(wgpu::Face::Back),
@@ -600,7 +701,7 @@ fn create_render_pipeline(
         depth_stencil: depth_format.map(|format| wgpu::DepthStencilState {
             format,
             depth_write_enabled: true,
-            depth_compare: wgpu::CompareFunction::Less,
+            depth_compare: wgpu::CompareFunction::LessEqual,
             stencil: wgpu::StencilState::default(),
             bias: wgpu::DepthBiasState::default(),
         }),
