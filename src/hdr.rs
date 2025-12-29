@@ -70,7 +70,7 @@ impl HdrPipeline {
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: None,
             bind_group_layouts: &[&layout],
-            push_constant_ranges: &[],
+            immediate_size: 0,
         });
 
         let pipeline = create_render_pipeline(
@@ -145,6 +145,7 @@ impl HdrPipeline {
             depth_stencil_attachment: None,
             timestamp_writes: None,
             occlusion_query_set: None,
+            multiview_mask: None,
         });
         pass.set_pipeline(&self.pipeline);
         pass.set_bind_group(0, &self.bind_group, &[]);

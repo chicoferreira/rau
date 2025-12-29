@@ -13,10 +13,7 @@ use winit::{
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
 
-use crate::{
-    model::{DrawLight, DrawModel, Vertex},
-    texture::Texture,
-};
+use crate::{model::Vertex, texture::Texture};
 
 mod camera;
 mod hdr;
@@ -448,7 +445,7 @@ impl State {
                     &light_bind_group_layout,
                     &environment_layout,
                 ],
-                push_constant_ranges: &[],
+                immediate_size: 0,
             });
 
         let render_pipeline = {
@@ -471,7 +468,7 @@ impl State {
             let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("Light Pipeline Layout"),
                 bind_group_layouts: &[&camera_bind_group_layout, &light_bind_group_layout],
-                push_constant_ranges: &[],
+                immediate_size: 0,
             });
             let shader = wgpu::ShaderModuleDescriptor {
                 label: Some("Light Shader"),
@@ -492,7 +489,7 @@ impl State {
             let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("Sky Pipeline Layout"),
                 bind_group_layouts: &[&camera_bind_group_layout, &environment_layout],
-                push_constant_ranges: &[],
+                immediate_size: 0,
             });
             let shader = wgpu::include_wgsl!("sky.wgsl");
             create_render_pipeline(
@@ -619,24 +616,32 @@ impl State {
                 }),
                 occlusion_query_set: None,
                 timestamp_writes: None,
+                multiview_mask: None,
             });
 
             render_pass.set_vertex_buffer(1, self.instance_buffer.slice(..));
             render_pass.set_pipeline(&self.light_render_pipeline);
-            render_pass.draw_light_model(
-                &self.obj_model,
-                &self.camera_bind_group,
-                &self.light_bind_group,
-            );
+            for mesh in &self.obj_model.meshes {
+                render_pass.set_vertex_buffer(0, mesh.vertex_buffer.slice(..));
+                render_pass
+                    .set_index_buffer(mesh.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
+                render_pass.set_bind_group(0, &self.camera_bind_group, &[]);
+                render_pass.set_bind_group(1, &self.light_bind_group, &[]);
+                render_pass.draw_indexed(0..mesh.num_elements, 0, 0..1);
+            }
 
             render_pass.set_pipeline(&self.render_pipeline);
-            render_pass.draw_model_instanced(
-                &self.obj_model,
-                0..self.instances.len() as u32,
-                &self.camera_bind_group,
-                &self.light_bind_group,
-                &self.environment_bind_group,
-            );
+            for mesh in &self.obj_model.meshes {
+                let material = &self.obj_model.materials[mesh.material];
+                render_pass.set_vertex_buffer(0, mesh.vertex_buffer.slice(..));
+                render_pass
+                    .set_index_buffer(mesh.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
+                render_pass.set_bind_group(0, &material.bind_group, &[]);
+                render_pass.set_bind_group(1, &self.camera_bind_group, &[]);
+                render_pass.set_bind_group(2, &self.light_bind_group, &[]);
+                render_pass.set_bind_group(3, &self.environment_bind_group, &[]);
+                render_pass.draw_indexed(0..mesh.num_elements, 0, 0..self.instances.len() as u32);
+            }
 
             render_pass.set_pipeline(&self.sky_pipeline);
             render_pass.set_bind_group(0, &self.camera_bind_group, &[]);
@@ -710,7 +715,7 @@ fn create_render_pipeline(
             mask: !0,
             alpha_to_coverage_enabled: false,
         },
-        multiview: None,
+        multiview_mask: None,
         cache: None,
     })
 }
