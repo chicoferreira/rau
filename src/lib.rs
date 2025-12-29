@@ -16,6 +16,7 @@ use wasm_bindgen::prelude::*;
 use crate::{model::Vertex, texture::Texture};
 
 mod camera;
+mod gui;
 mod hdr;
 mod model;
 mod resources;
@@ -167,6 +168,7 @@ pub struct State {
     hdr: hdr::HdrPipeline,
     environment_bind_group: wgpu::BindGroup,
     sky_pipeline: wgpu::RenderPipeline,
+    egui_renderer: gui::EguiRenderer,
 }
 
 impl State {
@@ -213,6 +215,8 @@ impl State {
 
         let surface_caps = surface.get_capabilities(&adapter);
 
+        log::info!("Available surface formats: {:?}", surface_caps.formats);
+
         // Assume sRGB color profile
         let surface_format = surface_caps
             .formats
@@ -220,9 +224,12 @@ impl State {
             .find(|f| f.is_srgb())
             .copied()
             .unwrap_or(surface_caps.formats[0]);
+
+        log::info!("Selected surface format: {:?}", surface_format);
+
         let config = wgpu::SurfaceConfiguration {
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
-            format: surface_format,
+            format: surface_format.remove_srgb_suffix(),
             width: size.width.max(1),
             height: size.height.max(1),
             present_mode: surface_caps.present_modes[0],
@@ -503,6 +510,9 @@ impl State {
             )
         };
 
+        let egui_renderer =
+            gui::EguiRenderer::new(&device, config.format.add_srgb_suffix(), &window);
+
         Ok(Self {
             surface,
             device,
@@ -530,6 +540,7 @@ impl State {
             hdr,
             environment_bind_group,
             sky_pipeline,
+            egui_renderer,
         })
     }
 
@@ -651,6 +662,38 @@ impl State {
 
         self.hdr.process(&mut encoder, &view);
 
+        let screen_descriptor = egui_wgpu::ScreenDescriptor {
+            size_in_pixels: [self.config.width, self.config.height],
+            pixels_per_point: self.window.scale_factor() as f32,
+        };
+
+        self.egui_renderer.render(
+            &self.device,
+            &self.queue,
+            &mut encoder,
+            &self.window,
+            &view,
+            screen_descriptor,
+            |context| {
+                egui::Window::new("winit + egui + wgpu says hello!")
+                    .resizable(true)
+                    .vscroll(true)
+                    .default_open(false)
+                    .show(context, |ui| {
+                        ui.label("Label!");
+
+                        if ui.button("Button!").clicked() {
+                            println!("boom!")
+                        }
+
+                        ui.separator();
+                        ui.horizontal(|ui| {
+                            ui.label(format!("Pixels per point: {}", context.pixels_per_point()));
+                        });
+                    });
+            },
+        );
+
         self.queue.submit(std::iter::once(encoder.finish()));
         output.present();
 
@@ -682,7 +725,7 @@ fn create_render_pipeline(
             module: &shader,
             entry_point: Some("fs_main"),
             targets: &[Some(wgpu::ColorTargetState {
-                format: color_format,
+                format: color_format.add_srgb_suffix(),
                 blend: Some(wgpu::BlendState {
                     alpha: wgpu::BlendComponent::REPLACE,
                     color: wgpu::BlendComponent::REPLACE,
@@ -829,6 +872,11 @@ impl ApplicationHandler<State> for App {
             None => return,
         };
 
+        let egui_response = state.egui_renderer.handle_input(&state.window, &event);
+        if egui_response.consumed {
+            return;
+        }
+
         match event {
             WindowEvent::CloseRequested => event_loop.exit(),
             WindowEvent::Resized(size) => state.resize(size.width, size.height),
@@ -882,7 +930,7 @@ pub fn run() -> anyhow::Result<()> {
     {
         env_logger::builder()
             .parse_default_env()
-            .filter_level(log::LevelFilter::Debug)
+            .filter_level(log::LevelFilter::Info)
             .init();
     }
     #[cfg(target_arch = "wasm32")]
