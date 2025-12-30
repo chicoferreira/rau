@@ -286,14 +286,19 @@ impl HdrLoader {
             })
             .collect::<Vec<_>>();
 
-        let src = texture::Texture::create_2d_texture(
+        let src = texture::Texture::create_texture(
             device,
-            meta.width,
-            meta.height,
-            self.texture_format,
-            wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
-            wgpu::FilterMode::Linear,
             None,
+            wgpu::Extent3d {
+                width: meta.width,
+                height: meta.height,
+                depth_or_array_layers: 1,
+            },
+            self.texture_format,
+            &[],
+            wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+            wgpu::TextureDimension::D2,
+            wgpu::FilterMode::Linear,
         );
 
         queue.write_texture(

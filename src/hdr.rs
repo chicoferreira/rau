@@ -20,14 +20,19 @@ impl HdrPipeline {
 
         let format = wgpu::TextureFormat::Rgba16Float;
 
-        let texture = texture::Texture::create_2d_texture(
+        let texture = texture::Texture::create_texture(
             device,
-            width,
-            height,
-            format,
-            wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::RENDER_ATTACHMENT,
-            wgpu::FilterMode::Nearest,
             Some("Hdr::texture"),
+            wgpu::Extent3d {
+                width,
+                height,
+                depth_or_array_layers: 1,
+            },
+            format,
+            &[],
+            wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::RENDER_ATTACHMENT,
+            wgpu::TextureDimension::D2,
+            wgpu::FilterMode::Nearest,
         );
 
         let layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
@@ -73,10 +78,12 @@ impl HdrPipeline {
             immediate_size: 0,
         });
 
+        let output_format = config.format.add_srgb_suffix();
+
         let pipeline = create_render_pipeline(
             device,
             &pipeline_layout,
-            config.format.add_srgb_suffix(),
+            output_format,
             None,
             &[],
             wgpu::PrimitiveTopology::TriangleList,
@@ -95,14 +102,19 @@ impl HdrPipeline {
     }
 
     pub fn resize(&mut self, device: &wgpu::Device, width: u32, height: u32) {
-        self.texture = texture::Texture::create_2d_texture(
+        self.texture = texture::Texture::create_texture(
             device,
-            width,
-            height,
-            wgpu::TextureFormat::Rgba16Float,
-            wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::RENDER_ATTACHMENT,
-            wgpu::FilterMode::Nearest,
             Some("Hdr::texture"),
+            wgpu::Extent3d {
+                width,
+                height,
+                depth_or_array_layers: 1,
+            },
+            wgpu::TextureFormat::Rgba16Float,
+            &[],
+            wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::RENDER_ATTACHMENT,
+            wgpu::TextureDimension::D2,
+            wgpu::FilterMode::Nearest,
         );
         self.bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("Hdr::bind_group"),

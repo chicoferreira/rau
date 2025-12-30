@@ -14,12 +14,13 @@ impl Texture {
 
     pub fn create_depth_texture(
         device: &wgpu::Device,
-        config: &wgpu::SurfaceConfiguration,
+        width: u32,
+        height: u32,
         label: &str,
     ) -> Self {
         let size = wgpu::Extent3d {
-            width: config.width.max(1),
-            height: config.height.max(1),
+            width: width.max(1),
+            height: height.max(1),
             depth_or_array_layers: 1,
         };
         let desc = wgpu::TextureDescriptor {
@@ -51,7 +52,7 @@ impl Texture {
             texture,
             view,
             sampler,
-            size, // NEW!
+            size,
         }
     }
 
@@ -88,14 +89,15 @@ impl Texture {
             wgpu::TextureFormat::Rgba8UnormSrgb
         };
         let usage = wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST;
-        let texture = Self::create_2d_texture(
+        let texture = Self::create_texture(
             device,
-            size.width,
-            size.height,
-            format,
-            usage,
-            wgpu::FilterMode::Linear,
             label,
+            size,
+            format,
+            &[],
+            usage,
+            wgpu::TextureDimension::D2,
+            wgpu::FilterMode::Linear,
         );
 
         queue.write_texture(
@@ -117,36 +119,12 @@ impl Texture {
         Ok(texture)
     }
 
-    pub(crate) fn create_2d_texture(
-        device: &wgpu::Device,
-        width: u32,
-        height: u32,
-        format: wgpu::TextureFormat,
-        usage: wgpu::TextureUsages,
-        mag_filter: wgpu::FilterMode,
-        label: Option<&str>,
-    ) -> Self {
-        let size = wgpu::Extent3d {
-            width,
-            height,
-            depth_or_array_layers: 1,
-        };
-        Self::create_texture(
-            device,
-            label,
-            size,
-            format,
-            usage,
-            wgpu::TextureDimension::D2,
-            mag_filter,
-        )
-    }
-
     pub fn create_texture(
         device: &wgpu::Device,
         label: Option<&str>,
         size: wgpu::Extent3d,
         format: wgpu::TextureFormat,
+        view_formats: &[wgpu::TextureFormat],
         usage: wgpu::TextureUsages,
         dimension: wgpu::TextureDimension,
         mag_filter: wgpu::FilterMode,
@@ -159,7 +137,7 @@ impl Texture {
             dimension,
             format,
             usage,
-            view_formats: &[],
+            view_formats,
         });
 
         let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
@@ -177,7 +155,7 @@ impl Texture {
             texture,
             view,
             sampler,
-            size, // NEW!
+            size,
         }
     }
 }

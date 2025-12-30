@@ -13,7 +13,7 @@ use winit::{
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
 
-use crate::{model::Vertex, texture::Texture};
+use crate::model::Vertex;
 
 mod camera;
 mod gui;
@@ -162,9 +162,11 @@ pub struct State {
     #[allow(dead_code)]
     instance_buffer: wgpu::Buffer,
     depth_texture: texture::Texture,
+    viewport_texture: texture::Texture,
+    viewport_texture_id: egui::TextureId,
+    viewport_size_px: [u32; 2],
     window: Arc<Window>,
     last_render_time: instant::Instant,
-    mouse_pressed: bool,
     hdr: hdr::HdrPipeline,
     environment_bind_group: wgpu::BindGroup,
     sky_pipeline: wgpu::RenderPipeline,
@@ -196,7 +198,7 @@ impl State {
             })
             .await?;
 
-        println!("adapter.get_info(): {:?}", adapter.get_info());
+        log::info!("Adapter info: {:?}", adapter.get_info());
 
         let (device, queue) = adapter
             .request_device(&wgpu::DeviceDescriptor {
@@ -280,8 +282,12 @@ impl State {
                 label: Some("texture_bind_group_layout"),
             });
 
-        let depth_texture =
-            texture::Texture::create_depth_texture(&device, &config, "depth texture");
+        let depth_texture = texture::Texture::create_depth_texture(
+            &device,
+            config.width,
+            config.height,
+            "depth texture",
+        );
 
         let camera = camera::Camera::new((0.0, 5.0, 10.0), cgmath::Deg(-90.0), cgmath::Deg(-20.0));
         let projection =
@@ -510,8 +516,29 @@ impl State {
             )
         };
 
-        let egui_renderer =
+        let mut egui_renderer =
             gui::EguiRenderer::new(&device, config.format.add_srgb_suffix(), &window);
+
+        let viewport_size_px = [config.width.max(1), config.height.max(1)];
+        let viewport_texture = texture::Texture::create_texture(
+            &device,
+            Some("viewport_texture"),
+            wgpu::Extent3d {
+                width: viewport_size_px[0],
+                height: viewport_size_px[1],
+                depth_or_array_layers: 1,
+            },
+            surface_format.remove_srgb_suffix(),
+            &[surface_format.add_srgb_suffix()],
+            wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::RENDER_ATTACHMENT,
+            wgpu::TextureDimension::D2,
+            wgpu::FilterMode::Linear,
+        );
+        let viewport_texture_id = egui_renderer.register_native_texture(
+            &device,
+            &viewport_texture.view,
+            wgpu::FilterMode::Linear,
+        );
 
         Ok(Self {
             surface,
@@ -534,9 +561,11 @@ impl State {
             instances,
             instance_buffer,
             depth_texture,
+            viewport_texture,
+            viewport_texture_id,
+            viewport_size_px,
             window,
             last_render_time: instant::Instant::now(),
-            mouse_pressed: false,
             hdr,
             environment_bind_group,
             sky_pipeline,
@@ -549,10 +578,6 @@ impl State {
             self.config.width = width;
             self.config.height = height;
             self.surface.configure(&self.device, &self.config);
-            self.projection.resize(width, height);
-            self.depth_texture =
-                Texture::create_depth_texture(&self.device, &self.config, "depth texture");
-            self.hdr.resize(&self.device, width, height);
             self.is_surface_configured = true;
         }
     }
@@ -581,6 +606,7 @@ impl State {
     }
 
     pub fn render(&mut self) -> Result<(), wgpu::SurfaceError> {
+        // TODO: refactor
         self.window.request_redraw();
 
         if !self.is_surface_configured {
@@ -599,6 +625,110 @@ impl State {
             .create_command_encoder(&wgpu::CommandEncoderDescriptor {
                 label: Some("Render Encoder"),
             });
+
+        let screen_descriptor = egui_wgpu::ScreenDescriptor {
+            size_in_pixels: [self.config.width, self.config.height],
+            pixels_per_point: self.window.scale_factor() as f32,
+        };
+
+        let viewport_texture_id = self.viewport_texture_id;
+        let mut requested_viewport_size_px = self.viewport_size_px;
+        let mut viewport_drag_delta_px = egui::Vec2::ZERO;
+        let mut viewport_scroll_px = 0.0f32;
+        let ppp = screen_descriptor.pixels_per_point;
+
+        let frame = self
+            .egui_renderer
+            .run(&self.window, &screen_descriptor, |context| {
+                egui::Window::new("Viewport")
+                    .resizable(true)
+                    .default_open(true)
+                    .show(context, |ui| {
+                        let size_points = ui.available_size().max(egui::Vec2::new(1.0, 1.0));
+
+                        requested_viewport_size_px = [
+                            (size_points.x * ppp).round().max(1.0) as u32,
+                            (size_points.y * ppp).round().max(1.0) as u32,
+                        ];
+
+                        let image = egui::Image::new(egui::load::SizedTexture::new(
+                            viewport_texture_id,
+                            size_points,
+                        ))
+                        .sense(egui::Sense::drag());
+
+                        let response = ui.add(image);
+
+                        if response.dragged_by(egui::PointerButton::Primary) {
+                            let delta_points = ui.input(|i| i.pointer.delta());
+                            viewport_drag_delta_px = delta_points * ppp;
+                        }
+
+                        if response.hovered() {
+                            let scroll_points = ui.input(|i| i.smooth_scroll_delta.y);
+                            viewport_scroll_px = scroll_points * ppp;
+                        }
+                    });
+            });
+
+        if viewport_drag_delta_px != egui::Vec2::ZERO {
+            self.camera_controller.handle_mouse(
+                viewport_drag_delta_px.x as f64,
+                viewport_drag_delta_px.y as f64,
+            );
+        }
+
+        if viewport_scroll_px > 0.0 {
+            self.camera_controller
+                .handle_scroll_pixels(viewport_scroll_px);
+        }
+
+        if requested_viewport_size_px != self.viewport_size_px {
+            self.viewport_size_px = requested_viewport_size_px;
+
+            self.viewport_texture = texture::Texture::create_texture(
+                &self.device,
+                Some("viewport_texture"),
+                wgpu::Extent3d {
+                    width: self.viewport_size_px[0],
+                    height: self.viewport_size_px[1],
+                    depth_or_array_layers: 1,
+                },
+                self.config.format.remove_srgb_suffix(),
+                &[self.config.format.add_srgb_suffix()],
+                wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::RENDER_ATTACHMENT,
+                wgpu::TextureDimension::D2,
+                wgpu::FilterMode::Linear,
+            );
+            self.egui_renderer.update_egui_texture_from_wgpu_texture(
+                &self.device,
+                &self.viewport_texture.view,
+                wgpu::FilterMode::Linear,
+                self.viewport_texture_id,
+            );
+
+            self.hdr.resize(
+                &self.device,
+                self.viewport_size_px[0],
+                self.viewport_size_px[1],
+            );
+            self.depth_texture = texture::Texture::create_depth_texture(
+                &self.device,
+                self.viewport_size_px[0],
+                self.viewport_size_px[1],
+                "depth texture",
+            );
+            self.projection
+                .resize(self.viewport_size_px[0], self.viewport_size_px[1]);
+
+            self.camera_uniform
+                .update_view_proj(&self.camera, &self.projection);
+            self.queue.write_buffer(
+                &self.camera_buffer,
+                0,
+                bytemuck::cast_slice(&[self.camera_uniform]),
+            );
+        }
 
         {
             let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
@@ -660,39 +790,35 @@ impl State {
             render_pass.draw(0..3, 0..1);
         }
 
-        self.hdr.process(&mut encoder, &view);
+        let viewport_view_srgb =
+            self.viewport_texture
+                .texture
+                .create_view(&wgpu::TextureViewDescriptor {
+                    format: Some(self.config.format.add_srgb_suffix()),
+                    ..Default::default()
+                });
+        self.hdr.process(&mut encoder, &viewport_view_srgb);
 
-        let screen_descriptor = egui_wgpu::ScreenDescriptor {
-            size_in_pixels: [self.config.width, self.config.height],
-            pixels_per_point: self.window.scale_factor() as f32,
-        };
-
-        self.egui_renderer.render(
+        self.egui_renderer.prepare(
             &self.device,
             &self.queue,
             &mut encoder,
-            &self.window,
+            &frame,
+            &screen_descriptor,
+        );
+        self.egui_renderer.paint(
+            &mut encoder,
             &view,
-            screen_descriptor,
-            |context| {
-                egui::Window::new("winit + egui + wgpu says hello!")
-                    .resizable(true)
-                    .vscroll(true)
-                    .default_open(false)
-                    .show(context, |ui| {
-                        ui.label("Label!");
-
-                        if ui.button("Button!").clicked() {
-                            println!("boom!")
-                        }
-
-                        ui.separator();
-                        ui.horizontal(|ui| {
-                            ui.label(format!("Pixels per point: {}", context.pixels_per_point()));
-                        });
-                    });
+            &frame,
+            &screen_descriptor,
+            wgpu::Color {
+                r: 0.02,
+                g: 0.02,
+                b: 0.02,
+                a: 1.0,
             },
         );
+        self.egui_renderer.cleanup(&frame);
 
         self.queue.submit(std::iter::once(encoder.finish()));
         output.present();
@@ -842,21 +968,7 @@ impl ApplicationHandler<State> for App {
         _device_id: DeviceId,
         event: DeviceEvent,
     ) {
-        let state = match &mut self.state {
-            Some(canvas) => canvas,
-            None => return,
-        };
-
         match event {
-            DeviceEvent::MouseMotion { delta } => {
-                if state.mouse_pressed {
-                    let (dx, dy) = delta;
-                    state.camera_controller.handle_mouse(dx, dy);
-                }
-            }
-            DeviceEvent::MouseWheel { delta } => {
-                state.camera_controller.handle_mouse_scroll(&delta);
-            }
             _ => {}
         }
     }
@@ -895,16 +1007,6 @@ impl ApplicationHandler<State> for App {
                         log::error!("Unable to render {}", e);
                     }
                 }
-            }
-            WindowEvent::MouseInput {
-                state: mouse_state,
-                button: MouseButton::Left,
-                ..
-            } => {
-                state.mouse_pressed = mouse_state.is_pressed();
-            }
-            WindowEvent::MouseWheel { delta, .. } => {
-                state.camera_controller.handle_mouse_scroll(&delta);
             }
             WindowEvent::KeyboardInput {
                 event:

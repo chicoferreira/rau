@@ -1,11 +1,7 @@
 use std::f32::consts::FRAC_PI_2;
 
 use cgmath::{InnerSpace, Matrix4, Point3, Rad, Vector3, perspective};
-use winit::{
-    dpi::PhysicalPosition,
-    event::{ElementState, MouseScrollDelta},
-    keyboard::KeyCode,
-};
+use winit::{event::ElementState, keyboard::KeyCode};
 
 #[rustfmt::skip]
 pub const OPENGL_TO_WGPU_MATRIX: cgmath::Matrix4<f32> = cgmath::Matrix4::from_cols(
@@ -147,12 +143,8 @@ impl CameraController {
         self.rotate_vertical = mouse_dy as f32;
     }
 
-    pub fn handle_mouse_scroll(&mut self, delta: &MouseScrollDelta) {
-        self.scroll = match delta {
-            // I'm assuming a line is about 100 pixels
-            MouseScrollDelta::LineDelta(_, scroll) => scroll * 100.0,
-            MouseScrollDelta::PixelDelta(PhysicalPosition { y: scroll, .. }) => *scroll as f32,
-        };
+    pub fn handle_scroll_pixels(&mut self, scroll_pixels: f32) {
+        self.scroll = scroll_pixels;
     }
 
     pub fn update_camera(&mut self, camera: &mut Camera, dt: instant::Duration) {
