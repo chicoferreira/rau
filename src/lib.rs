@@ -678,7 +678,7 @@ impl State {
             );
         }
 
-        if viewport_scroll_px > 0.0 {
+        if viewport_scroll_px != 0.0 {
             self.camera_controller
                 .handle_scroll_pixels(viewport_scroll_px);
         }
