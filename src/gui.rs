@@ -37,7 +37,7 @@ impl EguiRenderer {
         }
     }
 
-    pub fn run<F>(
+    pub fn handle<F>(
         &mut self,
         window: &winit::window::Window,
         screen_descriptor: &egui_wgpu::ScreenDescriptor,
@@ -68,13 +68,15 @@ impl EguiRenderer {
         }
     }
 
-    pub fn prepare(
+    pub fn render_egui_frame(
         &mut self,
+        frame: &EguiFrame,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
         encoder: &mut wgpu::CommandEncoder,
-        frame: &EguiFrame,
+        view: &wgpu::TextureView,
         screen_descriptor: &egui_wgpu::ScreenDescriptor,
+        clear_color: wgpu::Color,
     ) {
         for (id, image_delta) in &frame.textures_delta.set {
             self.renderer
@@ -83,16 +85,7 @@ impl EguiRenderer {
 
         self.renderer
             .update_buffers(device, queue, encoder, &frame.meshes, screen_descriptor);
-    }
 
-    pub fn paint(
-        &mut self,
-        encoder: &mut wgpu::CommandEncoder,
-        view: &wgpu::TextureView,
-        frame: &EguiFrame,
-        screen_descriptor: &egui_wgpu::ScreenDescriptor,
-        clear_color: wgpu::Color,
-    ) {
         let render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                 view,
@@ -115,15 +108,13 @@ impl EguiRenderer {
             &frame.meshes,
             screen_descriptor,
         );
-    }
 
-    pub fn cleanup(&mut self, frame: &EguiFrame) {
         for ele in &frame.textures_delta.free {
             self.renderer.free_texture(ele);
         }
     }
 
-    pub fn register_native_texture(
+    pub fn register_egui_texture(
         &mut self,
         device: &wgpu::Device,
         texture: &wgpu::TextureView,
@@ -133,7 +124,7 @@ impl EguiRenderer {
             .register_native_texture(device, texture, texture_filter)
     }
 
-    pub fn update_egui_texture_from_wgpu_texture(
+    pub fn update_egui_texture(
         &mut self,
         device: &wgpu::Device,
         texture: &wgpu::TextureView,

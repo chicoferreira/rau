@@ -164,7 +164,7 @@ pub struct State {
     depth_texture: texture::Texture,
     viewport_texture: texture::Texture,
     viewport_texture_id: egui::TextureId,
-    viewport_size_px: [u32; 2],
+    viewport_size_px: (u32, u32),
     window: Arc<Window>,
     last_render_time: instant::Instant,
     hdr: hdr::HdrPipeline,
@@ -519,13 +519,13 @@ impl State {
         let mut egui_renderer =
             gui::EguiRenderer::new(&device, config.format.add_srgb_suffix(), &window);
 
-        let viewport_size_px = [config.width.max(1), config.height.max(1)];
+        let viewport_size_px = (config.width.max(1), config.height.max(1));
         let viewport_texture = texture::Texture::create_texture(
             &device,
             Some("viewport_texture"),
             wgpu::Extent3d {
-                width: viewport_size_px[0],
-                height: viewport_size_px[1],
+                width: viewport_size_px.0,
+                height: viewport_size_px.1,
                 depth_or_array_layers: 1,
             },
             surface_format.remove_srgb_suffix(),
@@ -534,7 +534,7 @@ impl State {
             wgpu::TextureDimension::D2,
             wgpu::FilterMode::Linear,
         );
-        let viewport_texture_id = egui_renderer.register_native_texture(
+        let viewport_texture_id = egui_renderer.register_egui_texture(
             &device,
             &viewport_texture.view,
             wgpu::FilterMode::Linear,
@@ -582,7 +582,7 @@ impl State {
         }
     }
 
-    fn update(&mut self, dt: instant::Duration) {
+    fn update_buffers(&mut self, dt: instant::Duration) {
         self.camera_controller.update_camera(&mut self.camera, dt);
         self.camera_uniform
             .update_view_proj(&self.camera, &self.projection);
@@ -605,8 +605,7 @@ impl State {
         );
     }
 
-    pub fn render(&mut self) -> Result<(), wgpu::SurfaceError> {
-        // TODO: refactor
+    pub fn render(&mut self, dt: instant::Duration) -> Result<(), wgpu::SurfaceError> {
         self.window.request_redraw();
 
         if !self.is_surface_configured {
@@ -635,21 +634,21 @@ impl State {
         let mut requested_viewport_size_px = self.viewport_size_px;
         let mut viewport_drag_delta_px = egui::Vec2::ZERO;
         let mut viewport_scroll_px = 0.0f32;
-        let ppp = screen_descriptor.pixels_per_point;
+        let ppp = 1.0;
 
         let frame = self
             .egui_renderer
-            .run(&self.window, &screen_descriptor, |context| {
+            .handle(&self.window, &screen_descriptor, |context| {
                 egui::Window::new("Viewport")
                     .resizable(true)
                     .default_open(true)
                     .show(context, |ui| {
                         let size_points = ui.available_size().max(egui::Vec2::new(1.0, 1.0));
 
-                        requested_viewport_size_px = [
+                        requested_viewport_size_px = (
                             (size_points.x * ppp).round().max(1.0) as u32,
                             (size_points.y * ppp).round().max(1.0) as u32,
-                        ];
+                        );
 
                         let image = egui::Image::new(egui::load::SizedTexture::new(
                             viewport_texture_id,
@@ -683,133 +682,20 @@ impl State {
                 .handle_scroll_pixels(viewport_scroll_px);
         }
 
+        self.update_buffers(dt);
+
         if requested_viewport_size_px != self.viewport_size_px {
-            self.viewport_size_px = requested_viewport_size_px;
-
-            self.viewport_texture = texture::Texture::create_texture(
-                &self.device,
-                Some("viewport_texture"),
-                wgpu::Extent3d {
-                    width: self.viewport_size_px[0],
-                    height: self.viewport_size_px[1],
-                    depth_or_array_layers: 1,
-                },
-                self.config.format.remove_srgb_suffix(),
-                &[self.config.format.add_srgb_suffix()],
-                wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::RENDER_ATTACHMENT,
-                wgpu::TextureDimension::D2,
-                wgpu::FilterMode::Linear,
-            );
-            self.egui_renderer.update_egui_texture_from_wgpu_texture(
-                &self.device,
-                &self.viewport_texture.view,
-                wgpu::FilterMode::Linear,
-                self.viewport_texture_id,
-            );
-
-            self.hdr.resize(
-                &self.device,
-                self.viewport_size_px[0],
-                self.viewport_size_px[1],
-            );
-            self.depth_texture = texture::Texture::create_depth_texture(
-                &self.device,
-                self.viewport_size_px[0],
-                self.viewport_size_px[1],
-                "depth texture",
-            );
-            self.projection
-                .resize(self.viewport_size_px[0], self.viewport_size_px[1]);
-
-            self.camera_uniform
-                .update_view_proj(&self.camera, &self.projection);
-            self.queue.write_buffer(
-                &self.camera_buffer,
-                0,
-                bytemuck::cast_slice(&[self.camera_uniform]),
-            );
+            self.resize_viewport(requested_viewport_size_px);
         }
 
-        {
-            let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: Some("Render Pass"),
-                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view: &self.hdr.view(),
-                    resolve_target: None,
-                    ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(wgpu::Color {
-                            r: 0.1,
-                            g: 0.2,
-                            b: 0.3,
-                            a: 1.0,
-                        }),
-                        store: wgpu::StoreOp::Store,
-                    },
-                    depth_slice: None,
-                })],
-                depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
-                    view: &self.depth_texture.view,
-                    depth_ops: Some(wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(1.0),
-                        store: wgpu::StoreOp::Store,
-                    }),
-                    stencil_ops: None,
-                }),
-                occlusion_query_set: None,
-                timestamp_writes: None,
-                multiview_mask: None,
-            });
+        self.render_scene(&mut encoder);
 
-            render_pass.set_vertex_buffer(1, self.instance_buffer.slice(..));
-            render_pass.set_pipeline(&self.light_render_pipeline);
-            for mesh in &self.obj_model.meshes {
-                render_pass.set_vertex_buffer(0, mesh.vertex_buffer.slice(..));
-                render_pass
-                    .set_index_buffer(mesh.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
-                render_pass.set_bind_group(0, &self.camera_bind_group, &[]);
-                render_pass.set_bind_group(1, &self.light_bind_group, &[]);
-                render_pass.draw_indexed(0..mesh.num_elements, 0, 0..1);
-            }
-
-            render_pass.set_pipeline(&self.render_pipeline);
-            for mesh in &self.obj_model.meshes {
-                let material = &self.obj_model.materials[mesh.material];
-                render_pass.set_vertex_buffer(0, mesh.vertex_buffer.slice(..));
-                render_pass
-                    .set_index_buffer(mesh.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
-                render_pass.set_bind_group(0, &material.bind_group, &[]);
-                render_pass.set_bind_group(1, &self.camera_bind_group, &[]);
-                render_pass.set_bind_group(2, &self.light_bind_group, &[]);
-                render_pass.set_bind_group(3, &self.environment_bind_group, &[]);
-                render_pass.draw_indexed(0..mesh.num_elements, 0, 0..self.instances.len() as u32);
-            }
-
-            render_pass.set_pipeline(&self.sky_pipeline);
-            render_pass.set_bind_group(0, &self.camera_bind_group, &[]);
-            render_pass.set_bind_group(1, &self.environment_bind_group, &[]);
-            render_pass.draw(0..3, 0..1);
-        }
-
-        let viewport_view_srgb =
-            self.viewport_texture
-                .texture
-                .create_view(&wgpu::TextureViewDescriptor {
-                    format: Some(self.config.format.add_srgb_suffix()),
-                    ..Default::default()
-                });
-        self.hdr.process(&mut encoder, &viewport_view_srgb);
-
-        self.egui_renderer.prepare(
+        self.egui_renderer.render_egui_frame(
+            &frame,
             &self.device,
             &self.queue,
             &mut encoder,
-            &frame,
-            &screen_descriptor,
-        );
-        self.egui_renderer.paint(
-            &mut encoder,
             &view,
-            &frame,
             &screen_descriptor,
             wgpu::Color {
                 r: 0.02,
@@ -818,12 +704,127 @@ impl State {
                 a: 1.0,
             },
         );
-        self.egui_renderer.cleanup(&frame);
 
         self.queue.submit(std::iter::once(encoder.finish()));
         output.present();
 
         Ok(())
+    }
+
+    pub fn render_scene(&mut self, encoder: &mut wgpu::CommandEncoder) {
+        let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            label: Some("Render Pass"),
+            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                view: &self.hdr.view(),
+                resolve_target: None,
+                ops: wgpu::Operations {
+                    load: wgpu::LoadOp::Clear(wgpu::Color {
+                        r: 0.1,
+                        g: 0.2,
+                        b: 0.3,
+                        a: 1.0,
+                    }),
+                    store: wgpu::StoreOp::Store,
+                },
+                depth_slice: None,
+            })],
+            depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+                view: &self.depth_texture.view,
+                depth_ops: Some(wgpu::Operations {
+                    load: wgpu::LoadOp::Clear(1.0),
+                    store: wgpu::StoreOp::Store,
+                }),
+                stencil_ops: None,
+            }),
+            occlusion_query_set: None,
+            timestamp_writes: None,
+            multiview_mask: None,
+        });
+
+        render_pass.set_vertex_buffer(1, self.instance_buffer.slice(..));
+        render_pass.set_pipeline(&self.light_render_pipeline);
+        for mesh in &self.obj_model.meshes {
+            render_pass.set_vertex_buffer(0, mesh.vertex_buffer.slice(..));
+            render_pass.set_index_buffer(mesh.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
+            render_pass.set_bind_group(0, &self.camera_bind_group, &[]);
+            render_pass.set_bind_group(1, &self.light_bind_group, &[]);
+            render_pass.draw_indexed(0..mesh.num_elements, 0, 0..1);
+        }
+
+        render_pass.set_pipeline(&self.render_pipeline);
+        for mesh in &self.obj_model.meshes {
+            let material = &self.obj_model.materials[mesh.material];
+            render_pass.set_vertex_buffer(0, mesh.vertex_buffer.slice(..));
+            render_pass.set_index_buffer(mesh.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
+            render_pass.set_bind_group(0, &material.bind_group, &[]);
+            render_pass.set_bind_group(1, &self.camera_bind_group, &[]);
+            render_pass.set_bind_group(2, &self.light_bind_group, &[]);
+            render_pass.set_bind_group(3, &self.environment_bind_group, &[]);
+            render_pass.draw_indexed(0..mesh.num_elements, 0, 0..self.instances.len() as u32);
+        }
+
+        render_pass.set_pipeline(&self.sky_pipeline);
+        render_pass.set_bind_group(0, &self.camera_bind_group, &[]);
+        render_pass.set_bind_group(1, &self.environment_bind_group, &[]);
+        render_pass.draw(0..3, 0..1);
+
+        drop(render_pass);
+
+        let viewport_view_srgb =
+            self.viewport_texture
+                .texture
+                .create_view(&wgpu::TextureViewDescriptor {
+                    format: Some(self.config.format.add_srgb_suffix()),
+                    ..Default::default()
+                });
+
+        self.hdr.process(encoder, &viewport_view_srgb);
+    }
+
+    fn resize_viewport(&mut self, new_size: (u32, u32)) {
+        self.viewport_size_px = new_size;
+        self.viewport_texture = texture::Texture::create_texture(
+            &self.device,
+            Some("viewport_texture"),
+            wgpu::Extent3d {
+                width: self.viewport_size_px.0,
+                height: self.viewport_size_px.1,
+                depth_or_array_layers: 1,
+            },
+            self.config.format.remove_srgb_suffix(),
+            &[self.config.format.add_srgb_suffix()],
+            wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::RENDER_ATTACHMENT,
+            wgpu::TextureDimension::D2,
+            wgpu::FilterMode::Linear,
+        );
+        self.egui_renderer.update_egui_texture(
+            &self.device,
+            &self.viewport_texture.view,
+            wgpu::FilterMode::Linear,
+            self.viewport_texture_id,
+        );
+
+        self.hdr.resize(
+            &self.device,
+            self.viewport_size_px.0,
+            self.viewport_size_px.1,
+        );
+        self.depth_texture = texture::Texture::create_depth_texture(
+            &self.device,
+            self.viewport_size_px.0,
+            self.viewport_size_px.1,
+            "depth texture",
+        );
+        self.projection
+            .resize(self.viewport_size_px.0, self.viewport_size_px.1);
+
+        self.camera_uniform
+            .update_view_proj(&self.camera, &self.projection);
+        self.queue.write_buffer(
+            &self.camera_buffer,
+            0,
+            bytemuck::cast_slice(&[self.camera_uniform]),
+        );
     }
 }
 
@@ -996,8 +997,7 @@ impl ApplicationHandler<State> for App {
                 let now = instant::Instant::now();
                 let dt = now - state.last_render_time;
                 state.last_render_time = now;
-                state.update(dt);
-                match state.render() {
+                match state.render(dt) {
                     Ok(_) => {}
                     Err(wgpu::SurfaceError::Lost | wgpu::SurfaceError::Outdated) => {
                         let size = state.window.inner_size();
