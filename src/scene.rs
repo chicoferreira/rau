@@ -4,7 +4,7 @@ use crate::{
     camera, create_render_pipeline,
     hdr::{self, HdrPipeline},
     model::{self, Vertex},
-    resources, texture,
+    resources, texture, viewport,
 };
 use cgmath::{InnerSpace, Matrix, Rotation3, SquareMatrix, Zero};
 
@@ -451,8 +451,72 @@ impl Scene {
         })
     }
 
-    pub fn render(
+    fn update(&mut self, queue: &wgpu::Queue, dt: instant::Duration) {
+        self.camera_controller.update_camera(&mut self.camera, dt);
+        self.camera_uniform
+            .update_view_proj(&self.camera, &self.projection);
+        queue.write_buffer(
+            &self.camera_buffer,
+            0,
+            bytemuck::cast_slice(&[self.camera_uniform]),
+        );
+
+        let old_position: cgmath::Vector3<_> = self.light_uniform.position.into();
+        self.light_uniform.position = (cgmath::Quaternion::from_axis_angle(
+            (0.0, 1.0, 0.0).into(),
+            cgmath::Deg(60.0 * dt.as_secs_f32()),
+        ) * old_position)
+            .into();
+        queue.write_buffer(
+            &self.light_buffer,
+            0,
+            bytemuck::cast_slice(&[self.light_uniform]),
+        );
+    }
+}
+
+impl viewport::ViewportContent for Scene {
+    fn on_event(
         &mut self,
+        event: viewport::ViewportEvent,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+    ) {
+        match event {
+            viewport::ViewportEvent::Drag { dx_px, dy_px } => {
+                self.camera_controller.handle_mouse(dx_px, dy_px);
+            }
+            viewport::ViewportEvent::Scroll { delta_y_px } => {
+                self.camera_controller.handle_scroll_pixels(delta_y_px);
+            }
+            viewport::ViewportEvent::Resize { width, height } => {
+                self.hdr.resize(device, width, height);
+                self.depth_texture =
+                    texture::Texture::create_depth_texture(device, width, height, "depth texture");
+                self.projection.resize(width, height);
+
+                self.camera_uniform
+                    .update_view_proj(&self.camera, &self.projection);
+                queue.write_buffer(
+                    &self.camera_buffer,
+                    0,
+                    bytemuck::cast_slice(&[self.camera_uniform]),
+                );
+            }
+            viewport::ViewportEvent::Frame { dt } => {
+                self.update(queue, dt);
+            }
+            viewport::ViewportEvent::Keyboard {
+                key_code,
+                element_state,
+            } => {
+                self.camera_controller.process_keyboard(key_code, element_state);
+            }
+        }
+    }
+
+    fn render(
+        &self,
         encoder: &mut wgpu::CommandEncoder,
         target_texture: &texture::Texture,
         target_texture_format: wgpu::TextureFormat,
@@ -523,59 +587,5 @@ impl Scene {
             });
 
         self.hdr.process(encoder, &target_view_srgb);
-    }
-
-    pub fn resize(&mut self, device: &wgpu::Device, queue: &wgpu::Queue, width: u32, height: u32) {
-        self.hdr.resize(device, width, height);
-        self.depth_texture =
-            texture::Texture::create_depth_texture(device, width, height, "depth texture");
-        self.projection.resize(width, height);
-
-        self.camera_uniform
-            .update_view_proj(&self.camera, &self.projection);
-        queue.write_buffer(
-            &self.camera_buffer,
-            0,
-            bytemuck::cast_slice(&[self.camera_uniform]),
-        );
-    }
-
-    pub fn handle_mouse_input(&mut self, mouse_dx: f64, mouse_dy: f64) {
-        self.camera_controller.handle_mouse(mouse_dx, mouse_dy);
-    }
-
-    pub fn handle_scroll(&mut self, scroll_pixels: f32) {
-        self.camera_controller.handle_scroll_pixels(scroll_pixels);
-    }
-
-    pub fn handle_keyboard(
-        &mut self,
-        key: winit::keyboard::KeyCode,
-        pressed: winit::event::ElementState,
-    ) {
-        self.camera_controller.process_keyboard(key, pressed);
-    }
-
-    pub fn update(&mut self, queue: &wgpu::Queue, dt: instant::Duration) {
-        self.camera_controller.update_camera(&mut self.camera, dt);
-        self.camera_uniform
-            .update_view_proj(&self.camera, &self.projection);
-        queue.write_buffer(
-            &self.camera_buffer,
-            0,
-            bytemuck::cast_slice(&[self.camera_uniform]),
-        );
-
-        let old_position: cgmath::Vector3<_> = self.light_uniform.position.into();
-        self.light_uniform.position = (cgmath::Quaternion::from_axis_angle(
-            (0.0, 1.0, 0.0).into(),
-            cgmath::Deg(60.0 * dt.as_secs_f32()),
-        ) * old_position)
-            .into();
-        queue.write_buffer(
-            &self.light_buffer,
-            0,
-            bytemuck::cast_slice(&[self.light_uniform]),
-        );
     }
 }

@@ -18,6 +18,7 @@ mod model;
 mod resources;
 mod scene;
 mod texture;
+mod viewport;
 
 pub struct State {
     surface: wgpu::Surface<'static>,
@@ -28,12 +29,7 @@ pub struct State {
     window: Arc<Window>,
     last_render_time: instant::Instant,
     egui_renderer: gui::EguiRenderer,
-    scene: scene::Scene,
-    viewport_texture: texture::Texture,
-    viewport_texture_format: wgpu::TextureFormat,
-    viewport_texture_id: egui::TextureId,
-    viewport_width: u32,
-    viewport_height: u32,
+    viewport: viewport::Viewport<scene::Scene>,
 }
 
 impl State {
@@ -106,38 +102,17 @@ impl State {
         let mut egui_renderer =
             gui::EguiRenderer::new(&device, config.format.add_srgb_suffix(), &window);
 
-        let viewport_width = config.width.max(1);
-        let viewport_height = config.height.max(1);
-        let viewport_texture = texture::Texture::create_texture(
-            &device,
-            Some("viewport_texture"),
-            wgpu::Extent3d {
-                width: viewport_width,
-                height: viewport_height,
-                depth_or_array_layers: 1,
-            },
-            surface_format.remove_srgb_suffix(),
-            &[surface_format.add_srgb_suffix()],
-            wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::RENDER_ATTACHMENT,
-            wgpu::TextureDimension::D2,
-            wgpu::FilterMode::Linear,
-        );
-        let viewport_texture_id = egui_renderer.register_egui_texture(
-            &device,
-            &viewport_texture.view,
-            wgpu::FilterMode::Linear,
-        );
+        let scene =
+            scene::Scene::new(&device, &queue, config.width, config.height, surface_format).await?;
 
-        let viewport_texture_format = surface_format;
-
-        let viewport = scene::Scene::new(
+        let viewport = viewport::Viewport::new(
+            scene,
             &device,
-            &queue,
             config.width,
             config.height,
-            viewport_texture_format,
-        )
-        .await?;
+            surface_format,
+            &mut egui_renderer,
+        );
 
         Ok(Self {
             surface,
@@ -148,12 +123,7 @@ impl State {
             window,
             last_render_time: instant::Instant::now(),
             egui_renderer,
-            scene: viewport,
-            viewport_texture,
-            viewport_texture_format,
-            viewport_texture_id,
-            viewport_width,
-            viewport_height,
+            viewport,
         })
     }
 
@@ -164,34 +134,6 @@ impl State {
             self.surface.configure(&self.device, &self.config);
             self.is_surface_configured = true;
         }
-    }
-
-    pub fn resize_viewport(&mut self, width: u32, height: u32) {
-        self.viewport_width = width;
-        self.viewport_height = height;
-
-        self.viewport_texture = texture::Texture::create_texture(
-            &self.device,
-            Some("viewport_texture"),
-            wgpu::Extent3d {
-                width,
-                height,
-                depth_or_array_layers: 1,
-            },
-            self.viewport_texture_format.remove_srgb_suffix(),
-            &[self.viewport_texture_format.add_srgb_suffix()],
-            wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::RENDER_ATTACHMENT,
-            wgpu::TextureDimension::D2,
-            wgpu::FilterMode::Linear,
-        );
-        self.egui_renderer.update_egui_texture(
-            &self.device,
-            &self.viewport_texture.view,
-            wgpu::FilterMode::Linear,
-            self.viewport_texture_id,
-        );
-
-        self.scene.resize(&self.device, &self.queue, width, height);
     }
 
     pub fn render(&mut self, dt: instant::Duration) -> Result<(), wgpu::SurfaceError> {
@@ -219,12 +161,7 @@ impl State {
             pixels_per_point: self.window.scale_factor() as f32,
         };
 
-        let viewport_texture_id = self.viewport_texture_id;
-        let mut requested_viewport_width = self.viewport_width;
-        let mut requested_viewport_height = self.viewport_height;
-        let mut viewport_drag_delta_px = egui::Vec2::ZERO;
-        let mut viewport_scroll_px = 0.0f32;
-        let ppp = 1.0;
+        let mut events = vec![];
 
         let frame = self
             .egui_renderer
@@ -233,56 +170,16 @@ impl State {
                     .resizable(true)
                     .default_open(true)
                     .show(context, |ui| {
-                        let size_points = ui.available_size().max(egui::Vec2::new(1.0, 1.0));
-
-                        requested_viewport_width = (size_points.x * ppp).round().max(1.0) as u32;
-                        requested_viewport_height = (size_points.y * ppp).round().max(1.0) as u32;
-
-                        let image = egui::Image::new(egui::load::SizedTexture::new(
-                            viewport_texture_id,
-                            size_points,
-                        ))
-                        .sense(egui::Sense::drag());
-
-                        let response = ui.add(image);
-
-                        if response.dragged_by(egui::PointerButton::Primary) {
-                            let delta_points = ui.input(|i| i.pointer.delta());
-                            viewport_drag_delta_px = delta_points * ppp;
-                        }
-
-                        if response.hovered() {
-                            let scroll_points = ui.input(|i| i.smooth_scroll_delta.y);
-                            viewport_scroll_px = scroll_points * ppp;
-                        }
+                        events = self.viewport.ui(ui);
                     });
             });
 
-        if viewport_drag_delta_px != egui::Vec2::ZERO {
-            self.scene.handle_mouse_input(
-                viewport_drag_delta_px.x as f64,
-                viewport_drag_delta_px.y as f64,
-            );
-        }
+        self.viewport
+            .apply_events(events, &self.device, &self.queue, &mut self.egui_renderer);
 
-        if viewport_scroll_px != 0.0 {
-            self.scene.handle_scroll(viewport_scroll_px);
-        }
+        self.viewport.update(dt, &self.device, &self.queue);
 
-        self.scene.update(&self.queue, dt);
-
-        let requested_viewport_size = (requested_viewport_width, requested_viewport_height);
-        let viewport_size = (self.viewport_width, self.viewport_height);
-
-        if requested_viewport_size != viewport_size {
-            self.resize_viewport(requested_viewport_width, requested_viewport_height);
-        }
-
-        self.scene.render(
-            &mut encoder,
-            &self.viewport_texture,
-            self.viewport_texture_format,
-        );
+        self.viewport.render(&mut encoder);
 
         self.egui_renderer.render_egui_frame(
             &frame,
@@ -442,17 +339,6 @@ impl ApplicationHandler<State> for App {
         self.state = Some(event);
     }
 
-    fn device_event(
-        &mut self,
-        _event_loop: &ActiveEventLoop,
-        _device_id: DeviceId,
-        event: DeviceEvent,
-    ) {
-        match event {
-            _ => {}
-        }
-    }
-
     fn window_event(
         &mut self,
         event_loop: &ActiveEventLoop,
@@ -498,7 +384,9 @@ impl ApplicationHandler<State> for App {
             } => match (code, key_state) {
                 (KeyCode::Escape, ElementState::Pressed) => event_loop.exit(),
                 (code, pressed) => {
-                    state.scene.handle_keyboard(code, pressed);
+                    state
+                        .viewport
+                        .handle_keyboard(code, pressed, &state.device, &state.queue);
                 }
             },
             _ => {}
