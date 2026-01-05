@@ -9,17 +9,17 @@ pub struct HdrPipeline {
     texture: texture::Texture,
     width: u32,
     height: u32,
-    format: wgpu::TextureFormat,
     layout: wgpu::BindGroupLayout,
 }
 
 impl HdrPipeline {
-    pub fn new(device: &wgpu::Device, config: &wgpu::SurfaceConfiguration) -> Self {
-        let width = config.width;
-        let height = config.height;
-
-        let format = wgpu::TextureFormat::Rgba16Float;
-
+    pub const RENDER_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba16Float;
+    pub fn new(
+        device: &wgpu::Device,
+        width: u32,
+        height: u32,
+        output_format: wgpu::TextureFormat,
+    ) -> Self {
         let texture = texture::Texture::create_texture(
             device,
             Some("Hdr::texture"),
@@ -28,7 +28,7 @@ impl HdrPipeline {
                 height,
                 depth_or_array_layers: 1,
             },
-            format,
+            HdrPipeline::RENDER_FORMAT,
             &[],
             wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::RENDER_ATTACHMENT,
             wgpu::TextureDimension::D2,
@@ -78,12 +78,11 @@ impl HdrPipeline {
             immediate_size: 0,
         });
 
-        let output_format = config.format.add_srgb_suffix();
-
         let pipeline = create_render_pipeline(
+            "hdr pipeline",
             device,
             &pipeline_layout,
-            output_format,
+            output_format.add_srgb_suffix(),
             None,
             &[],
             wgpu::PrimitiveTopology::TriangleList,
@@ -97,7 +96,6 @@ impl HdrPipeline {
             texture,
             width,
             height,
-            format,
         }
     }
 
@@ -136,10 +134,6 @@ impl HdrPipeline {
 
     pub fn view(&self) -> &wgpu::TextureView {
         &self.texture.view
-    }
-
-    pub fn format(&self) -> wgpu::TextureFormat {
-        self.format
     }
 
     pub fn process(&self, encoder: &mut wgpu::CommandEncoder, output: &wgpu::TextureView) {

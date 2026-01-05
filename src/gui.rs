@@ -22,7 +22,7 @@ impl EguiRenderer {
             &window,
             Some(window.scale_factor() as f32),
             None,
-            Some(2 * 1024),
+            None,
         );
 
         let egui_renderer = egui_wgpu::Renderer::new(
