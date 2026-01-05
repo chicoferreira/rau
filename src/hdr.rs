@@ -1,6 +1,6 @@
 use wgpu::Operations;
 
-use crate::{create_render_pipeline, texture};
+use crate::{state, texture};
 
 /// Owns the render texture and controls tonemapping
 pub struct HdrPipeline {
@@ -78,7 +78,7 @@ impl HdrPipeline {
             immediate_size: 0,
         });
 
-        let pipeline = create_render_pipeline(
+        let pipeline = state::create_render_pipeline(
             "hdr pipeline",
             device,
             &pipeline_layout,

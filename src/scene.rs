@@ -1,10 +1,10 @@
 use wgpu::util::DeviceExt;
 
 use crate::{
-    camera, create_render_pipeline,
+    camera,
     hdr::{self, HdrPipeline},
     model::{self, Vertex},
-    resources, texture, viewport,
+    resources, state, texture, viewport,
 };
 use cgmath::{InnerSpace, Matrix, Rotation3, SquareMatrix, Zero};
 
@@ -376,7 +376,7 @@ impl Scene {
                 label: Some("Normal Shader"),
                 source: wgpu::ShaderSource::Wgsl(include_str!("shader.wgsl").into()),
             };
-            create_render_pipeline(
+            state::create_render_pipeline(
                 "normal shader pipeline",
                 &device,
                 &render_pipeline_layout,
@@ -398,7 +398,7 @@ impl Scene {
                 label: Some("Light Shader"),
                 source: wgpu::ShaderSource::Wgsl(include_str!("light.wgsl").into()),
             };
-            create_render_pipeline(
+            state::create_render_pipeline(
                 "light pipeline",
                 &device,
                 &layout,
@@ -417,7 +417,7 @@ impl Scene {
                 immediate_size: 0,
             });
             let shader = wgpu::include_wgsl!("sky.wgsl");
-            create_render_pipeline(
+            state::create_render_pipeline(
                 "sky pipeline",
                 &device,
                 &layout,
@@ -510,7 +510,8 @@ impl viewport::ViewportContent for Scene {
                 key_code,
                 element_state,
             } => {
-                self.camera_controller.process_keyboard(key_code, element_state);
+                self.camera_controller
+                    .process_keyboard(key_code, element_state);
             }
         }
     }
