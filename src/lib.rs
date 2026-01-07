@@ -2,7 +2,6 @@ use winit::event_loop::EventLoop;
 
 mod app;
 mod camera;
-mod hdr;
 mod model;
 mod resources;
 mod scene;

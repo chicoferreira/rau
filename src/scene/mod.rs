@@ -2,11 +2,15 @@ use wgpu::util::DeviceExt;
 
 use crate::{
     camera,
-    hdr::{self, HdrPipeline},
     model::{self, Vertex},
-    resources, state, texture, viewport,
+    resources,
+    scene::hdr::HdrPipeline,
+    state, texture, viewport,
 };
 use cgmath::{InnerSpace, Matrix, Rotation3, SquareMatrix, Zero};
+
+mod hdr;
+mod loader;
 
 #[repr(C)]
 #[derive(Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
@@ -311,7 +315,7 @@ impl Scene {
 
         let hdr = hdr::HdrPipeline::new(&device, width, height, target_texture_format);
 
-        let hdr_loader = resources::HdrLoader::new(&device);
+        let hdr_loader = loader::HdrLoader::new(&device);
         let sky_bytes = resources::load_binary("pure-sky.hdr").await?;
         let sky_texture = hdr_loader.from_equirectangular_bytes(
             &device,
