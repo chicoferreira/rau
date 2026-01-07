@@ -2,13 +2,13 @@ use winit::event_loop::EventLoop;
 
 mod app;
 mod camera;
-mod gui;
 mod hdr;
 mod model;
 mod resources;
 mod scene;
 mod state;
 mod texture;
+mod ui;
 mod viewport;
 
 pub fn run() -> anyhow::Result<()> {

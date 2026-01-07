@@ -1,4 +1,4 @@
-use crate::{gui, texture};
+use crate::{texture, ui};
 
 pub struct Viewport<C: ViewportContent> {
     texture: texture::Texture,
@@ -16,7 +16,7 @@ impl<C: ViewportContent> Viewport<C> {
         width: u32,
         height: u32,
         texture_format: wgpu::TextureFormat,
-        egui_renderer: &mut gui::EguiRenderer,
+        egui_renderer: &mut ui::renderer::EguiRenderer,
     ) -> Self {
         let width = width.max(1);
         let height = height.max(1);
@@ -52,7 +52,7 @@ impl<C: ViewportContent> Viewport<C> {
         width: u32,
         height: u32,
         device: &wgpu::Device,
-        egui_renderer: &mut gui::EguiRenderer,
+        egui_renderer: &mut ui::renderer::EguiRenderer,
     ) {
         let width = width.max(1);
         let height = height.max(1);
@@ -129,7 +129,7 @@ impl<C: ViewportContent> Viewport<C> {
         events: Vec<ViewportEvent>,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
-        egui_renderer: &mut gui::EguiRenderer,
+        egui_renderer: &mut ui::renderer::EguiRenderer,
     ) {
         for event in events {
             match event {
@@ -145,23 +145,6 @@ impl<C: ViewportContent> Viewport<C> {
     pub fn update(&mut self, dt: instant::Duration, device: &wgpu::Device, queue: &wgpu::Queue) {
         self.content
             .on_event(ViewportEvent::Frame { dt }, device, queue);
-    }
-
-    pub fn handle_keyboard(
-        &mut self,
-        key_code: winit::keyboard::KeyCode,
-        element_state: winit::event::ElementState,
-        device: &wgpu::Device,
-        queue: &wgpu::Queue,
-    ) {
-        self.content.on_event(
-            ViewportEvent::Keyboard {
-                key_code,
-                element_state,
-            },
-            device,
-            queue,
-        );
     }
 
     pub fn render(&self, encoder: &mut wgpu::CommandEncoder) {

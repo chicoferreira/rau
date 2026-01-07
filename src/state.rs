@@ -6,7 +6,10 @@ use winit::{
     window::Window,
 };
 
-use crate::{gui, scene, viewport};
+use crate::{
+    scene, ui,
+    viewport::{self},
+};
 
 pub struct State {
     surface: wgpu::Surface<'static>,
@@ -16,8 +19,11 @@ pub struct State {
     is_surface_configured: bool,
     window: Arc<Window>,
     last_render_time: instant::Instant,
-    egui_renderer: gui::EguiRenderer,
+    egui_renderer: ui::renderer::EguiRenderer,
     viewport: viewport::Viewport<scene::Scene>,
+    pending_events: Vec<viewport::ViewportEvent>,
+    tree: egui_tiles::Tree<ui::pane::Pane>,
+    adapter_info: wgpu::AdapterInfo,
 }
 
 impl State {
@@ -45,7 +51,7 @@ impl State {
             })
             .await?;
 
-        log::info!("Adapter info: {:?}", adapter.get_info());
+        let adapter_info = adapter.get_info();
 
         let (device, queue) = adapter
             .request_device(&wgpu::DeviceDescriptor {
@@ -88,7 +94,7 @@ impl State {
         };
 
         let mut egui_renderer =
-            gui::EguiRenderer::new(&device, config.format.add_srgb_suffix(), &window);
+            ui::renderer::EguiRenderer::new(&device, config.format.add_srgb_suffix(), &window);
 
         let scene =
             scene::Scene::new(&device, &queue, config.width, config.height, surface_format).await?;
@@ -102,6 +108,8 @@ impl State {
             &mut egui_renderer,
         );
 
+        let tree = ui::pane::build_default_tree();
+
         Ok(Self {
             surface,
             device,
@@ -112,6 +120,9 @@ impl State {
             last_render_time: instant::Instant::now(),
             egui_renderer,
             viewport,
+            pending_events: vec![],
+            tree,
+            adapter_info,
         })
     }
 
@@ -154,21 +165,30 @@ impl State {
             pixels_per_point: self.window.scale_factor() as f32,
         };
 
-        let mut events = vec![];
-
         let frame = self
             .egui_renderer
             .handle(&self.window, &screen_descriptor, |context| {
-                egui::Window::new("Viewport")
-                    .resizable(true)
-                    .default_open(true)
+                // FIXME: until this new version is released with proper documentation
+                #[allow(deprecated)]
+                egui::CentralPanel::default()
+                    .frame(egui::Frame::none().inner_margin(0))
                     .show(context, |ui| {
-                        events = self.viewport.ui(ui);
+                        let mut behavior = ui::pane::Behavior {
+                            viewport: &mut self.viewport,
+                            pending_events: &mut self.pending_events,
+                            adapter_info: &self.adapter_info,
+                        };
+
+                        self.tree.ui(&mut behavior, ui);
                     });
             });
 
-        self.viewport
-            .apply_events(events, &self.device, &self.queue, &mut self.egui_renderer);
+        self.viewport.apply_events(
+            self.pending_events.drain(..).collect(),
+            &self.device,
+            &self.queue,
+            &mut self.egui_renderer,
+        );
 
         self.viewport.update(dt, &self.device, &self.queue);
 
@@ -233,9 +253,11 @@ impl State {
                 ..
             } => match (code, key_state) {
                 (KeyCode::Escape, ElementState::Pressed) => event_loop.exit(),
-                (code, pressed) => {
-                    self.viewport
-                        .handle_keyboard(code, pressed, &self.device, &self.queue);
+                (key_code, element_state) => {
+                    self.pending_events.push(viewport::ViewportEvent::Keyboard {
+                        key_code,
+                        element_state,
+                    });
                 }
             },
             _ => {}

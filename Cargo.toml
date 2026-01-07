@@ -16,10 +16,10 @@ path = "src/main.rs"
 anyhow = "1.0.100"
 bytemuck = { version = "1.24.0", features = ["derive"] }
 cgmath = "0.18.0"
-# Using revisions until wgpu in egui gets updated to 28.0
-egui = { git = "https://github.com/emilk/egui.git", rev = "4a9fc7e6417b9ca838b880f2a89fd16468aece67" }
-egui-wgpu = { git = "https://github.com/emilk/egui.git", rev = "4a9fc7e6417b9ca838b880f2a89fd16468aece67" }
-egui-winit = { git = "https://github.com/emilk/egui.git", rev = "4a9fc7e6417b9ca838b880f2a89fd16468aece67", default-features = false }
+egui = "0.33.3"
+egui-wgpu = "0.33.3"
+egui-winit = { version = "0.33.3", default-features = false }
+egui_tiles = "0.14.1"
 env_logger = "0.11.8"
 image = { version = "0.24", default-features = false, features = ["png", "jpeg", "hdr"] }
 instant = "0.1"
@@ -31,11 +31,11 @@ winit = { version = "0.30.12", features = ["android-native-activity"] }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 # Enable default features for egui-winit
-egui-winit = { git = "https://github.com/emilk/egui.git", rev = "4a9fc7e6417b9ca838b880f2a89fd16468aece67", default-features = true }
+egui-winit = { version = "0.33.3", default-features = true }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 # Disable default features as egui-winit arboard is not compatible with wasm32
-egui-winit = { git = "https://github.com/emilk/egui.git", rev = "4a9fc7e6417b9ca838b880f2a89fd16468aece67", default-features = false }
+egui-winit = { version = "0.33.3", default-features = false }
 console_error_panic_hook = "0.1.6"
 console_log = "1.0"
 wasm-bindgen = "0.2"
@@ -48,6 +48,12 @@ web-sys = { version = "0.3", features = [
 ]}
 reqwest = "0.12"
 instant = { version = "0.1", features = [ "wasm-bindgen" ] }
+
+[patch.crates-io]
+# Using revisions until wgpu in egui gets updated to 28.0
+egui = { git = "https://github.com/emilk/egui.git", rev = "4a9fc7e6417b9ca838b880f2a89fd16468aece67" }
+egui-wgpu = { git = "https://github.com/emilk/egui.git", rev = "4a9fc7e6417b9ca838b880f2a89fd16468aece67" }
+egui-winit = { git = "https://github.com/emilk/egui.git", rev = "4a9fc7e6417b9ca838b880f2a89fd16468aece67" }
 
 [build-dependencies]
 anyhow = "1.0"
