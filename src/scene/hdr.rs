@@ -1,38 +1,19 @@
 use crate::{state, texture};
 
-/// Owns the render texture and controls tonemapping
 pub struct HdrPipeline {
     pipeline: wgpu::RenderPipeline,
     bind_group: wgpu::BindGroup,
-    texture: texture::Texture,
-    width: u32,
-    height: u32,
     layout: wgpu::BindGroupLayout,
 }
 
 impl HdrPipeline {
     pub const RENDER_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba16Float;
+
     pub fn new(
         device: &wgpu::Device,
-        width: u32,
-        height: u32,
+        hdr_texture: &texture::Texture,
         output_format: wgpu::TextureFormat,
     ) -> Self {
-        let texture = texture::Texture::create_texture(
-            device,
-            Some("Hdr::texture"),
-            wgpu::Extent3d {
-                width,
-                height,
-                depth_or_array_layers: 1,
-            },
-            HdrPipeline::RENDER_FORMAT,
-            &[],
-            wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::RENDER_ATTACHMENT,
-            wgpu::TextureDimension::D2,
-            wgpu::FilterMode::Nearest,
-        );
-
         let layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("Hdr::layout"),
             entries: &[
@@ -54,20 +35,8 @@ impl HdrPipeline {
                 },
             ],
         });
-        let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("Hdr::bind_group"),
-            layout: &layout,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: wgpu::BindingResource::TextureView(&texture.view),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: wgpu::BindingResource::Sampler(&texture.sampler),
-                },
-            ],
-        });
+
+        let bind_group = Self::create_bind_group(device, &layout, hdr_texture);
 
         let shader = wgpu::include_wgsl!("hdr.wgsl");
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
@@ -91,47 +60,32 @@ impl HdrPipeline {
             pipeline,
             bind_group,
             layout,
-            texture,
-            width,
-            height,
         }
     }
 
-    pub fn resize(&mut self, device: &wgpu::Device, width: u32, height: u32) {
-        self.texture = texture::Texture::create_texture(
-            device,
-            Some("Hdr::texture"),
-            wgpu::Extent3d {
-                width,
-                height,
-                depth_or_array_layers: 1,
-            },
-            wgpu::TextureFormat::Rgba16Float,
-            &[],
-            wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::RENDER_ATTACHMENT,
-            wgpu::TextureDimension::D2,
-            wgpu::FilterMode::Nearest,
-        );
-        self.bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+    fn create_bind_group(
+        device: &wgpu::Device,
+        layout: &wgpu::BindGroupLayout,
+        texture: &texture::Texture,
+    ) -> wgpu::BindGroup {
+        device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("Hdr::bind_group"),
-            layout: &self.layout,
+            layout,
             entries: &[
                 wgpu::BindGroupEntry {
                     binding: 0,
-                    resource: wgpu::BindingResource::TextureView(&self.texture.view),
+                    resource: wgpu::BindingResource::TextureView(&texture.view),
                 },
                 wgpu::BindGroupEntry {
                     binding: 1,
-                    resource: wgpu::BindingResource::Sampler(&self.texture.sampler),
+                    resource: wgpu::BindingResource::Sampler(&texture.sampler),
                 },
             ],
-        });
-        self.width = width;
-        self.height = height;
+        })
     }
 
-    pub fn view(&self) -> &wgpu::TextureView {
-        &self.texture.view
+    pub fn update_texture(&mut self, device: &wgpu::Device, hdr_texture: &texture::Texture) {
+        self.bind_group = Self::create_bind_group(device, &self.layout, hdr_texture);
     }
 
     pub fn pipeline(&self) -> &wgpu::RenderPipeline {

@@ -1,6 +1,8 @@
 use anyhow::*;
 use image::GenericImageView;
 
+use crate::ui;
+
 pub struct Texture {
     #[allow(unused)]
     pub texture: wgpu::Texture,
@@ -12,15 +14,10 @@ pub struct Texture {
 impl Texture {
     pub const DEPTH_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Depth32Float;
 
-    pub fn create_depth_texture(
-        device: &wgpu::Device,
-        width: u32,
-        height: u32,
-        label: &str,
-    ) -> Self {
+    pub fn create_depth_texture(device: &wgpu::Device, size: ui::Size2d, label: &str) -> Self {
         let size = wgpu::Extent3d {
-            width: width.max(1),
-            height: height.max(1),
+            width: size.width(),
+            height: size.height(),
             depth_or_array_layers: 1,
         };
         let desc = wgpu::TextureDescriptor {

@@ -1,12 +1,17 @@
-use crate::{scene, viewport};
+use crate::{registry, ui};
 
 pub fn build_default_tree() -> egui_tiles::Tree<Pane> {
     let mut tiles = egui_tiles::Tiles::default();
-    let tabs: Vec<egui_tiles::TileId> = vec![
+
+    let viewport_tile = tiles.insert_pane(Pane::Viewport);
+
+    let inspector_tabs: Vec<egui_tiles::TileId> = vec![
+        tiles.insert_pane(Pane::TextureInspector),
         tiles.insert_pane(Pane::DeviceInfo),
-        tiles.insert_pane(Pane::Viewport),
     ];
-    let root: egui_tiles::TileId = tiles.insert_horizontal_tile(tabs);
+    let inspector_container = tiles.insert_tab_tile(inspector_tabs);
+
+    let root = tiles.insert_horizontal_tile(vec![viewport_tile, inspector_container]);
 
     egui_tiles::Tree::new("my_tree", root, tiles)
 }
@@ -14,6 +19,7 @@ pub fn build_default_tree() -> egui_tiles::Tree<Pane> {
 pub enum Pane {
     Viewport,
     DeviceInfo,
+    TextureInspector,
 }
 
 impl Pane {
@@ -21,14 +27,16 @@ impl Pane {
         match self {
             Pane::Viewport => "Viewport",
             Pane::DeviceInfo => "Device Info",
+            Pane::TextureInspector => "Textures",
         }
     }
 }
 
 pub struct Behavior<'a> {
-    pub viewport: &'a mut viewport::Viewport<scene::Scene>,
     pub adapter_info: &'a wgpu::AdapterInfo,
-    pub pending_events: &'a mut Vec<viewport::ViewportEvent>,
+    pub pending_events: &'a mut Vec<ui::viewport::ViewportEvent>,
+    pub texture_registry: &'a mut registry::TextureRegistry,
+    pub viewport_content: &'a mut Option<registry::TextureId>,
 }
 
 impl<'a> egui_tiles::Behavior<Pane> for Behavior<'a> {
@@ -40,8 +48,15 @@ impl<'a> egui_tiles::Behavior<Pane> for Behavior<'a> {
     ) -> egui_tiles::UiResponse {
         match pane {
             Pane::Viewport => {
-                let events = self.viewport.ui(ui);
-                self.pending_events.extend(events);
+                if let Some(texture_id) = self.viewport_content {
+                    let texture = self
+                        .texture_registry
+                        .get(*texture_id)
+                        .expect("texture must exist");
+
+                    let events = crate::ui::viewport::ui(ui, texture.egui_id(), texture.size());
+                    self.pending_events.extend(events);
+                }
             }
             Pane::DeviceInfo => {
                 egui::CentralPanel::default().show_inside(ui, |ui| {
@@ -63,6 +78,28 @@ impl<'a> egui_tiles::Behavior<Pane> for Behavior<'a> {
                             ui.label("Driver Info:");
                             ui.label(&self.adapter_info.driver_info);
                             ui.end_row();
+                        });
+                });
+            }
+            Pane::TextureInspector => {
+                egui::CentralPanel::default().show_inside(ui, |ui| {
+                    let selected = self
+                        .viewport_content
+                        .and_then(|id| self.texture_registry.get(id))
+                        .map(|texture| texture.name())
+                        .unwrap_or("Empty");
+
+                    egui::ComboBox::from_label("Viewport Content")
+                        .selected_text(selected)
+                        .show_ui(ui, |ui| {
+                            ui.selectable_value(self.viewport_content, None, "Empty");
+                            for (id, element) in self.texture_registry.list() {
+                                ui.selectable_value(
+                                    self.viewport_content,
+                                    Some(id),
+                                    element.name(),
+                                );
+                            }
                         });
                 });
             }

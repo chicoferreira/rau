@@ -2486,6 +2486,7 @@ dependencies = [
  "log",
  "pollster",
  "reqwest",
+ "slotmap",
  "tobj",
  "wasm-bindgen",
  "wasm-bindgen-futures",

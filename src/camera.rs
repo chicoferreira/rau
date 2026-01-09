@@ -62,8 +62,8 @@ impl Projection {
         }
     }
 
-    pub fn resize(&mut self, width: u32, height: u32) {
-        self.aspect = width as f32 / height as f32;
+    pub fn resize(&mut self, size: crate::ui::Size2d) {
+        self.aspect = size.width() as f32 / size.height() as f32;
     }
 
     pub fn calc_matrix(&self) -> Matrix4<f32> {

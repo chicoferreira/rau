@@ -3,12 +3,12 @@ use winit::event_loop::EventLoop;
 mod app;
 mod camera;
 mod model;
+mod registry;
 mod resources;
 mod scene;
 mod state;
 mod texture;
 mod ui;
-mod viewport;
 
 pub fn run() -> anyhow::Result<()> {
     #[cfg(not(target_arch = "wasm32"))]
