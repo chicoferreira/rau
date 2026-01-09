@@ -1,5 +1,3 @@
-use wgpu::Operations;
-
 use crate::{state, texture};
 
 /// Owns the render texture and controls tonemapping
@@ -136,25 +134,11 @@ impl HdrPipeline {
         &self.texture.view
     }
 
-    pub fn process(&self, encoder: &mut wgpu::CommandEncoder, output: &wgpu::TextureView) {
-        let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-            label: Some("Hdr::process"),
-            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                view: &output,
-                resolve_target: None,
-                ops: Operations {
-                    load: wgpu::LoadOp::Load,
-                    store: wgpu::StoreOp::Store,
-                },
-                depth_slice: None,
-            })],
-            depth_stencil_attachment: None,
-            timestamp_writes: None,
-            occlusion_query_set: None,
-            multiview_mask: None,
-        });
-        pass.set_pipeline(&self.pipeline);
-        pass.set_bind_group(0, &self.bind_group, &[]);
-        pass.draw(0..3, 0..1);
+    pub fn pipeline(&self) -> &wgpu::RenderPipeline {
+        &self.pipeline
+    }
+
+    pub fn bind_group(&self) -> &wgpu::BindGroup {
+        &self.bind_group
     }
 }
