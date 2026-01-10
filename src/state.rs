@@ -8,8 +8,19 @@ use winit::{
 
 use crate::{
     registry, scene,
-    ui::{self, viewport::ViewportEvent},
+    ui::{self},
 };
+
+pub enum StateEvent {
+    SceneEvent(scene::SceneEvent),
+    AddViewport(registry::TextureId),
+}
+
+impl From<scene::SceneEvent> for StateEvent {
+    fn from(event: scene::SceneEvent) -> Self {
+        StateEvent::SceneEvent(event)
+    }
+}
 
 pub struct State {
     surface: wgpu::Surface<'static>,
@@ -20,10 +31,9 @@ pub struct State {
     window: Arc<Window>,
     last_render_time: instant::Instant,
     egui_renderer: ui::renderer::EguiRenderer,
-    viewport_content: Option<registry::TextureId>,
     scene: scene::Scene,
-    pending_events: Vec<ui::viewport::ViewportEvent>,
-    tree: egui_tiles::Tree<ui::pane::Pane>,
+    pending_events: Vec<StateEvent>,
+    app_tree: ui::pane::AppTree,
     adapter_info: wgpu::AdapterInfo,
     texture_registry: registry::TextureRegistry,
 }
@@ -112,7 +122,7 @@ impl State {
         )
         .await?;
 
-        let tree = ui::pane::build_default_tree();
+        let app_tree = ui::pane::AppTree::new_default();
 
         Ok(Self {
             surface,
@@ -125,10 +135,9 @@ impl State {
             egui_renderer,
             scene,
             pending_events: vec![],
-            tree,
+            app_tree,
             adapter_info,
             texture_registry,
-            viewport_content: None,
         })
     }
 
@@ -183,24 +192,30 @@ impl State {
                             pending_events: &mut self.pending_events,
                             adapter_info: &self.adapter_info,
                             texture_registry: &mut self.texture_registry,
-                            viewport_content: &mut self.viewport_content,
                         };
 
-                        self.tree.ui(&mut behavior, ui);
+                        self.app_tree.ui(&mut behavior, ui);
                     });
             });
 
-        let events =
-            std::iter::once(ViewportEvent::Frame { dt }).chain(self.pending_events.drain(..));
+        let events = std::iter::once(scene::SceneEvent::Frame { dt }.into())
+            .chain(self.pending_events.drain(..));
 
         for event in events {
-            self.scene.handle_event(
-                event,
-                &self.device,
-                &self.queue,
-                &mut self.texture_registry,
-                &mut self.egui_renderer,
-            );
+            match event {
+                StateEvent::SceneEvent(scene_event) => {
+                    self.scene.handle_event(
+                        scene_event,
+                        &self.device,
+                        &self.queue,
+                        &mut self.texture_registry,
+                        &mut self.egui_renderer,
+                    );
+                }
+                StateEvent::AddViewport(texture_id) => {
+                    self.app_tree.add_viewport(Some(texture_id));
+                }
+            }
         }
 
         self.scene.render(&mut encoder, &self.texture_registry);
@@ -265,10 +280,13 @@ impl State {
             } => match (code, key_state) {
                 (KeyCode::Escape, ElementState::Pressed) => event_loop.exit(),
                 (key_code, element_state) => {
-                    self.pending_events.push(ViewportEvent::Keyboard {
-                        key_code,
-                        element_state,
-                    });
+                    self.pending_events.push(
+                        scene::SceneEvent::Keyboard {
+                            key_code,
+                            element_state,
+                        }
+                        .into(),
+                    );
                 }
             },
             _ => {}

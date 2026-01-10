@@ -1,42 +1,87 @@
-use crate::{registry, ui};
+use crate::{registry, state};
 
-pub fn build_default_tree() -> egui_tiles::Tree<Pane> {
-    let mut tiles = egui_tiles::Tiles::default();
-
-    let viewport_tile = tiles.insert_pane(Pane::Viewport);
-
-    let inspector_tabs: Vec<egui_tiles::TileId> = vec![
-        tiles.insert_pane(Pane::TextureInspector),
-        tiles.insert_pane(Pane::DeviceInfo),
-    ];
-    let inspector_container = tiles.insert_tab_tile(inspector_tabs);
-
-    let root = tiles.insert_horizontal_tile(vec![viewport_tile, inspector_container]);
-
-    egui_tiles::Tree::new("my_tree", root, tiles)
+pub struct AppTree {
+    tree: egui_tiles::Tree<Pane>,
+    viewport_container: egui_tiles::TileId,
 }
 
-pub enum Pane {
-    Viewport,
-    DeviceInfo,
-    TextureInspector,
-}
+impl AppTree {
+    pub fn new_default() -> Self {
+        let mut tiles = egui_tiles::Tiles::default();
 
-impl Pane {
-    pub fn title(&self) -> &'static str {
-        match self {
-            Pane::Viewport => "Viewport",
-            Pane::DeviceInfo => "Device Info",
-            Pane::TextureInspector => "Textures",
+        let viewport_tile = tiles.insert_pane(Pane::Viewport(None));
+        let viewport_container = tiles.insert_tab_tile(vec![viewport_tile]);
+
+        let inspector_tabs: Vec<egui_tiles::TileId> = vec![
+            tiles.insert_pane(Pane::TextureInspector),
+            tiles.insert_pane(Pane::DeviceInfo),
+        ];
+        let inspector_container = tiles.insert_tab_tile(inspector_tabs);
+
+        let root = tiles.insert_horizontal_tile(vec![viewport_container, inspector_container]);
+
+        let tree = egui_tiles::Tree::new("my_tree", root, tiles);
+
+        Self {
+            tree,
+            viewport_container,
+        }
+    }
+
+    pub fn ui(&mut self, behavior: &mut Behavior, ui: &mut egui::Ui) {
+        self.tree.ui(behavior, ui);
+    }
+
+    pub fn add_viewport(&mut self, texture_id: Option<registry::TextureId>) {
+        let child = self.tree.tiles.insert_pane(Pane::Viewport(texture_id));
+
+        if let Some(egui_tiles::Tile::Container(egui_tiles::Container::Tabs(tabs))) =
+            self.tree.tiles.get_mut(self.viewport_container)
+        {
+            tabs.add_child(child);
+            tabs.set_active(child);
+            return;
+        }
+
+        if let Some(root) = self.tree.root {
+            match self.tree.tiles.get_mut(root) {
+                Some(egui_tiles::Tile::Container(egui_tiles::Container::Tabs(tabs))) => {
+                    tabs.add_child(child);
+                    tabs.set_active(child);
+                }
+                Some(egui_tiles::Tile::Container(container)) => {
+                    container.add_child(child);
+                }
+                Some(egui_tiles::Tile::Pane(_)) => {
+                    let new_root = self.tree.tiles.insert_tab_tile(vec![root, child]);
+                    if let Some(egui_tiles::Tile::Container(egui_tiles::Container::Tabs(tabs))) =
+                        self.tree.tiles.get_mut(new_root)
+                    {
+                        tabs.set_active(child);
+                    }
+                    self.tree.root = Some(new_root);
+                }
+                None => {
+                    log::warn!("Tree root points to a missing tile; cannot add viewport");
+                }
+            }
+        } else {
+            self.tree.root = Some(child);
         }
     }
 }
 
+#[derive(Debug)]
+pub enum Pane {
+    Viewport(Option<registry::TextureId>),
+    DeviceInfo,
+    TextureInspector,
+}
+
 pub struct Behavior<'a> {
     pub adapter_info: &'a wgpu::AdapterInfo,
-    pub pending_events: &'a mut Vec<ui::viewport::ViewportEvent>,
+    pub pending_events: &'a mut Vec<state::StateEvent>,
     pub texture_registry: &'a mut registry::TextureRegistry,
-    pub viewport_content: &'a mut Option<registry::TextureId>,
 }
 
 impl<'a> egui_tiles::Behavior<Pane> for Behavior<'a> {
@@ -47,8 +92,8 @@ impl<'a> egui_tiles::Behavior<Pane> for Behavior<'a> {
         pane: &mut Pane,
     ) -> egui_tiles::UiResponse {
         match pane {
-            Pane::Viewport => {
-                if let Some(texture_id) = self.viewport_content {
+            Pane::Viewport(texture_id) => {
+                if let Some(texture_id) = texture_id {
                     let texture = self
                         .texture_registry
                         .get(*texture_id)
@@ -83,24 +128,11 @@ impl<'a> egui_tiles::Behavior<Pane> for Behavior<'a> {
             }
             Pane::TextureInspector => {
                 egui::CentralPanel::default().show_inside(ui, |ui| {
-                    let selected = self
-                        .viewport_content
-                        .and_then(|id| self.texture_registry.get(id))
-                        .map(|texture| texture.name())
-                        .unwrap_or("Empty");
-
-                    egui::ComboBox::from_label("Viewport Content")
-                        .selected_text(selected)
-                        .show_ui(ui, |ui| {
-                            ui.selectable_value(self.viewport_content, None, "Empty");
-                            for (id, element) in self.texture_registry.list() {
-                                ui.selectable_value(
-                                    self.viewport_content,
-                                    Some(id),
-                                    element.name(),
-                                );
-                            }
-                        });
+                    for (id, element) in self.texture_registry.list() {
+                        if ui.button(element.name()).clicked() {
+                            self.pending_events.push(state::StateEvent::AddViewport(id));
+                        }
+                    }
                 });
             }
         };
@@ -109,7 +141,25 @@ impl<'a> egui_tiles::Behavior<Pane> for Behavior<'a> {
     }
 
     fn tab_title_for_pane(&mut self, pane: &Pane) -> egui::WidgetText {
-        pane.title().into()
+        match pane {
+            Pane::Viewport(texture_id) => texture_id
+                .and_then(|id| self.texture_registry.get(id))
+                .map(|texture| texture.name().into())
+                .unwrap_or("Empty Viewport".into()),
+            Pane::DeviceInfo => "Device Info".into(),
+            Pane::TextureInspector => "Textures".into(),
+        }
+    }
+
+    fn is_tab_closable(
+        &self,
+        tiles: &egui_tiles::Tiles<Pane>,
+        tile_id: egui_tiles::TileId,
+    ) -> bool {
+        matches!(
+            tiles.get(tile_id),
+            Some(egui_tiles::Tile::Pane(Pane::Viewport(_)))
+        )
     }
 
     fn simplification_options(&self) -> egui_tiles::SimplificationOptions {

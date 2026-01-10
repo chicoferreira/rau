@@ -12,6 +12,26 @@ use cgmath::{InnerSpace, Matrix, Rotation3, SquareMatrix, Zero};
 mod hdr;
 mod loader;
 
+pub enum SceneEvent {
+    Resize {
+        size: ui::Size2d,
+    },
+    Scroll {
+        delta_y_px: f32,
+    },
+    Drag {
+        dx_px: f32,
+        dy_px: f32,
+    },
+    Keyboard {
+        key_code: winit::keyboard::KeyCode,
+        element_state: winit::event::ElementState,
+    },
+    Frame {
+        dt: instant::Duration,
+    },
+}
+
 #[repr(C)]
 #[derive(Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
 struct CameraUniform {
@@ -506,20 +526,20 @@ impl Scene {
 
     pub fn handle_event(
         &mut self,
-        event: ui::viewport::ViewportEvent,
+        event: SceneEvent,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
         texture_registry: &mut registry::TextureRegistry,
         egui_renderer: &mut ui::renderer::EguiRenderer,
     ) {
         match event {
-            ui::viewport::ViewportEvent::Drag { dx_px, dy_px } => {
+            SceneEvent::Drag { dx_px, dy_px } => {
                 self.camera_controller.handle_mouse(dx_px, dy_px);
             }
-            ui::viewport::ViewportEvent::Scroll { delta_y_px } => {
+            SceneEvent::Scroll { delta_y_px } => {
                 self.camera_controller.handle_scroll_pixels(delta_y_px);
             }
-            ui::viewport::ViewportEvent::Resize { size } => {
+            SceneEvent::Resize { size } => {
                 if let Some(hdr_texture) = texture_registry.get_mut(self.hdr_texture_id) {
                     hdr_texture.resize(size, device, egui_renderer);
                     self.hdr.update_texture(device, hdr_texture.texture());
@@ -541,10 +561,10 @@ impl Scene {
                     bytemuck::cast_slice(&[self.camera_uniform]),
                 );
             }
-            ui::viewport::ViewportEvent::Frame { dt } => {
+            SceneEvent::Frame { dt } => {
                 self.update(queue, dt);
             }
-            ui::viewport::ViewportEvent::Keyboard {
+            SceneEvent::Keyboard {
                 key_code,
                 element_state,
             } => {
