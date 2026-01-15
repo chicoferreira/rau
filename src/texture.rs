@@ -155,6 +155,28 @@ impl Texture {
             size,
         }
     }
+
+    pub fn create_2d_texture(
+        device: &wgpu::Device,
+        name: &str,
+        size: ui::Size2d,
+        texture_format: wgpu::TextureFormat,
+    ) -> Self {
+        Self::create_texture(
+            device,
+            Some(name),
+            wgpu::Extent3d {
+                width: size.width(),
+                height: size.height(),
+                depth_or_array_layers: 1,
+            },
+            texture_format.remove_srgb_suffix(),
+            &[texture_format.add_srgb_suffix()],
+            wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::RENDER_ATTACHMENT,
+            wgpu::TextureDimension::D2,
+            wgpu::FilterMode::Linear,
+        )
+    }
 }
 
 pub struct CubeTexture {

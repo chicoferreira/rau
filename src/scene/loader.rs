@@ -1,6 +1,9 @@
 use std::io::Cursor;
 
-use crate::texture;
+use crate::{
+    project::{Project, ShaderId},
+    texture,
+};
 
 pub struct HdrLoader {
     texture_format: wgpu::TextureFormat,
@@ -9,8 +12,13 @@ pub struct HdrLoader {
 }
 
 impl HdrLoader {
-    pub fn new(device: &wgpu::Device) -> Self {
-        let module = device.create_shader_module(wgpu::include_wgsl!("equirectangular.wgsl"));
+    pub fn new(
+        device: &wgpu::Device,
+        project: &Project,
+        equirectangular_shader_id: ShaderId,
+    ) -> Self {
+        let shader = project.get_shader(equirectangular_shader_id).unwrap();
+        let module = shader.create_wgpu_shader_module(device);
         let texture_format = wgpu::TextureFormat::Rgba32Float;
         let equirect_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("HdrLoader::equirect_layout"),

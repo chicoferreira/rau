@@ -3,7 +3,7 @@ use wgpu::util::DeviceExt;
 use crate::{
     camera,
     model::{self, Vertex},
-    registry, resources,
+    project, resources,
     scene::hdr::HdrPipeline,
     state, texture, ui,
 };
@@ -169,8 +169,8 @@ pub struct Scene {
     hdr: hdr::HdrPipeline,
     environment_bind_group: wgpu::BindGroup,
     sky_pipeline: wgpu::RenderPipeline,
-    hdr_texture_id: registry::TextureId,
-    viewport_texture_id: registry::TextureId,
+    hdr_texture_id: project::TextureId,
+    viewport_texture_id: project::TextureId,
 }
 
 impl Scene {
@@ -179,8 +179,13 @@ impl Scene {
         queue: &wgpu::Queue,
         size: ui::Size2d,
         target_texture_format: wgpu::TextureFormat,
-        texture_registry: &mut registry::TextureRegistry,
+        project: &mut project::Project,
         egui_renderer: &mut ui::renderer::EguiRenderer,
+        equirectangular_shader_id: project::ShaderId,
+        hdr_shader_id: project::ShaderId,
+        light_shader_id: project::ShaderId,
+        main_shader_id: project::ShaderId,
+        sky_shader_id: project::ShaderId,
     ) -> anyhow::Result<Scene> {
         let texture_bind_group_layout =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
@@ -336,7 +341,7 @@ impl Scene {
                 .await
                 .unwrap();
 
-        let hdr_texture_id = texture_registry.register(
+        let hdr_texture_id = project.register_texture(
             "HDR Buffer",
             device,
             size,
@@ -344,14 +349,17 @@ impl Scene {
             egui_renderer,
         );
 
-        let hdr_texture = texture_registry
-            .get(hdr_texture_id)
-            .expect("just registered")
-            .texture();
+        let hdr_texture = project.get_texture(hdr_texture_id).unwrap().texture();
 
-        let hdr = hdr::HdrPipeline::new(device, hdr_texture, target_texture_format);
+        let hdr = hdr::HdrPipeline::new(
+            device,
+            hdr_texture,
+            target_texture_format,
+            &project,
+            hdr_shader_id,
+        );
 
-        let hdr_loader = loader::HdrLoader::new(&device);
+        let hdr_loader = loader::HdrLoader::new(&device, &project, equirectangular_shader_id);
         let sky_bytes = resources::load_binary("pure-sky.hdr").await?;
         let sky_texture = hdr_loader.from_equirectangular_bytes(
             &device,
@@ -412,10 +420,7 @@ impl Scene {
             });
 
         let render_pipeline = {
-            let shader = wgpu::ShaderModuleDescriptor {
-                label: Some("Normal Shader"),
-                source: wgpu::ShaderSource::Wgsl(include_str!("shader.wgsl").into()),
-            };
+            let shader = project.get_shader(main_shader_id).unwrap();
             state::create_render_pipeline(
                 "normal shader pipeline",
                 &device,
@@ -424,7 +429,7 @@ impl Scene {
                 Some(texture::Texture::DEPTH_FORMAT),
                 &[model::ModelVertex::desc(), InstanceRaw::desc()],
                 wgpu::PrimitiveTopology::TriangleList,
-                shader,
+                shader.create_wgpu_shader_module(device),
             )
         };
 
@@ -434,10 +439,7 @@ impl Scene {
                 bind_group_layouts: &[&camera_bind_group_layout, &light_bind_group_layout],
                 immediate_size: 0,
             });
-            let shader = wgpu::ShaderModuleDescriptor {
-                label: Some("Light Shader"),
-                source: wgpu::ShaderSource::Wgsl(include_str!("light.wgsl").into()),
-            };
+            let shader = project.get_shader(light_shader_id).unwrap();
             state::create_render_pipeline(
                 "light pipeline",
                 &device,
@@ -446,7 +448,7 @@ impl Scene {
                 Some(texture::Texture::DEPTH_FORMAT),
                 &[model::ModelVertex::desc()],
                 wgpu::PrimitiveTopology::TriangleList,
-                shader,
+                shader.create_wgpu_shader_module(device),
             )
         };
 
@@ -456,7 +458,7 @@ impl Scene {
                 bind_group_layouts: &[&camera_bind_group_layout, &environment_layout],
                 immediate_size: 0,
             });
-            let shader = wgpu::include_wgsl!("sky.wgsl");
+            let shader = project.get_shader(sky_shader_id).unwrap();
             state::create_render_pipeline(
                 "sky pipeline",
                 &device,
@@ -465,11 +467,11 @@ impl Scene {
                 Some(texture::Texture::DEPTH_FORMAT),
                 &[],
                 wgpu::PrimitiveTopology::TriangleList,
-                shader,
+                shader.create_wgpu_shader_module(device),
             )
         };
 
-        let viewport_texture_id = texture_registry.register(
+        let viewport_texture_id = project.register_texture(
             "Result Texture",
             device,
             size,
@@ -529,7 +531,7 @@ impl Scene {
         event: SceneEvent,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
-        texture_registry: &mut registry::TextureRegistry,
+        project: &mut project::Project,
         egui_renderer: &mut ui::renderer::EguiRenderer,
     ) {
         match event {
@@ -540,12 +542,12 @@ impl Scene {
                 self.camera_controller.handle_scroll_pixels(delta_y_px);
             }
             SceneEvent::Resize { size } => {
-                if let Some(hdr_texture) = texture_registry.get_mut(self.hdr_texture_id) {
+                if let Some(hdr_texture) = project.get_texture_mut(self.hdr_texture_id) {
                     hdr_texture.resize(size, device, egui_renderer);
                     self.hdr.update_texture(device, hdr_texture.texture());
                 }
 
-                if let Some(viewport_texture) = texture_registry.get_mut(self.viewport_texture_id) {
+                if let Some(viewport_texture) = project.get_texture_mut(self.viewport_texture_id) {
                     viewport_texture.resize(size, device, egui_renderer);
                 }
 
@@ -574,18 +576,14 @@ impl Scene {
         }
     }
 
-    pub fn render(
-        &self,
-        encoder: &mut wgpu::CommandEncoder,
-        texture_registry: &registry::TextureRegistry,
-    ) {
-        let hdr_texture = texture_registry
-            .get(self.hdr_texture_id)
+    pub fn render(&self, encoder: &mut wgpu::CommandEncoder, project: &project::Project) {
+        let hdr_texture = project
+            .get_texture(self.hdr_texture_id)
             .expect("HDR texture must exist")
             .texture();
 
-        let viewport_texture_entry = texture_registry
-            .get(self.viewport_texture_id)
+        let viewport_texture_entry = project
+            .get_texture(self.viewport_texture_id)
             .expect("Viewport texture must exist");
 
         let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {

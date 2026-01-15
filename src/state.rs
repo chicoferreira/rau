@@ -7,13 +7,13 @@ use winit::{
 };
 
 use crate::{
-    registry, scene,
+    project, resources, scene,
     ui::{self},
 };
 
 pub enum StateEvent {
     SceneEvent(scene::SceneEvent),
-    AddViewport(registry::TextureId),
+    AddViewport(project::TextureId),
 }
 
 impl From<scene::SceneEvent> for StateEvent {
@@ -35,7 +35,7 @@ pub struct State {
     pending_events: Vec<StateEvent>,
     app_tree: ui::pane::AppTree,
     adapter_info: wgpu::AdapterInfo,
-    texture_registry: registry::TextureRegistry,
+    project: project::Project,
 }
 
 impl State {
@@ -108,7 +108,34 @@ impl State {
         let mut egui_renderer =
             ui::renderer::EguiRenderer::new(&device, config.format.add_srgb_suffix(), &window);
 
-        let mut texture_registry = registry::TextureRegistry::new();
+        let mut project = project::Project::default();
+
+        let equirectengular_shader = project.register_shader(
+            "Equirectengular Shader",
+            resources::load_string("equirectangular.wgsl")
+                .await
+                .unwrap(),
+        );
+
+        let hdr_shader = project.register_shader(
+            "HDR Shader",
+            resources::load_string("hdr.wgsl").await.unwrap(),
+        );
+
+        let light_shader = project.register_shader(
+            "Light Shader",
+            resources::load_string("light.wgsl").await.unwrap(),
+        );
+
+        let main_shader = project.register_shader(
+            "Main Shader",
+            resources::load_string("shader.wgsl").await.unwrap(),
+        );
+
+        let sky_shader = project.register_shader(
+            "Sky Shader",
+            resources::load_string("sky.wgsl").await.unwrap(),
+        );
 
         let size = ui::Size2d::new(config.width, config.height);
 
@@ -117,8 +144,13 @@ impl State {
             &queue,
             size,
             surface_format,
-            &mut texture_registry,
+            &mut project,
             &mut egui_renderer,
+            equirectengular_shader,
+            hdr_shader,
+            light_shader,
+            main_shader,
+            sky_shader,
         )
         .await?;
 
@@ -137,7 +169,7 @@ impl State {
             pending_events: vec![],
             app_tree,
             adapter_info,
-            texture_registry,
+            project,
         })
     }
 
@@ -191,7 +223,7 @@ impl State {
                         let mut behavior = ui::pane::Behavior {
                             pending_events: &mut self.pending_events,
                             adapter_info: &self.adapter_info,
-                            texture_registry: &mut self.texture_registry,
+                            project: &mut self.project,
                         };
 
                         self.app_tree.ui(&mut behavior, ui);
@@ -208,7 +240,7 @@ impl State {
                         scene_event,
                         &self.device,
                         &self.queue,
-                        &mut self.texture_registry,
+                        &mut self.project,
                         &mut self.egui_renderer,
                     );
                 }
@@ -218,7 +250,7 @@ impl State {
             }
         }
 
-        self.scene.render(&mut encoder, &self.texture_registry);
+        self.scene.render(&mut encoder, &self.project);
 
         self.egui_renderer.render_egui_frame(
             &frame,
@@ -302,10 +334,8 @@ pub fn create_render_pipeline(
     depth_format: Option<wgpu::TextureFormat>,
     vertex_layouts: &[wgpu::VertexBufferLayout],
     topology: wgpu::PrimitiveTopology,
-    shader: wgpu::ShaderModuleDescriptor,
+    shader: wgpu::ShaderModule,
 ) -> wgpu::RenderPipeline {
-    let shader = device.create_shader_module(shader);
-
     device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
         label: Some(label),
         layout: Some(layout),

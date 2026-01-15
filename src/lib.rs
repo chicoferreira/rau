@@ -3,7 +3,7 @@ use winit::event_loop::EventLoop;
 mod app;
 mod camera;
 mod model;
-mod registry;
+mod project;
 mod resources;
 mod scene;
 mod state;

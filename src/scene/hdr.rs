@@ -1,4 +1,4 @@
-use crate::{state, texture};
+use crate::{project, state, texture};
 
 pub struct HdrPipeline {
     pipeline: wgpu::RenderPipeline,
@@ -13,6 +13,8 @@ impl HdrPipeline {
         device: &wgpu::Device,
         hdr_texture: &texture::Texture,
         output_format: wgpu::TextureFormat,
+        project: &project::Project,
+        hdr_shader_id: project::ShaderId,
     ) -> Self {
         let layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("Hdr::layout"),
@@ -38,7 +40,7 @@ impl HdrPipeline {
 
         let bind_group = Self::create_bind_group(device, &layout, hdr_texture);
 
-        let shader = wgpu::include_wgsl!("hdr.wgsl");
+        let shader = project.get_shader(hdr_shader_id).unwrap();
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: None,
             bind_group_layouts: &[&layout],
@@ -53,7 +55,7 @@ impl HdrPipeline {
             None,
             &[],
             wgpu::PrimitiveTopology::TriangleList,
-            shader,
+            shader.create_wgpu_shader_module(device),
         );
 
         Self {
