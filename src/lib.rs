@@ -4,6 +4,7 @@ mod app;
 mod camera;
 mod model;
 mod project;
+mod render;
 mod resources;
 mod scene;
 mod state;

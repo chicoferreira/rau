@@ -3,7 +3,7 @@ use wgpu::util::DeviceExt;
 use crate::{
     camera,
     model::{self, Vertex},
-    project, resources,
+    project, render, resources,
     scene::hdr::HdrPipeline,
     state, texture, ui,
 };
@@ -577,99 +577,91 @@ impl Scene {
     }
 
     pub fn render(&self, encoder: &mut wgpu::CommandEncoder, project: &project::Project) {
-        let hdr_texture = project
-            .get_texture(self.hdr_texture_id)
-            .expect("HDR texture must exist")
-            .texture();
-
-        let viewport_texture_entry = project
-            .get_texture(self.viewport_texture_id)
-            .expect("Viewport texture must exist");
-
-        let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-            label: Some("Scene Render Pass"),
-            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                view: &hdr_texture.view,
-                resolve_target: None,
-                ops: wgpu::Operations {
-                    load: wgpu::LoadOp::Clear(wgpu::Color {
-                        r: 0.1,
-                        g: 0.2,
-                        b: 0.3,
-                        a: 1.0,
-                    }),
-                    store: wgpu::StoreOp::Store,
-                },
-                depth_slice: None,
-            })],
-            depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
-                view: &self.depth_texture.view,
-                depth_ops: Some(wgpu::Operations {
-                    load: wgpu::LoadOp::Clear(1.0),
-                    store: wgpu::StoreOp::Store,
-                }),
-                stencil_ops: None,
+        let main_render_pass = render::RenderPassSpec {
+            label: Some("Main Render Pass"),
+            target_spec: render::RenderPassTargetSpec {
+                texture_id: self.hdr_texture_id,
+                texture_format: render::RenderPassTargetTextureFormat::UseExisting,
+                load_operation: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+            },
+            depth_spec: Some(render::RenderPassDepthSpec {
+                texture: &self.depth_texture.view,
+                load_operation: wgpu::LoadOp::Clear(1.0),
             }),
-            occlusion_query_set: None,
-            timestamp_writes: None,
-            multiview_mask: None,
-        });
-
-        render_pass.set_vertex_buffer(1, self.instance_buffer.slice(..));
-        render_pass.set_pipeline(&self.light_render_pipeline);
-        for mesh in &self.obj_model.meshes {
-            render_pass.set_vertex_buffer(0, mesh.vertex_buffer.slice(..));
-            render_pass.set_index_buffer(mesh.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
-            render_pass.set_bind_group(0, &self.camera_bind_group, &[]);
-            render_pass.set_bind_group(1, &self.light_bind_group, &[]);
-            render_pass.draw_indexed(0..mesh.num_elements, 0, 0..1);
-        }
-
-        render_pass.set_pipeline(&self.render_pipeline);
-        for mesh in &self.obj_model.meshes {
-            let material = &self.obj_model.materials[mesh.material];
-            render_pass.set_vertex_buffer(0, mesh.vertex_buffer.slice(..));
-            render_pass.set_index_buffer(mesh.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
-            render_pass.set_bind_group(0, &material.bind_group, &[]);
-            render_pass.set_bind_group(1, &self.camera_bind_group, &[]);
-            render_pass.set_bind_group(2, &self.light_bind_group, &[]);
-            render_pass.set_bind_group(3, &self.environment_bind_group, &[]);
-            render_pass.draw_indexed(0..mesh.num_elements, 0, 0..self.instances.len() as u32);
-        }
-
-        render_pass.set_pipeline(&self.sky_pipeline);
-        render_pass.set_bind_group(0, &self.camera_bind_group, &[]);
-        render_pass.set_bind_group(1, &self.environment_bind_group, &[]);
-        render_pass.draw(0..3, 0..1);
-
-        drop(render_pass);
-
-        let viewport_texture = viewport_texture_entry.texture();
-        let target_view_srgb = viewport_texture
-            .texture
-            .create_view(&wgpu::TextureViewDescriptor {
-                format: Some(viewport_texture_entry.format().add_srgb_suffix()),
-                ..Default::default()
-            });
-
-        let mut hdr_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-            label: Some("Hdr::process"),
-            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                view: &target_view_srgb,
-                resolve_target: None,
-                ops: wgpu::Operations {
-                    load: wgpu::LoadOp::Load,
-                    store: wgpu::StoreOp::Store,
+            pipelines: vec![
+                render::RenderPipelineSpec {
+                    pipeline: &self.light_render_pipeline,
+                    bind_groups: vec![
+                        render::RenderBindGroupSpec::new_fixed(0, &self.camera_bind_group),
+                        render::RenderBindGroupSpec::new_fixed(1, &self.light_bind_group),
+                    ],
+                    vertex_buffers: vec![
+                        render::RenderVertexBufferSpec::new_model_mesh(0),
+                        render::RenderVertexBufferSpec::new_fixed(1, &self.instance_buffer),
+                    ],
+                    draw: render::RenderDrawSpec::Model {
+                        model: &self.obj_model,
+                        instances: 0..1,
+                    },
                 },
-                depth_slice: None,
-            })],
-            depth_stencil_attachment: None,
-            timestamp_writes: None,
-            occlusion_query_set: None,
-            multiview_mask: None,
-        });
-        hdr_pass.set_pipeline(&self.hdr.pipeline());
-        hdr_pass.set_bind_group(0, self.hdr.bind_group(), &[]);
-        hdr_pass.draw(0..3, 0..1);
+                render::RenderPipelineSpec {
+                    pipeline: &self.render_pipeline,
+                    bind_groups: vec![
+                        render::RenderBindGroupSpec::new_model_material(0),
+                        render::RenderBindGroupSpec::new_fixed(1, &self.camera_bind_group),
+                        render::RenderBindGroupSpec::new_fixed(2, &self.light_bind_group),
+                        render::RenderBindGroupSpec::new_fixed(3, &self.environment_bind_group),
+                    ],
+                    vertex_buffers: vec![
+                        render::RenderVertexBufferSpec::new_model_mesh(0),
+                        render::RenderVertexBufferSpec::new_fixed(1, &self.instance_buffer),
+                    ],
+                    draw: render::RenderDrawSpec::Model {
+                        model: &self.obj_model,
+                        instances: 0..self.instances.len() as u32,
+                    },
+                },
+                render::RenderPipelineSpec {
+                    pipeline: &self.sky_pipeline,
+                    bind_groups: vec![
+                        render::RenderBindGroupSpec::new_fixed(0, &self.camera_bind_group),
+                        render::RenderBindGroupSpec::new_fixed(1, &self.environment_bind_group),
+                    ],
+                    vertex_buffers: vec![],
+                    draw: render::RenderDrawSpec::Single {
+                        vertices: 0..3,
+                        instances: 0..1,
+                    },
+                },
+            ],
+        };
+
+        let hdr_pass = render::RenderPassSpec {
+            label: Some("HDR Pass"),
+            target_spec: render::RenderPassTargetSpec {
+                texture_id: self.viewport_texture_id,
+                texture_format: render::RenderPassTargetTextureFormat::NewViewSrgb,
+                load_operation: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+            },
+            depth_spec: None,
+            pipelines: vec![render::RenderPipelineSpec {
+                pipeline: self.hdr.pipeline(),
+                vertex_buffers: vec![],
+                bind_groups: vec![render::RenderBindGroupSpec::new_fixed(
+                    0,
+                    self.hdr.bind_group(),
+                )],
+                draw: render::RenderDrawSpec::Single {
+                    vertices: 0..3,
+                    instances: 0..1,
+                },
+            }],
+        };
+
+        let result = render::RenderPassSpecSet {
+            render_passes: vec![main_render_pass, hdr_pass],
+        };
+
+        result.submit(encoder, project);
     }
 }
