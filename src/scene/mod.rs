@@ -47,11 +47,11 @@ fn camera_to_uniform_data(
 
     uniform::UniformData {
         fields: vec![
-            uniform::UniformField::Vec4(view_position),
-            uniform::UniformField::Mat4(view),
-            uniform::UniformField::Mat4(view_proj),
-            uniform::UniformField::Mat4(inv_proj),
-            uniform::UniformField::Mat4(inv_view),
+            uniform::UniformField::new_vec4("view_position", view_position),
+            uniform::UniformField::new_mat4("view", view),
+            uniform::UniformField::new_mat4("view_proj", view_proj),
+            uniform::UniformField::new_mat4("inv_proj", inv_proj),
+            uniform::UniformField::new_mat4("inv_view", inv_view),
         ],
     }
 }
@@ -59,8 +59,8 @@ fn camera_to_uniform_data(
 fn light_to_uniform_data(position: Vector3<f32>, color: Vector3<f32>) -> uniform::UniformData {
     uniform::UniformData {
         fields: vec![
-            uniform::UniformField::Vec4(position.extend(1.0).into()),
-            uniform::UniformField::Color(color.extend(1.0).into()),
+            uniform::UniformField::new_vec4("position", position.extend(1.0).into()),
+            uniform::UniformField::new_color("color", color.extend(1.0).into()),
         ],
     }
 }
@@ -473,18 +473,18 @@ impl Scene {
         project
             .get_uniform_mut(self.camera_uniform_id)
             .unwrap()
-            .update(queue, camera_data);
+            .set_and_upload(queue, camera_data);
 
         let light_uniform = project.get_uniform_mut(self.light_uniform_id).unwrap();
 
         // this is fine for now
-        let position: Vector4<_> = match light_uniform.data.fields[0] {
-            uniform::UniformField::Vec4(position) => position.into(),
+        let position: Vector4<_> = match light_uniform.data.fields[0].ty {
+            uniform::UniformFieldType::Vec4(position) => position.into(),
             _ => unreachable!("deal with this later"),
         };
 
-        let color: Vector4<_> = match light_uniform.data.fields[1] {
-            uniform::UniformField::Color(color) => color.into(),
+        let color: Vector4<_> = match light_uniform.data.fields[1].ty {
+            uniform::UniformFieldType::Color(color) => color.into(),
             _ => unreachable!("deal with this later"),
         };
 
@@ -493,8 +493,7 @@ impl Scene {
             cgmath::Deg(60.0 * dt.as_secs_f32()),
         ) * position.truncate();
 
-        let light_data = light_to_uniform_data(new_position, color.truncate());
-        light_uniform.update(queue, light_data);
+        light_uniform.set_and_upload(queue, light_to_uniform_data(new_position, color.truncate()));
     }
 
     pub fn handle_event(
@@ -526,12 +525,9 @@ impl Scene {
                     texture::Texture::create_depth_texture(device, size, "Depth Buffer");
                 self.projection.resize(size);
 
-                let camera_data = camera_to_uniform_data(&self.camera, &self.projection);
-
-                project
-                    .get_uniform_mut(self.camera_uniform_id)
-                    .unwrap()
-                    .update(queue, camera_data);
+                let camera_uniform = project.get_uniform_mut(self.camera_uniform_id).unwrap();
+                let new_data = camera_to_uniform_data(&self.camera, &self.projection);
+                camera_uniform.set_and_upload(queue, new_data);
             }
             SceneEvent::Frame { dt } => {
                 self.update(project, queue, dt);

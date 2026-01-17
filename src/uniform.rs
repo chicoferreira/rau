@@ -8,13 +8,17 @@ pub struct Uniform {
 }
 
 impl Uniform {
-    pub fn update(&mut self, queue: &wgpu::Queue, new_data: UniformData) {
-        self.data = new_data;
+    pub fn upload(&self, queue: &wgpu::Queue) {
         queue.write_buffer(&self.buffer, 0, &self.data.cast());
+    }
+
+    pub fn set_and_upload(&mut self, queue: &wgpu::Queue, new_data: UniformData) {
+        self.data = new_data;
+        self.upload(queue);
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct UniformData {
     pub fields: Vec<UniformField>,
 }
@@ -24,14 +28,41 @@ impl UniformData {
         let mut data = Vec::new();
         for field in &self.fields {
             // TODO: implement alignment solver
-            data.extend_from_slice(field.cast());
+            data.extend_from_slice(field.ty.cast());
         }
         data
     }
 }
 
+#[derive(Debug)]
+pub struct UniformField {
+    pub name: String,
+    pub ty: UniformFieldType,
+}
+
+impl UniformField {
+    fn new(name: impl Into<String>, ty: UniformFieldType) -> Self {
+        Self {
+            name: name.into(),
+            ty,
+        }
+    }
+
+    pub fn new_vec4(name: impl Into<String>, vec4: [f32; 4]) -> Self {
+        Self::new(name, UniformFieldType::Vec4(vec4))
+    }
+
+    pub fn new_color(name: impl Into<String>, color: [f32; 4]) -> Self {
+        Self::new(name, UniformFieldType::Color(color))
+    }
+
+    pub fn new_mat4(name: impl Into<String>, mat4: [[f32; 4]; 4]) -> Self {
+        Self::new(name, UniformFieldType::Mat4(mat4))
+    }
+}
+
 #[derive(Debug, Clone)]
-pub enum UniformField {
+pub enum UniformFieldType {
     // TODO: Support more types
     // https://sotrh.github.io/learn-wgpu/showcase/alignment/#alignment-of-vertex-and-index-buffers
     Vec4([f32; 4]),
@@ -39,12 +70,12 @@ pub enum UniformField {
     Mat4([[f32; 4]; 4]),
 }
 
-impl UniformField {
+impl UniformFieldType {
     pub fn cast(&self) -> &[u8] {
         match self {
-            UniformField::Vec4(vec4) => bytemuck::cast_slice(vec4),
-            UniformField::Color(color) => bytemuck::cast_slice(color),
-            UniformField::Mat4(mat4) => bytemuck::cast_slice(mat4),
+            UniformFieldType::Vec4(vec4) => bytemuck::cast_slice(vec4),
+            UniformFieldType::Color(color) => bytemuck::cast_slice(color),
+            UniformFieldType::Mat4(mat4) => bytemuck::cast_slice(mat4),
         }
     }
 }

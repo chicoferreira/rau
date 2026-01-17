@@ -158,17 +158,17 @@ impl<'a> egui_tiles::Behavior<Pane> for Behavior<'a> {
                             continue;
                         };
 
-                        let mut new_data = uniform.data.clone();
+                        let data = &mut uniform.data;
                         let mut updated = false;
 
                         egui::CollapsingHeader::new(uniform.label.as_str())
                             .default_open(true)
                             .show(ui, |ui| {
-                                for (index, field) in new_data.fields.iter_mut().enumerate() {
-                                    match field {
-                                        uniform::UniformField::Vec4(vec4) => {
+                                for (index, field) in data.fields.iter_mut().enumerate() {
+                                    match &mut field.ty {
+                                        uniform::UniformFieldType::Vec4(vec4) => {
                                             // TODO: change this to a label
-                                            ui.label(format!("Vec4 #{index}"));
+                                            ui.label(&field.name);
                                             ui.horizontal(|ui| {
                                                 for value in vec4.iter_mut() {
                                                     updated |= ui
@@ -179,9 +179,9 @@ impl<'a> egui_tiles::Behavior<Pane> for Behavior<'a> {
                                                 }
                                             });
                                         }
-                                        uniform::UniformField::Mat4(mat4) => {
+                                        uniform::UniformFieldType::Mat4(mat4) => {
                                             // TODO: change this to a label
-                                            ui.label(format!("Mat4 #{index}"));
+                                            ui.label(&field.name);
                                             egui::Grid::new(format!(
                                                 "uniform_{uniform_id:?}_mat4_{index}"
                                             ))
@@ -202,9 +202,9 @@ impl<'a> egui_tiles::Behavior<Pane> for Behavior<'a> {
                                                 },
                                             );
                                         }
-                                        uniform::UniformField::Color(color) => {
+                                        uniform::UniformFieldType::Color(color) => {
                                             // TODO: change this to a label
-                                            ui.label(format!("Color #{index}"));
+                                            ui.label(&field.name);
 
                                             let mut egui_color =
                                                 egui::Rgba::from_rgba_premultiplied(
@@ -229,7 +229,7 @@ impl<'a> egui_tiles::Behavior<Pane> for Behavior<'a> {
                             });
 
                         if updated {
-                            uniform.update(self.queue, new_data);
+                            uniform.upload(self.queue);
                         }
                     }
                 });
