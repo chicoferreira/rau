@@ -202,6 +202,27 @@ impl<'a> egui_tiles::Behavior<Pane> for Behavior<'a> {
                                                 },
                                             );
                                         }
+                                        uniform::UniformField::Color(color) => {
+                                            // TODO: change this to a label
+                                            ui.label(format!("Color #{index}"));
+
+                                            let mut egui_color =
+                                                egui::Rgba::from_rgba_premultiplied(
+                                                    color[0], color[1], color[2], color[3],
+                                                );
+
+                                            let color_picker =
+                                                egui::color_picker::color_edit_button_rgba(
+                                                    ui,
+                                                    &mut egui_color,
+                                                    egui::color_picker::Alpha::OnlyBlend,
+                                                );
+
+                                            if color_picker.changed() {
+                                                *color = egui_color.to_array();
+                                                updated = true;
+                                            }
+                                        }
                                     }
                                     ui.add_space(8.0);
                                 }

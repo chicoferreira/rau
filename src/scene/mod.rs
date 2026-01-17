@@ -60,7 +60,7 @@ fn light_to_uniform_data(position: Vector3<f32>, color: Vector3<f32>) -> uniform
     uniform::UniformData {
         fields: vec![
             uniform::UniformField::Vec4(position.extend(1.0).into()),
-            uniform::UniformField::Vec4(color.extend(1.0).into()),
+            uniform::UniformField::Color(color.extend(1.0).into()),
         ],
     }
 }
@@ -484,7 +484,7 @@ impl Scene {
         };
 
         let color: Vector4<_> = match light_uniform.data.fields[1] {
-            uniform::UniformField::Vec4(color) => color.into(),
+            uniform::UniformField::Color(color) => color.into(),
             _ => unreachable!("deal with this later"),
         };
 

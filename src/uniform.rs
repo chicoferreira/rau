@@ -35,6 +35,7 @@ pub enum UniformField {
     // TODO: Support more types
     // https://sotrh.github.io/learn-wgpu/showcase/alignment/#alignment-of-vertex-and-index-buffers
     Vec4([f32; 4]),
+    Color([f32; 4]),
     Mat4([[f32; 4]; 4]),
 }
 
@@ -42,6 +43,7 @@ impl UniformField {
     pub fn cast(&self) -> &[u8] {
         match self {
             UniformField::Vec4(vec4) => bytemuck::cast_slice(vec4),
+            UniformField::Color(color) => bytemuck::cast_slice(color),
             UniformField::Mat4(mat4) => bytemuck::cast_slice(mat4),
         }
     }
