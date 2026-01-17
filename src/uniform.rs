@@ -98,7 +98,7 @@ impl From<BindGroupEntry> for wgpu::BindGroupLayoutEntry {
     fn from(value: BindGroupEntry) -> Self {
         wgpu::BindGroupLayoutEntry {
             binding: value.binding,
-            visibility: wgpu::ShaderStages::all(),
+            visibility: wgpu::ShaderStages::VERTEX | wgpu::ShaderStages::FRAGMENT,
             ty: value.resource.into(),
             count: None,
         }
