@@ -1,4 +1,4 @@
-use crate::{project, state};
+use crate::{project, state, uniform};
 
 pub struct AppTree {
     tree: egui_tiles::Tree<Pane>,
@@ -14,6 +14,7 @@ impl AppTree {
 
         let inspector_tabs: Vec<egui_tiles::TileId> = vec![
             tiles.insert_pane(Pane::TextureInspector),
+            tiles.insert_pane(Pane::UniformInspector),
             tiles.insert_pane(Pane::DeviceInfo),
         ];
         let inspector_container = tiles.insert_tab_tile(inspector_tabs);
@@ -77,6 +78,7 @@ pub enum Pane {
         texture_id: Option<project::TextureId>,
     },
     DeviceInfo,
+    UniformInspector,
     TextureInspector,
 }
 
@@ -84,6 +86,7 @@ pub struct Behavior<'a> {
     pub adapter_info: &'a wgpu::AdapterInfo,
     pub pending_events: &'a mut Vec<state::StateEvent>,
     pub project: &'a mut project::Project,
+    pub queue: &'a wgpu::Queue,
 }
 
 impl<'a> egui_tiles::Behavior<Pane> for Behavior<'a> {
@@ -137,6 +140,79 @@ impl<'a> egui_tiles::Behavior<Pane> for Behavior<'a> {
                     }
                 });
             }
+            Pane::UniformInspector => {
+                egui::CentralPanel::default().show_inside(ui, |ui| {
+                    let uniform_ids = self
+                        .project
+                        .list_uniforms()
+                        .map(|(id, _)| id)
+                        .collect::<Vec<_>>();
+
+                    if uniform_ids.is_empty() {
+                        ui.label("No uniforms registered.");
+                        return;
+                    }
+
+                    for uniform_id in uniform_ids {
+                        let Some(uniform) = self.project.get_uniform_mut(uniform_id) else {
+                            continue;
+                        };
+
+                        let mut new_data = uniform.data.clone();
+                        let mut updated = false;
+
+                        egui::CollapsingHeader::new(uniform.label.as_str())
+                            .default_open(true)
+                            .show(ui, |ui| {
+                                for (index, field) in new_data.fields.iter_mut().enumerate() {
+                                    match field {
+                                        uniform::UniformField::Vec4(vec4) => {
+                                            // TODO: change this to a label
+                                            ui.label(format!("Vec4 #{index}"));
+                                            ui.horizontal(|ui| {
+                                                for value in vec4.iter_mut() {
+                                                    updated |= ui
+                                                        .add(
+                                                            egui::DragValue::new(value).speed(0.01),
+                                                        )
+                                                        .changed();
+                                                }
+                                            });
+                                        }
+                                        uniform::UniformField::Mat4(mat4) => {
+                                            // TODO: change this to a label
+                                            ui.label(format!("Mat4 #{index}"));
+                                            egui::Grid::new(format!(
+                                                "uniform_{uniform_id:?}_mat4_{index}"
+                                            ))
+                                            .show(
+                                                ui,
+                                                |ui| {
+                                                    for row in mat4.iter_mut() {
+                                                        for value in row.iter_mut() {
+                                                            updated |= ui
+                                                                .add(
+                                                                    egui::DragValue::new(value)
+                                                                        .speed(0.01),
+                                                                )
+                                                                .changed();
+                                                        }
+                                                        ui.end_row();
+                                                    }
+                                                },
+                                            );
+                                        }
+                                    }
+                                    ui.add_space(8.0);
+                                }
+                            });
+
+                        if updated {
+                            uniform.update(self.queue, new_data);
+                        }
+                    }
+                });
+            }
         };
 
         egui_tiles::UiResponse::None
@@ -150,6 +226,7 @@ impl<'a> egui_tiles::Behavior<Pane> for Behavior<'a> {
                 .unwrap_or("Empty Viewport".into()),
             Pane::DeviceInfo => "Device Info".into(),
             Pane::TextureInspector => "Textures".into(),
+            Pane::UniformInspector => "Uniforms".into(),
         }
     }
 

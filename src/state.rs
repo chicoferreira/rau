@@ -224,6 +224,7 @@ impl State {
                             pending_events: &mut self.pending_events,
                             adapter_info: &self.adapter_info,
                             project: &mut self.project,
+                            queue: &self.queue,
                         };
 
                         self.app_tree.ui(&mut behavior, ui);

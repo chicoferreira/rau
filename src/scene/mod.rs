@@ -5,9 +5,9 @@ use crate::{
     model::{self, Vertex},
     project, render, resources,
     scene::hdr::HdrPipeline,
-    state, texture, ui,
+    state, texture, ui, uniform,
 };
-use cgmath::{InnerSpace, Matrix, Rotation3, SquareMatrix, Zero};
+use cgmath::{InnerSpace, Matrix, Rotation3, SquareMatrix, Vector3, Vector4, Zero};
 
 mod hdr;
 mod loader;
@@ -32,37 +32,36 @@ pub enum SceneEvent {
     },
 }
 
-#[repr(C)]
-#[derive(Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
-struct CameraUniform {
-    view_position: [f32; 4],
-    view: [[f32; 4]; 4],
-    view_proj: [[f32; 4]; 4],
-    inv_proj: [[f32; 4]; 4],
-    inv_view: [[f32; 4]; 4],
+fn camera_to_uniform_data(
+    camera: &camera::Camera,
+    projection: &camera::Projection,
+) -> uniform::UniformData {
+    let view_position: [f32; 4] = camera.position.to_homogeneous().into();
+    let proj = projection.calc_matrix();
+    let view_matrix = camera.calc_matrix();
+    let view_proj = proj * view_matrix;
+    let view: [[f32; 4]; 4] = view_matrix.into();
+    let view_proj: [[f32; 4]; 4] = view_proj.into();
+    let inv_proj: [[f32; 4]; 4] = proj.invert().unwrap().into();
+    let inv_view: [[f32; 4]; 4] = view_matrix.transpose().into();
+
+    uniform::UniformData {
+        fields: vec![
+            uniform::UniformField::Vec4(view_position),
+            uniform::UniformField::Mat4(view),
+            uniform::UniformField::Mat4(view_proj),
+            uniform::UniformField::Mat4(inv_proj),
+            uniform::UniformField::Mat4(inv_view),
+        ],
+    }
 }
 
-impl CameraUniform {
-    fn new() -> Self {
-        use cgmath::SquareMatrix;
-        Self {
-            view_position: [0.0; 4],
-            view: cgmath::Matrix4::identity().into(),
-            view_proj: cgmath::Matrix4::identity().into(),
-            inv_proj: cgmath::Matrix4::identity().into(),
-            inv_view: cgmath::Matrix4::identity().into(),
-        }
-    }
-
-    fn update_view_proj(&mut self, camera: &camera::Camera, projection: &camera::Projection) {
-        self.view_position = camera.position.to_homogeneous().into();
-        let proj = projection.calc_matrix();
-        let view = camera.calc_matrix();
-        let view_proj = proj * view;
-        self.view = view.into();
-        self.view_proj = view_proj.into();
-        self.inv_proj = proj.invert().unwrap().into();
-        self.inv_view = view.transpose().into();
+fn light_to_uniform_data(position: Vector3<f32>, color: Vector3<f32>) -> uniform::UniformData {
+    uniform::UniformData {
+        fields: vec![
+            uniform::UniformField::Vec4(position.extend(1.0).into()),
+            uniform::UniformField::Vec4(color.extend(1.0).into()),
+        ],
     }
 }
 
@@ -159,12 +158,10 @@ pub struct Scene {
     camera: camera::Camera,
     projection: camera::Projection,
     camera_controller: camera::CameraController,
-    camera_uniform: CameraUniform,
-    camera_buffer: wgpu::Buffer,
-    camera_bind_group: wgpu::BindGroup,
-    light_buffer: wgpu::Buffer,
-    light_bind_group: wgpu::BindGroup,
-    light_uniform: LightUniform,
+    camera_uniform_id: project::UniformId,
+    camera_bind_group_id: project::BindGroupId,
+    light_uniform_id: project::UniformId,
+    light_bind_group_id: project::BindGroupId,
     light_render_pipeline: wgpu::RenderPipeline,
     hdr: hdr::HdrPipeline,
     environment_bind_group: wgpu::BindGroup,
@@ -236,14 +233,9 @@ impl Scene {
             camera::Projection::new(size.width(), size.height(), cgmath::Deg(45.0), 0.1, 100.0);
         let camera_controller = camera::CameraController::new(4.0, 0.4);
 
-        let mut camera_uniform = CameraUniform::new();
-        camera_uniform.update_view_proj(&camera, &projection);
-
-        let camera_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Camera Buffer"),
-            contents: bytemuck::cast_slice(&[camera_uniform]),
-            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-        });
+        let camera_uniform_data = camera_to_uniform_data(&camera, &projection);
+        let camera_uniform_id =
+            project.register_uniform(device, "Camera Buffer", camera_uniform_data);
 
         const SPACE_BETWEEN: f32 = 3.0;
         let instances = (0..NUM_INSTANCES_PER_ROW)
@@ -275,66 +267,28 @@ impl Scene {
             usage: wgpu::BufferUsages::VERTEX,
         });
 
-        let camera_bind_group_layout =
-            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                entries: &[wgpu::BindGroupLayoutEntry {
-                    binding: 0,
-                    visibility: wgpu::ShaderStages::VERTEX | wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Uniform,
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
-                    },
-                    count: None,
-                }],
-                label: Some("camera_bind_group_layout"),
-            });
-
-        let camera_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            layout: &camera_bind_group_layout,
-            entries: &[wgpu::BindGroupEntry {
+        let camera_bind_group_id = project.register_bind_group(
+            device,
+            "camera bind group",
+            vec![uniform::BindGroupEntry {
                 binding: 0,
-                resource: camera_buffer.as_entire_binding(),
+                resource: uniform::BindGroupResource::Uniform(camera_uniform_id),
             }],
-            label: Some("camera_bind_group"),
-        });
+        );
 
-        let light_uniform = LightUniform {
-            position: [2.0, 2.0, 2.0],
-            _padding: 0,
-            color: [1.0, 1.0, 1.0],
-            _padding2: 0,
-        };
+        let light_data =
+            light_to_uniform_data(Vector3::new(2.0, 2.0, 2.0), Vector3::new(1.0, 1.0, 1.0));
 
-        let light_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Light VB"),
-            contents: bytemuck::cast_slice(&[light_uniform]),
-            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-        });
+        let light_uniform_id = project.register_uniform(device, "light", light_data);
 
-        let light_bind_group_layout =
-            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                entries: &[wgpu::BindGroupLayoutEntry {
-                    binding: 0,
-                    visibility: wgpu::ShaderStages::VERTEX | wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Uniform,
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
-                    },
-                    count: None,
-                }],
-                label: None,
-            });
-
-        let light_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            layout: &light_bind_group_layout,
-            entries: &[wgpu::BindGroupEntry {
+        let light_bind_group_id = project.register_bind_group(
+            device,
+            "light bind group",
+            vec![uniform::BindGroupEntry {
                 binding: 0,
-                resource: light_buffer.as_entire_binding(),
+                resource: uniform::BindGroupResource::Uniform(light_uniform_id),
             }],
-            label: None,
-        });
+        );
 
         let obj_model =
             resources::load_model("cube.obj", &device, &queue, &texture_bind_group_layout)
@@ -412,8 +366,8 @@ impl Scene {
                 label: Some("Render Pipeline Layout"),
                 bind_group_layouts: &[
                     &texture_bind_group_layout,
-                    &camera_bind_group_layout,
-                    &light_bind_group_layout,
+                    &project.get_bind_group(camera_bind_group_id).unwrap().layout,
+                    &project.get_bind_group(light_bind_group_id).unwrap().layout,
                     &environment_layout,
                 ],
                 immediate_size: 0,
@@ -436,7 +390,10 @@ impl Scene {
         let light_render_pipeline = {
             let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("Light Pipeline Layout"),
-                bind_group_layouts: &[&camera_bind_group_layout, &light_bind_group_layout],
+                bind_group_layouts: &[
+                    &project.get_bind_group(camera_bind_group_id).unwrap().layout,
+                    &project.get_bind_group(light_bind_group_id).unwrap().layout,
+                ],
                 immediate_size: 0,
             });
             let shader = project.get_shader(light_shader_id).unwrap();
@@ -455,7 +412,10 @@ impl Scene {
         let sky_pipeline = {
             let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("Sky Pipeline Layout"),
-                bind_group_layouts: &[&camera_bind_group_layout, &environment_layout],
+                bind_group_layouts: &[
+                    &project.get_bind_group(camera_bind_group_id).unwrap().layout,
+                    &environment_layout,
+                ],
                 immediate_size: 0,
             });
             let shader = project.get_shader(sky_shader_id).unwrap();
@@ -488,12 +448,10 @@ impl Scene {
             camera,
             projection,
             camera_controller,
-            camera_uniform,
-            camera_buffer,
-            camera_bind_group,
-            light_buffer,
-            light_bind_group,
-            light_uniform,
+            camera_bind_group_id,
+            camera_uniform_id,
+            light_uniform_id,
+            light_bind_group_id,
             light_render_pipeline,
             hdr,
             environment_bind_group,
@@ -503,27 +461,40 @@ impl Scene {
         })
     }
 
-    fn update(&mut self, queue: &wgpu::Queue, dt: instant::Duration) {
+    fn update(
+        &mut self,
+        project: &mut project::Project,
+        queue: &wgpu::Queue,
+        dt: instant::Duration,
+    ) {
         self.camera_controller.update_camera(&mut self.camera, dt);
-        self.camera_uniform
-            .update_view_proj(&self.camera, &self.projection);
-        queue.write_buffer(
-            &self.camera_buffer,
-            0,
-            bytemuck::cast_slice(&[self.camera_uniform]),
-        );
+        let camera_data = camera_to_uniform_data(&self.camera, &self.projection);
 
-        let old_position: cgmath::Vector3<_> = self.light_uniform.position.into();
-        self.light_uniform.position = (cgmath::Quaternion::from_axis_angle(
+        project
+            .get_uniform_mut(self.camera_uniform_id)
+            .unwrap()
+            .update(queue, camera_data);
+
+        let light_uniform = project.get_uniform_mut(self.light_uniform_id).unwrap();
+
+        // this is fine for now
+        let position: Vector4<_> = match light_uniform.data.fields[0] {
+            uniform::UniformField::Vec4(position) => position.into(),
+            _ => unreachable!("deal with this later"),
+        };
+
+        let color: Vector4<_> = match light_uniform.data.fields[1] {
+            uniform::UniformField::Vec4(color) => color.into(),
+            _ => unreachable!("deal with this later"),
+        };
+
+        let new_position = cgmath::Quaternion::from_axis_angle(
             (0.0, 1.0, 0.0).into(),
             cgmath::Deg(60.0 * dt.as_secs_f32()),
-        ) * old_position)
-            .into();
-        queue.write_buffer(
-            &self.light_buffer,
-            0,
-            bytemuck::cast_slice(&[self.light_uniform]),
-        );
+        ) * position.truncate();
+
+        let light_data = light_to_uniform_data(new_position, color.truncate());
+        light_uniform.update(queue, light_data);
     }
 
     pub fn handle_event(
@@ -555,16 +526,15 @@ impl Scene {
                     texture::Texture::create_depth_texture(device, size, "Depth Buffer");
                 self.projection.resize(size);
 
-                self.camera_uniform
-                    .update_view_proj(&self.camera, &self.projection);
-                queue.write_buffer(
-                    &self.camera_buffer,
-                    0,
-                    bytemuck::cast_slice(&[self.camera_uniform]),
-                );
+                let camera_data = camera_to_uniform_data(&self.camera, &self.projection);
+
+                project
+                    .get_uniform_mut(self.camera_uniform_id)
+                    .unwrap()
+                    .update(queue, camera_data);
             }
             SceneEvent::Frame { dt } => {
-                self.update(queue, dt);
+                self.update(project, queue, dt);
             }
             SceneEvent::Keyboard {
                 key_code,
@@ -577,6 +547,9 @@ impl Scene {
     }
 
     pub fn render(&self, encoder: &mut wgpu::CommandEncoder, project: &project::Project) {
+        let camera_bind_group = project.get_bind_group(self.camera_bind_group_id).unwrap();
+        let light_bind_group = project.get_bind_group(self.light_bind_group_id).unwrap();
+
         let main_render_pass = render::RenderPassSpec {
             label: Some("Main Render Pass"),
             target_spec: render::RenderPassTargetSpec {
@@ -592,8 +565,8 @@ impl Scene {
                 render::RenderPipelineSpec {
                     pipeline: &self.light_render_pipeline,
                     bind_groups: vec![
-                        render::RenderBindGroupSpec::new_fixed(0, &self.camera_bind_group),
-                        render::RenderBindGroupSpec::new_fixed(1, &self.light_bind_group),
+                        render::RenderBindGroupSpec::new_fixed(0, &camera_bind_group.group),
+                        render::RenderBindGroupSpec::new_fixed(1, &light_bind_group.group),
                     ],
                     vertex_buffers: vec![
                         render::RenderVertexBufferSpec::new_model_mesh(0),
@@ -608,8 +581,8 @@ impl Scene {
                     pipeline: &self.render_pipeline,
                     bind_groups: vec![
                         render::RenderBindGroupSpec::new_model_material(0),
-                        render::RenderBindGroupSpec::new_fixed(1, &self.camera_bind_group),
-                        render::RenderBindGroupSpec::new_fixed(2, &self.light_bind_group),
+                        render::RenderBindGroupSpec::new_fixed(1, &camera_bind_group.group),
+                        render::RenderBindGroupSpec::new_fixed(2, &light_bind_group.group),
                         render::RenderBindGroupSpec::new_fixed(3, &self.environment_bind_group),
                     ],
                     vertex_buffers: vec![
@@ -624,7 +597,7 @@ impl Scene {
                 render::RenderPipelineSpec {
                     pipeline: &self.sky_pipeline,
                     bind_groups: vec![
-                        render::RenderBindGroupSpec::new_fixed(0, &self.camera_bind_group),
+                        render::RenderBindGroupSpec::new_fixed(0, &camera_bind_group.group),
                         render::RenderBindGroupSpec::new_fixed(1, &self.environment_bind_group),
                     ],
                     vertex_buffers: vec![],
