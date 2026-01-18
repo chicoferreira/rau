@@ -1,4 +1,48 @@
-use crate::project;
+use slotmap::new_key_type;
+use wgpu::util::DeviceExt;
+
+use crate::project::Project;
+
+new_key_type! {
+    pub struct UniformId;
+}
+
+impl Project {
+    pub fn get_uniform(&self, id: UniformId) -> Option<&Uniform> {
+        self.uniforms.get(id)
+    }
+
+    pub fn get_uniform_mut(&mut self, id: UniformId) -> Option<&mut Uniform> {
+        self.uniforms.get_mut(id)
+    }
+
+    pub fn list_uniforms(&self) -> impl Iterator<Item = (UniformId, &Uniform)> {
+        self.uniforms.iter()
+    }
+
+    pub fn register_uniform(
+        &mut self,
+        device: &wgpu::Device,
+        label: impl Into<String>,
+        data: UniformData,
+    ) -> UniformId {
+        let label = label.into();
+
+        let buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some(&label),
+            contents: &data.cast(),
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        });
+
+        let uniform = Uniform {
+            label,
+            data,
+            buffer,
+        };
+
+        self.uniforms.insert(uniform)
+    }
+}
 
 #[derive(Debug)]
 pub struct Uniform {
@@ -176,98 +220,5 @@ mod tests {
 
         let result: &[f32] = bytemuck::cast_slice(&result);
         assert_eq!(result, &[9.0, 8.0, 7.0, 0.0, 0.25, 0.5, 0.0, 0.0]);
-    }
-}
-
-pub struct BindGroup {
-    pub(crate) label: String,
-    pub(crate) layout: wgpu::BindGroupLayout,
-    pub(crate) group: wgpu::BindGroup,
-    pub(crate) entries: Vec<BindGroupEntry>,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct BindGroupEntry {
-    pub binding: u32,
-    pub resource: BindGroupResource,
-}
-
-impl BindGroupEntry {
-    pub fn into_bind_group_entry<'a>(
-        &self,
-        project: &'a project::Project,
-    ) -> wgpu::BindGroupEntry<'a> {
-        let resource = match self.resource {
-            BindGroupResource::Texture { texture_id, .. } => {
-                let texture = project
-                    .get_texture(texture_id)
-                    .expect("deal with this later");
-                wgpu::BindingResource::TextureView(&texture.texture().view)
-            }
-            BindGroupResource::Sampler { texture_id, .. } => {
-                let texture = project
-                    .get_texture(texture_id)
-                    .expect("deal with this later");
-                wgpu::BindingResource::Sampler(&texture.texture().sampler)
-            }
-            BindGroupResource::Uniform(uniform_id) => {
-                let uniform = project
-                    .get_uniform(uniform_id)
-                    .expect("deal with this later");
-
-                uniform.buffer.as_entire_binding()
-            }
-        };
-
-        wgpu::BindGroupEntry {
-            binding: self.binding,
-            resource,
-        }
-    }
-}
-
-impl From<BindGroupEntry> for wgpu::BindGroupLayoutEntry {
-    fn from(value: BindGroupEntry) -> Self {
-        wgpu::BindGroupLayoutEntry {
-            binding: value.binding,
-            visibility: wgpu::ShaderStages::VERTEX | wgpu::ShaderStages::FRAGMENT,
-            ty: value.resource.into(),
-            count: None,
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum BindGroupResource {
-    Texture {
-        texture_id: project::TextureId,
-        view_dimension: wgpu::TextureViewDimension,
-    },
-    Sampler {
-        texture_id: project::TextureId,
-        sampler_binding_type: wgpu::SamplerBindingType,
-    },
-    Uniform(project::UniformId),
-}
-
-impl From<BindGroupResource> for wgpu::BindingType {
-    fn from(value: BindGroupResource) -> Self {
-        match value {
-            BindGroupResource::Texture { view_dimension, .. } => wgpu::BindingType::Texture {
-                sample_type: wgpu::TextureSampleType::Float { filterable: false },
-                // TODO: support for depth texture
-                view_dimension,
-                multisampled: false,
-            },
-            BindGroupResource::Sampler {
-                sampler_binding_type,
-                ..
-            } => wgpu::BindingType::Sampler(sampler_binding_type),
-            BindGroupResource::Uniform(_) => wgpu::BindingType::Buffer {
-                ty: wgpu::BufferBindingType::Uniform,
-                has_dynamic_offset: false,
-                min_binding_size: None,
-            },
-        }
     }
 }

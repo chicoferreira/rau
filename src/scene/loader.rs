@@ -1,7 +1,7 @@
 use std::io::Cursor;
 
 use crate::{
-    project::{Project, ShaderId},
+    project::{Project, shader::ShaderId},
     texture,
 };
 

@@ -13,7 +13,7 @@ use crate::{
 
 pub enum StateEvent {
     SceneEvent(scene::SceneEvent),
-    AddViewport(project::TextureId),
+    AddViewport(project::texture::TextureId),
 }
 
 impl From<scene::SceneEvent> for StateEvent {

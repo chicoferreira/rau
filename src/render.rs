@@ -70,7 +70,7 @@ impl RenderPassSpec<'_> {
 }
 
 pub struct RenderPassTargetSpec {
-    pub texture_id: project::TextureId,
+    pub texture_id: project::texture::TextureId,
     pub texture_format: RenderPassTargetTextureFormat,
     pub load_operation: wgpu::LoadOp<wgpu::Color>,
 }

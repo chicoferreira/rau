@@ -5,9 +5,9 @@ use crate::{
     model::{self, Vertex},
     project, render, resources,
     scene::hdr::HdrPipeline,
-    state, texture, ui, uniform,
+    state, texture, ui,
 };
-use cgmath::{InnerSpace, Matrix, Rotation3, SquareMatrix, Vector3, Vector4, Zero};
+use cgmath::{InnerSpace, Matrix, Rotation3, SquareMatrix, Vector3, Zero};
 
 mod hdr;
 mod loader;
@@ -35,7 +35,7 @@ pub enum SceneEvent {
 fn camera_to_uniform_data(
     camera: &camera::Camera,
     projection: &camera::Projection,
-) -> uniform::UniformData {
+) -> project::uniform::UniformData {
     let view_position: [f32; 4] = camera.position.to_homogeneous().into();
     let proj = projection.calc_matrix();
     let view_matrix = camera.calc_matrix();
@@ -45,22 +45,22 @@ fn camera_to_uniform_data(
     let inv_proj: [[f32; 4]; 4] = proj.invert().unwrap().into();
     let inv_view: [[f32; 4]; 4] = view_matrix.transpose().into();
 
-    uniform::UniformData {
+    project::uniform::UniformData {
         fields: vec![
-            uniform::UniformField::new_vec4("view_position", view_position),
-            uniform::UniformField::new_mat4("view", view),
-            uniform::UniformField::new_mat4("view_proj", view_proj),
-            uniform::UniformField::new_mat4("inv_proj", inv_proj),
-            uniform::UniformField::new_mat4("inv_view", inv_view),
+            project::uniform::UniformField::new_vec4("view_position", view_position),
+            project::uniform::UniformField::new_mat4("view", view),
+            project::uniform::UniformField::new_mat4("view_proj", view_proj),
+            project::uniform::UniformField::new_mat4("inv_proj", inv_proj),
+            project::uniform::UniformField::new_mat4("inv_view", inv_view),
         ],
     }
 }
 
-fn light_to_uniform_data(position: [f32; 3], color: [f32; 3]) -> uniform::UniformData {
-    uniform::UniformData {
+fn light_to_uniform_data(position: [f32; 3], color: [f32; 3]) -> project::uniform::UniformData {
+    project::uniform::UniformData {
         fields: vec![
-            uniform::UniformField::new_vec3("position", position),
-            uniform::UniformField::new_rgb("color", color),
+            project::uniform::UniformField::new_vec3("position", position),
+            project::uniform::UniformField::new_rgb("color", color),
         ],
     }
 }
@@ -147,16 +147,16 @@ pub struct Scene {
     camera: camera::Camera,
     projection: camera::Projection,
     camera_controller: camera::CameraController,
-    camera_uniform_id: project::UniformId,
-    camera_bind_group_id: project::BindGroupId,
-    light_uniform_id: project::UniformId,
-    light_bind_group_id: project::BindGroupId,
+    camera_uniform_id: project::uniform::UniformId,
+    camera_bind_group_id: project::bindgroup::BindGroupId,
+    light_uniform_id: project::uniform::UniformId,
+    light_bind_group_id: project::bindgroup::BindGroupId,
     light_render_pipeline: wgpu::RenderPipeline,
     hdr: hdr::HdrPipeline,
     environment_bind_group: wgpu::BindGroup,
     sky_pipeline: wgpu::RenderPipeline,
-    hdr_texture_id: project::TextureId,
-    viewport_texture_id: project::TextureId,
+    hdr_texture_id: project::texture::TextureId,
+    viewport_texture_id: project::texture::TextureId,
 }
 
 impl Scene {
@@ -167,11 +167,11 @@ impl Scene {
         target_texture_format: wgpu::TextureFormat,
         project: &mut project::Project,
         egui_renderer: &mut ui::renderer::EguiRenderer,
-        equirectangular_shader_id: project::ShaderId,
-        hdr_shader_id: project::ShaderId,
-        light_shader_id: project::ShaderId,
-        main_shader_id: project::ShaderId,
-        sky_shader_id: project::ShaderId,
+        equirectangular_shader_id: project::shader::ShaderId,
+        hdr_shader_id: project::shader::ShaderId,
+        light_shader_id: project::shader::ShaderId,
+        main_shader_id: project::shader::ShaderId,
+        sky_shader_id: project::shader::ShaderId,
     ) -> anyhow::Result<Scene> {
         let texture_bind_group_layout =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
@@ -259,9 +259,9 @@ impl Scene {
         let camera_bind_group_id = project.register_bind_group(
             device,
             "camera bind group",
-            vec![uniform::BindGroupEntry {
+            vec![project::bindgroup::BindGroupEntry {
                 binding: 0,
-                resource: uniform::BindGroupResource::Uniform(camera_uniform_id),
+                resource: project::bindgroup::BindGroupResource::Uniform(camera_uniform_id),
             }],
         );
 
@@ -272,9 +272,9 @@ impl Scene {
         let light_bind_group_id = project.register_bind_group(
             device,
             "light bind group",
-            vec![uniform::BindGroupEntry {
+            vec![project::bindgroup::BindGroupEntry {
                 binding: 0,
-                resource: uniform::BindGroupResource::Uniform(light_uniform_id),
+                resource: project::bindgroup::BindGroupResource::Uniform(light_uniform_id),
             }],
         );
 
@@ -467,12 +467,12 @@ impl Scene {
 
         // this is fine for now
         let position: Vector3<_> = match light_uniform.data.fields[0].ty {
-            uniform::UniformFieldType::Vec3f(position) => position.into(),
+            project::uniform::UniformFieldType::Vec3f(position) => position.into(),
             _ => unreachable!("deal with this later"),
         };
 
         let color = match light_uniform.data.fields[1].ty {
-            uniform::UniformFieldType::Rgb(color) => color,
+            project::uniform::UniformFieldType::Rgb(color) => color,
             _ => unreachable!("deal with this later"),
         };
 

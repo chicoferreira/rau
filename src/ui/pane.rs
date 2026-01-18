@@ -1,4 +1,7 @@
-use crate::{project, state, uniform};
+use crate::{
+    project::{self, uniform},
+    state,
+};
 
 pub struct AppTree {
     tree: egui_tiles::Tree<Pane>,
@@ -33,7 +36,7 @@ impl AppTree {
         self.tree.ui(behavior, ui);
     }
 
-    pub fn add_viewport(&mut self, texture_id: Option<project::TextureId>) {
+    pub fn add_viewport(&mut self, texture_id: Option<project::texture::TextureId>) {
         let child = self.tree.tiles.insert_pane(Pane::Viewport { texture_id });
 
         if let Some(egui_tiles::Tile::Container(egui_tiles::Container::Tabs(tabs))) =
@@ -75,7 +78,7 @@ impl AppTree {
 #[derive(Debug)]
 pub enum Pane {
     Viewport {
-        texture_id: Option<project::TextureId>,
+        texture_id: Option<project::texture::TextureId>,
     },
     DeviceInfo,
     UniformInspector,
