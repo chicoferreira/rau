@@ -56,24 +56,13 @@ fn camera_to_uniform_data(
     }
 }
 
-fn light_to_uniform_data(position: Vector3<f32>, color: Vector3<f32>) -> uniform::UniformData {
+fn light_to_uniform_data(position: [f32; 3], color: [f32; 3]) -> uniform::UniformData {
     uniform::UniformData {
         fields: vec![
-            uniform::UniformField::new_vec4("position", position.extend(1.0).into()),
-            uniform::UniformField::new_color("color", color.extend(1.0).into()),
+            uniform::UniformField::new_vec3("position", position),
+            uniform::UniformField::new_rgb("color", color),
         ],
     }
-}
-
-#[repr(C)]
-#[derive(Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
-struct LightUniform {
-    position: [f32; 3],
-    // Due to uniforms requiring 16 byte (4 float) spacing, we need to use a padding field here
-    _padding: u32,
-    color: [f32; 3],
-    // Due to uniforms requiring 16 byte (4 float) spacing, we need to use a padding field here
-    _padding2: u32,
 }
 
 struct Instance {
@@ -276,8 +265,7 @@ impl Scene {
             }],
         );
 
-        let light_data =
-            light_to_uniform_data(Vector3::new(2.0, 2.0, 2.0), Vector3::new(1.0, 1.0, 1.0));
+        let light_data = light_to_uniform_data([2.0, 2.0, 2.0], [1.0, 1.0, 1.0]);
 
         let light_uniform_id = project.register_uniform(device, "light", light_data);
 
@@ -478,22 +466,22 @@ impl Scene {
         let light_uniform = project.get_uniform_mut(self.light_uniform_id).unwrap();
 
         // this is fine for now
-        let position: Vector4<_> = match light_uniform.data.fields[0].ty {
-            uniform::UniformFieldType::Vec4(position) => position.into(),
+        let position: Vector3<_> = match light_uniform.data.fields[0].ty {
+            uniform::UniformFieldType::Vec3f(position) => position.into(),
             _ => unreachable!("deal with this later"),
         };
 
-        let color: Vector4<_> = match light_uniform.data.fields[1].ty {
-            uniform::UniformFieldType::Color(color) => color.into(),
+        let color = match light_uniform.data.fields[1].ty {
+            uniform::UniformFieldType::Rgb(color) => color,
             _ => unreachable!("deal with this later"),
         };
 
         let new_position = cgmath::Quaternion::from_axis_angle(
             (0.0, 1.0, 0.0).into(),
             cgmath::Deg(60.0 * dt.as_secs_f32()),
-        ) * position.truncate();
+        ) * position;
 
-        light_uniform.set_and_upload(queue, light_to_uniform_data(new_position, color.truncate()));
+        light_uniform.set_and_upload(queue, light_to_uniform_data(new_position.into(), color));
     }
 
     pub fn handle_event(

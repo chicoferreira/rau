@@ -165,10 +165,9 @@ impl<'a> egui_tiles::Behavior<Pane> for Behavior<'a> {
                             .default_open(true)
                             .show(ui, |ui| {
                                 for (index, field) in data.fields.iter_mut().enumerate() {
+                                    ui.label(&field.name);
                                     match &mut field.ty {
-                                        uniform::UniformFieldType::Vec4(vec4) => {
-                                            // TODO: change this to a label
-                                            ui.label(&field.name);
+                                        uniform::UniformFieldType::Vec4f(vec4) => {
                                             ui.horizontal(|ui| {
                                                 for value in vec4.iter_mut() {
                                                     updated |= ui
@@ -179,9 +178,29 @@ impl<'a> egui_tiles::Behavior<Pane> for Behavior<'a> {
                                                 }
                                             });
                                         }
-                                        uniform::UniformFieldType::Mat4(mat4) => {
-                                            // TODO: change this to a label
-                                            ui.label(&field.name);
+                                        uniform::UniformFieldType::Vec3f(vec3) => {
+                                            ui.horizontal(|ui| {
+                                                for value in vec3.iter_mut() {
+                                                    updated |= ui
+                                                        .add(
+                                                            egui::DragValue::new(value).speed(0.01),
+                                                        )
+                                                        .changed();
+                                                }
+                                            });
+                                        }
+                                        uniform::UniformFieldType::Vec2f(vec2) => {
+                                            ui.horizontal(|ui| {
+                                                for value in vec2.iter_mut() {
+                                                    updated |= ui
+                                                        .add(
+                                                            egui::DragValue::new(value).speed(0.01),
+                                                        )
+                                                        .changed();
+                                                }
+                                            });
+                                        }
+                                        uniform::UniformFieldType::Mat4x4f(mat4) => {
                                             egui::Grid::new(format!(
                                                 "uniform_{uniform_id:?}_mat4_{index}"
                                             ))
@@ -202,10 +221,7 @@ impl<'a> egui_tiles::Behavior<Pane> for Behavior<'a> {
                                                 },
                                             );
                                         }
-                                        uniform::UniformFieldType::Color(color) => {
-                                            // TODO: change this to a label
-                                            ui.label(&field.name);
-
+                                        uniform::UniformFieldType::Rgba(color) => {
                                             let mut egui_color =
                                                 egui::Rgba::from_rgba_premultiplied(
                                                     color[0], color[1], color[2], color[3],
@@ -222,6 +238,12 @@ impl<'a> egui_tiles::Behavior<Pane> for Behavior<'a> {
                                                 *color = egui_color.to_array();
                                                 updated = true;
                                             }
+                                        }
+                                        uniform::UniformFieldType::Rgb(color) => {
+                                            updated |= egui::color_picker::color_edit_button_rgb(
+                                                ui, color,
+                                            )
+                                            .changed();
                                         }
                                     }
                                     ui.add_space(8.0);
