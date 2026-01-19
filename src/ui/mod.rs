@@ -1,5 +1,6 @@
 pub mod pane;
 pub mod renderer;
+mod uniform_inspector;
 pub mod viewport;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

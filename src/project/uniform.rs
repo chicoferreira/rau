@@ -20,6 +20,14 @@ impl Project {
         self.uniforms.iter()
     }
 
+    pub fn list_uniforms_mut(&mut self) -> impl Iterator<Item = (UniformId, &mut Uniform)> {
+        self.uniforms.iter_mut()
+    }
+
+    pub fn is_empty_uniforms(&self) -> bool {
+        self.uniforms.is_empty()
+    }
+
     pub fn register_uniform(
         &mut self,
         device: &wgpu::Device,
@@ -87,6 +95,20 @@ impl UniformData {
         buf.resize(final_len, 0);
 
         buf
+    }
+
+    pub fn layout(&self) -> (usize, usize) {
+        let mut size = 0usize;
+        let mut struct_align = 1usize;
+
+        for field in &self.fields {
+            let (align, field_size) = field.ty.layout();
+            struct_align = struct_align.max(align);
+            size = size.next_multiple_of(align);
+            size += field_size;
+        }
+
+        (size.next_multiple_of(struct_align), struct_align)
     }
 }
 

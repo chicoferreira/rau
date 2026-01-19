@@ -1,5 +1,5 @@
 use crate::{
-    project::{self, uniform},
+    project::{self},
     state,
 };
 
@@ -144,120 +144,7 @@ impl<'a> egui_tiles::Behavior<Pane> for Behavior<'a> {
                 });
             }
             Pane::UniformInspector => {
-                egui::CentralPanel::default().show_inside(ui, |ui| {
-                    let uniform_ids = self
-                        .project
-                        .list_uniforms()
-                        .map(|(id, _)| id)
-                        .collect::<Vec<_>>();
-
-                    if uniform_ids.is_empty() {
-                        ui.label("No uniforms registered.");
-                        return;
-                    }
-
-                    for uniform_id in uniform_ids {
-                        let Some(uniform) = self.project.get_uniform_mut(uniform_id) else {
-                            continue;
-                        };
-
-                        let data = &mut uniform.data;
-                        let mut updated = false;
-
-                        egui::CollapsingHeader::new(uniform.label.as_str())
-                            .default_open(true)
-                            .show(ui, |ui| {
-                                for (index, field) in data.fields.iter_mut().enumerate() {
-                                    ui.label(&field.name);
-                                    match &mut field.ty {
-                                        uniform::UniformFieldType::Vec4f(vec4) => {
-                                            ui.horizontal(|ui| {
-                                                for value in vec4.iter_mut() {
-                                                    updated |= ui
-                                                        .add(
-                                                            egui::DragValue::new(value).speed(0.01),
-                                                        )
-                                                        .changed();
-                                                }
-                                            });
-                                        }
-                                        uniform::UniformFieldType::Vec3f(vec3) => {
-                                            ui.horizontal(|ui| {
-                                                for value in vec3.iter_mut() {
-                                                    updated |= ui
-                                                        .add(
-                                                            egui::DragValue::new(value).speed(0.01),
-                                                        )
-                                                        .changed();
-                                                }
-                                            });
-                                        }
-                                        uniform::UniformFieldType::Vec2f(vec2) => {
-                                            ui.horizontal(|ui| {
-                                                for value in vec2.iter_mut() {
-                                                    updated |= ui
-                                                        .add(
-                                                            egui::DragValue::new(value).speed(0.01),
-                                                        )
-                                                        .changed();
-                                                }
-                                            });
-                                        }
-                                        uniform::UniformFieldType::Mat4x4f(mat4) => {
-                                            egui::Grid::new(format!(
-                                                "uniform_{uniform_id:?}_mat4_{index}"
-                                            ))
-                                            .show(
-                                                ui,
-                                                |ui| {
-                                                    for row in mat4.iter_mut() {
-                                                        for value in row.iter_mut() {
-                                                            updated |= ui
-                                                                .add(
-                                                                    egui::DragValue::new(value)
-                                                                        .speed(0.01),
-                                                                )
-                                                                .changed();
-                                                        }
-                                                        ui.end_row();
-                                                    }
-                                                },
-                                            );
-                                        }
-                                        uniform::UniformFieldType::Rgba(color) => {
-                                            let mut egui_color =
-                                                egui::Rgba::from_rgba_premultiplied(
-                                                    color[0], color[1], color[2], color[3],
-                                                );
-
-                                            let color_picker =
-                                                egui::color_picker::color_edit_button_rgba(
-                                                    ui,
-                                                    &mut egui_color,
-                                                    egui::color_picker::Alpha::OnlyBlend,
-                                                );
-
-                                            if color_picker.changed() {
-                                                *color = egui_color.to_array();
-                                                updated = true;
-                                            }
-                                        }
-                                        uniform::UniformFieldType::Rgb(color) => {
-                                            updated |= egui::color_picker::color_edit_button_rgb(
-                                                ui, color,
-                                            )
-                                            .changed();
-                                        }
-                                    }
-                                    ui.add_space(8.0);
-                                }
-                            });
-
-                        if updated {
-                            uniform.upload(self.queue);
-                        }
-                    }
-                });
+                self.uniform_inspector_ui(ui);
             }
         };
 
