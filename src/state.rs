@@ -70,11 +70,7 @@ impl State {
                 label: None,
                 required_features: wgpu::Features::empty(),
                 experimental_features: wgpu::ExperimentalFeatures::disabled(),
-                required_limits: if cfg!(target_arch = "wasm32") {
-                    wgpu::Limits::downlevel_defaults()
-                } else {
-                    wgpu::Limits::default()
-                },
+                required_limits: adapter.limits(),
                 memory_hints: Default::default(),
                 trace: wgpu::Trace::Off,
             })
