@@ -1,190 +1,39 @@
 use crate::{
     project::{self},
     state,
+    ui::panels::{
+        inspector_pane::InspectorTreePane, project_tree_panel, viewport_pane::ViewportTreePane,
+    },
 };
 
-pub struct AppTree {
-    tree: egui_tiles::Tree<Pane>,
-    viewport_container: egui_tiles::TileId,
-}
-
-impl AppTree {
-    pub fn new_default() -> Self {
-        let mut tiles = egui_tiles::Tiles::default();
-
-        let viewport_tile = tiles.insert_pane(Pane::Viewport { texture_id: None });
-        let viewport_container = tiles.insert_tab_tile(vec![viewport_tile]);
-
-        let inspector_tabs: Vec<egui_tiles::TileId> = vec![
-            tiles.insert_pane(Pane::TextureInspector),
-            tiles.insert_pane(Pane::UniformInspector),
-            tiles.insert_pane(Pane::BindGroupInspector),
-            tiles.insert_pane(Pane::DeviceInfo),
-        ];
-        let inspector_container = tiles.insert_tab_tile(inspector_tabs);
-
-        let root = tiles.insert_horizontal_tile(vec![viewport_container, inspector_container]);
-
-        let tree = egui_tiles::Tree::new("my_tree", root, tiles);
-
-        Self {
-            tree,
-            viewport_container,
-        }
-    }
-
-    pub fn ui(&mut self, behavior: &mut Behavior, ui: &mut egui::Ui) {
-        self.tree.ui(behavior, ui);
-    }
-
-    pub fn add_viewport(&mut self, texture_id: Option<project::texture::TextureId>) {
-        let child = self.tree.tiles.insert_pane(Pane::Viewport { texture_id });
-
-        if let Some(egui_tiles::Tile::Container(egui_tiles::Container::Tabs(tabs))) =
-            self.tree.tiles.get_mut(self.viewport_container)
-        {
-            tabs.add_child(child);
-            tabs.set_active(child);
-            return;
-        }
-
-        if let Some(root) = self.tree.root {
-            match self.tree.tiles.get_mut(root) {
-                Some(egui_tiles::Tile::Container(egui_tiles::Container::Tabs(tabs))) => {
-                    tabs.add_child(child);
-                    tabs.set_active(child);
-                }
-                Some(egui_tiles::Tile::Container(container)) => {
-                    container.add_child(child);
-                }
-                Some(egui_tiles::Tile::Pane(_)) => {
-                    let new_root = self.tree.tiles.insert_tab_tile(vec![root, child]);
-                    if let Some(egui_tiles::Tile::Container(egui_tiles::Container::Tabs(tabs))) =
-                        self.tree.tiles.get_mut(new_root)
-                    {
-                        tabs.set_active(child);
-                    }
-                    self.tree.root = Some(new_root);
-                }
-                None => {
-                    log::warn!("Tree root points to a missing tile; cannot add viewport");
-                }
-            }
-        } else {
-            self.tree.root = Some(child);
-        }
-    }
-}
-
-#[derive(Debug)]
-pub enum Pane {
-    Viewport {
-        texture_id: Option<project::texture::TextureId>,
-    },
-    DeviceInfo,
-    UniformInspector,
-    TextureInspector,
-    BindGroupInspector,
-}
-
-pub struct Behavior<'a> {
-    pub adapter_info: &'a wgpu::AdapterInfo,
+pub struct StateSnapshot<'a> {
     pub pending_events: &'a mut Vec<state::StateEvent>,
     pub project: &'a mut project::Project,
     pub queue: &'a wgpu::Queue,
 }
 
-impl<'a> egui_tiles::Behavior<Pane> for Behavior<'a> {
-    fn pane_ui(
+impl StateSnapshot<'_> {
+    pub fn ui(
         &mut self,
         ui: &mut egui::Ui,
-        _tile_id: egui_tiles::TileId,
-        pane: &mut Pane,
-    ) -> egui_tiles::UiResponse {
-        match pane {
-            Pane::Viewport { texture_id } => {
-                if let Some(texture_id) = texture_id {
-                    let texture = self
-                        .project
-                        .get_texture(*texture_id)
-                        .expect("texture must exist");
+        inspector_tree_pane: &mut InspectorTreePane,
+        viewport_tree_pane: &mut ViewportTreePane,
+    ) {
+        egui::Panel::left("project_tree_panel")
+            .frame(egui::Frame::new().inner_margin(0))
+            .resizable(true)
+            .show_inside(ui, |ui| {
+                project_tree_panel::ui(self, ui, inspector_tree_pane, viewport_tree_pane);
+            });
 
-                    let events =
-                        crate::ui::components::viewport::ui(ui, texture.egui_id(), texture.size());
-                    self.pending_events.extend(events);
-                }
-            }
-            Pane::DeviceInfo => {
-                egui::CentralPanel::default().show_inside(ui, |ui| {
-                    egui::Grid::new("adapter_info")
-                        .num_columns(2)
-                        .show(ui, |ui| {
-                            ui.label("Adapter:");
-                            ui.label(&self.adapter_info.name);
-                            ui.end_row();
+        egui::Panel::right("inspector_tree_panel")
+            .frame(egui::Frame::new().inner_margin(0))
+            .resizable(true)
+            .show_inside(ui, |ui| {
+                ui.take_available_space();
+                inspector_tree_pane.ui(self, ui);
+            });
 
-                            ui.label("Renderer:");
-                            ui.label(self.adapter_info.backend.to_str());
-                            ui.end_row();
-
-                            ui.label("Driver:");
-                            ui.label(&self.adapter_info.driver);
-                            ui.end_row();
-
-                            ui.label("Driver Info:");
-                            ui.label(&self.adapter_info.driver_info);
-                            ui.end_row();
-                        });
-                });
-            }
-            Pane::TextureInspector => {
-                egui::CentralPanel::default().show_inside(ui, |ui| {
-                    for (id, element) in self.project.list_textures() {
-                        if ui.button(element.name()).clicked() {
-                            self.pending_events.push(state::StateEvent::AddViewport(id));
-                        }
-                    }
-                });
-            }
-            Pane::UniformInspector => {
-                self.uniform_inspector_ui(ui);
-            }
-            Pane::BindGroupInspector => {
-                self.bind_group_inspector_ui(ui);
-            }
-        };
-
-        egui_tiles::UiResponse::None
-    }
-
-    fn tab_title_for_pane(&mut self, pane: &Pane) -> egui::WidgetText {
-        match pane {
-            Pane::Viewport { texture_id } => texture_id
-                .and_then(|id| self.project.get_texture(id))
-                .map(|texture| texture.name().into())
-                .unwrap_or("Empty Viewport".into()),
-            Pane::DeviceInfo => "Device Info".into(),
-            Pane::TextureInspector => "Textures".into(),
-            Pane::UniformInspector => "Uniforms".into(),
-            Pane::BindGroupInspector => "Bind Groups".into(),
-        }
-    }
-
-    fn is_tab_closable(
-        &self,
-        tiles: &egui_tiles::Tiles<Pane>,
-        tile_id: egui_tiles::TileId,
-    ) -> bool {
-        matches!(
-            tiles.get(tile_id),
-            Some(egui_tiles::Tile::Pane(Pane::Viewport { texture_id: _ }))
-        )
-    }
-
-    fn simplification_options(&self) -> egui_tiles::SimplificationOptions {
-        egui_tiles::SimplificationOptions {
-            all_panes_must_have_tabs: true,
-            ..Default::default()
-        }
+        viewport_tree_pane.ui(self, ui);
     }
 }

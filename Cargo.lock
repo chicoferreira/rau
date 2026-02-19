@@ -697,6 +697,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "egui_ltreeview"
+version = "0.6.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3866bdabd204d3839ea4f69252207153864adc4f4f49faecdc579b8d9e362ac9"
+dependencies = [
+ "egui",
+]
+
+[[package]]
 name = "egui_tiles"
 version = "0.14.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2477,6 +2486,7 @@ dependencies = [
  "egui",
  "egui-wgpu",
  "egui-winit",
+ "egui_ltreeview",
  "egui_tiles",
  "env_logger",
  "fs_extra",

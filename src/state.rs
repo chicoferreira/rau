@@ -8,12 +8,14 @@ use winit::{
 
 use crate::{
     project, resources, scene,
-    ui::{self},
+    ui::{
+        self,
+        panels::{inspector_pane::InspectorTreePane, viewport_pane::ViewportTreePane},
+    },
 };
 
 pub enum StateEvent {
     SceneEvent(scene::SceneEvent),
-    AddViewport(project::texture::TextureId),
 }
 
 impl From<scene::SceneEvent> for StateEvent {
@@ -33,8 +35,8 @@ pub struct State {
     egui_renderer: ui::renderer::EguiRenderer,
     scene: scene::Scene,
     pending_events: Vec<StateEvent>,
-    app_tree: ui::pane::AppTree,
-    adapter_info: wgpu::AdapterInfo,
+    inspector_tree_pane: InspectorTreePane,
+    viewport_tree_pane: ViewportTreePane,
     project: project::Project,
 }
 
@@ -62,8 +64,6 @@ impl State {
                 force_fallback_adapter: false,
             })
             .await?;
-
-        let adapter_info = adapter.get_info();
 
         let (device, queue) = adapter
             .request_device(&wgpu::DeviceDescriptor {
@@ -150,7 +150,8 @@ impl State {
         )
         .await?;
 
-        let app_tree = ui::pane::AppTree::new_default();
+        let inspector_tree_pane = InspectorTreePane::default();
+        let viewport_tree_pane = ViewportTreePane::default();
 
         Ok(Self {
             surface,
@@ -163,8 +164,8 @@ impl State {
             egui_renderer,
             scene,
             pending_events: vec![],
-            app_tree,
-            adapter_info,
+            inspector_tree_pane,
+            viewport_tree_pane,
             project,
         })
     }
@@ -216,14 +217,17 @@ impl State {
                 egui::CentralPanel::default()
                     .frame(egui::Frame::none().inner_margin(0))
                     .show(context, |ui| {
-                        let mut behavior = ui::pane::Behavior {
+                        let mut snapshot = ui::pane::StateSnapshot {
                             pending_events: &mut self.pending_events,
-                            adapter_info: &self.adapter_info,
                             project: &mut self.project,
                             queue: &self.queue,
                         };
 
-                        self.app_tree.ui(&mut behavior, ui);
+                        snapshot.ui(
+                            ui,
+                            &mut self.inspector_tree_pane,
+                            &mut self.viewport_tree_pane,
+                        );
                     });
             });
 
@@ -240,9 +244,6 @@ impl State {
                         &mut self.project,
                         &mut self.egui_renderer,
                     );
-                }
-                StateEvent::AddViewport(texture_id) => {
-                    self.app_tree.add_viewport(Some(texture_id));
                 }
             }
         }

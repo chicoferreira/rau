@@ -1,8 +1,7 @@
-mod bind_group_inspector;
 pub mod components;
 pub mod pane;
+pub mod panels;
 pub mod renderer;
-mod uniform_inspector;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Size2d {

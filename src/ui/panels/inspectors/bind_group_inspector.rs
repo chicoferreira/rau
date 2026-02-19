@@ -1,47 +1,45 @@
-use crate::ui::pane::Behavior;
+use crate::{project::bindgroup::BindGroupId, ui::pane::StateSnapshot};
 
-impl Behavior<'_> {
-    pub fn bind_group_inspector_ui(&mut self, ui: &mut egui::Ui) {
+impl StateSnapshot<'_> {
+    pub fn bind_group_inspector_ui(&mut self, bind_group_id: BindGroupId, ui: &mut egui::Ui) {
         egui::CentralPanel::default().show_inside(ui, |ui| {
             egui::ScrollArea::both().auto_shrink(false).show(ui, |ui| {
-                if self.project.is_empty_bind_groups() {
-                    ui.label("No bind groups registered.");
+                let Some(bind_group) = self.project.get_bind_group(bind_group_id) else {
+                    ui.label("Bind group not found.");
                     return;
-                }
+                };
 
-                for (id, bind_group) in self.project.list_bind_groups() {
-                    let header_label =
-                        egui::RichText::new(format!("{} ({id:?})", bind_group.label))
-                            .size(ui.text_style_height(&egui::TextStyle::Body) + 2.0)
-                            .strong();
+                let header_label =
+                    egui::RichText::new(format!("{} ({bind_group_id:?})", bind_group.label))
+                        .size(ui.text_style_height(&egui::TextStyle::Body) + 2.0)
+                        .strong();
 
-                    egui::CollapsingHeader::new(header_label)
-                        .default_open(true)
-                        .show(ui, |ui| {
-                            if bind_group.entries.is_empty() {
-                                ui.label("No bindings.");
-                                return;
-                            }
+                egui::CollapsingHeader::new(header_label)
+                    .default_open(true)
+                    .show(ui, |ui| {
+                        if bind_group.entries.is_empty() {
+                            ui.label("No bindings.");
+                            return;
+                        }
 
-                            for entry in &bind_group.entries {
-                                ui.horizontal(|ui| {
-                                    ui.label("binding");
-                                    ui.strong(entry.binding.to_string());
-                                    ui.separator();
-                                    ui.label(resource_label(entry.resource));
-                                });
+                        for entry in &bind_group.entries {
+                            ui.horizontal(|ui| {
+                                ui.label("binding");
+                                ui.strong(entry.binding.to_string());
+                                ui.separator();
+                                ui.label(resource_label(entry.resource));
+                            });
 
-                                ui.label(
-                                    egui::RichText::new(resource_detail_label(
-                                        self.project,
-                                        entry.resource,
-                                    ))
-                                    .weak(),
-                                );
-                                ui.add_space(6.0);
-                            }
-                        });
-                }
+                            ui.label(
+                                egui::RichText::new(resource_detail_label(
+                                    self.project,
+                                    entry.resource,
+                                ))
+                                .weak(),
+                            );
+                            ui.add_space(6.0);
+                        }
+                    });
             });
         });
     }
