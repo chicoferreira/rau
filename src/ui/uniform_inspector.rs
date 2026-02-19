@@ -1,4 +1,10 @@
-use crate::{project::uniform, ui::pane::Behavior};
+use crate::{
+    project::uniform,
+    ui::{
+        components::{color_edit::color_edit_rgba, edit_number_array::ui_edit_array_h},
+        pane::Behavior,
+    },
+};
 
 impl Behavior<'_> {
     pub fn uniform_inspector_ui(&mut self, ui: &mut egui::Ui) {
@@ -110,48 +116,6 @@ impl Behavior<'_> {
                 }
             });
         });
-    }
-}
-
-pub fn ui_edit_array_h<T: egui::emath::Numeric, const N: usize>(
-    ui: &mut egui::Ui,
-    array: &mut [T; N],
-) -> bool {
-    let mut changed = false;
-    ui.horizontal(|ui| {
-        changed |= ui_edit_array(ui, array);
-    });
-    changed
-}
-
-pub fn ui_edit_array<T: egui::emath::Numeric, const N: usize>(
-    ui: &mut egui::Ui,
-    array: &mut [T; N],
-) -> bool {
-    let mut changed = false;
-    ui.horizontal(|ui| {
-        for value in array.iter_mut() {
-            changed |= ui.add(egui::DragValue::new(value).speed(0.01)).changed();
-        }
-    });
-    changed
-}
-
-pub fn color_edit_rgba(ui: &mut egui::Ui, color: &mut [f32; 4]) -> bool {
-    let mut egui_color =
-        egui::Rgba::from_rgba_premultiplied(color[0], color[1], color[2], color[3]);
-
-    let color_picker = egui::color_picker::color_edit_button_rgba(
-        ui,
-        &mut egui_color,
-        egui::color_picker::Alpha::OnlyBlend,
-    );
-
-    if color_picker.changed() {
-        *color = egui_color.to_array();
-        true
-    } else {
-        false
     }
 }
 

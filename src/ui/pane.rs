@@ -18,6 +18,7 @@ impl AppTree {
         let inspector_tabs: Vec<egui_tiles::TileId> = vec![
             tiles.insert_pane(Pane::TextureInspector),
             tiles.insert_pane(Pane::UniformInspector),
+            tiles.insert_pane(Pane::BindGroupInspector),
             tiles.insert_pane(Pane::DeviceInfo),
         ];
         let inspector_container = tiles.insert_tab_tile(inspector_tabs);
@@ -83,6 +84,7 @@ pub enum Pane {
     DeviceInfo,
     UniformInspector,
     TextureInspector,
+    BindGroupInspector,
 }
 
 pub struct Behavior<'a> {
@@ -107,7 +109,8 @@ impl<'a> egui_tiles::Behavior<Pane> for Behavior<'a> {
                         .get_texture(*texture_id)
                         .expect("texture must exist");
 
-                    let events = crate::ui::viewport::ui(ui, texture.egui_id(), texture.size());
+                    let events =
+                        crate::ui::components::viewport::ui(ui, texture.egui_id(), texture.size());
                     self.pending_events.extend(events);
                 }
             }
@@ -146,6 +149,9 @@ impl<'a> egui_tiles::Behavior<Pane> for Behavior<'a> {
             Pane::UniformInspector => {
                 self.uniform_inspector_ui(ui);
             }
+            Pane::BindGroupInspector => {
+                self.bind_group_inspector_ui(ui);
+            }
         };
 
         egui_tiles::UiResponse::None
@@ -160,6 +166,7 @@ impl<'a> egui_tiles::Behavior<Pane> for Behavior<'a> {
             Pane::DeviceInfo => "Device Info".into(),
             Pane::TextureInspector => "Textures".into(),
             Pane::UniformInspector => "Uniforms".into(),
+            Pane::BindGroupInspector => "Bind Groups".into(),
         }
     }
 

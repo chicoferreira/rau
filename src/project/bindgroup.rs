@@ -23,7 +23,7 @@ impl Project {
         });
 
         let group_entries = entries
-            .into_iter()
+            .iter()
             .map(|entry| entry.into_bind_group_entry(self))
             .collect::<Vec<_>>();
 
@@ -37,7 +37,7 @@ impl Project {
             label,
             layout,
             group,
-            entries: Vec::new(),
+            entries,
         };
 
         self.bind_groups.insert(bind_group)
@@ -45,6 +45,18 @@ impl Project {
 
     pub fn get_bind_group(&self, id: BindGroupId) -> Option<&BindGroup> {
         self.bind_groups.get(id)
+    }
+
+    pub fn list_bind_groups(&self) -> impl Iterator<Item = (BindGroupId, &BindGroup)> {
+        self.bind_groups.iter()
+    }
+
+    pub fn list_bind_groups_mut(&mut self) -> impl Iterator<Item = (BindGroupId, &mut BindGroup)> {
+        self.bind_groups.iter_mut()
+    }
+
+    pub fn is_empty_bind_groups(&self) -> bool {
+        self.bind_groups.is_empty()
     }
 }
 
