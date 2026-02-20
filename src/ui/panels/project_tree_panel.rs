@@ -1,15 +1,14 @@
 use egui::Response;
-use egui_ltreeview::{Action, TreeView};
+use egui_ltreeview::{Action, NodeBuilder, NodeConfig, TreeView};
 
 use crate::{
-    project::{bindgroup::BindGroupId, texture::TextureId, uniform::UniformId},
-    ui::{
-        pane::StateSnapshot,
-        panels::{
-            inspector_pane::{InspectorPane, InspectorTreePane},
-            viewport_pane::ViewportTreePane,
-        },
+    project::{
+        bindgroup::BindGroupId,
+        texture::TextureId,
+        uniform::{Uniform, UniformId},
     },
+    state::StateEvent,
+    ui::pane::StateSnapshot,
 };
 
 #[derive(Clone, PartialEq, Eq, Hash)]
@@ -22,18 +21,50 @@ enum TreeNodeId {
     Viewport(TextureId),
 }
 
-pub fn ui(
-    state: &mut StateSnapshot,
-    ui: &mut egui::Ui,
-    inspector_tree_pane: &mut InspectorTreePane,
-    viewport_tree_pane: &mut ViewportTreePane,
-) -> Response {
+impl TreeNodeId {
+    fn new_uniform_folder_node(
+        pending_events: &mut Vec<StateEvent>,
+    ) -> impl NodeConfig<TreeNodeId> {
+        NodeBuilder::dir(TreeNodeId::UniformFolder)
+            .label("Uniforms")
+            .context_menu(|ui| {
+                if ui.button("Create New Uniform").clicked() {
+                    pending_events.push(StateEvent::CreateUniform);
+                }
+            })
+    }
+
+    fn new_uniform_node<'a>(
+        id: UniformId,
+        uniform: &'a Uniform,
+        pending_events: &'a mut Vec<StateEvent>,
+    ) -> impl NodeConfig<TreeNodeId> + 'a {
+        NodeBuilder::leaf(TreeNodeId::Uniform(id))
+            .label(&uniform.label)
+            .context_menu(move |ui| {
+                if ui.button("Inspect").clicked() {
+                    pending_events.push(StateEvent::InspectUniform(id));
+                }
+                if ui.button("Delete").clicked() {
+                    pending_events.push(StateEvent::DeleteUniform(id));
+                }
+                ui.separator();
+                if ui.button("Create New Uniform").clicked() {
+                    pending_events.push(StateEvent::CreateUniform);
+                }
+            })
+    }
+}
+
+pub fn ui(state: &mut StateSnapshot, ui: &mut egui::Ui) -> Response {
     let (response, actions) = TreeView::new(ui.make_persistent_id("project_tree_view"))
         .allow_multi_selection(false)
         .show(ui, |builder| {
-            builder.dir(TreeNodeId::UniformFolder, "Uniforms");
+            builder.node(TreeNodeId::new_uniform_folder_node(state.pending_events));
+
             for (id, uniform) in state.project.list_uniforms() {
-                builder.leaf(TreeNodeId::Uniform(id), &uniform.label);
+                let node = TreeNodeId::new_uniform_node(id, uniform, state.pending_events);
+                builder.node(node);
             }
             builder.close_dir();
 
@@ -56,15 +87,17 @@ pub fn ui(
                 for node in activate.selected {
                     match node {
                         TreeNodeId::Uniform(id) => {
-                            inspector_tree_pane.add_inspector_pane(InspectorPane::Uniform(id));
+                            state.pending_events.push(StateEvent::InspectUniform(id));
                         }
                         TreeNodeId::BindGroup(id) => {
-                            inspector_tree_pane.add_inspector_pane(InspectorPane::BindGroup(id));
+                            state.pending_events.push(StateEvent::InspectBindGroup(id));
                         }
                         TreeNodeId::Viewport(id) => {
-                            viewport_tree_pane.add_viewport(Some(id));
+                            state.pending_events.push(StateEvent::OpenViewport(id));
                         }
-                        _ => {}
+                        TreeNodeId::UniformFolder
+                        | TreeNodeId::BindGroupFolder
+                        | TreeNodeId::ViewportFolder => {}
                     }
                 }
             }

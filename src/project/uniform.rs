@@ -50,6 +50,10 @@ impl Project {
 
         self.uniforms.insert(uniform)
     }
+
+    pub fn unregister_uniform(&mut self, id: UniformId) {
+        self.uniforms.remove(id);
+    }
 }
 
 #[derive(Debug)]
@@ -70,7 +74,7 @@ impl Uniform {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct UniformData {
     pub fields: Vec<UniformField>,
 }

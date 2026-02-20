@@ -7,15 +7,29 @@ use winit::{
 };
 
 use crate::{
-    project, resources, scene,
+    project::{
+        self,
+        bindgroup::BindGroupId,
+        texture::TextureId,
+        uniform::{UniformData, UniformId},
+    },
+    resources, scene,
     ui::{
         self,
-        panels::{inspector_pane::InspectorTreePane, viewport_pane::ViewportTreePane},
+        panels::{
+            inspector_pane::{InspectorPane, InspectorTreePane},
+            viewport_pane::ViewportTreePane,
+        },
     },
 };
 
 pub enum StateEvent {
     SceneEvent(scene::SceneEvent),
+    InspectUniform(UniformId),
+    InspectBindGroup(BindGroupId),
+    OpenViewport(TextureId),
+    CreateUniform,
+    DeleteUniform(UniformId),
 }
 
 impl From<scene::SceneEvent> for StateEvent {
@@ -245,6 +259,23 @@ impl State {
                         &mut self.egui_renderer,
                     );
                 }
+                StateEvent::InspectUniform(id) => {
+                    self.inspector_tree_pane
+                        .add_inspector_pane(InspectorPane::Uniform(id));
+                }
+                StateEvent::OpenViewport(texture_id) => {
+                    self.viewport_tree_pane.add_viewport(texture_id);
+                }
+                StateEvent::CreateUniform => {
+                    self.project
+                        .register_uniform(&self.device, "Uniform", UniformData::default());
+                }
+                StateEvent::DeleteUniform(id) => {
+                    self.project.unregister_uniform(id);
+                }
+                StateEvent::InspectBindGroup(bind_group_id) => self
+                    .inspector_tree_pane
+                    .add_inspector_pane(InspectorPane::BindGroup(bind_group_id)),
             }
         }
 

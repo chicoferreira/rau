@@ -23,7 +23,7 @@ impl StateSnapshot<'_> {
             .frame(egui::Frame::new().inner_margin(0))
             .resizable(true)
             .show_inside(ui, |ui| {
-                project_tree_panel::ui(self, ui, inspector_tree_pane, viewport_tree_pane);
+                project_tree_panel::ui(self, ui);
             });
 
         egui::Panel::right("inspector_tree_panel")
