@@ -1,3 +1,5 @@
+use egui::ScrollArea;
+
 use crate::{
     project::{self},
     state,
@@ -27,15 +29,18 @@ impl StateSnapshot<'_> {
             .frame(egui::Frame::new().inner_margin(0))
             .resizable(true)
             .show_inside(ui, |ui| {
-                project_tree_panel::ui(self, ui);
+                ScrollArea::both().show(ui, |ui| {
+                    project_tree_panel::ui(self, ui);
+                });
             });
 
         egui::Panel::right("inspector_tree_panel")
             .frame(egui::Frame::new().inner_margin(0))
             .resizable(true)
             .show_inside(ui, |ui| {
-                ui.take_available_space();
-                inspector_tree_pane.ui(self, ui);
+                ScrollArea::vertical().show(ui, |ui| {
+                    inspector_tree_pane.ui(self, ui);
+                });
             });
 
         viewport_tree_pane.ui(self, ui);
