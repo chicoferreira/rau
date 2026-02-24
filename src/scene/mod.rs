@@ -157,7 +157,7 @@ pub struct Scene {
     environment_bind_group: wgpu::BindGroup,
     sky_pipeline: wgpu::RenderPipeline,
     hdr_texture_id: project::texture::TextureId,
-    viewport_texture_id: project::texture::TextureId,
+    pub viewport_texture_id: project::texture::TextureId,
 }
 
 impl Scene {

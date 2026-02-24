@@ -171,7 +171,9 @@ impl State {
         .await?;
 
         let inspector_tree_pane = InspectorTreePane::default();
-        let viewport_tree_pane = ViewportTreePane::default();
+        let mut viewport_tree_pane = ViewportTreePane::default();
+
+        viewport_tree_pane.add_viewport(scene.viewport_texture_id);
 
         Ok(Self {
             surface,
