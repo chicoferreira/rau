@@ -27,6 +27,7 @@ impl TreeNodeId {
         NodeBuilder::dir(TreeNodeId::UniformFolder)
             .label("Uniforms")
             .context_menu(|ui| {
+                ui.set_min_width(130.0);
                 if ui.button("Create New Uniform").clicked() {
                     pending_events.push(StateEvent::CreateUniform);
                 }

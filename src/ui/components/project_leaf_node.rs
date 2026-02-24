@@ -79,6 +79,7 @@ where
         NodeBuilder::leaf(self.tree_id)
             .label(self.label)
             .context_menu(move |ui| {
+                ui.set_min_width(130.0);
                 let mut pending_events = context_pending_events.borrow_mut();
                 if let Some(inspect_event) = self.inspect_event.clone() {
                     if ui.button("Inspect").clicked() {
