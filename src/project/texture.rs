@@ -3,7 +3,7 @@ use slotmap::new_key_type;
 use crate::{
     project::Project,
     texture,
-    ui::{self, Size2d},
+    ui::{self},
 };
 
 new_key_type! {
@@ -11,33 +11,17 @@ new_key_type! {
 }
 
 pub struct TextureEntry {
-    name: String,
-    texture: texture::Texture,
-    texture_format: wgpu::TextureFormat,
-    egui_id: egui::TextureId,
+    pub name: String,
+    pub texture: texture::Texture,
+    pub texture_format: wgpu::TextureFormat,
+    pub egui_id: egui::TextureId,
     size: ui::Size2d,
 }
 
 #[allow(dead_code)]
 impl TextureEntry {
-    pub fn name(&self) -> &str {
-        &self.name
-    }
-
-    pub fn egui_id(&self) -> egui::TextureId {
-        self.egui_id
-    }
-
-    pub fn size(&self) -> Size2d {
+    pub fn size(&self) -> ui::Size2d {
         self.size
-    }
-
-    pub fn texture(&self) -> &texture::Texture {
-        &self.texture
-    }
-
-    pub fn format(&self) -> wgpu::TextureFormat {
-        self.texture_format
     }
 
     pub fn resize(

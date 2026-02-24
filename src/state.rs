@@ -20,9 +20,11 @@ use crate::{
             inspector_pane::{InspectorPane, InspectorTreePane},
             viewport_pane::ViewportTreePane,
         },
+        rename::{RenameState, RenameTarget},
     },
 };
 
+#[derive(Debug, Clone)]
 pub enum StateEvent {
     SceneEvent(scene::SceneEvent),
     InspectUniform(UniformId),
@@ -30,6 +32,9 @@ pub enum StateEvent {
     OpenViewport(TextureId),
     CreateUniform,
     DeleteUniform(UniformId),
+    StartRename(RenameTarget),
+    CancelRename,
+    ApplyRename(RenameTarget, String),
 }
 
 impl From<scene::SceneEvent> for StateEvent {
@@ -48,6 +53,7 @@ pub struct State {
     last_render_time: instant::Instant,
     egui_renderer: ui::renderer::EguiRenderer,
     scene: scene::Scene,
+    rename_state: Option<ui::rename::RenameState>,
     pending_events: Vec<StateEvent>,
     inspector_tree_pane: InspectorTreePane,
     viewport_tree_pane: ViewportTreePane,
@@ -177,6 +183,7 @@ impl State {
             last_render_time: instant::Instant::now(),
             egui_renderer,
             scene,
+            rename_state: None,
             pending_events: vec![],
             inspector_tree_pane,
             viewport_tree_pane,
@@ -235,6 +242,7 @@ impl State {
                             pending_events: &mut self.pending_events,
                             project: &mut self.project,
                             queue: &self.queue,
+                            rename_state: &mut self.rename_state,
                         };
 
                         snapshot.ui(
@@ -276,6 +284,52 @@ impl State {
                 StateEvent::InspectBindGroup(bind_group_id) => self
                     .inspector_tree_pane
                     .add_inspector_pane(InspectorPane::BindGroup(bind_group_id)),
+                StateEvent::StartRename(rename_target) => {
+                    let current_name = match rename_target {
+                        RenameTarget::Uniform(uniform_id) => self
+                            .project
+                            .get_uniform(uniform_id)
+                            .map(|u| u.label.clone()),
+                        RenameTarget::BindGroup(bind_group_id) => self
+                            .project
+                            .get_bind_group(bind_group_id)
+                            .map(|b| b.label.clone()),
+                        RenameTarget::Viewport(texture_id) => {
+                            self.project.get_texture(texture_id).map(|t| t.name.clone())
+                        }
+                    };
+
+                    if let Some(current_name) = current_name {
+                        self.rename_state = Some(RenameState {
+                            target: rename_target,
+                            current_name,
+                        });
+                    }
+                }
+                StateEvent::CancelRename => {
+                    self.rename_state = None;
+                }
+                StateEvent::ApplyRename(rename_target, new_name) => {
+                    self.rename_state = None;
+                    match rename_target {
+                        RenameTarget::Uniform(uniform_id) => {
+                            if let Some(uniform) = self.project.get_uniform_mut(uniform_id) {
+                                uniform.label = new_name;
+                            }
+                        }
+                        RenameTarget::BindGroup(bind_group_id) => {
+                            if let Some(bind_group) = self.project.get_bind_group_mut(bind_group_id)
+                            {
+                                bind_group.label = new_name;
+                            }
+                        }
+                        RenameTarget::Viewport(texture_id) => {
+                            if let Some(viewport) = self.project.get_texture_mut(texture_id) {
+                                viewport.name = new_name;
+                            }
+                        }
+                    }
+                }
             }
         }
 

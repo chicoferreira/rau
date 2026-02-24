@@ -1,8 +1,11 @@
 use crate::{
     project::{self},
     state,
-    ui::panels::{
-        inspector_pane::InspectorTreePane, project_tree_panel, viewport_pane::ViewportTreePane,
+    ui::{
+        panels::{
+            inspector_pane::InspectorTreePane, project_tree_panel, viewport_pane::ViewportTreePane,
+        },
+        rename::RenameState,
     },
 };
 
@@ -10,6 +13,7 @@ pub struct StateSnapshot<'a> {
     pub pending_events: &'a mut Vec<state::StateEvent>,
     pub project: &'a mut project::Project,
     pub queue: &'a wgpu::Queue,
+    pub rename_state: &'a mut Option<RenameState>,
 }
 
 impl StateSnapshot<'_> {

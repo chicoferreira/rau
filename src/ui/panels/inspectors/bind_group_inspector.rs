@@ -64,7 +64,7 @@ fn resource_detail_label(
         } => {
             let texture_name = project
                 .get_texture(texture_id)
-                .map(|texture| texture.name().to_owned())
+                .map(|texture| texture.name.to_owned())
                 .unwrap_or_else(|| "missing texture".to_owned());
             format!("texture: {texture_name}, view: {view_dimension:?}")
         }
@@ -74,7 +74,7 @@ fn resource_detail_label(
         } => {
             let texture_name = project
                 .get_texture(texture_id)
-                .map(|texture| texture.name().to_owned())
+                .map(|texture| texture.name.to_owned())
                 .unwrap_or_else(|| "missing texture".to_owned());
             format!("sampler: {texture_name}, type: {sampler_binding_type:?}")
         }

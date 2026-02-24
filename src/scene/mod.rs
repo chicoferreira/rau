@@ -12,6 +12,7 @@ use cgmath::{InnerSpace, Matrix, Rotation3, SquareMatrix, Vector3, Zero};
 mod hdr;
 mod loader;
 
+#[derive(Debug, Clone)]
 pub enum SceneEvent {
     Resize {
         size: ui::Size2d,
@@ -291,7 +292,7 @@ impl Scene {
             egui_renderer,
         );
 
-        let hdr_texture = project.get_texture(hdr_texture_id).unwrap().texture();
+        let hdr_texture = &project.get_texture(hdr_texture_id).unwrap().texture;
 
         let hdr = hdr::HdrPipeline::new(
             device,
@@ -502,7 +503,7 @@ impl Scene {
             SceneEvent::Resize { size } => {
                 if let Some(hdr_texture) = project.get_texture_mut(self.hdr_texture_id) {
                     hdr_texture.resize(size, device, egui_renderer);
-                    self.hdr.update_texture(device, hdr_texture.texture());
+                    self.hdr.update_texture(device, &hdr_texture.texture);
                 }
 
                 if let Some(viewport_texture) = project.get_texture_mut(self.viewport_texture_id) {

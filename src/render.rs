@@ -25,13 +25,13 @@ impl RenderPassSpec<'_> {
             .get_texture(self.target_spec.texture_id)
             .expect("deal with this later");
 
-        let texture = texture_entry.texture();
+        let texture = &texture_entry.texture;
 
         let view = match self.target_spec.texture_format {
             RenderPassTargetTextureFormat::UseExisting => &texture.view,
             RenderPassTargetTextureFormat::NewViewSrgb => {
                 &texture.texture.create_view(&wgpu::TextureViewDescriptor {
-                    format: Some(texture_entry.format().add_srgb_suffix()),
+                    format: Some(texture_entry.texture_format.add_srgb_suffix()),
                     ..Default::default()
                 })
             }

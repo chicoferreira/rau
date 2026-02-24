@@ -1,18 +1,17 @@
 use egui::Response;
 use egui_ltreeview::{Action, NodeBuilder, NodeConfig, TreeView};
+use std::hash::Hash;
 
 use crate::{
-    project::{
-        bindgroup::BindGroupId,
-        texture::TextureId,
-        uniform::{Uniform, UniformId},
-    },
+    project::{bindgroup::BindGroupId, texture::TextureId, uniform::UniformId},
     state::StateEvent,
-    ui::pane::StateSnapshot,
+    ui::{
+        components::project_leaf_node::ProjectLeafNode, pane::StateSnapshot, rename::RenameTarget,
+    },
 };
 
 #[derive(Clone, PartialEq, Eq, Hash)]
-enum TreeNodeId {
+pub enum TreeNodeId {
     UniformFolder,
     Uniform(UniformId),
     BindGroupFolder,
@@ -33,27 +32,6 @@ impl TreeNodeId {
                 }
             })
     }
-
-    fn new_uniform_node<'a>(
-        id: UniformId,
-        uniform: &'a Uniform,
-        pending_events: &'a mut Vec<StateEvent>,
-    ) -> impl NodeConfig<TreeNodeId> + 'a {
-        NodeBuilder::leaf(TreeNodeId::Uniform(id))
-            .label(&uniform.label)
-            .context_menu(move |ui| {
-                if ui.button("Inspect").clicked() {
-                    pending_events.push(StateEvent::InspectUniform(id));
-                }
-                if ui.button("Delete").clicked() {
-                    pending_events.push(StateEvent::DeleteUniform(id));
-                }
-                ui.separator();
-                if ui.button("Create New Uniform").clicked() {
-                    pending_events.push(StateEvent::CreateUniform);
-                }
-            })
-    }
 }
 
 pub fn ui(state: &mut StateSnapshot, ui: &mut egui::Ui) -> Response {
@@ -63,20 +41,36 @@ pub fn ui(state: &mut StateSnapshot, ui: &mut egui::Ui) -> Response {
             builder.node(TreeNodeId::new_uniform_folder_node(state.pending_events));
 
             for (id, uniform) in state.project.list_uniforms() {
-                let node = TreeNodeId::new_uniform_node(id, uniform, state.pending_events);
+                let node = ProjectLeafNode::new(TreeNodeId::Uniform(id), id, &uniform.label)
+                    .with_rename_target(RenameTarget::Uniform(id))
+                    .with_inspect_event(StateEvent::InspectUniform(id))
+                    .with_create_event(StateEvent::CreateUniform, "Create New Uniform")
+                    .with_delete_event(StateEvent::DeleteUniform(id))
+                    .build(state.pending_events, state.rename_state);
                 builder.node(node);
             }
             builder.close_dir();
 
             builder.dir(TreeNodeId::BindGroupFolder, "Bind Groups");
             for (id, bind_group) in state.project.list_bind_groups() {
-                builder.leaf(TreeNodeId::BindGroup(id), &bind_group.label);
+                let node = ProjectLeafNode::new(TreeNodeId::BindGroup(id), id, &bind_group.label)
+                    .with_rename_target(RenameTarget::BindGroup(id))
+                    .with_inspect_event(StateEvent::InspectBindGroup(id))
+                    // .with_create_event(StateEvent::CreateBindGroup)
+                    // .with_delete_event(StateEvent::DeleteBindGroup(id))
+                    .build(state.pending_events, state.rename_state);
+                builder.node(node);
             }
             builder.close_dir();
 
             builder.dir(TreeNodeId::ViewportFolder, "Viewports");
             for (id, viewport) in state.project.list_textures() {
-                builder.leaf(TreeNodeId::Viewport(id), viewport.name());
+                let node = ProjectLeafNode::new(TreeNodeId::Viewport(id), id, &viewport.name)
+                    .with_rename_target(RenameTarget::Viewport(id))
+                    .with_inspect_event(StateEvent::OpenViewport(id))
+                    .build(state.pending_events, state.rename_state);
+
+                builder.node(node);
             }
             builder.close_dir();
         });

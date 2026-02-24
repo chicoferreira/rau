@@ -47,6 +47,10 @@ impl Project {
         self.bind_groups.get(id)
     }
 
+    pub fn get_bind_group_mut(&mut self, id: BindGroupId) -> Option<&mut BindGroup> {
+        self.bind_groups.get_mut(id)
+    }
+
     pub fn list_bind_groups(&self) -> impl Iterator<Item = (BindGroupId, &BindGroup)> {
         self.bind_groups.iter()
     }
@@ -80,13 +84,13 @@ impl BindGroupEntry {
                 let texture = project
                     .get_texture(texture_id)
                     .expect("deal with this later");
-                wgpu::BindingResource::TextureView(&texture.texture().view)
+                wgpu::BindingResource::TextureView(&texture.texture.view)
             }
             BindGroupResource::Sampler { texture_id, .. } => {
                 let texture = project
                     .get_texture(texture_id)
                     .expect("deal with this later");
-                wgpu::BindingResource::Sampler(&texture.texture().sampler)
+                wgpu::BindingResource::Sampler(&texture.texture.sampler)
             }
             BindGroupResource::Uniform(uniform_id) => {
                 let uniform = project

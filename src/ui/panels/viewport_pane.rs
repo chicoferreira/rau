@@ -67,7 +67,7 @@ impl<'a> egui_tiles::Behavior<ViewportPane> for StateSnapshot<'a> {
             .get_texture(pane.texture_id)
             .expect("texture must exist");
 
-        let events = crate::ui::components::viewport::ui(ui, texture.egui_id(), texture.size());
+        let events = crate::ui::components::viewport::ui(ui, texture.egui_id, texture.size());
         self.pending_events.extend(events);
 
         egui_tiles::UiResponse::None
@@ -76,7 +76,7 @@ impl<'a> egui_tiles::Behavior<ViewportPane> for StateSnapshot<'a> {
     fn tab_title_for_pane(&mut self, pane: &ViewportPane) -> egui::WidgetText {
         self.project
             .get_texture(pane.texture_id)
-            .map(|texture| texture.name().into())
+            .map(|texture| texture.name.as_str().into())
             .unwrap_or("Empty Viewport".into())
     }
 
