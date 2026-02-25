@@ -279,8 +279,18 @@ impl State {
                     self.viewport_tree_pane.add_viewport(texture_id);
                 }
                 StateEvent::CreateUniform => {
-                    self.project
-                        .register_uniform(&self.device, "Uniform", UniformData::default());
+                    const DEFAULT_NAME: &str = "Uniform";
+
+                    let uniform_id = self.project.register_uniform(
+                        &self.device,
+                        DEFAULT_NAME,
+                        UniformData::default(),
+                    );
+
+                    self.rename_state = Some(RenameState {
+                        target: RenameTarget::Uniform(uniform_id),
+                        current_label: DEFAULT_NAME.to_string(),
+                    });
                 }
                 StateEvent::DeleteUniform(id) => {
                     self.project.unregister_uniform(id);
@@ -349,12 +359,20 @@ impl State {
                 }
                 StateEvent::CreateUniformField(uniform_id, uniform_field_kind) => {
                     if let Some(uniform) = self.project.get_uniform_mut(uniform_id) {
-                        uniform
-                            .data
-                            .fields
-                            .push(UniformField::new_from_kind("Field", uniform_field_kind));
+                        const DEFAULT_NAME: &str = "Field";
+
+                        let index = uniform.data.fields.len();
+                        uniform.data.fields.push(UniformField::new_from_kind(
+                            DEFAULT_NAME,
+                            uniform_field_kind,
+                        ));
 
                         uniform.upload(&self.device, &self.queue);
+
+                        self.rename_state = Some(RenameState {
+                            target: RenameTarget::UniformField(uniform_id, index),
+                            current_label: DEFAULT_NAME.to_string(),
+                        });
                     }
                 }
                 StateEvent::DeleteUniformField(uniform_id, index) => {
