@@ -42,7 +42,7 @@ pub fn ui(state: &mut StateSnapshot, ui: &mut egui::Ui) -> Response {
             builder.node(TreeNodeId::new_uniform_folder_node(state.pending_events));
 
             for (id, uniform) in state.project.list_uniforms() {
-                let node = ProjectLeafNode::new(TreeNodeId::Uniform(id), id, &uniform.label)
+                let node = ProjectLeafNode::new(TreeNodeId::Uniform(id), &uniform.label)
                     .with_rename_target(RenameTarget::Uniform(id))
                     .with_inspect_event(StateEvent::InspectUniform(id))
                     .with_create_event(StateEvent::CreateUniform, "Create New Uniform")
@@ -54,7 +54,7 @@ pub fn ui(state: &mut StateSnapshot, ui: &mut egui::Ui) -> Response {
 
             builder.dir(TreeNodeId::BindGroupFolder, "Bind Groups");
             for (id, bind_group) in state.project.list_bind_groups() {
-                let node = ProjectLeafNode::new(TreeNodeId::BindGroup(id), id, &bind_group.label)
+                let node = ProjectLeafNode::new(TreeNodeId::BindGroup(id), &bind_group.label)
                     .with_rename_target(RenameTarget::BindGroup(id))
                     .with_inspect_event(StateEvent::InspectBindGroup(id))
                     // .with_create_event(StateEvent::CreateBindGroup)
@@ -66,7 +66,7 @@ pub fn ui(state: &mut StateSnapshot, ui: &mut egui::Ui) -> Response {
 
             builder.dir(TreeNodeId::ViewportFolder, "Viewports");
             for (id, viewport) in state.project.list_textures() {
-                let node = ProjectLeafNode::new(TreeNodeId::Viewport(id), id, &viewport.name)
+                let node = ProjectLeafNode::new(TreeNodeId::Viewport(id), &viewport.name)
                     .with_rename_target(RenameTarget::Viewport(id))
                     .with_inspect_event(StateEvent::OpenViewport(id))
                     .build(state.pending_events, state.rename_state);

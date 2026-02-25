@@ -14,7 +14,6 @@ use crate::{
 pub struct StateSnapshot<'a> {
     pub pending_events: &'a mut Vec<state::StateEvent>,
     pub project: &'a mut project::Project,
-    pub queue: &'a wgpu::Queue,
     pub rename_state: &'a mut Option<RenameState>,
 }
 

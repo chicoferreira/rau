@@ -11,7 +11,7 @@ use crate::{
         self,
         bindgroup::BindGroupId,
         texture::TextureId,
-        uniform::{UniformData, UniformId},
+        uniform::{UniformData, UniformField, UniformFieldKind, UniformId},
     },
     resources, scene,
     ui::{
@@ -31,7 +31,10 @@ pub enum StateEvent {
     InspectBindGroup(BindGroupId),
     OpenViewport(TextureId),
     CreateUniform,
+    UpdateUniform(UniformId),
     DeleteUniform(UniformId),
+    CreateUniformField(UniformId, UniformFieldKind),
+    DeleteUniformField(UniformId, usize),
     StartRename(RenameTarget),
     CancelRename,
     ApplyRename(RenameTarget, String),
@@ -243,7 +246,6 @@ impl State {
                         let mut snapshot = ui::pane::StateSnapshot {
                             pending_events: &mut self.pending_events,
                             project: &mut self.project,
-                            queue: &self.queue,
                             rename_state: &mut self.rename_state,
                         };
 
@@ -292,6 +294,12 @@ impl State {
                             .project
                             .get_uniform(uniform_id)
                             .map(|u| u.label.clone()),
+                        RenameTarget::UniformField(uniform_id, index) => self
+                            .project
+                            .get_uniform(uniform_id)
+                            .map(|uniform| uniform.data.fields.get(index))
+                            .flatten()
+                            .map(|field| field.name.clone()),
                         RenameTarget::BindGroup(bind_group_id) => self
                             .project
                             .get_bind_group(bind_group_id)
@@ -304,7 +312,7 @@ impl State {
                     if let Some(current_name) = current_name {
                         self.rename_state = Some(RenameState {
                             target: rename_target,
-                            current_name,
+                            current_label: current_name,
                         });
                     }
                 }
@@ -319,6 +327,13 @@ impl State {
                                 uniform.label = new_name;
                             }
                         }
+                        RenameTarget::UniformField(uniform_id, index) => {
+                            if let Some(uniform) = self.project.get_uniform_mut(uniform_id) {
+                                if let Some(field) = uniform.data.fields.get_mut(index) {
+                                    field.name = new_name;
+                                }
+                            }
+                        }
                         RenameTarget::BindGroup(bind_group_id) => {
                             if let Some(bind_group) = self.project.get_bind_group_mut(bind_group_id)
                             {
@@ -330,6 +345,30 @@ impl State {
                                 viewport.name = new_name;
                             }
                         }
+                    }
+                }
+                StateEvent::CreateUniformField(uniform_id, uniform_field_kind) => {
+                    if let Some(uniform) = self.project.get_uniform_mut(uniform_id) {
+                        uniform
+                            .data
+                            .fields
+                            .push(UniformField::new_from_kind("Field", uniform_field_kind));
+
+                        uniform.upload(&self.device, &self.queue);
+                    }
+                }
+                StateEvent::DeleteUniformField(uniform_id, index) => {
+                    if let Some(uniform) = self.project.get_uniform_mut(uniform_id) {
+                        let fields = &mut uniform.data.fields;
+                        if index < fields.len() {
+                            fields.remove(index);
+                            uniform.upload(&self.device, &self.queue);
+                        }
+                    }
+                }
+                StateEvent::UpdateUniform(uniform_id) => {
+                    if let Some(uniform) = self.project.get_uniform_mut(uniform_id) {
+                        uniform.upload(&self.device, &self.queue);
                     }
                 }
             }

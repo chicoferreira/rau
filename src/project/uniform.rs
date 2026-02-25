@@ -36,12 +36,7 @@ impl Project {
     ) -> UniformId {
         let label = label.into();
 
-        let buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some(&label),
-            contents: &data.cast(),
-            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-        });
-
+        let buffer = Uniform::create_buffer(device, &label, &data.cast());
         let uniform = Uniform {
             label,
             data,
@@ -58,19 +53,43 @@ impl Project {
 
 #[derive(Debug)]
 pub struct Uniform {
-    pub(crate) label: String,
-    pub(crate) data: UniformData,
-    pub(crate) buffer: wgpu::Buffer,
+    pub label: String,
+    pub data: UniformData,
+    buffer: wgpu::Buffer,
 }
 
 impl Uniform {
-    pub fn upload(&self, queue: &wgpu::Queue) {
-        queue.write_buffer(&self.buffer, 0, &self.data.cast());
+    fn create_buffer(device: &wgpu::Device, label: &str, contents: &[u8]) -> wgpu::Buffer {
+        device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some(label),
+            contents,
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        })
     }
 
-    pub fn set_and_upload(&mut self, queue: &wgpu::Queue, new_data: UniformData) {
+    pub fn upload(&mut self, device: &wgpu::Device, queue: &wgpu::Queue) {
+        let size = self.buffer.size();
+        let content = self.data.cast();
+
+        if size != content.len() as wgpu::BufferAddress {
+            self.buffer = Self::create_buffer(device, &self.label, &content);
+        } else {
+            queue.write_buffer(&self.buffer, 0, &self.data.cast());
+        }
+    }
+
+    pub fn set_and_upload(
+        &mut self,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        new_data: UniformData,
+    ) {
         self.data = new_data;
-        self.upload(queue);
+        self.upload(device, queue);
+    }
+
+    pub fn buffer(&self) -> &wgpu::Buffer {
+        &self.buffer
     }
 }
 
@@ -127,6 +146,17 @@ impl UniformField {
         Self {
             name: name.into(),
             ty,
+        }
+    }
+
+    pub fn new_from_kind(name: impl Into<String>, kind: UniformFieldKind) -> Self {
+        match kind {
+            UniformFieldKind::Vec4f => Self::new_vec4(name, [0.0; 4]),
+            UniformFieldKind::Vec3f => Self::new_vec3(name, [0.0; 3]),
+            UniformFieldKind::Vec2f => Self::new_vec2(name, [0.0; 2]),
+            UniformFieldKind::Rgb => Self::new_rgb(name, [1.0; 3]),
+            UniformFieldKind::Rgba => Self::new_rgba(name, [1.0; 4]),
+            UniformFieldKind::Mat4x4f => Self::new_mat4(name, [[0.0; 4]; 4]),
         }
     }
 
@@ -199,6 +229,51 @@ impl UniformFieldType {
 
         let (_, size) = self.layout();
         debug_assert_eq!(buf.len(), start + size);
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum UniformFieldKind {
+    Vec2f,
+    Vec3f,
+    Vec4f,
+    Rgb,
+    Rgba,
+    Mat4x4f,
+}
+
+impl UniformFieldKind {
+    pub fn label(&self) -> &'static str {
+        match self {
+            UniformFieldKind::Vec2f => "Vec2f",
+            UniformFieldKind::Vec3f => "Vec3f",
+            UniformFieldKind::Vec4f => "Vec4f",
+            UniformFieldKind::Rgb => "Rgb",
+            UniformFieldKind::Rgba => "Rgba",
+            UniformFieldKind::Mat4x4f => "Mat4x4f",
+        }
+    }
+
+    pub fn wgsl_type_label(&self) -> &'static str {
+        match self {
+            UniformFieldKind::Vec2f => "vec2<f32>",
+            UniformFieldKind::Vec3f => "vec3<f32>",
+            UniformFieldKind::Vec4f => "vec4<f32>",
+            UniformFieldKind::Rgb => "vec3<f32>",
+            UniformFieldKind::Rgba => "vec4<f32>",
+            UniformFieldKind::Mat4x4f => "mat4x4<f32>",
+        }
+    }
+
+    pub fn all() -> Vec<Self> {
+        vec![
+            UniformFieldKind::Vec2f,
+            UniformFieldKind::Vec3f,
+            UniformFieldKind::Vec4f,
+            UniformFieldKind::Rgb,
+            UniformFieldKind::Rgba,
+            UniformFieldKind::Mat4x4f,
+        ]
     }
 }
 

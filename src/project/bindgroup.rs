@@ -97,7 +97,7 @@ impl BindGroupEntry {
                     .get_uniform(uniform_id)
                     .expect("deal with this later");
 
-                uniform.buffer.as_entire_binding()
+                uniform.buffer().as_entire_binding()
             }
         };
 

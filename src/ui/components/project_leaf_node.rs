@@ -1,4 +1,4 @@
-use std::{cell::RefCell, hash::Hash, rc::Rc};
+use std::{cell::RefCell, rc::Rc};
 
 use egui::Label;
 use egui_ltreeview::{NodeBuilder, NodeConfig};
@@ -6,15 +6,14 @@ use egui_ltreeview::{NodeBuilder, NodeConfig};
 use crate::{
     state::StateEvent,
     ui::{
-        components::rename_text_edit::RenameTextEdit,
+        components::renameable_label::renameable_label,
         panels::project_tree_panel::TreeNodeId,
         rename::{RenameState, RenameTarget},
     },
 };
 
-pub struct ProjectLeafNode<'a, Id> {
+pub struct ProjectLeafNode<'a> {
     tree_id: TreeNodeId,
-    id: Id,
     label: &'a str,
     inspect_event: Option<StateEvent>,
     delete_event: Option<StateEvent>,
@@ -23,14 +22,10 @@ pub struct ProjectLeafNode<'a, Id> {
     create_event: Option<StateEvent>,
 }
 
-impl<'a, Id> ProjectLeafNode<'a, Id>
-where
-    Id: Copy + Hash + 'a,
-{
-    pub fn new(tree_id: TreeNodeId, id: Id, label: &'a str) -> Self {
+impl<'a> ProjectLeafNode<'a> {
+    pub fn new(tree_id: TreeNodeId, label: &'a str) -> Self {
         Self {
             tree_id,
-            id,
             label,
             inspect_event: None,
             delete_event: None,
@@ -104,31 +99,17 @@ where
                 }
             })
             .label_ui(move |ui| {
-                if let Some(rename_state) = rename_state
-                    && let Some(rename_target) = self.rename_target.clone()
-                    && rename_state.target == rename_target
-                {
-                    let mut pending_events = label_pending_events.borrow_mut();
+                let default_label = Label::new(self.label).selectable(false);
 
-                    let text_edit_id = ui.id().with(("rename", self.id));
-
-                    let response = ui.add(RenameTextEdit::new(
-                        &mut rename_state.current_name,
-                        text_edit_id,
+                if let Some(rename_target) = self.rename_target.clone() {
+                    ui.add(renameable_label(
+                        default_label,
+                        label_pending_events.borrow_mut().as_mut(),
+                        rename_state,
+                        rename_target,
                     ));
-
-                    if response.lost_focus() {
-                        if ui.input(|i| i.key_pressed(egui::Key::Enter)) {
-                            pending_events.push(StateEvent::ApplyRename(
-                                rename_state.target.clone(),
-                                rename_state.current_name.clone(),
-                            ));
-                        } else {
-                            pending_events.push(StateEvent::CancelRename);
-                        }
-                    }
                 } else {
-                    ui.add(Label::new(self.label).selectable(false));
+                    ui.add(default_label);
                 }
             })
     }

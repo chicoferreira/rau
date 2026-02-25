@@ -453,6 +453,7 @@ impl Scene {
     fn update(
         &mut self,
         project: &mut project::Project,
+        device: &wgpu::Device,
         queue: &wgpu::Queue,
         dt: instant::Duration,
     ) {
@@ -462,7 +463,7 @@ impl Scene {
         project
             .get_uniform_mut(self.camera_uniform_id)
             .unwrap()
-            .set_and_upload(queue, camera_data);
+            .set_and_upload(device, queue, camera_data);
 
         let light_uniform = project.get_uniform_mut(self.light_uniform_id).unwrap();
 
@@ -482,7 +483,11 @@ impl Scene {
             cgmath::Deg(60.0 * dt.as_secs_f32()),
         ) * position;
 
-        light_uniform.set_and_upload(queue, light_to_uniform_data(new_position.into(), color));
+        light_uniform.set_and_upload(
+            device,
+            queue,
+            light_to_uniform_data(new_position.into(), color),
+        );
     }
 
     pub fn handle_event(
@@ -516,10 +521,10 @@ impl Scene {
 
                 let camera_uniform = project.get_uniform_mut(self.camera_uniform_id).unwrap();
                 let new_data = camera_to_uniform_data(&self.camera, &self.projection);
-                camera_uniform.set_and_upload(queue, new_data);
+                camera_uniform.set_and_upload(device, queue, new_data);
             }
             SceneEvent::Frame { dt } => {
-                self.update(project, queue, dt);
+                self.update(project, device, queue, dt);
             }
             SceneEvent::Keyboard {
                 key_code,
