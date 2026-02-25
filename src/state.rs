@@ -10,6 +10,7 @@ use crate::{
     project::{
         self,
         bindgroup::BindGroupId,
+        shader::ShaderId,
         texture::TextureId,
         uniform::{UniformData, UniformField, UniformFieldKind, UniformId},
     },
@@ -38,6 +39,7 @@ pub enum StateEvent {
     StartRename(RenameTarget),
     CancelRename,
     ApplyRename(RenameTarget, String),
+    InspectShader(ShaderId),
 }
 
 impl From<scene::SceneEvent> for StateEvent {
@@ -317,6 +319,9 @@ impl State {
                         RenameTarget::Viewport(texture_id) => {
                             self.project.get_texture(texture_id).map(|t| t.name.clone())
                         }
+                        RenameTarget::Shader(shader_id) => {
+                            self.project.get_shader(shader_id).map(|s| s.label.clone())
+                        }
                     };
 
                     if let Some(current_name) = current_name {
@@ -355,6 +360,11 @@ impl State {
                                 viewport.name = new_name;
                             }
                         }
+                        RenameTarget::Shader(shader_id) => {
+                            if let Some(shader) = self.project.get_shader_mut(shader_id) {
+                                shader.label = new_name;
+                            }
+                        }
                     }
                 }
                 StateEvent::CreateUniformField(uniform_id, uniform_field_kind) => {
@@ -388,6 +398,10 @@ impl State {
                     if let Some(uniform) = self.project.get_uniform_mut(uniform_id) {
                         uniform.upload(&self.device, &self.queue);
                     }
+                }
+                StateEvent::InspectShader(shader_id) => {
+                    self.inspector_tree_pane
+                        .add_inspector_pane(InspectorPane::Shader(shader_id));
                 }
             }
         }

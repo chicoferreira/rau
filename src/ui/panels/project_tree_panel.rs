@@ -3,7 +3,7 @@ use egui_ltreeview::{Action, NodeBuilder, NodeConfig, TreeView};
 use std::hash::Hash;
 
 use crate::{
-    project::{bindgroup::BindGroupId, texture::TextureId, uniform::UniformId},
+    project::{bindgroup::BindGroupId, shader::ShaderId, texture::TextureId, uniform::UniformId},
     state::StateEvent,
     ui::{
         components::project_leaf_node::ProjectLeafNode, pane::StateSnapshot, rename::RenameTarget,
@@ -18,6 +18,8 @@ pub enum TreeNodeId {
     BindGroup(BindGroupId),
     ViewportFolder,
     Viewport(TextureId),
+    ShaderFolder,
+    Shader(ShaderId),
 }
 
 impl TreeNodeId {
@@ -74,6 +76,17 @@ pub fn ui(state: &mut StateSnapshot, ui: &mut egui::Ui) -> Response {
                 builder.node(node);
             }
             builder.close_dir();
+
+            builder.dir(TreeNodeId::ShaderFolder, "Shaders");
+            for (id, shader) in state.project.list_shaders() {
+                let node = ProjectLeafNode::new(TreeNodeId::Shader(id), &shader.label)
+                    .with_rename_target(RenameTarget::Shader(id))
+                    .with_inspect_event(StateEvent::InspectShader(id))
+                    .build(state.pending_events, state.rename_state);
+
+                builder.node(node);
+            }
+            builder.close_dir();
         });
 
     for action in actions {
@@ -90,9 +103,13 @@ pub fn ui(state: &mut StateSnapshot, ui: &mut egui::Ui) -> Response {
                         TreeNodeId::Viewport(id) => {
                             state.pending_events.push(StateEvent::OpenViewport(id));
                         }
+                        TreeNodeId::Shader(id) => {
+                            state.pending_events.push(StateEvent::InspectShader(id));
+                        }
                         TreeNodeId::UniformFolder
                         | TreeNodeId::BindGroupFolder
-                        | TreeNodeId::ViewportFolder => {}
+                        | TreeNodeId::ViewportFolder
+                        | TreeNodeId::ShaderFolder => {}
                     }
                 }
             }

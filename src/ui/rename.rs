@@ -1,4 +1,6 @@
-use crate::project::{bindgroup::BindGroupId, texture::TextureId, uniform::UniformId};
+use crate::project::{
+    bindgroup::BindGroupId, shader::ShaderId, texture::TextureId, uniform::UniformId,
+};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct RenameState {
@@ -12,4 +14,5 @@ pub enum RenameTarget {
     BindGroup(BindGroupId),
     Viewport(TextureId),
     UniformField(UniformId, usize),
+    Shader(ShaderId),
 }

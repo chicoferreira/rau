@@ -15,7 +15,7 @@ impl HdrPipeline {
         output_format: wgpu::TextureFormat,
         project: &project::Project,
         hdr_shader_id: project::shader::ShaderId,
-    ) -> Self {
+    ) -> anyhow::Result<Self> {
         let layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("Hdr::layout"),
             entries: &[
@@ -55,14 +55,14 @@ impl HdrPipeline {
             None,
             &[],
             wgpu::PrimitiveTopology::TriangleList,
-            shader.create_wgpu_shader_module(device),
+            shader.create_wgpu_shader_module(device)?,
         );
 
-        Self {
+        Ok(Self {
             pipeline,
             bind_group,
             layout,
-        }
+        })
     }
 
     fn create_bind_group(

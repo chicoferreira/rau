@@ -300,9 +300,9 @@ impl Scene {
             target_texture_format,
             &project,
             hdr_shader_id,
-        );
+        )?;
 
-        let hdr_loader = loader::HdrLoader::new(&device, &project, equirectangular_shader_id);
+        let hdr_loader = loader::HdrLoader::new(&device, &project, equirectangular_shader_id)?;
         let sky_bytes = resources::load_binary("pure-sky.hdr").await?;
         let sky_texture = hdr_loader.from_equirectangular_bytes(
             &device,
@@ -372,7 +372,7 @@ impl Scene {
                 Some(texture::Texture::DEPTH_FORMAT),
                 &[model::ModelVertex::desc(), InstanceRaw::desc()],
                 wgpu::PrimitiveTopology::TriangleList,
-                shader.create_wgpu_shader_module(device),
+                shader.create_wgpu_shader_module(device)?,
             )
         };
 
@@ -394,7 +394,7 @@ impl Scene {
                 Some(texture::Texture::DEPTH_FORMAT),
                 &[model::ModelVertex::desc()],
                 wgpu::PrimitiveTopology::TriangleList,
-                shader.create_wgpu_shader_module(device),
+                shader.create_wgpu_shader_module(device)?,
             )
         };
 
@@ -416,7 +416,7 @@ impl Scene {
                 Some(texture::Texture::DEPTH_FORMAT),
                 &[],
                 wgpu::PrimitiveTopology::TriangleList,
-                shader.create_wgpu_shader_module(device),
+                shader.create_wgpu_shader_module(device)?,
             )
         };
 

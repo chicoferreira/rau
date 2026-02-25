@@ -1,5 +1,5 @@
 use crate::{
-    project::{bindgroup::BindGroupId, uniform::UniformId},
+    project::{bindgroup::BindGroupId, shader::ShaderId, uniform::UniformId},
     ui::pane::StateSnapshot,
 };
 
@@ -55,6 +55,7 @@ impl InspectorTreePane {
 pub enum InspectorPane {
     Uniform(UniformId),
     BindGroup(BindGroupId),
+    Shader(ShaderId),
 }
 
 impl<'a> egui_tiles::Behavior<InspectorPane> for StateSnapshot<'a> {
@@ -70,6 +71,9 @@ impl<'a> egui_tiles::Behavior<InspectorPane> for StateSnapshot<'a> {
             }
             InspectorPane::BindGroup(bind_group_id) => {
                 self.bind_group_inspector_ui(*bind_group_id, ui);
+            }
+            InspectorPane::Shader(shader_id) => {
+                self.shader_inspector_ui(ui, *shader_id);
             }
         };
 
@@ -89,6 +93,12 @@ impl<'a> egui_tiles::Behavior<InspectorPane> for StateSnapshot<'a> {
                 .get_bind_group(*id)
                 .map(|b| b.label.clone())
                 .unwrap_or(format!("Unknown {id:?}"))
+                .into(),
+            InspectorPane::Shader(shader_id) => self
+                .project
+                .get_shader(*shader_id)
+                .map(|s| s.label.clone())
+                .unwrap_or(format!("Unknown {shader_id:?}"))
                 .into(),
         }
     }
