@@ -341,11 +341,11 @@ impl Scene {
             entries: &[
                 wgpu::BindGroupEntry {
                     binding: 0,
-                    resource: wgpu::BindingResource::TextureView(&sky_texture.view()),
+                    resource: wgpu::BindingResource::TextureView(&sky_texture.view),
                 },
                 wgpu::BindGroupEntry {
                     binding: 1,
-                    resource: wgpu::BindingResource::Sampler(sky_texture.sampler()),
+                    resource: wgpu::BindingResource::Sampler(&sky_texture.sampler),
                 },
             ],
         });

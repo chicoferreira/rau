@@ -76,7 +76,7 @@ impl HdrLoader {
         data: &[u8],
         dst_size: u32,
         label: Option<&str>,
-    ) -> anyhow::Result<texture::CubeTexture> {
+    ) -> anyhow::Result<texture::Texture> {
         let hdr_decoder = image::codecs::hdr::HdrDecoder::new(Cursor::new(data))?;
         let meta = hdr_decoder.metadata();
 
@@ -102,14 +102,16 @@ impl HdrLoader {
             })
             .collect::<Vec<_>>();
 
+        let size = wgpu::Extent3d {
+            width: meta.width,
+            height: meta.height,
+            depth_or_array_layers: 1,
+        };
+
         let src = texture::Texture::create_texture(
             device,
             None,
-            wgpu::Extent3d {
-                width: meta.width,
-                height: meta.height,
-                depth_or_array_layers: 1,
-            },
+            size,
             self.texture_format,
             &[],
             wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
@@ -127,18 +129,17 @@ impl HdrLoader {
             &bytemuck::cast_slice(&pixels),
             wgpu::TexelCopyBufferLayout {
                 offset: 0,
-                bytes_per_row: Some(src.size.width * std::mem::size_of::<[f32; 4]>() as u32),
-                rows_per_image: Some(src.size.height),
+                bytes_per_row: Some(size.width * std::mem::size_of::<[f32; 4]>() as u32),
+                rows_per_image: Some(size.height),
             },
-            src.size,
+            size,
         );
 
-        let dst = texture::CubeTexture::create_2d(
+        let dst = texture::Texture::create_2d_cube_texture(
             device,
             dst_size,
             dst_size,
             self.texture_format,
-            1,
             // We are going to write to `dst` texture so we
             // need to use a `STORAGE_BINDING`.
             wgpu::TextureUsages::STORAGE_BINDING | wgpu::TextureUsages::TEXTURE_BINDING,
@@ -146,7 +147,7 @@ impl HdrLoader {
             label,
         );
 
-        let dst_view = dst.texture().create_view(&wgpu::TextureViewDescriptor {
+        let dst_view = dst.texture.create_view(&wgpu::TextureViewDescriptor {
             label,
             dimension: Some(wgpu::TextureViewDimension::D2Array),
             ..Default::default()

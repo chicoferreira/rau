@@ -8,9 +8,9 @@ pub struct Texture {
     pub texture: wgpu::Texture,
     pub view: wgpu::TextureView,
     pub sampler: wgpu::Sampler,
-    pub size: wgpu::Extent3d,
 }
 
+// TODO: refactor all these constructors (they have too much repeated logic)
 impl Texture {
     pub const DEPTH_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Depth32Float;
 
@@ -49,7 +49,6 @@ impl Texture {
             texture,
             view,
             sampler,
-            size,
         }
     }
 
@@ -152,7 +151,6 @@ impl Texture {
             texture,
             view,
             sampler,
-            size,
         }
     }
 
@@ -177,21 +175,12 @@ impl Texture {
             wgpu::FilterMode::Linear,
         )
     }
-}
 
-pub struct CubeTexture {
-    texture: wgpu::Texture,
-    sampler: wgpu::Sampler,
-    view: wgpu::TextureView,
-}
-
-impl CubeTexture {
-    pub fn create_2d(
+    pub fn create_2d_cube_texture(
         device: &wgpu::Device,
         width: u32,
         height: u32,
         format: wgpu::TextureFormat,
-        mip_level_count: u32,
         usage: wgpu::TextureUsages,
         mag_filter: wgpu::FilterMode,
         label: Option<&str>,
@@ -204,7 +193,7 @@ impl CubeTexture {
                 // A cube has 6 sides, so we need 6 layers
                 depth_or_array_layers: 6,
             },
-            mip_level_count,
+            mip_level_count: 1,
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
             format,
@@ -235,17 +224,5 @@ impl CubeTexture {
             sampler,
             view,
         }
-    }
-
-    pub fn texture(&self) -> &wgpu::Texture {
-        &self.texture
-    }
-
-    pub fn view(&self) -> &wgpu::TextureView {
-        &self.view
-    }
-
-    pub fn sampler(&self) -> &wgpu::Sampler {
-        &self.sampler
     }
 }
