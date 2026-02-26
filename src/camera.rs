@@ -67,7 +67,7 @@ impl Camera {
 }
 
 #[derive(Debug)]
-pub struct CameraController {
+pub struct CameraInput {
     amount_left: f32,
     amount_right: f32,
     amount_forward: f32,
@@ -81,7 +81,7 @@ pub struct CameraController {
     sensitivity: f32,
 }
 
-impl CameraController {
+impl CameraInput {
     pub fn new(speed: f32, sensitivity: f32) -> Self {
         Self {
             amount_left: 0.0,
@@ -98,7 +98,7 @@ impl CameraController {
         }
     }
 
-    pub fn process_keyboard(&mut self, key: KeyCode, state: ElementState) -> bool {
+    pub fn handle_keyboard(&mut self, key: KeyCode, state: ElementState) -> bool {
         let amount = if state == ElementState::Pressed {
             1.0
         } else {

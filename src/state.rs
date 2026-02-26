@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use slotmap::KeyData;
 use winit::{
     event::{ElementState, KeyEvent, WindowEvent},
     keyboard::{KeyCode, PhysicalKey},
@@ -7,6 +8,7 @@ use winit::{
 };
 
 use crate::{
+    camera::{Camera, CameraInput},
     project::{
         self,
         bindgroup::BindGroupId,
@@ -26,8 +28,26 @@ use crate::{
 };
 
 #[derive(Debug, Clone)]
+pub enum ViewportEvent {
+    Resize {
+        size: ui::Size2d,
+    },
+    Scroll {
+        delta_y_px: f32,
+    },
+    Drag {
+        mouse_dx: f32,
+        mouse_dy: f32,
+    },
+    Keyboard {
+        key_code: winit::keyboard::KeyCode,
+        element_state: winit::event::ElementState,
+    },
+}
+
+#[derive(Debug, Clone)]
 pub enum StateEvent {
-    SceneEvent(scene::SceneEvent),
+    ViewportEvent(TextureId, ViewportEvent),
     InspectUniform(UniformId),
     InspectBindGroup(BindGroupId),
     OpenViewport(TextureId),
@@ -40,12 +60,6 @@ pub enum StateEvent {
     CancelRename,
     ApplyRename(RenameTarget, String),
     InspectShader(ShaderId),
-}
-
-impl From<scene::SceneEvent> for StateEvent {
-    fn from(event: scene::SceneEvent) -> Self {
-        StateEvent::SceneEvent(event)
-    }
 }
 
 pub struct State {
@@ -62,6 +76,7 @@ pub struct State {
     pending_events: Vec<StateEvent>,
     inspector_tree_pane: InspectorTreePane,
     viewport_tree_pane: ViewportTreePane,
+    camera_input: CameraInput,
     project: project::Project,
 }
 
@@ -129,7 +144,22 @@ impl State {
         let mut egui_renderer =
             ui::renderer::EguiRenderer::new(&device, config.format.add_srgb_suffix(), &window);
 
-        let mut project = project::Project::default();
+        let size = ui::Size2d::new(config.width, config.height);
+
+        let camera = Camera::new(
+            (0.0, 5.0, 10.0),
+            cgmath::Deg(-90.0),
+            cgmath::Deg(-20.0),
+            size.width(),
+            size.height(),
+            cgmath::Deg(45.0),
+            0.1,
+            100.0,
+        );
+
+        let camera_input = CameraInput::new(4.0, 0.4);
+
+        let mut project = project::Project::new(camera);
 
         let equirectengular_shader = project.register_shader(
             "Equirectengular Shader",
@@ -157,8 +187,6 @@ impl State {
             "Sky Shader",
             resources::load_string("sky.wgsl").await.unwrap(),
         );
-
-        let size = ui::Size2d::new(config.width, config.height);
 
         let scene = scene::Scene::new(
             &device,
@@ -194,6 +222,7 @@ impl State {
             pending_events: vec![],
             inspector_tree_pane,
             viewport_tree_pane,
+            camera_input,
             project,
         })
     }
@@ -259,20 +288,10 @@ impl State {
                     });
             });
 
-        let events = std::iter::once(scene::SceneEvent::Frame { dt }.into())
-            .chain(self.pending_events.drain(..));
+        let events = self.pending_events.drain(..);
 
         for event in events {
             match event {
-                StateEvent::SceneEvent(scene_event) => {
-                    self.scene.handle_event(
-                        scene_event,
-                        &self.device,
-                        &self.queue,
-                        &mut self.project,
-                        &mut self.egui_renderer,
-                    );
-                }
                 StateEvent::InspectUniform(id) => {
                     self.inspector_tree_pane
                         .add_inspector_pane(InspectorPane::Uniform(id));
@@ -403,8 +422,42 @@ impl State {
                     self.inspector_tree_pane
                         .add_inspector_pane(InspectorPane::Shader(shader_id));
                 }
+                StateEvent::ViewportEvent(texture_id, viewport_event) => {
+                    let _viewport = self.project.get_texture_mut(texture_id);
+                    let camera = self.project.get_camera_mut();
+
+                    match viewport_event {
+                        ViewportEvent::Resize { size } => {
+                            camera.resize(size);
+                            self.scene.resize(
+                                size,
+                                &mut self.project,
+                                &self.device,
+                                &mut self.egui_renderer,
+                            );
+                        }
+                        ViewportEvent::Scroll { delta_y_px } => {
+                            self.camera_input.handle_scroll_pixels(delta_y_px);
+                        }
+                        ViewportEvent::Drag { mouse_dx, mouse_dy } => {
+                            self.camera_input.handle_mouse(mouse_dx, mouse_dy);
+                        }
+                        ViewportEvent::Keyboard {
+                            key_code,
+                            element_state,
+                        } => {
+                            self.camera_input.handle_keyboard(key_code, element_state);
+                        }
+                    }
+                }
             }
         }
+
+        self.camera_input
+            .update_camera(self.project.get_camera_mut(), dt);
+
+        self.scene
+            .update(&mut self.project, &self.device, &self.queue, dt);
 
         self.scene.render(&mut encoder, &self.project);
 
@@ -468,13 +521,13 @@ impl State {
             } => match (code, key_state) {
                 (KeyCode::Escape, ElementState::Pressed) => event_loop.exit(),
                 (key_code, element_state) => {
-                    self.pending_events.push(
-                        scene::SceneEvent::Keyboard {
+                    self.pending_events.push(StateEvent::ViewportEvent(
+                        TextureId::from(KeyData::from_ffi(0)), // TODO: fix me
+                        ViewportEvent::Keyboard {
                             key_code,
                             element_state,
-                        }
-                        .into(),
-                    );
+                        },
+                    ));
                 }
             },
             _ => {}

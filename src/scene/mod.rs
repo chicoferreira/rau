@@ -3,7 +3,8 @@ use wgpu::util::DeviceExt;
 use crate::{
     camera,
     model::{self, Vertex},
-    project, render, resources,
+    project::{self, Project},
+    render, resources,
     scene::hdr::HdrPipeline,
     state, texture, ui,
 };
@@ -11,27 +12,6 @@ use cgmath::{InnerSpace, Matrix, Rotation3, SquareMatrix, Vector3, Zero};
 
 mod hdr;
 mod loader;
-
-#[derive(Debug, Clone)]
-pub enum SceneEvent {
-    Resize {
-        size: ui::Size2d,
-    },
-    Scroll {
-        delta_y_px: f32,
-    },
-    Drag {
-        dx_px: f32,
-        dy_px: f32,
-    },
-    Keyboard {
-        key_code: winit::keyboard::KeyCode,
-        element_state: winit::event::ElementState,
-    },
-    Frame {
-        dt: instant::Duration,
-    },
-}
 
 fn camera_to_uniform_data(camera: &camera::Camera) -> project::uniform::UniformData {
     let view_position: [f32; 4] = camera.position.to_homogeneous().into();
@@ -142,8 +122,6 @@ pub struct Scene {
     instance_buffer: wgpu::Buffer,
     instances: Vec<Instance>,
     depth_texture: texture::Texture,
-    camera: camera::Camera,
-    camera_controller: camera::CameraController,
     camera_uniform_id: project::uniform::UniformId,
     camera_bind_group_id: project::bindgroup::BindGroupId,
     light_uniform_id: project::uniform::UniformId,
@@ -214,19 +192,7 @@ impl Scene {
 
         let depth_texture = texture::Texture::create_depth_texture(&device, size, "depth texture");
 
-        let camera = camera::Camera::new(
-            (0.0, 5.0, 10.0),
-            cgmath::Deg(-90.0),
-            cgmath::Deg(-20.0),
-            size.width(),
-            size.height(),
-            cgmath::Deg(45.0),
-            0.1,
-            100.0,
-        );
-        let camera_controller = camera::CameraController::new(4.0, 0.4);
-
-        let camera_uniform_data = camera_to_uniform_data(&camera);
+        let camera_uniform_data = camera_to_uniform_data(&project.get_camera());
         let camera_uniform_id =
             project.register_uniform(device, "Camera Buffer", camera_uniform_data);
 
@@ -437,8 +403,6 @@ impl Scene {
             instance_buffer,
             instances,
             depth_texture,
-            camera,
-            camera_controller,
             camera_bind_group_id,
             camera_uniform_id,
             light_uniform_id,
@@ -452,15 +416,14 @@ impl Scene {
         })
     }
 
-    fn update(
+    pub fn update(
         &mut self,
         project: &mut project::Project,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
         dt: instant::Duration,
     ) {
-        self.camera_controller.update_camera(&mut self.camera, dt);
-        let camera_data = camera_to_uniform_data(&self.camera);
+        let camera_data = camera_to_uniform_data(project.get_camera());
 
         project
             .get_uniform_mut(self.camera_uniform_id)
@@ -492,50 +455,23 @@ impl Scene {
         );
     }
 
-    pub fn handle_event(
+    pub fn resize(
         &mut self,
-        event: SceneEvent,
+        size: ui::Size2d,
+        project: &mut Project,
         device: &wgpu::Device,
-        queue: &wgpu::Queue,
-        project: &mut project::Project,
         egui_renderer: &mut ui::renderer::EguiRenderer,
     ) {
-        match event {
-            SceneEvent::Drag { dx_px, dy_px } => {
-                self.camera_controller.handle_mouse(dx_px, dy_px);
-            }
-            SceneEvent::Scroll { delta_y_px } => {
-                self.camera_controller.handle_scroll_pixels(delta_y_px);
-            }
-            SceneEvent::Resize { size } => {
-                if let Some(hdr_texture) = project.get_texture_mut(self.hdr_texture_id) {
-                    hdr_texture.resize(size, device, egui_renderer);
-                    self.hdr.update_texture(device, &hdr_texture.texture);
-                }
-
-                if let Some(viewport_texture) = project.get_texture_mut(self.viewport_texture_id) {
-                    viewport_texture.resize(size, device, egui_renderer);
-                }
-
-                self.depth_texture =
-                    texture::Texture::create_depth_texture(device, size, "Depth Buffer");
-                self.camera.resize(size);
-
-                let camera_uniform = project.get_uniform_mut(self.camera_uniform_id).unwrap();
-                let new_data = camera_to_uniform_data(&self.camera);
-                camera_uniform.set_and_upload(device, queue, new_data);
-            }
-            SceneEvent::Frame { dt } => {
-                self.update(project, device, queue, dt);
-            }
-            SceneEvent::Keyboard {
-                key_code,
-                element_state,
-            } => {
-                self.camera_controller
-                    .process_keyboard(key_code, element_state);
-            }
+        if let Some(hdr_texture) = project.get_texture_mut(self.hdr_texture_id) {
+            hdr_texture.resize(size, device, egui_renderer);
+            self.hdr.update_texture(device, &hdr_texture.texture);
         }
+
+        if let Some(viewport_texture) = project.get_texture_mut(self.viewport_texture_id) {
+            viewport_texture.resize(size, device, egui_renderer);
+        }
+
+        self.depth_texture = texture::Texture::create_depth_texture(device, size, "Depth Buffer");
     }
 
     pub fn render(&self, encoder: &mut wgpu::CommandEncoder, project: &project::Project) {

@@ -1,4 +1,10 @@
-use crate::{scene, state, ui};
+use slotmap::KeyData;
+
+use crate::{
+    project::texture::TextureId,
+    state::{self, StateEvent, ViewportEvent},
+    ui,
+};
 
 pub fn ui(
     ui: &mut egui::Ui,
@@ -14,12 +20,12 @@ pub fn ui(
     let requested_height = (size_points.y * pixels_per_point).round() as u32;
 
     if requested_width != size.width() || requested_height != size.height() {
-        events.push(
-            scene::SceneEvent::Resize {
-                size: ui::Size2d::new(requested_width, requested_height),
-            }
-            .into(),
-        );
+        let texture_id = TextureId::from(KeyData::from_ffi(0)); // TODO: fix me
+        let size = ui::Size2d::new(requested_width, requested_height);
+        events.push(StateEvent::ViewportEvent(
+            texture_id,
+            ViewportEvent::Resize { size },
+        ));
     }
 
     let sized_texture = egui::load::SizedTexture::new(egui_texture_id, size_points);
@@ -31,25 +37,27 @@ pub fn ui(
         let delta_points = ui.input(|i| i.pointer.delta());
         if delta_points.x != 0.0 || delta_points.y != 0.0 {
             let delta_px = delta_points * pixels_per_point;
-            events.push(
-                scene::SceneEvent::Drag {
-                    dx_px: delta_px.x,
-                    dy_px: delta_px.y,
-                }
-                .into(),
-            );
+            let texture_id = TextureId::from(KeyData::from_ffi(0)); // TODO: fix me
+            events.push(StateEvent::ViewportEvent(
+                texture_id,
+                ViewportEvent::Drag {
+                    mouse_dx: delta_px.x,
+                    mouse_dy: delta_px.y,
+                },
+            ));
         }
     }
 
     if response.hovered() {
         let scroll_points = ui.input(|i| i.smooth_scroll_delta.y);
         if scroll_points != 0.0 {
-            events.push(
-                scene::SceneEvent::Scroll {
+            let texture_id = TextureId::from(KeyData::from_ffi(0)); // TODO: fix me
+            events.push(StateEvent::ViewportEvent(
+                texture_id,
+                ViewportEvent::Scroll {
                     delta_y_px: scroll_points * pixels_per_point,
-                }
-                .into(),
-            );
+                },
+            ));
         }
     }
 
