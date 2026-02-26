@@ -33,13 +33,10 @@ pub enum SceneEvent {
     },
 }
 
-fn camera_to_uniform_data(
-    camera: &camera::Camera,
-    projection: &camera::Projection,
-) -> project::uniform::UniformData {
+fn camera_to_uniform_data(camera: &camera::Camera) -> project::uniform::UniformData {
     let view_position: [f32; 4] = camera.position.to_homogeneous().into();
-    let proj = projection.calc_matrix();
-    let view_matrix = camera.calc_matrix();
+    let proj = camera.calc_proj_matrix();
+    let view_matrix = camera.calc_view_matrix();
     let view_proj = proj * view_matrix;
     let view: [[f32; 4]; 4] = view_matrix.into();
     let view_proj: [[f32; 4]; 4] = view_proj.into();
@@ -146,7 +143,6 @@ pub struct Scene {
     instances: Vec<Instance>,
     depth_texture: texture::Texture,
     camera: camera::Camera,
-    projection: camera::Projection,
     camera_controller: camera::CameraController,
     camera_uniform_id: project::uniform::UniformId,
     camera_bind_group_id: project::bindgroup::BindGroupId,
@@ -218,12 +214,19 @@ impl Scene {
 
         let depth_texture = texture::Texture::create_depth_texture(&device, size, "depth texture");
 
-        let camera = camera::Camera::new((0.0, 5.0, 10.0), cgmath::Deg(-90.0), cgmath::Deg(-20.0));
-        let projection =
-            camera::Projection::new(size.width(), size.height(), cgmath::Deg(45.0), 0.1, 100.0);
+        let camera = camera::Camera::new(
+            (0.0, 5.0, 10.0),
+            cgmath::Deg(-90.0),
+            cgmath::Deg(-20.0),
+            size.width(),
+            size.height(),
+            cgmath::Deg(45.0),
+            0.1,
+            100.0,
+        );
         let camera_controller = camera::CameraController::new(4.0, 0.4);
 
-        let camera_uniform_data = camera_to_uniform_data(&camera, &projection);
+        let camera_uniform_data = camera_to_uniform_data(&camera);
         let camera_uniform_id =
             project.register_uniform(device, "Camera Buffer", camera_uniform_data);
 
@@ -435,7 +438,6 @@ impl Scene {
             instances,
             depth_texture,
             camera,
-            projection,
             camera_controller,
             camera_bind_group_id,
             camera_uniform_id,
@@ -458,7 +460,7 @@ impl Scene {
         dt: instant::Duration,
     ) {
         self.camera_controller.update_camera(&mut self.camera, dt);
-        let camera_data = camera_to_uniform_data(&self.camera, &self.projection);
+        let camera_data = camera_to_uniform_data(&self.camera);
 
         project
             .get_uniform_mut(self.camera_uniform_id)
@@ -517,10 +519,10 @@ impl Scene {
 
                 self.depth_texture =
                     texture::Texture::create_depth_texture(device, size, "Depth Buffer");
-                self.projection.resize(size);
+                self.camera.resize(size);
 
                 let camera_uniform = project.get_uniform_mut(self.camera_uniform_id).unwrap();
-                let new_data = camera_to_uniform_data(&self.camera, &self.projection);
+                let new_data = camera_to_uniform_data(&self.camera);
                 camera_uniform.set_and_upload(device, queue, new_data);
             }
             SceneEvent::Frame { dt } => {
