@@ -1,6 +1,4 @@
-use crate::project::{
-    bindgroup::BindGroupId, shader::ShaderId, texture::TextureId, uniform::UniformId,
-};
+use crate::project::{BindGroupId, ShaderId, TextureId, UniformId};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct RenameState {

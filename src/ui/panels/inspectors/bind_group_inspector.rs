@@ -1,10 +1,10 @@
-use crate::{project::bindgroup::BindGroupId, ui::pane::StateSnapshot};
+use crate::{project::BindGroupId, ui::pane::StateSnapshot};
 
 impl StateSnapshot<'_> {
     pub fn bind_group_inspector_ui(&mut self, bind_group_id: BindGroupId, ui: &mut egui::Ui) {
         egui::CentralPanel::default().show_inside(ui, |ui| {
             egui::ScrollArea::both().auto_shrink(false).show(ui, |ui| {
-                let Some(bind_group) = self.project.get_bind_group(bind_group_id) else {
+                let Some(bind_group) = self.project.bind_groups.get(bind_group_id) else {
                     ui.label("Bind group not found.");
                     return;
                 };
@@ -63,7 +63,8 @@ fn resource_detail_label(
             view_dimension,
         } => {
             let texture_name = project
-                .get_texture(texture_id)
+                .textures
+                .get(texture_id)
                 .map(|texture| texture.name.to_owned())
                 .unwrap_or_else(|| "missing texture".to_owned());
             format!("texture: {texture_name}, view: {view_dimension:?}")
@@ -73,14 +74,16 @@ fn resource_detail_label(
             sampler_binding_type,
         } => {
             let texture_name = project
-                .get_texture(texture_id)
+                .textures
+                .get(texture_id)
                 .map(|texture| texture.name.to_owned())
                 .unwrap_or_else(|| "missing texture".to_owned());
             format!("sampler: {texture_name}, type: {sampler_binding_type:?}")
         }
         crate::project::bindgroup::BindGroupResource::Uniform(uniform_id) => {
             let uniform_label = project
-                .get_uniform(uniform_id)
+                .uniforms
+                .get(uniform_id)
                 .map(|uniform| uniform.label.clone())
                 .unwrap_or_else(|| "missing uniform".to_owned());
             format!("uniform: {uniform_label}")

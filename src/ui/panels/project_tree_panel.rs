@@ -3,7 +3,7 @@ use egui_ltreeview::{Action, NodeBuilder, NodeConfig, TreeView};
 use std::hash::Hash;
 
 use crate::{
-    project::{bindgroup::BindGroupId, shader::ShaderId, texture::TextureId, uniform::UniformId},
+    project::{BindGroupId, ShaderId, TextureId, UniformId},
     state::StateEvent,
     ui::{
         components::project_leaf_node::ProjectLeafNode, pane::StateSnapshot, rename::RenameTarget,
@@ -43,7 +43,7 @@ pub fn ui(state: &mut StateSnapshot, ui: &mut egui::Ui) -> Response {
         .show(ui, |builder| {
             builder.node(TreeNodeId::new_uniform_folder_node(state.pending_events));
 
-            for (id, uniform) in state.project.list_uniforms() {
+            for (id, uniform) in state.project.uniforms.list() {
                 let node = ProjectLeafNode::new(TreeNodeId::Uniform(id), &uniform.label)
                     .with_rename_target(RenameTarget::Uniform(id))
                     .with_inspect_event(StateEvent::InspectUniform(id))
@@ -55,7 +55,7 @@ pub fn ui(state: &mut StateSnapshot, ui: &mut egui::Ui) -> Response {
             builder.close_dir();
 
             builder.dir(TreeNodeId::BindGroupFolder, "Bind Groups");
-            for (id, bind_group) in state.project.list_bind_groups() {
+            for (id, bind_group) in state.project.bind_groups.list() {
                 let node = ProjectLeafNode::new(TreeNodeId::BindGroup(id), &bind_group.label)
                     .with_rename_target(RenameTarget::BindGroup(id))
                     .with_inspect_event(StateEvent::InspectBindGroup(id))
@@ -67,7 +67,7 @@ pub fn ui(state: &mut StateSnapshot, ui: &mut egui::Ui) -> Response {
             builder.close_dir();
 
             builder.dir(TreeNodeId::ViewportFolder, "Viewports");
-            for (id, viewport) in state.project.list_textures() {
+            for (id, viewport) in state.project.textures.list() {
                 let node = ProjectLeafNode::new(TreeNodeId::Viewport(id), &viewport.name)
                     .with_rename_target(RenameTarget::Viewport(id))
                     .with_inspect_event(StateEvent::OpenViewport(id))
@@ -78,7 +78,7 @@ pub fn ui(state: &mut StateSnapshot, ui: &mut egui::Ui) -> Response {
             builder.close_dir();
 
             builder.dir(TreeNodeId::ShaderFolder, "Shaders");
-            for (id, shader) in state.project.list_shaders() {
+            for (id, shader) in state.project.shaders.list() {
                 let node = ProjectLeafNode::new(TreeNodeId::Shader(id), &shader.label)
                     .with_rename_target(RenameTarget::Shader(id))
                     .with_inspect_event(StateEvent::InspectShader(id))

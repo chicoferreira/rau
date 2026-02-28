@@ -1,5 +1,5 @@
 use crate::{
-    project::{bindgroup::BindGroupId, shader::ShaderId, uniform::UniformId},
+    project::{BindGroupId, ShaderId, UniformId},
     ui::pane::StateSnapshot,
 };
 
@@ -84,19 +84,22 @@ impl<'a> egui_tiles::Behavior<InspectorPane> for StateSnapshot<'a> {
         match pane {
             InspectorPane::Uniform(id) => self
                 .project
-                .get_uniform(*id)
+                .uniforms
+                .get(*id)
                 .map(|u| u.label.clone())
                 .unwrap_or(format!("Unknown {id:?}"))
                 .into(),
             InspectorPane::BindGroup(id) => self
                 .project
-                .get_bind_group(*id)
+                .bind_groups
+                .get(*id)
                 .map(|b| b.label.clone())
                 .unwrap_or(format!("Unknown {id:?}"))
                 .into(),
             InspectorPane::Shader(shader_id) => self
                 .project
-                .get_shader(*shader_id)
+                .shaders
+                .get(*shader_id)
                 .map(|s| s.label.clone())
                 .unwrap_or(format!("Unknown {shader_id:?}"))
                 .into(),

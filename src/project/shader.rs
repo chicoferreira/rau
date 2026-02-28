@@ -1,32 +1,4 @@
 use anyhow::Context;
-use slotmap::new_key_type;
-
-use crate::project::Project;
-
-new_key_type! {
-    pub struct ShaderId;
-}
-
-impl Project {
-    pub fn get_shader(&self, id: ShaderId) -> Option<&Shader> {
-        self.shaders.get(id)
-    }
-
-    pub fn get_shader_mut(&mut self, id: ShaderId) -> Option<&mut Shader> {
-        self.shaders.get_mut(id)
-    }
-
-    pub fn register_shader(&mut self, label: impl Into<String>, source: String) -> ShaderId {
-        self.shaders.insert(Shader {
-            label: label.into(),
-            source,
-        })
-    }
-
-    pub fn list_shaders(&self) -> impl Iterator<Item = (ShaderId, &Shader)> {
-        self.shaders.iter()
-    }
-}
 
 pub struct Shader {
     pub label: String,
@@ -34,6 +6,13 @@ pub struct Shader {
 }
 
 impl Shader {
+    pub fn new(label: impl Into<String>, source: impl Into<String>) -> Self {
+        Self {
+            label: label.into(),
+            source: source.into(),
+        }
+    }
+
     pub fn create_wgpu_shader_module(
         &self,
         device: &wgpu::Device,

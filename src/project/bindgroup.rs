@@ -1,18 +1,19 @@
-use slotmap::new_key_type;
+use crate::project::{Project, TextureId, UniformId};
 
-use crate::project::{Project, texture::TextureId, uniform::UniformId};
-
-new_key_type! {
-    pub struct BindGroupId;
+pub struct BindGroup {
+    pub(crate) label: String,
+    pub(crate) layout: wgpu::BindGroupLayout,
+    pub(crate) group: wgpu::BindGroup,
+    pub(crate) entries: Vec<BindGroupEntry>,
 }
 
-impl Project {
-    pub fn register_bind_group(
-        &mut self,
+impl BindGroup {
+    pub fn new(
+        project: &Project,
         device: &wgpu::Device,
         label: impl Into<String>,
         entries: Vec<BindGroupEntry>,
-    ) -> BindGroupId {
+    ) -> BindGroup {
         let label = label.into();
 
         let layout_entries = entries.iter().copied().map(Into::into).collect::<Vec<_>>();
@@ -24,7 +25,7 @@ impl Project {
 
         let group_entries = entries
             .iter()
-            .map(|entry| entry.into_bind_group_entry(self))
+            .map(|entry| entry.into_bind_group_entry(project))
             .collect::<Vec<_>>();
 
         let group = device.create_bind_group(&wgpu::BindGroupDescriptor {
@@ -33,42 +34,13 @@ impl Project {
             entries: &group_entries,
         });
 
-        let bind_group = BindGroup {
+        BindGroup {
             label,
             layout,
             group,
             entries,
-        };
-
-        self.bind_groups.insert(bind_group)
+        }
     }
-
-    pub fn get_bind_group(&self, id: BindGroupId) -> Option<&BindGroup> {
-        self.bind_groups.get(id)
-    }
-
-    pub fn get_bind_group_mut(&mut self, id: BindGroupId) -> Option<&mut BindGroup> {
-        self.bind_groups.get_mut(id)
-    }
-
-    pub fn list_bind_groups(&self) -> impl Iterator<Item = (BindGroupId, &BindGroup)> {
-        self.bind_groups.iter()
-    }
-
-    pub fn list_bind_groups_mut(&mut self) -> impl Iterator<Item = (BindGroupId, &mut BindGroup)> {
-        self.bind_groups.iter_mut()
-    }
-
-    pub fn is_empty_bind_groups(&self) -> bool {
-        self.bind_groups.is_empty()
-    }
-}
-
-pub struct BindGroup {
-    pub(crate) label: String,
-    pub(crate) layout: wgpu::BindGroupLayout,
-    pub(crate) group: wgpu::BindGroup,
-    pub(crate) entries: Vec<BindGroupEntry>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -82,19 +54,22 @@ impl BindGroupEntry {
         let resource = match self.resource {
             BindGroupResource::Texture { texture_id, .. } => {
                 let texture = project
-                    .get_texture(texture_id)
+                    .textures
+                    .get(texture_id)
                     .expect("deal with this later");
                 wgpu::BindingResource::TextureView(&texture.texture.view)
             }
             BindGroupResource::Sampler { texture_id, .. } => {
                 let texture = project
-                    .get_texture(texture_id)
+                    .textures
+                    .get(texture_id)
                     .expect("deal with this later");
                 wgpu::BindingResource::Sampler(&texture.texture.sampler)
             }
             BindGroupResource::Uniform(uniform_id) => {
                 let uniform = project
-                    .get_uniform(uniform_id)
+                    .uniforms
+                    .get(uniform_id)
                     .expect("deal with this later");
 
                 uniform.buffer().as_entire_binding()

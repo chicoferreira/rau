@@ -1,44 +1,28 @@
 use wgpu::util::DeviceExt;
 
 use crate::{
-    camera,
     model::{self, Vertex},
-    project::{self, Project},
+    project::{
+        self, Project,
+        uniform::{
+            CameraFieldSource, Uniform, UniformData, UniformField, UniformFieldData,
+            UniformFieldSource,
+        },
+    },
     render, resources,
     scene::hdr::HdrPipeline,
     state, texture, ui,
 };
-use cgmath::{InnerSpace, Matrix, Rotation3, SquareMatrix, Vector3, Zero};
+use cgmath::{InnerSpace, Rotation3, Vector3, Zero};
 
 mod hdr;
 mod loader;
 
-fn camera_to_uniform_data(camera: &camera::Camera) -> project::uniform::UniformData {
-    let view_position: [f32; 4] = camera.position.to_homogeneous().into();
-    let proj = camera.calc_proj_matrix();
-    let view_matrix = camera.calc_view_matrix();
-    let view_proj = proj * view_matrix;
-    let view: [[f32; 4]; 4] = view_matrix.into();
-    let view_proj: [[f32; 4]; 4] = view_proj.into();
-    let inv_proj: [[f32; 4]; 4] = proj.invert().unwrap().into();
-    let inv_view: [[f32; 4]; 4] = view_matrix.transpose().into();
-
-    project::uniform::UniformData {
-        fields: vec![
-            project::uniform::UniformField::new_vec4("view_position", view_position),
-            project::uniform::UniformField::new_mat4("view", view),
-            project::uniform::UniformField::new_mat4("view_proj", view_proj),
-            project::uniform::UniformField::new_mat4("inv_proj", inv_proj),
-            project::uniform::UniformField::new_mat4("inv_view", inv_view),
-        ],
-    }
-}
-
 fn light_to_uniform_data(position: [f32; 3], color: [f32; 3]) -> project::uniform::UniformData {
     project::uniform::UniformData {
         fields: vec![
-            project::uniform::UniformField::new_vec3("position", position),
-            project::uniform::UniformField::new_rgb("color", color),
+            project::uniform::UniformField::new_user_defined_vec3f("position", position),
+            project::uniform::UniformField::new_user_defined_rgb("color", color),
         ],
     }
 }
@@ -122,16 +106,15 @@ pub struct Scene {
     instance_buffer: wgpu::Buffer,
     instances: Vec<Instance>,
     depth_texture: texture::Texture,
-    camera_uniform_id: project::uniform::UniformId,
-    camera_bind_group_id: project::bindgroup::BindGroupId,
-    light_uniform_id: project::uniform::UniformId,
-    light_bind_group_id: project::bindgroup::BindGroupId,
+    camera_bind_group_id: project::BindGroupId,
+    light_uniform_id: project::UniformId,
+    light_bind_group_id: project::BindGroupId,
     light_render_pipeline: wgpu::RenderPipeline,
     hdr: hdr::HdrPipeline,
     environment_bind_group: wgpu::BindGroup,
     sky_pipeline: wgpu::RenderPipeline,
-    hdr_texture_id: project::texture::TextureId,
-    pub viewport_texture_id: project::texture::TextureId,
+    hdr_texture_id: project::TextureId,
+    pub viewport_texture_id: project::TextureId,
 }
 
 impl Scene {
@@ -142,11 +125,11 @@ impl Scene {
         target_texture_format: wgpu::TextureFormat,
         project: &mut project::Project,
         egui_renderer: &mut ui::renderer::EguiRenderer,
-        equirectangular_shader_id: project::shader::ShaderId,
-        hdr_shader_id: project::shader::ShaderId,
-        light_shader_id: project::shader::ShaderId,
-        main_shader_id: project::shader::ShaderId,
-        sky_shader_id: project::shader::ShaderId,
+        equirectangular_shader_id: project::ShaderId,
+        hdr_shader_id: project::ShaderId,
+        light_shader_id: project::ShaderId,
+        main_shader_id: project::ShaderId,
+        sky_shader_id: project::ShaderId,
     ) -> anyhow::Result<Scene> {
         let texture_bind_group_layout =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
@@ -191,10 +174,17 @@ impl Scene {
             });
 
         let depth_texture = texture::Texture::create_depth_texture(&device, size, "depth texture");
-
-        let camera_uniform_data = camera_to_uniform_data(&project.get_camera());
-        let camera_uniform_id =
-            project.register_uniform(device, "Camera Buffer", camera_uniform_data);
+        let camera_uniform_data = UniformData {
+            fields: vec![
+                UniformField::new_camera_sourced("view_position", CameraFieldSource::Position),
+                UniformField::new_camera_sourced("view", CameraFieldSource::View),
+                UniformField::new_camera_sourced("proj_view", CameraFieldSource::ProjectionView),
+                UniformField::new_camera_sourced("inv_proj", CameraFieldSource::InverseProjection),
+                UniformField::new_camera_sourced("inv_view", CameraFieldSource::InverseView),
+            ],
+        };
+        let camera_uniform = Uniform::new(device, "Camera Buffer", camera_uniform_data);
+        let camera_uniform_id = project.uniforms.register(camera_uniform);
 
         const SPACE_BETWEEN: f32 = 3.0;
         let instances = (0..NUM_INSTANCES_PER_ROW)
@@ -226,7 +216,8 @@ impl Scene {
             usage: wgpu::BufferUsages::VERTEX,
         });
 
-        let camera_bind_group_id = project.register_bind_group(
+        let camera_bind_group = project::bindgroup::BindGroup::new(
+            project,
             device,
             "camera bind group",
             vec![project::bindgroup::BindGroupEntry {
@@ -234,12 +225,14 @@ impl Scene {
                 resource: project::bindgroup::BindGroupResource::Uniform(camera_uniform_id),
             }],
         );
+        let camera_bind_group_id = project.bind_groups.register(camera_bind_group);
 
         let light_data = light_to_uniform_data([2.0, 2.0, 2.0], [1.0, 1.0, 1.0]);
+        let light_uniform = Uniform::new(device, "light", light_data);
+        let light_uniform_id = project.uniforms.register(light_uniform);
 
-        let light_uniform_id = project.register_uniform(device, "light", light_data);
-
-        let light_bind_group_id = project.register_bind_group(
+        let light_bind_group = project::bindgroup::BindGroup::new(
+            project,
             device,
             "light bind group",
             vec![project::bindgroup::BindGroupEntry {
@@ -247,21 +240,22 @@ impl Scene {
                 resource: project::bindgroup::BindGroupResource::Uniform(light_uniform_id),
             }],
         );
+        let light_bind_group_id = project.bind_groups.register(light_bind_group);
 
         let obj_model =
             resources::load_model("cube.obj", &device, &queue, &texture_bind_group_layout)
                 .await
                 .unwrap();
 
-        let hdr_texture_id = project.register_texture(
-            "HDR Buffer",
+        let hdr_texture = project::texture::TextureEntry::new(
+            "HDR BUffer",
             device,
             size,
             HdrPipeline::RENDER_FORMAT,
             egui_renderer,
         );
-
-        let hdr_texture = &project.get_texture(hdr_texture_id).unwrap().texture;
+        let hdr_texture_id = project.textures.register(hdr_texture);
+        let hdr_texture = &project.textures.get(hdr_texture_id).unwrap().texture;
 
         let hdr = hdr::HdrPipeline::new(
             device,
@@ -319,20 +313,22 @@ impl Scene {
             ],
         });
 
+        let camera_bind_group = project.bind_groups.get(camera_bind_group_id).unwrap();
+        let light_bind_group = project.bind_groups.get(light_bind_group_id).unwrap();
         let render_pipeline_layout =
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("Render Pipeline Layout"),
                 bind_group_layouts: &[
                     &texture_bind_group_layout,
-                    &project.get_bind_group(camera_bind_group_id).unwrap().layout,
-                    &project.get_bind_group(light_bind_group_id).unwrap().layout,
+                    &camera_bind_group.layout,
+                    &light_bind_group.layout,
                     &environment_layout,
                 ],
                 immediate_size: 0,
             });
 
         let render_pipeline = {
-            let shader = project.get_shader(main_shader_id).unwrap();
+            let shader = project.shaders.get(main_shader_id).unwrap();
             state::create_render_pipeline(
                 "normal shader pipeline",
                 &device,
@@ -348,13 +344,10 @@ impl Scene {
         let light_render_pipeline = {
             let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("Light Pipeline Layout"),
-                bind_group_layouts: &[
-                    &project.get_bind_group(camera_bind_group_id).unwrap().layout,
-                    &project.get_bind_group(light_bind_group_id).unwrap().layout,
-                ],
+                bind_group_layouts: &[&camera_bind_group.layout, &light_bind_group.layout],
                 immediate_size: 0,
             });
-            let shader = project.get_shader(light_shader_id).unwrap();
+            let shader = project.shaders.get(light_shader_id).unwrap();
             state::create_render_pipeline(
                 "light pipeline",
                 &device,
@@ -370,13 +363,10 @@ impl Scene {
         let sky_pipeline = {
             let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("Sky Pipeline Layout"),
-                bind_group_layouts: &[
-                    &project.get_bind_group(camera_bind_group_id).unwrap().layout,
-                    &environment_layout,
-                ],
+                bind_group_layouts: &[&camera_bind_group.layout, &environment_layout],
                 immediate_size: 0,
             });
-            let shader = project.get_shader(sky_shader_id).unwrap();
+            let shader = project.shaders.get(sky_shader_id).unwrap();
             state::create_render_pipeline(
                 "sky pipeline",
                 &device,
@@ -389,13 +379,14 @@ impl Scene {
             )
         };
 
-        let viewport_texture_id = project.register_texture(
-            "Result Texture",
+        let viewport_texture = project::texture::TextureEntry::new(
+            "Viewport Texture",
             device,
             size,
             target_texture_format,
             egui_renderer,
         );
+        let viewport_texture_id = project.textures.register(viewport_texture);
 
         Ok(Scene {
             render_pipeline,
@@ -404,7 +395,6 @@ impl Scene {
             instances,
             depth_texture,
             camera_bind_group_id,
-            camera_uniform_id,
             light_uniform_id,
             light_bind_group_id,
             light_render_pipeline,
@@ -416,43 +406,23 @@ impl Scene {
         })
     }
 
-    pub fn update(
-        &mut self,
-        project: &mut project::Project,
-        device: &wgpu::Device,
-        queue: &wgpu::Queue,
-        dt: instant::Duration,
-    ) {
-        let camera_data = camera_to_uniform_data(project.get_camera());
-
-        project
-            .get_uniform_mut(self.camera_uniform_id)
-            .unwrap()
-            .set_and_upload(device, queue, camera_data);
-
-        let light_uniform = project.get_uniform_mut(self.light_uniform_id).unwrap();
+    pub fn update(&mut self, project: &mut project::Project, dt: instant::Duration) {
+        let light_uniform = project.uniforms.get_mut(self.light_uniform_id).unwrap();
 
         // this is fine for now
-        let position: Vector3<_> = match light_uniform.data.fields[0].ty {
-            project::uniform::UniformFieldType::Vec3f(position) => position.into(),
+        let position = match &mut light_uniform.data.fields[0].source {
+            UniformFieldSource::UserDefined(UniformFieldData::Vec3f(position)) => position,
             _ => unreachable!("deal with this later"),
         };
 
-        let color = match light_uniform.data.fields[1].ty {
-            project::uniform::UniformFieldType::Rgb(color) => color,
-            _ => unreachable!("deal with this later"),
-        };
+        let position_vec: Vector3<_> = position.clone().into();
 
         let new_position = cgmath::Quaternion::from_axis_angle(
             (0.0, 1.0, 0.0).into(),
             cgmath::Deg(60.0 * dt.as_secs_f32()),
-        ) * position;
+        ) * position_vec;
 
-        light_uniform.set_and_upload(
-            device,
-            queue,
-            light_to_uniform_data(new_position.into(), color),
-        );
+        *position = new_position.into();
     }
 
     pub fn resize(
@@ -462,12 +432,12 @@ impl Scene {
         device: &wgpu::Device,
         egui_renderer: &mut ui::renderer::EguiRenderer,
     ) {
-        if let Some(hdr_texture) = project.get_texture_mut(self.hdr_texture_id) {
+        if let Some(hdr_texture) = project.textures.get_mut(self.hdr_texture_id) {
             hdr_texture.resize(size, device, egui_renderer);
             self.hdr.update_texture(device, &hdr_texture.texture);
         }
 
-        if let Some(viewport_texture) = project.get_texture_mut(self.viewport_texture_id) {
+        if let Some(viewport_texture) = project.textures.get_mut(self.viewport_texture_id) {
             viewport_texture.resize(size, device, egui_renderer);
         }
 
@@ -475,8 +445,8 @@ impl Scene {
     }
 
     pub fn render(&self, encoder: &mut wgpu::CommandEncoder, project: &project::Project) {
-        let camera_bind_group = project.get_bind_group(self.camera_bind_group_id).unwrap();
-        let light_bind_group = project.get_bind_group(self.light_bind_group_id).unwrap();
+        let camera_bind_group = project.bind_groups.get(self.camera_bind_group_id).unwrap();
+        let light_bind_group = project.bind_groups.get(self.light_bind_group_id).unwrap();
 
         let main_render_pass = render::RenderPassSpec {
             label: Some("Main Render Pass"),

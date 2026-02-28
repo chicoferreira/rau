@@ -1,7 +1,7 @@
 use slotmap::KeyData;
 
 use crate::{
-    project::texture::TextureId,
+    project::TextureId,
     state::{self, StateEvent, ViewportEvent},
     ui,
 };

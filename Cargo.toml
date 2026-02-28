@@ -27,6 +27,7 @@ instant = "0.1"
 log = "0.4.29"
 pollster = "0.4.0"
 slotmap = "1.0"
+strum = { version = "0.28.0", features = ["derive"] }
 thiserror = "2.0.18"
 tobj = { version = "4.0.3", default-features = false, features = ["futures"] }
 wgpu = { version = "28.0", features = ["naga-ir"] }

@@ -22,7 +22,8 @@ pub struct RenderPassSpec<'a> {
 impl RenderPassSpec<'_> {
     pub fn submit(&self, encoder: &mut wgpu::CommandEncoder, project: &project::Project) {
         let texture_entry = project
-            .get_texture(self.target_spec.texture_id)
+            .textures
+            .get(self.target_spec.texture_id)
             .expect("deal with this later");
 
         let texture = &texture_entry.texture;
@@ -70,7 +71,7 @@ impl RenderPassSpec<'_> {
 }
 
 pub struct RenderPassTargetSpec {
-    pub texture_id: project::texture::TextureId,
+    pub texture_id: project::TextureId,
     pub texture_format: RenderPassTargetTextureFormat,
     pub load_operation: wgpu::LoadOp<wgpu::Color>,
 }

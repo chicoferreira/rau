@@ -8,10 +8,6 @@ pub fn color_edit_rgba(ui: &mut egui::Ui, color: &mut [f32; 4]) -> bool {
         egui::color_picker::Alpha::OnlyBlend,
     );
 
-    if color_picker.changed() {
-        *color = egui_color.to_array();
-        true
-    } else {
-        false
-    }
+    *color = egui_color.to_array();
+    color_picker.changed()
 }

@@ -10,11 +10,8 @@ use winit::{
 use crate::{
     camera::{Camera, CameraInput},
     project::{
-        self,
-        bindgroup::BindGroupId,
-        shader::ShaderId,
-        texture::TextureId,
-        uniform::{UniformData, UniformField, UniformFieldKind, UniformId},
+        self, BindGroupId, ShaderId, TextureId, UniformId,
+        uniform::{UniformData, UniformField, UniformFieldSourceKind, UniformProjectContext},
     },
     resources, scene,
     ui::{
@@ -52,9 +49,9 @@ pub enum StateEvent {
     InspectBindGroup(BindGroupId),
     OpenViewport(TextureId),
     CreateUniform,
-    UpdateUniform(UniformId),
     DeleteUniform(UniformId),
-    CreateUniformField(UniformId, UniformFieldKind),
+    CreateUniformField(UniformId, UniformFieldSourceKind),
+    UpdateUniformFieldSource(UniformId, usize, UniformFieldSourceKind),
     DeleteUniformField(UniformId, usize),
     StartRename(RenameTarget),
     CancelRename,
@@ -161,32 +158,37 @@ impl State {
 
         let mut project = project::Project::new(camera);
 
-        let equirectengular_shader = project.register_shader(
+        let equirectangular_shader = project::shader::Shader::new(
             "Equirectengular Shader",
             resources::load_string("equirectangular.wgsl")
                 .await
                 .unwrap(),
         );
+        let equirectengular_shader_id = project.shaders.register(equirectangular_shader);
 
-        let hdr_shader = project.register_shader(
+        let hdr_shader = project::shader::Shader::new(
             "HDR Shader",
             resources::load_string("hdr.wgsl").await.unwrap(),
         );
+        let hdr_shader_id = project.shaders.register(hdr_shader);
 
-        let light_shader = project.register_shader(
+        let light_shader = project::shader::Shader::new(
             "Light Shader",
             resources::load_string("light.wgsl").await.unwrap(),
         );
+        let light_shader_id = project.shaders.register(light_shader);
 
-        let main_shader = project.register_shader(
+        let main_shader = project::shader::Shader::new(
             "Main Shader",
             resources::load_string("shader.wgsl").await.unwrap(),
         );
+        let main_shader_id = project.shaders.register(main_shader);
 
-        let sky_shader = project.register_shader(
+        let sky_shader = project::shader::Shader::new(
             "Sky Shader",
             resources::load_string("sky.wgsl").await.unwrap(),
         );
+        let sky_shader_id = project.shaders.register(sky_shader);
 
         let scene = scene::Scene::new(
             &device,
@@ -195,11 +197,11 @@ impl State {
             surface_format,
             &mut project,
             &mut egui_renderer,
-            equirectengular_shader,
-            hdr_shader,
-            light_shader,
-            main_shader,
-            sky_shader,
+            equirectengular_shader_id,
+            hdr_shader_id,
+            light_shader_id,
+            main_shader_id,
+            sky_shader_id,
         )
         .await?;
 
@@ -302,11 +304,13 @@ impl State {
                 StateEvent::CreateUniform => {
                     const DEFAULT_NAME: &str = "Uniform";
 
-                    let uniform_id = self.project.register_uniform(
+                    let uniform = project::uniform::Uniform::new(
                         &self.device,
                         DEFAULT_NAME,
                         UniformData::default(),
                     );
+
+                    let uniform_id = self.project.uniforms.register(uniform);
 
                     self.rename_state = Some(RenameState {
                         target: RenameTarget::Uniform(uniform_id),
@@ -314,7 +318,7 @@ impl State {
                     });
                 }
                 StateEvent::DeleteUniform(id) => {
-                    self.project.unregister_uniform(id);
+                    self.project.uniforms.unregister(id);
                 }
                 StateEvent::InspectBindGroup(bind_group_id) => self
                     .inspector_tree_pane
@@ -323,23 +327,28 @@ impl State {
                     let current_name = match rename_target {
                         RenameTarget::Uniform(uniform_id) => self
                             .project
-                            .get_uniform(uniform_id)
+                            .uniforms
+                            .get(uniform_id)
                             .map(|u| u.label.clone()),
                         RenameTarget::UniformField(uniform_id, index) => self
                             .project
-                            .get_uniform(uniform_id)
+                            .uniforms
+                            .get(uniform_id)
                             .map(|uniform| uniform.data.fields.get(index))
                             .flatten()
                             .map(|field| field.name.clone()),
                         RenameTarget::BindGroup(bind_group_id) => self
                             .project
-                            .get_bind_group(bind_group_id)
+                            .bind_groups
+                            .get(bind_group_id)
                             .map(|b| b.label.clone()),
-                        RenameTarget::Viewport(texture_id) => {
-                            self.project.get_texture(texture_id).map(|t| t.name.clone())
-                        }
+                        RenameTarget::Viewport(texture_id) => self
+                            .project
+                            .textures
+                            .get(texture_id)
+                            .map(|t| t.name.clone()),
                         RenameTarget::Shader(shader_id) => {
-                            self.project.get_shader(shader_id).map(|s| s.label.clone())
+                            self.project.shaders.get(shader_id).map(|s| s.label.clone())
                         }
                     };
 
@@ -356,38 +365,37 @@ impl State {
                 StateEvent::ApplyRename(rename_target, new_name) => {
                     self.rename_state = None;
                     match rename_target {
-                        RenameTarget::Uniform(uniform_id) => {
-                            if let Some(uniform) = self.project.get_uniform_mut(uniform_id) {
+                        RenameTarget::Uniform(id) => {
+                            if let Some(uniform) = self.project.uniforms.get_mut(id) {
                                 uniform.label = new_name;
                             }
                         }
-                        RenameTarget::UniformField(uniform_id, index) => {
-                            if let Some(uniform) = self.project.get_uniform_mut(uniform_id) {
+                        RenameTarget::UniformField(id, index) => {
+                            if let Some(uniform) = self.project.uniforms.get_mut(id) {
                                 if let Some(field) = uniform.data.fields.get_mut(index) {
                                     field.name = new_name;
                                 }
                             }
                         }
-                        RenameTarget::BindGroup(bind_group_id) => {
-                            if let Some(bind_group) = self.project.get_bind_group_mut(bind_group_id)
-                            {
+                        RenameTarget::BindGroup(id) => {
+                            if let Some(bind_group) = self.project.bind_groups.get_mut(id) {
                                 bind_group.label = new_name;
                             }
                         }
-                        RenameTarget::Viewport(texture_id) => {
-                            if let Some(viewport) = self.project.get_texture_mut(texture_id) {
+                        RenameTarget::Viewport(id) => {
+                            if let Some(viewport) = self.project.textures.get_mut(id) {
                                 viewport.name = new_name;
                             }
                         }
-                        RenameTarget::Shader(shader_id) => {
-                            if let Some(shader) = self.project.get_shader_mut(shader_id) {
+                        RenameTarget::Shader(id) => {
+                            if let Some(shader) = self.project.shaders.get_mut(id) {
                                 shader.label = new_name;
                             }
                         }
                     }
                 }
-                StateEvent::CreateUniformField(uniform_id, uniform_field_kind) => {
-                    if let Some(uniform) = self.project.get_uniform_mut(uniform_id) {
+                StateEvent::CreateUniformField(id, uniform_field_kind) => {
+                    if let Some(uniform) = self.project.uniforms.get_mut(id) {
                         const DEFAULT_NAME: &str = "Field";
 
                         let index = uniform.data.fields.len();
@@ -396,26 +404,29 @@ impl State {
                             uniform_field_kind,
                         ));
 
-                        uniform.upload(&self.device, &self.queue);
-
                         self.rename_state = Some(RenameState {
-                            target: RenameTarget::UniformField(uniform_id, index),
+                            target: RenameTarget::UniformField(id, index),
                             current_label: DEFAULT_NAME.to_string(),
                         });
                     }
                 }
-                StateEvent::DeleteUniformField(uniform_id, index) => {
-                    if let Some(uniform) = self.project.get_uniform_mut(uniform_id) {
+                StateEvent::UpdateUniformFieldSource(
+                    uniform_id,
+                    index,
+                    uniform_field_source_kind,
+                ) => {
+                    if let Some(uniform) = self.project.uniforms.get_mut(uniform_id) {
+                        let field = &mut uniform.data.fields[index];
+                        let name = field.name.clone();
+                        *field = UniformField::new_from_kind(name, uniform_field_source_kind);
+                    }
+                }
+                StateEvent::DeleteUniformField(id, index) => {
+                    if let Some(uniform) = self.project.uniforms.get_mut(id) {
                         let fields = &mut uniform.data.fields;
                         if index < fields.len() {
                             fields.remove(index);
-                            uniform.upload(&self.device, &self.queue);
                         }
-                    }
-                }
-                StateEvent::UpdateUniform(uniform_id) => {
-                    if let Some(uniform) = self.project.get_uniform_mut(uniform_id) {
-                        uniform.upload(&self.device, &self.queue);
                     }
                 }
                 StateEvent::InspectShader(shader_id) => {
@@ -423,8 +434,8 @@ impl State {
                         .add_inspector_pane(InspectorPane::Shader(shader_id));
                 }
                 StateEvent::ViewportEvent(texture_id, viewport_event) => {
-                    let _viewport = self.project.get_texture_mut(texture_id);
-                    let camera = self.project.get_camera_mut();
+                    let _viewport = self.project.textures.get_mut(texture_id);
+                    let camera = &mut self.project.camera;
 
                     match viewport_event {
                         ViewportEvent::Resize { size } => {
@@ -454,10 +465,16 @@ impl State {
         }
 
         self.camera_input
-            .update_camera(self.project.get_camera_mut(), dt);
+            .update_camera(&mut self.project.camera, dt);
 
-        self.scene
-            .update(&mut self.project, &self.device, &self.queue, dt);
+        let context = UniformProjectContext {
+            camera: &self.project.camera,
+        };
+        for (_, uniform) in self.project.uniforms.list_mut() {
+            uniform.update(&context, &self.device, &self.queue);
+        }
+
+        self.scene.update(&mut self.project, dt);
 
         self.scene.render(&mut encoder, &self.project);
 

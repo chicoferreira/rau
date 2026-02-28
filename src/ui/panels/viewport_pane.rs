@@ -1,7 +1,4 @@
-use crate::{
-    project::{self, texture::TextureId},
-    ui::pane::StateSnapshot,
-};
+use crate::{project::TextureId, ui::pane::StateSnapshot};
 
 pub struct ViewportTreePane {
     tree: egui_tiles::Tree<ViewportPane>,
@@ -20,7 +17,7 @@ impl ViewportTreePane {
         self.tree.ui(behavior, ui);
     }
 
-    pub fn add_viewport(&mut self, texture_id: project::texture::TextureId) {
+    pub fn add_viewport(&mut self, texture_id: TextureId) {
         let child = self.tree.tiles.insert_pane(ViewportPane { texture_id });
 
         if let Some(root) = self.tree.root {
@@ -64,7 +61,8 @@ impl<'a> egui_tiles::Behavior<ViewportPane> for StateSnapshot<'a> {
     ) -> egui_tiles::UiResponse {
         let texture = self
             .project
-            .get_texture(pane.texture_id)
+            .textures
+            .get(pane.texture_id)
             .expect("texture must exist");
 
         let events = crate::ui::components::viewport::ui(ui, texture.egui_id, texture.size());
@@ -75,7 +73,8 @@ impl<'a> egui_tiles::Behavior<ViewportPane> for StateSnapshot<'a> {
 
     fn tab_title_for_pane(&mut self, pane: &ViewportPane) -> egui::WidgetText {
         self.project
-            .get_texture(pane.texture_id)
+            .textures
+            .get(pane.texture_id)
             .map(|texture| texture.name.as_str().into())
             .unwrap_or("Empty Viewport".into())
     }

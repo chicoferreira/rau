@@ -1,6 +1,6 @@
 use egui::TextEdit;
 
-use crate::{project::shader::ShaderId, ui::pane::StateSnapshot};
+use crate::{project::ShaderId, ui::pane::StateSnapshot};
 
 impl StateSnapshot<'_> {
     pub fn shader_inspector_ui(&mut self, ui: &mut egui::Ui, shader_id: ShaderId) {
@@ -9,8 +9,8 @@ impl StateSnapshot<'_> {
                 .auto_shrink([false, false])
                 .show(ui, |ui| {
                     ui.take_available_space();
-                    let shader = self.project.get_shader_mut(shader_id).unwrap();
-                    
+                    let shader = self.project.shaders.get_mut(shader_id).unwrap();
+
                     let mut no_wrap_layouter =
                         |ui: &egui::Ui, text: &dyn egui::TextBuffer, _wrap_width: f32| {
                             let text_color = ui.visuals().widgets.inactive.text_color();

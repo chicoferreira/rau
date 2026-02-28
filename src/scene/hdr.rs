@@ -14,7 +14,7 @@ impl HdrPipeline {
         hdr_texture: &texture::Texture,
         output_format: wgpu::TextureFormat,
         project: &project::Project,
-        hdr_shader_id: project::shader::ShaderId,
+        hdr_shader_id: project::ShaderId,
     ) -> anyhow::Result<Self> {
         let layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("Hdr::layout"),
@@ -40,7 +40,7 @@ impl HdrPipeline {
 
         let bind_group = Self::create_bind_group(device, &layout, hdr_texture);
 
-        let shader = project.get_shader(hdr_shader_id).unwrap();
+        let shader = project.shaders.get(hdr_shader_id).unwrap();
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: None,
             bind_group_layouts: &[&layout],
