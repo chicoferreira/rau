@@ -6,9 +6,7 @@ use crate::{
 pub struct TextureEntry {
     pub name: String,
     pub texture: texture::Texture,
-    pub texture_format: wgpu::TextureFormat,
     pub egui_id: egui::TextureId,
-    size: ui::Size2d,
 }
 
 #[allow(dead_code)]
@@ -30,14 +28,8 @@ impl TextureEntry {
         TextureEntry {
             name,
             texture,
-            texture_format,
             egui_id,
-            size,
         }
-    }
-
-    pub fn size(&self) -> ui::Size2d {
-        self.size
     }
 
     pub fn resize(
@@ -46,9 +38,9 @@ impl TextureEntry {
         device: &wgpu::Device,
         egui_renderer: &mut ui::renderer::EguiRenderer,
     ) {
-        self.size = size;
+        let texture_format = self.texture.texture.format();
         self.texture =
-            texture::Texture::create_2d_texture(device, &self.name, size, self.texture_format);
+            texture::Texture::create_2d_texture(device, &self.name, size, texture_format);
 
         egui_renderer.update_egui_texture(
             device,

@@ -32,7 +32,7 @@ impl RenderPassSpec<'_> {
             RenderPassTargetTextureFormat::UseExisting => &texture.view,
             RenderPassTargetTextureFormat::NewViewSrgb => {
                 &texture.texture.create_view(&wgpu::TextureViewDescriptor {
-                    format: Some(texture_entry.texture_format.add_srgb_suffix()),
+                    format: Some(texture_entry.texture.texture.format().add_srgb_suffix()),
                     ..Default::default()
                 })
             }

@@ -26,3 +26,12 @@ impl Size2d {
         self.height
     }
 }
+
+impl From<wgpu::Extent3d> for Size2d {
+    fn from(value: wgpu::Extent3d) -> Self {
+        Self {
+            width: value.width,
+            height: value.height,
+        }
+    }
+}

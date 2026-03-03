@@ -59,13 +59,17 @@ impl<'a> egui_tiles::Behavior<ViewportPane> for StateSnapshot<'a> {
         _tile_id: egui_tiles::TileId,
         pane: &mut ViewportPane,
     ) -> egui_tiles::UiResponse {
-        let texture = self
+        let texture_entry = self
             .project
             .textures
             .get(pane.texture_id)
             .expect("texture must exist");
 
-        let events = crate::ui::components::viewport::ui(ui, texture.egui_id, texture.size());
+        let events = crate::ui::components::viewport::ui(
+            ui,
+            texture_entry.egui_id,
+            texture_entry.texture.texture.size().into(),
+        );
         self.pending_events.extend(events);
 
         egui_tiles::UiResponse::None
