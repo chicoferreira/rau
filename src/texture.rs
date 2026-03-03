@@ -71,11 +71,11 @@ impl Texture {
         is_normal_map: bool,
     ) -> Result<Self> {
         let rgba = img.to_rgba8();
-        let dimensions = img.dimensions();
+        let (width, height) = img.dimensions();
 
         let size = wgpu::Extent3d {
-            width: dimensions.0,
-            height: dimensions.1,
+            width,
+            height,
             depth_or_array_layers: 1,
         };
         let format = if is_normal_map {
@@ -91,7 +91,6 @@ impl Texture {
             format,
             &[],
             usage,
-            wgpu::TextureDimension::D2,
             wgpu::FilterMode::Linear,
         );
 
@@ -105,8 +104,8 @@ impl Texture {
             &rgba,
             wgpu::TexelCopyBufferLayout {
                 offset: 0,
-                bytes_per_row: Some(4 * dimensions.0),
-                rows_per_image: Some(dimensions.1),
+                bytes_per_row: Some(4 * width),
+                rows_per_image: Some(height),
             },
             size,
         );
@@ -121,7 +120,6 @@ impl Texture {
         format: wgpu::TextureFormat,
         view_formats: &[wgpu::TextureFormat],
         usage: wgpu::TextureUsages,
-        dimension: wgpu::TextureDimension,
         mag_filter: wgpu::FilterMode,
     ) -> Self {
         let texture = device.create_texture(&wgpu::TextureDescriptor {
@@ -129,14 +127,19 @@ impl Texture {
             size,
             mip_level_count: 1,
             sample_count: 1,
-            dimension,
+            dimension: wgpu::TextureDimension::D2,
             format,
             usage,
             view_formats,
         });
 
-        let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
+        let view = texture.create_view(&wgpu::TextureViewDescriptor {
+            label,
+            ..Default::default()
+        });
+
         let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
+            label,
             address_mode_u: wgpu::AddressMode::ClampToEdge,
             address_mode_v: wgpu::AddressMode::ClampToEdge,
             address_mode_w: wgpu::AddressMode::ClampToEdge,
@@ -159,6 +162,12 @@ impl Texture {
         size: ui::Size2d,
         texture_format: wgpu::TextureFormat,
     ) -> Self {
+        let view_formats = if texture_format.is_srgb() {
+            vec![texture_format.remove_srgb_suffix()]
+        } else {
+            vec![]
+        };
+
         Self::create_texture(
             device,
             Some(name),
@@ -167,10 +176,9 @@ impl Texture {
                 height: size.height(),
                 depth_or_array_layers: 1,
             },
-            texture_format.remove_srgb_suffix(),
-            &[texture_format.add_srgb_suffix()],
+            texture_format,
+            &view_formats,
             wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::RENDER_ATTACHMENT,
-            wgpu::TextureDimension::D2,
             wgpu::FilterMode::Linear,
         )
     }

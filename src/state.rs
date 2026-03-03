@@ -117,19 +117,23 @@ impl State {
 
         log::info!("Available surface formats: {:?}", surface_caps.formats);
 
-        // Assume sRGB color profile
-        let surface_format = surface_caps
+        pub const EGUI_PREFERRED_SURFACE_FORMAT: wgpu::TextureFormat =
+            wgpu::TextureFormat::Rgba8Unorm;
+
+        let surface_format = if surface_caps
             .formats
-            .iter()
-            .find(|f| f.is_srgb())
-            .copied()
-            .unwrap_or(surface_caps.formats[0]);
+            .contains(&EGUI_PREFERRED_SURFACE_FORMAT)
+        {
+            EGUI_PREFERRED_SURFACE_FORMAT
+        } else {
+            anyhow::bail!("Surface capabilities does not include {EGUI_PREFERRED_SURFACE_FORMAT:?}")
+        };
 
         log::info!("Selected surface format: {:?}", surface_format);
 
         let config = wgpu::SurfaceConfiguration {
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
-            format: surface_format.remove_srgb_suffix(),
+            format: surface_format,
             width: size.width.max(1),
             height: size.height.max(1),
             present_mode: surface_caps.present_modes[0],
@@ -138,8 +142,7 @@ impl State {
             desired_maximum_frame_latency: 2,
         };
 
-        let mut egui_renderer =
-            ui::renderer::EguiRenderer::new(&device, config.format.add_srgb_suffix(), &window);
+        let mut egui_renderer = ui::renderer::EguiRenderer::new(&device, config.format, &window);
 
         let size = ui::Size2d::new(config.width, config.height);
 
@@ -194,7 +197,6 @@ impl State {
             &device,
             &queue,
             size,
-            surface_format,
             &mut project,
             &mut egui_renderer,
             equirectengular_shader_id,
@@ -252,10 +254,9 @@ impl State {
 
         let output = self.surface.get_current_texture()?;
 
-        let view = output.texture.create_view(&wgpu::TextureViewDescriptor {
-            format: Some(self.config.format.add_srgb_suffix()),
-            ..Default::default()
-        });
+        let view = output
+            .texture
+            .create_view(&wgpu::TextureViewDescriptor::default());
 
         let mut encoder = self
             .device
@@ -485,12 +486,6 @@ impl State {
             &mut encoder,
             &view,
             &screen_descriptor,
-            wgpu::Color {
-                r: 0.02,
-                g: 0.02,
-                b: 0.02,
-                a: 1.0,
-            },
         );
 
         self.queue.submit(std::iter::once(encoder.finish()));
@@ -575,7 +570,7 @@ pub fn create_render_pipeline(
             module: &shader,
             entry_point: Some("fs_main"),
             targets: &[Some(wgpu::ColorTargetState {
-                format: color_format.add_srgb_suffix(),
+                format: color_format,
                 blend: Some(wgpu::BlendState {
                     alpha: wgpu::BlendComponent::REPLACE,
                     color: wgpu::BlendComponent::REPLACE,

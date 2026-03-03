@@ -115,7 +115,6 @@ impl HdrLoader {
             self.texture_format,
             &[],
             wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
-            wgpu::TextureDimension::D2,
             wgpu::FilterMode::Linear,
         );
 

@@ -11,7 +11,8 @@ use crate::{
     },
     render, resources,
     scene::hdr::HdrPipeline,
-    state, texture, ui,
+    state, texture,
+    ui::{self},
 };
 use cgmath::{InnerSpace, Rotation3, Vector3, Zero};
 
@@ -122,7 +123,6 @@ impl Scene {
         device: &wgpu::Device,
         queue: &wgpu::Queue,
         size: ui::Size2d,
-        target_texture_format: wgpu::TextureFormat,
         project: &mut project::Project,
         egui_renderer: &mut ui::renderer::EguiRenderer,
         equirectangular_shader_id: project::ShaderId,
@@ -257,10 +257,12 @@ impl Scene {
         let hdr_texture_id = project.textures.register(hdr_texture);
         let hdr_texture = &project.textures.get(hdr_texture_id).unwrap().texture;
 
+        let viewport_texture_format = wgpu::TextureFormat::Rgba8UnormSrgb;
+
         let hdr = hdr::HdrPipeline::new(
             device,
             hdr_texture,
-            target_texture_format,
+            viewport_texture_format,
             &project,
             hdr_shader_id,
         )?;
@@ -383,7 +385,7 @@ impl Scene {
             "Viewport Texture",
             device,
             size,
-            target_texture_format,
+            viewport_texture_format,
             egui_renderer,
         );
         let viewport_texture_id = project.textures.register(viewport_texture);
@@ -452,7 +454,6 @@ impl Scene {
             label: Some("Main Render Pass"),
             target_spec: render::RenderPassTargetSpec {
                 texture_id: self.hdr_texture_id,
-                texture_format: render::RenderPassTargetTextureFormat::UseExisting,
                 load_operation: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
             },
             depth_spec: Some(render::RenderPassDepthSpec {
@@ -511,7 +512,6 @@ impl Scene {
             label: Some("HDR Pass"),
             target_spec: render::RenderPassTargetSpec {
                 texture_id: self.viewport_texture_id,
-                texture_format: render::RenderPassTargetTextureFormat::NewViewSrgb,
                 load_operation: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
             },
             depth_spec: None,

@@ -51,7 +51,7 @@ impl HdrPipeline {
             "hdr pipeline",
             device,
             &pipeline_layout,
-            output_format.add_srgb_suffix(),
+            output_format,
             None,
             &[],
             wgpu::PrimitiveTopology::TriangleList,

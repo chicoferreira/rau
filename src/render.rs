@@ -26,22 +26,10 @@ impl RenderPassSpec<'_> {
             .get(self.target_spec.texture_id)
             .expect("deal with this later");
 
-        let texture = &texture_entry.texture;
-
-        let view = match self.target_spec.texture_format {
-            RenderPassTargetTextureFormat::UseExisting => &texture.view,
-            RenderPassTargetTextureFormat::NewViewSrgb => {
-                &texture.texture.create_view(&wgpu::TextureViewDescriptor {
-                    format: Some(texture_entry.texture.texture.format().add_srgb_suffix()),
-                    ..Default::default()
-                })
-            }
-        };
-
         let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: self.label,
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                view,
+                view: &texture_entry.texture.view,
                 resolve_target: None,
                 ops: wgpu::Operations {
                     load: self.target_spec.load_operation,
@@ -72,13 +60,7 @@ impl RenderPassSpec<'_> {
 
 pub struct RenderPassTargetSpec {
     pub texture_id: project::TextureId,
-    pub texture_format: RenderPassTargetTextureFormat,
     pub load_operation: wgpu::LoadOp<wgpu::Color>,
-}
-
-pub enum RenderPassTargetTextureFormat {
-    UseExisting,
-    NewViewSrgb,
 }
 
 pub struct RenderPassDepthSpec<'a> {

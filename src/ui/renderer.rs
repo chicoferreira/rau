@@ -76,7 +76,6 @@ impl EguiRenderer {
         encoder: &mut wgpu::CommandEncoder,
         view: &wgpu::TextureView,
         screen_descriptor: &egui_wgpu::ScreenDescriptor,
-        clear_color: wgpu::Color,
     ) {
         for (id, image_delta) in &frame.textures_delta.set {
             self.renderer
@@ -92,7 +91,13 @@ impl EguiRenderer {
                 depth_slice: None,
                 resolve_target: None,
                 ops: wgpu::Operations {
-                    load: wgpu::LoadOp::Clear(clear_color),
+                    // TODO: change to egui actual background color
+                    load: wgpu::LoadOp::Clear(wgpu::Color {
+                        r: 27.0 / 255.0,
+                        g: 27.0 / 255.0,
+                        b: 27.0 / 255.0,
+                        a: 1.0,
+                    }),
                     store: wgpu::StoreOp::Store,
                 },
             })],
