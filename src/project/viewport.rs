@@ -3,14 +3,14 @@ use crate::{
     ui::{self},
 };
 
-pub struct TextureEntry {
+pub struct Viewport {
     pub name: String,
     pub texture: texture::Texture,
     pub egui_id: egui::TextureId,
 }
 
 #[allow(dead_code)]
-impl TextureEntry {
+impl Viewport {
     fn egui_texture_view(texture: &texture::Texture, label: &str) -> wgpu::TextureView {
         texture.texture.create_view(&wgpu::TextureViewDescriptor {
             label: Some(&format!("{label} egui texture view")),
@@ -23,13 +23,14 @@ impl TextureEntry {
     pub fn new(
         name: impl Into<String>,
         device: &wgpu::Device,
-        size: ui::Size2d,
+        initial_size: ui::Size2d,
         texture_format: wgpu::TextureFormat,
         egui_renderer: &mut ui::renderer::EguiRenderer,
-    ) -> TextureEntry {
+    ) -> Viewport {
         let name = name.into();
 
-        let texture = texture::Texture::create_2d_texture(device, &name, size, texture_format);
+        let texture =
+            texture::Texture::create_2d_texture(device, &name, initial_size, texture_format);
         let egui_texture_view = Self::egui_texture_view(&texture, &name);
 
         let egui_id = egui_renderer.register_egui_texture(
@@ -38,7 +39,7 @@ impl TextureEntry {
             wgpu::FilterMode::Linear,
         );
 
-        TextureEntry {
+        Viewport {
             name,
             texture,
             egui_id,

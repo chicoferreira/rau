@@ -21,15 +21,15 @@ pub struct RenderPassSpec<'a> {
 
 impl RenderPassSpec<'_> {
     pub fn submit(&self, encoder: &mut wgpu::CommandEncoder, project: &project::Project) {
-        let texture_entry = project
-            .textures
-            .get(self.target_spec.texture_id)
+        let viewport = project
+            .viewports
+            .get(self.target_spec.viewport_id)
             .expect("deal with this later");
 
         let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: self.label,
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                view: &texture_entry.texture.view,
+                view: &viewport.texture.view,
                 resolve_target: None,
                 ops: wgpu::Operations {
                     load: self.target_spec.load_operation,
@@ -59,12 +59,12 @@ impl RenderPassSpec<'_> {
 }
 
 pub struct RenderPassTargetSpec {
-    pub texture_id: project::TextureId,
+    pub viewport_id: project::ViewportId,
     pub load_operation: wgpu::LoadOp<wgpu::Color>,
 }
 
 pub struct RenderPassDepthSpec<'a> {
-    pub texture: &'a wgpu::TextureView, // TODO: change this to texture in a registry
+    pub texture: &'a wgpu::TextureView, // TODO: change this to viewport in a registry
     pub load_operation: wgpu::LoadOp<f32>,
 }
 

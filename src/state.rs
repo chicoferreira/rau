@@ -10,7 +10,7 @@ use winit::{
 use crate::{
     camera::{Camera, CameraInput},
     project::{
-        self, BindGroupId, ShaderId, TextureId, UniformId,
+        self, BindGroupId, ShaderId, UniformId, ViewportId,
         uniform::{UniformData, UniformField, UniformFieldSourceKind, UniformProjectContext},
     },
     resources, scene,
@@ -44,10 +44,10 @@ pub enum ViewportEvent {
 
 #[derive(Debug, Clone)]
 pub enum StateEvent {
-    ViewportEvent(TextureId, ViewportEvent),
+    ViewportEvent(ViewportId, ViewportEvent),
     InspectUniform(UniformId),
     InspectBindGroup(BindGroupId),
-    OpenViewport(TextureId),
+    OpenViewport(ViewportId),
     CreateUniform,
     DeleteUniform(UniformId),
     CreateUniformField(UniformId, UniformFieldSourceKind),
@@ -210,7 +210,7 @@ impl State {
         let inspector_tree_pane = InspectorTreePane::default();
         let mut viewport_tree_pane = ViewportTreePane::default();
 
-        viewport_tree_pane.add_viewport(scene.viewport_texture_id);
+        viewport_tree_pane.add_viewport(scene.output_viewport_id);
 
         Ok(Self {
             surface,
@@ -299,8 +299,8 @@ impl State {
                     self.inspector_tree_pane
                         .add_inspector_pane(InspectorPane::Uniform(id));
                 }
-                StateEvent::OpenViewport(texture_id) => {
-                    self.viewport_tree_pane.add_viewport(texture_id);
+                StateEvent::OpenViewport(viewport_id) => {
+                    self.viewport_tree_pane.add_viewport(viewport_id);
                 }
                 StateEvent::CreateUniform => {
                     const DEFAULT_NAME: &str = "Uniform";
@@ -343,10 +343,10 @@ impl State {
                             .bind_groups
                             .get(bind_group_id)
                             .map(|b| b.label.clone()),
-                        RenameTarget::Viewport(texture_id) => self
+                        RenameTarget::Viewport(viewport_id) => self
                             .project
-                            .textures
-                            .get(texture_id)
+                            .viewports
+                            .get(viewport_id)
                             .map(|t| t.name.clone()),
                         RenameTarget::Shader(shader_id) => {
                             self.project.shaders.get(shader_id).map(|s| s.label.clone())
@@ -384,7 +384,7 @@ impl State {
                             }
                         }
                         RenameTarget::Viewport(id) => {
-                            if let Some(viewport) = self.project.textures.get_mut(id) {
+                            if let Some(viewport) = self.project.viewports.get_mut(id) {
                                 viewport.name = new_name;
                             }
                         }
@@ -434,8 +434,8 @@ impl State {
                     self.inspector_tree_pane
                         .add_inspector_pane(InspectorPane::Shader(shader_id));
                 }
-                StateEvent::ViewportEvent(texture_id, viewport_event) => {
-                    let _viewport = self.project.textures.get_mut(texture_id);
+                StateEvent::ViewportEvent(viewport_id, viewport_event) => {
+                    let _viewport = self.project.viewports.get_mut(viewport_id);
                     let camera = &mut self.project.camera;
 
                     match viewport_event {
@@ -534,7 +534,7 @@ impl State {
                 (KeyCode::Escape, ElementState::Pressed) => event_loop.exit(),
                 (key_code, element_state) => {
                     self.pending_events.push(StateEvent::ViewportEvent(
-                        TextureId::from(KeyData::from_ffi(0)), // TODO: fix me
+                        ViewportId::from(KeyData::from_ffi(0)), // TODO: fix me
                         ViewportEvent::Keyboard {
                             key_code,
                             element_state,

@@ -1,7 +1,7 @@
 use slotmap::KeyData;
 
 use crate::{
-    project::TextureId,
+    project::ViewportId,
     state::{self, StateEvent, ViewportEvent},
     ui,
 };
@@ -20,10 +20,10 @@ pub fn ui(
     let requested_height = (size_points.y * pixels_per_point).round() as u32;
 
     if requested_width != size.width() || requested_height != size.height() {
-        let texture_id = TextureId::from(KeyData::from_ffi(0)); // TODO: fix me
+        let viewport_id = ViewportId::from(KeyData::from_ffi(0)); // TODO: fix me
         let size = ui::Size2d::new(requested_width, requested_height);
         events.push(StateEvent::ViewportEvent(
-            texture_id,
+            viewport_id,
             ViewportEvent::Resize { size },
         ));
     }
@@ -37,9 +37,9 @@ pub fn ui(
         let delta_points = ui.input(|i| i.pointer.delta());
         if delta_points.x != 0.0 || delta_points.y != 0.0 {
             let delta_px = delta_points * pixels_per_point;
-            let texture_id = TextureId::from(KeyData::from_ffi(0)); // TODO: fix me
+            let viewport_id = ViewportId::from(KeyData::from_ffi(0)); // TODO: fix me
             events.push(StateEvent::ViewportEvent(
-                texture_id,
+                viewport_id,
                 ViewportEvent::Drag {
                     mouse_dx: delta_px.x,
                     mouse_dy: delta_px.y,
@@ -51,9 +51,9 @@ pub fn ui(
     if response.hovered() {
         let scroll_points = ui.input(|i| i.smooth_scroll_delta.y);
         if scroll_points != 0.0 {
-            let texture_id = TextureId::from(KeyData::from_ffi(0)); // TODO: fix me
+            let viewport_id = ViewportId::from(KeyData::from_ffi(0)); // TODO: fix me
             events.push(StateEvent::ViewportEvent(
-                texture_id,
+                viewport_id,
                 ViewportEvent::Scroll {
                     delta_y_px: scroll_points * pixels_per_point,
                 },

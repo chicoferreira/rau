@@ -114,8 +114,8 @@ pub struct Scene {
     hdr: hdr::HdrPipeline,
     environment_bind_group: wgpu::BindGroup,
     sky_pipeline: wgpu::RenderPipeline,
-    hdr_texture_id: project::TextureId,
-    pub viewport_texture_id: project::TextureId,
+    hdr_viewport_id: project::ViewportId,
+    pub output_viewport_id: project::ViewportId,
 }
 
 impl Scene {
@@ -247,15 +247,15 @@ impl Scene {
                 .await
                 .unwrap();
 
-        let hdr_texture = project::texture::TextureEntry::new(
-            "HDR BUffer",
+        let hdr_viewport = project::viewport::Viewport::new(
+            "HDR Buffer",
             device,
             size,
             HdrPipeline::RENDER_FORMAT,
             egui_renderer,
         );
-        let hdr_texture_id = project.textures.register(hdr_texture);
-        let hdr_texture = &project.textures.get(hdr_texture_id).unwrap().texture;
+        let hdr_viewport_id = project.viewports.register(hdr_viewport);
+        let hdr_texture = &project.viewports.get(hdr_viewport_id).unwrap().texture;
 
         let viewport_texture_format = wgpu::TextureFormat::Rgba8UnormSrgb;
 
@@ -381,14 +381,14 @@ impl Scene {
             )
         };
 
-        let viewport_texture = project::texture::TextureEntry::new(
+        let viewport_texture = project::viewport::Viewport::new(
             "Viewport Texture",
             device,
             size,
             viewport_texture_format,
             egui_renderer,
         );
-        let viewport_texture_id = project.textures.register(viewport_texture);
+        let viewport_id = project.viewports.register(viewport_texture);
 
         Ok(Scene {
             render_pipeline,
@@ -403,8 +403,8 @@ impl Scene {
             hdr,
             environment_bind_group,
             sky_pipeline,
-            hdr_texture_id,
-            viewport_texture_id,
+            hdr_viewport_id,
+            output_viewport_id: viewport_id,
         })
     }
 
@@ -434,13 +434,13 @@ impl Scene {
         device: &wgpu::Device,
         egui_renderer: &mut ui::renderer::EguiRenderer,
     ) {
-        if let Some(hdr_texture) = project.textures.get_mut(self.hdr_texture_id) {
-            hdr_texture.resize(size, device, egui_renderer);
-            self.hdr.update_texture(device, &hdr_texture.texture);
+        if let Some(viewport) = project.viewports.get_mut(self.hdr_viewport_id) {
+            viewport.resize(size, device, egui_renderer);
+            self.hdr.update_texture(device, &viewport.texture);
         }
 
-        if let Some(viewport_texture) = project.textures.get_mut(self.viewport_texture_id) {
-            viewport_texture.resize(size, device, egui_renderer);
+        if let Some(viewport) = project.viewports.get_mut(self.output_viewport_id) {
+            viewport.resize(size, device, egui_renderer);
         }
 
         self.depth_texture = texture::Texture::create_depth_texture(device, size, "Depth Buffer");
@@ -453,7 +453,7 @@ impl Scene {
         let main_render_pass = render::RenderPassSpec {
             label: Some("Main Render Pass"),
             target_spec: render::RenderPassTargetSpec {
-                texture_id: self.hdr_texture_id,
+                viewport_id: self.hdr_viewport_id,
                 load_operation: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
             },
             depth_spec: Some(render::RenderPassDepthSpec {
@@ -511,7 +511,7 @@ impl Scene {
         let hdr_pass = render::RenderPassSpec {
             label: Some("HDR Pass"),
             target_spec: render::RenderPassTargetSpec {
-                texture_id: self.viewport_texture_id,
+                viewport_id: self.output_viewport_id,
                 load_operation: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
             },
             depth_spec: None,

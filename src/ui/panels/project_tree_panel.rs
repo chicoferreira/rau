@@ -3,7 +3,7 @@ use egui_ltreeview::{Action, NodeBuilder, NodeConfig, TreeView};
 use std::hash::Hash;
 
 use crate::{
-    project::{BindGroupId, ShaderId, TextureId, UniformId},
+    project::{BindGroupId, ShaderId, ViewportId, UniformId},
     state::StateEvent,
     ui::{
         components::project_leaf_node::ProjectLeafNode, pane::StateSnapshot, rename::RenameTarget,
@@ -17,7 +17,7 @@ pub enum TreeNodeId {
     BindGroupFolder,
     BindGroup(BindGroupId),
     ViewportFolder,
-    Viewport(TextureId),
+    Viewport(ViewportId),
     ShaderFolder,
     Shader(ShaderId),
 }
@@ -67,7 +67,7 @@ pub fn ui(state: &mut StateSnapshot, ui: &mut egui::Ui) -> Response {
             builder.close_dir();
 
             builder.dir(TreeNodeId::ViewportFolder, "Viewports");
-            for (id, viewport) in state.project.textures.list() {
+            for (id, viewport) in state.project.viewports.list() {
                 let node = ProjectLeafNode::new(TreeNodeId::Viewport(id), &viewport.name)
                     .with_rename_target(RenameTarget::Viewport(id))
                     .with_inspect_event(StateEvent::OpenViewport(id))

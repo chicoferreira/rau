@@ -1,4 +1,4 @@
-use crate::project::{Project, TextureId, UniformId};
+use crate::project::{Project, UniformId, ViewportId};
 
 pub struct BindGroup {
     pub(crate) label: String,
@@ -52,17 +52,17 @@ pub struct BindGroupEntry {
 impl BindGroupEntry {
     pub fn into_bind_group_entry<'a>(&self, project: &'a Project) -> wgpu::BindGroupEntry<'a> {
         let resource = match self.resource {
-            BindGroupResource::Texture { texture_id, .. } => {
+            BindGroupResource::Texture { viewport_id, .. } => {
                 let texture = project
-                    .textures
-                    .get(texture_id)
+                    .viewports
+                    .get(viewport_id)
                     .expect("deal with this later");
                 wgpu::BindingResource::TextureView(&texture.texture.view)
             }
-            BindGroupResource::Sampler { texture_id, .. } => {
+            BindGroupResource::Sampler { viewport_id, .. } => {
                 let texture = project
-                    .textures
-                    .get(texture_id)
+                    .viewports
+                    .get(viewport_id)
                     .expect("deal with this later");
                 wgpu::BindingResource::Sampler(&texture.texture.sampler)
             }
@@ -97,11 +97,11 @@ impl From<BindGroupEntry> for wgpu::BindGroupLayoutEntry {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum BindGroupResource {
     Texture {
-        texture_id: TextureId,
+        viewport_id: ViewportId,
         view_dimension: wgpu::TextureViewDimension,
     },
     Sampler {
-        texture_id: TextureId,
+        viewport_id: ViewportId,
         sampler_binding_type: wgpu::SamplerBindingType,
     },
     Uniform(UniformId),
