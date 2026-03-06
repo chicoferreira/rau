@@ -59,24 +59,25 @@ fn resource_detail_label(
 ) -> String {
     match resource {
         crate::project::bindgroup::BindGroupResource::Texture {
-            viewport_id: texture_id,
             view_dimension,
+            texture_view_id,
+            ..
         } => {
             let texture_name = project
-                .viewports
-                .get(texture_id)
-                .map(|texture| texture.name.to_owned())
+                .texture_views
+                .get(texture_view_id)
+                .map(|texture| texture.label.to_owned())
                 .unwrap_or_else(|| "missing texture".to_owned());
             format!("texture: {texture_name}, view: {view_dimension:?}")
         }
         crate::project::bindgroup::BindGroupResource::Sampler {
-            viewport_id: texture_id,
+            sampler_id,
             sampler_binding_type,
         } => {
             let texture_name = project
-                .viewports
-                .get(texture_id)
-                .map(|texture| texture.name.to_owned())
+                .samplers
+                .get(sampler_id)
+                .map(|texture| texture.label.to_owned())
                 .unwrap_or_else(|| "missing texture".to_owned());
             format!("sampler: {texture_name}, type: {sampler_binding_type:?}")
         }

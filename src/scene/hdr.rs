@@ -1,9 +1,14 @@
-use crate::{project, state, texture};
+use crate::{
+    project::{
+        self, BindGroupId, SamplerId, TextureViewId,
+        bindgroup::{BindGroup, BindGroupEntry, BindGroupResource},
+    },
+    state,
+};
 
 pub struct HdrPipeline {
     pipeline: wgpu::RenderPipeline,
-    bind_group: wgpu::BindGroup,
-    layout: wgpu::BindGroupLayout,
+    pub bind_group_id: BindGroupId,
 }
 
 impl HdrPipeline {
@@ -11,41 +16,43 @@ impl HdrPipeline {
 
     pub fn new(
         device: &wgpu::Device,
-        hdr_texture: &texture::Texture,
+        project: &mut project::Project,
+        output_texture_view_id: TextureViewId,
         output_format: wgpu::TextureFormat,
-        project: &project::Project,
+        sampler_id: SamplerId,
         hdr_shader_id: project::ShaderId,
     ) -> anyhow::Result<Self> {
-        let layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: Some("Hdr::layout"),
-            entries: &[
-                wgpu::BindGroupLayoutEntry {
+        let bind_group = BindGroup::new(
+            project,
+            device,
+            "HDR Bind Group",
+            vec![
+                BindGroupEntry {
                     binding: 0,
-                    visibility: wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Texture {
-                        sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                    resource: BindGroupResource::Texture {
+                        texture_view_id: output_texture_view_id,
                         view_dimension: wgpu::TextureViewDimension::D2,
-                        multisampled: false,
+                        sample_type: wgpu::TextureSampleType::Float { filterable: true },
                     },
-                    count: None,
                 },
-                wgpu::BindGroupLayoutEntry {
+                BindGroupEntry {
                     binding: 1,
-                    visibility: wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
-                    count: None,
+                    resource: BindGroupResource::Sampler {
+                        sampler_id,
+                        sampler_binding_type: wgpu::SamplerBindingType::Filtering,
+                    },
                 },
             ],
-        });
-
-        let bind_group = Self::create_bind_group(device, &layout, hdr_texture);
+        );
 
         let shader = project.shaders.get(hdr_shader_id).unwrap();
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: None,
-            bind_group_layouts: &[&layout],
+            bind_group_layouts: &[bind_group.inner_layout()],
             immediate_size: 0,
         });
+
+        let bind_group_id = project.bind_groups.register(bind_group);
 
         let pipeline = state::create_render_pipeline(
             "hdr pipeline",
@@ -60,41 +67,11 @@ impl HdrPipeline {
 
         Ok(Self {
             pipeline,
-            bind_group,
-            layout,
+            bind_group_id,
         })
-    }
-
-    fn create_bind_group(
-        device: &wgpu::Device,
-        layout: &wgpu::BindGroupLayout,
-        texture: &texture::Texture,
-    ) -> wgpu::BindGroup {
-        device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("Hdr::bind_group"),
-            layout,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: wgpu::BindingResource::TextureView(&texture.view),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: wgpu::BindingResource::Sampler(&texture.sampler),
-                },
-            ],
-        })
-    }
-
-    pub fn update_texture(&mut self, device: &wgpu::Device, hdr_texture: &texture::Texture) {
-        self.bind_group = Self::create_bind_group(device, &self.layout, hdr_texture);
     }
 
     pub fn pipeline(&self) -> &wgpu::RenderPipeline {
         &self.pipeline
-    }
-
-    pub fn bind_group(&self) -> &wgpu::BindGroup {
-        &self.bind_group
     }
 }

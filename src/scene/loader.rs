@@ -1,7 +1,10 @@
 use std::io::Cursor;
 
 use crate::{
-    project::{Project, ShaderId},
+    project::{
+        Project, ShaderId, TextureId,
+        texture::{Texture, TextureProjectView, TextureSource},
+    },
     texture,
 };
 
@@ -71,12 +74,12 @@ impl HdrLoader {
 
     pub fn from_equirectangular_bytes(
         &self,
+        project: &mut Project,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
         data: &[u8],
         dst_size: u32,
-        label: Option<&str>,
-    ) -> anyhow::Result<texture::Texture> {
+    ) -> anyhow::Result<TextureId> {
         let hdr_decoder = image::codecs::hdr::HdrDecoder::new(Cursor::new(data))?;
         let meta = hdr_decoder.metadata();
 
@@ -134,26 +137,40 @@ impl HdrLoader {
             size,
         );
 
-        let dst = texture::Texture::create_2d_cube_texture(
+        let dst_texture = Texture::new(
+            &TextureProjectView {
+                viewports: &project.viewports,
+                dimensions: &project.dimensions,
+            },
             device,
-            dst_size,
-            dst_size,
+            queue,
+            "Sky Texture".to_string(),
             self.texture_format,
-            // We are going to write to `dst` texture so we
-            // need to use a `STORAGE_BINDING`.
-            wgpu::TextureUsages::STORAGE_BINDING | wgpu::TextureUsages::TEXTURE_BINDING,
-            wgpu::FilterMode::Nearest,
-            label,
+            wgpu::TextureUsages::STORAGE_BINDING
+                | wgpu::TextureUsages::TEXTURE_BINDING
+                | wgpu::TextureUsages::COPY_DST,
+            TextureSource::Manual {
+                size: wgpu::Extent3d {
+                    width: dst_size,
+                    height: dst_size,
+                    depth_or_array_layers: 6,
+                },
+            },
         );
 
-        let dst_view = dst.texture.create_view(&wgpu::TextureViewDescriptor {
-            label,
-            dimension: Some(wgpu::TextureViewDimension::D2Array),
-            ..Default::default()
-        });
+        // we can create without adding to the project because this D2Array will be only used by the shader
+        let dst_texture_view = dst_texture
+            .inner()
+            .create_view(&wgpu::TextureViewDescriptor {
+                label: Some("compute shader destination texture view"),
+                dimension: Some(wgpu::TextureViewDimension::D2Array),
+                ..Default::default()
+            });
+
+        let dst_texture_id = project.textures.register(dst_texture);
 
         let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label,
+            label: Some("compute shader bind group"),
             layout: &self.equirect_layout,
             entries: &[
                 wgpu::BindGroupEntry {
@@ -162,14 +179,14 @@ impl HdrLoader {
                 },
                 wgpu::BindGroupEntry {
                     binding: 1,
-                    resource: wgpu::BindingResource::TextureView(&dst_view),
+                    resource: wgpu::BindingResource::TextureView(&dst_texture_view),
                 },
             ],
         });
 
         let mut encoder = device.create_command_encoder(&Default::default());
         let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
-            label,
+            label: Some("compute shader pass"),
             timestamp_writes: None,
         });
 
@@ -182,6 +199,6 @@ impl HdrLoader {
 
         queue.submit([encoder.finish()]);
 
-        Ok(dst)
+        Ok(dst_texture_id)
     }
 }

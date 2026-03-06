@@ -1,4 +1,7 @@
-use crate::{model, project};
+use crate::{
+    model,
+    project::{self, BindGroupId},
+};
 
 pub struct RenderPassSpecSet<'a> {
     pub render_passes: Vec<RenderPassSpec<'a>>,
@@ -21,15 +24,15 @@ pub struct RenderPassSpec<'a> {
 
 impl RenderPassSpec<'_> {
     pub fn submit(&self, encoder: &mut wgpu::CommandEncoder, project: &project::Project) {
-        let viewport = project
-            .viewports
-            .get(self.target_spec.viewport_id)
+        let viewport_texture_view = project
+            .texture_views
+            .get(self.target_spec.texture_view_id)
             .expect("deal with this later");
 
         let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: self.label,
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                view: &viewport.texture.view,
+                view: viewport_texture_view.inner(),
                 resolve_target: None,
                 ops: wgpu::Operations {
                     load: self.target_spec.load_operation,
@@ -59,7 +62,7 @@ impl RenderPassSpec<'_> {
 }
 
 pub struct RenderPassTargetSpec {
-    pub viewport_id: project::ViewportId,
+    pub texture_view_id: project::TextureViewId,
     pub load_operation: wgpu::LoadOp<wgpu::Color>,
 }
 
@@ -71,12 +74,12 @@ pub struct RenderPassDepthSpec<'a> {
 pub struct RenderPipelineSpec<'a> {
     pub pipeline: &'a wgpu::RenderPipeline,
     pub vertex_buffers: Vec<RenderVertexBufferSpec<'a>>,
-    pub bind_groups: Vec<RenderBindGroupSpec<'a>>,
+    pub bind_groups: Vec<RenderBindGroupSpec>,
     pub draw: RenderDrawSpec<'a>,
 }
 
 impl RenderPipelineSpec<'_> {
-    pub fn draw(&self, render_pass: &mut wgpu::RenderPass, _project: &project::Project) {
+    pub fn draw(&self, render_pass: &mut wgpu::RenderPass, project: &project::Project) {
         render_pass.set_pipeline(self.pipeline);
 
         match &self.draw {
@@ -87,7 +90,7 @@ impl RenderPipelineSpec<'_> {
                     }
 
                     for bind_group in &self.bind_groups {
-                        bind_group.set(render_pass, Some((mesh, model)));
+                        bind_group.set(render_pass, Some((mesh, model)), project);
                     }
 
                     render_pass
@@ -105,7 +108,7 @@ impl RenderPipelineSpec<'_> {
                 }
 
                 for bind_group in &self.bind_groups {
-                    bind_group.set(render_pass, None);
+                    bind_group.set(render_pass, None, project);
                 }
 
                 render_pass.draw(vertices.clone(), instances.clone());
@@ -141,13 +144,13 @@ impl<'a> RenderVertexBufferSpec<'a> {
     }
 }
 
-pub struct RenderBindGroupSpec<'a> {
+pub struct RenderBindGroupSpec {
     slot: u32,
-    target: RenderBindGroupTargetSpec<'a>,
+    target: RenderBindGroupTargetSpec,
 }
 
-impl<'a> RenderBindGroupSpec<'a> {
-    pub fn new_fixed(slot: u32, target: &'a wgpu::BindGroup) -> Self {
+impl RenderBindGroupSpec {
+    pub fn new_fixed(slot: u32, target: BindGroupId) -> Self {
         Self {
             slot,
             target: RenderBindGroupTargetSpec::Fixed(target),
@@ -165,22 +168,31 @@ impl<'a> RenderBindGroupSpec<'a> {
         &self,
         render_pass: &mut wgpu::RenderPass,
         current: Option<(&model::Mesh, &model::Model)>,
+        project: &project::Project,
     ) {
         match self.target {
-            RenderBindGroupTargetSpec::Fixed(bind_group) => {
-                render_pass.set_bind_group(self.slot, bind_group, &[]);
+            RenderBindGroupTargetSpec::Fixed(bind_group_id) => {
+                let bind_group = project
+                    .bind_groups
+                    .get(bind_group_id)
+                    .expect("deal with this later");
+                render_pass.set_bind_group(self.slot, bind_group.inner(), &[]);
             }
             RenderBindGroupTargetSpec::ModelMaterial => {
                 let (current_mesh, model) = current.expect("deal with this later");
-                let material = &model.materials[current_mesh.material];
-                render_pass.set_bind_group(self.slot, &material.bind_group, &[]);
+                let material = model.materials[current_mesh.material];
+                let bind_group = project
+                    .bind_groups
+                    .get(material)
+                    .expect("deal with this later");
+                render_pass.set_bind_group(self.slot, bind_group.inner(), &[]);
             }
         }
     }
 }
 
-pub enum RenderBindGroupTargetSpec<'a> {
-    Fixed(&'a wgpu::BindGroup),
+pub enum RenderBindGroupTargetSpec {
+    Fixed(BindGroupId),
     ModelMaterial,
 }
 

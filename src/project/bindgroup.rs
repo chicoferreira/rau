@@ -1,10 +1,10 @@
-use crate::project::{Project, UniformId, ViewportId};
+use crate::project::{Project, SamplerId, TextureViewId, UniformId};
 
 pub struct BindGroup {
-    pub(crate) label: String,
-    pub(crate) layout: wgpu::BindGroupLayout,
-    pub(crate) group: wgpu::BindGroup,
-    pub(crate) entries: Vec<BindGroupEntry>,
+    pub label: String,
+    layout: wgpu::BindGroupLayout,
+    inner: wgpu::BindGroup,
+    pub entries: Vec<BindGroupEntry>,
 }
 
 impl BindGroup {
@@ -28,7 +28,7 @@ impl BindGroup {
             .map(|entry| entry.into_bind_group_entry(project))
             .collect::<Vec<_>>();
 
-        let group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+        let inner = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some(&label),
             layout: &layout,
             entries: &group_entries,
@@ -37,9 +37,21 @@ impl BindGroup {
         BindGroup {
             label,
             layout,
-            group,
+            inner,
             entries,
         }
+    }
+
+    // TODO: needs to be upated  when either of the entries was updated
+    // For example, when the texture view is updated, it should recreate the texture view with the correct reference
+    // the same applies for the sampler
+
+    pub fn inner_layout(&self) -> &wgpu::BindGroupLayout {
+        &self.layout
+    }
+
+    pub fn inner(&self) -> &wgpu::BindGroup {
+        &self.inner
     }
 }
 
@@ -52,19 +64,21 @@ pub struct BindGroupEntry {
 impl BindGroupEntry {
     pub fn into_bind_group_entry<'a>(&self, project: &'a Project) -> wgpu::BindGroupEntry<'a> {
         let resource = match self.resource {
-            BindGroupResource::Texture { viewport_id, .. } => {
-                let texture = project
-                    .viewports
-                    .get(viewport_id)
+            BindGroupResource::Texture {
+                texture_view_id, ..
+            } => {
+                let texture_view = project
+                    .texture_views
+                    .get(texture_view_id)
                     .expect("deal with this later");
-                wgpu::BindingResource::TextureView(&texture.texture.view)
+                wgpu::BindingResource::TextureView(texture_view.inner())
             }
-            BindGroupResource::Sampler { viewport_id, .. } => {
-                let texture = project
-                    .viewports
-                    .get(viewport_id)
+            BindGroupResource::Sampler { sampler_id, .. } => {
+                let sampler = project
+                    .samplers
+                    .get(sampler_id)
                     .expect("deal with this later");
-                wgpu::BindingResource::Sampler(&texture.texture.sampler)
+                wgpu::BindingResource::Sampler(sampler.inner())
             }
             BindGroupResource::Uniform(uniform_id) => {
                 let uniform = project
@@ -97,11 +111,17 @@ impl From<BindGroupEntry> for wgpu::BindGroupLayoutEntry {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum BindGroupResource {
     Texture {
-        viewport_id: ViewportId,
+        texture_view_id: TextureViewId,
+        // These two fields are used on the layout creation
+        // TODO: Decide if we keep this here, or move it to the TextureViewId, or separate the layout from the BindGroup
         view_dimension: wgpu::TextureViewDimension,
+        // TODO: As when [`wgpu::wgt::TextureSampleType::Float::filterable`] is true it accepts both, maybe we can hardcode it to always be true
+        sample_type: wgpu::TextureSampleType,
     },
     Sampler {
-        viewport_id: ViewportId,
+        sampler_id: SamplerId,
+        // This field is used on the layout creation
+        // TODO: Decide if we keep this here, or move it to the TextureViewId, or separate the layout from the BindGroup
         sampler_binding_type: wgpu::SamplerBindingType,
     },
     Uniform(UniformId),
@@ -110,9 +130,12 @@ pub enum BindGroupResource {
 impl From<BindGroupResource> for wgpu::BindingType {
     fn from(value: BindGroupResource) -> Self {
         match value {
-            BindGroupResource::Texture { view_dimension, .. } => wgpu::BindingType::Texture {
-                sample_type: wgpu::TextureSampleType::Float { filterable: false },
-                // TODO: support for depth texture
+            BindGroupResource::Texture {
+                view_dimension,
+                sample_type,
+                ..
+            } => wgpu::BindingType::Texture {
+                sample_type,
                 view_dimension,
                 multisampled: false,
             },

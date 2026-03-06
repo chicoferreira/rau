@@ -1,4 +1,4 @@
-use crate::texture;
+use crate::project::BindGroupId;
 
 pub trait Vertex {
     fn desc() -> wgpu::VertexBufferLayout<'static>;
@@ -51,56 +51,6 @@ impl Vertex for ModelVertex {
     }
 }
 
-pub struct Material {
-    #[allow(unused)]
-    pub name: String,
-    #[allow(unused)]
-    pub diffuse_texture: texture::Texture,
-    #[allow(unused)]
-    pub normal_texture: texture::Texture,
-    pub bind_group: wgpu::BindGroup,
-}
-
-impl Material {
-    pub fn new(
-        device: &wgpu::Device,
-        name: &str,
-        diffuse_texture: texture::Texture,
-        normal_texture: texture::Texture,
-        layout: &wgpu::BindGroupLayout,
-    ) -> Self {
-        let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            layout,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: wgpu::BindingResource::TextureView(&diffuse_texture.view),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: wgpu::BindingResource::Sampler(&diffuse_texture.sampler),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 2,
-                    resource: wgpu::BindingResource::TextureView(&normal_texture.view),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 3,
-                    resource: wgpu::BindingResource::Sampler(&normal_texture.sampler),
-                },
-            ],
-            label: Some(name),
-        });
-
-        Self {
-            name: name.to_string(),
-            diffuse_texture,
-            normal_texture,
-            bind_group,
-        }
-    }
-}
-
 pub struct Mesh {
     #[allow(unused)]
     pub name: String,
@@ -112,5 +62,5 @@ pub struct Mesh {
 
 pub struct Model {
     pub meshes: Vec<Mesh>,
-    pub materials: Vec<Material>,
+    pub materials: Vec<BindGroupId>,
 }

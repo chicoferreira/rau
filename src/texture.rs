@@ -6,7 +6,6 @@ use crate::ui;
 pub struct Texture {
     pub texture: wgpu::Texture,
     pub view: wgpu::TextureView,
-    pub sampler: wgpu::Sampler,
 }
 
 // TODO: refactor all these constructors (they have too much repeated logic)
@@ -26,7 +25,7 @@ impl Texture {
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
             format: Self::DEPTH_FORMAT,
-            usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
+            usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::RENDER_ATTACHMENT,
             view_formats: &[Self::DEPTH_FORMAT],
         };
         let texture = device.create_texture(&desc);
@@ -44,14 +43,9 @@ impl Texture {
             ..Default::default()
         });
 
-        Self {
-            texture,
-            view,
-            sampler,
-        }
+        Self { texture, view }
     }
 
-    #[allow(dead_code)]
     pub fn from_bytes(
         device: &wgpu::Device,
         queue: &wgpu::Queue,
@@ -149,11 +143,7 @@ impl Texture {
             ..Default::default()
         });
 
-        Self {
-            texture,
-            view,
-            sampler,
-        }
+        Self { texture, view }
     }
 
     pub fn create_2d_texture(
@@ -188,8 +178,6 @@ impl Texture {
         width: u32,
         height: u32,
         format: wgpu::TextureFormat,
-        usage: wgpu::TextureUsages,
-        mag_filter: wgpu::FilterMode,
         label: Option<&str>,
     ) -> Self {
         let texture = device.create_texture(&wgpu::TextureDescriptor {
@@ -204,7 +192,9 @@ impl Texture {
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
             format,
-            usage,
+            usage: wgpu::TextureUsages::STORAGE_BINDING
+                | wgpu::TextureUsages::TEXTURE_BINDING
+                | wgpu::TextureUsages::COPY_DST,
             view_formats: &[],
         });
 
@@ -220,16 +210,12 @@ impl Texture {
             address_mode_u: wgpu::AddressMode::ClampToEdge,
             address_mode_v: wgpu::AddressMode::ClampToEdge,
             address_mode_w: wgpu::AddressMode::ClampToEdge,
-            mag_filter,
+            mag_filter: wgpu::FilterMode::Nearest,
             min_filter: wgpu::FilterMode::Nearest,
             mipmap_filter: wgpu::MipmapFilterMode::Nearest,
             ..Default::default()
         });
 
-        Self {
-            texture,
-            sampler,
-            view,
-        }
+        Self { texture, view }
     }
 }

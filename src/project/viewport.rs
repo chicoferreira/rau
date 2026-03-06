@@ -1,67 +1,70 @@
 use crate::{
-    texture,
+    project::{DimensionId, TextureViewId, storage::Storage, texture_view::TextureView},
     ui::{self},
 };
 
+pub struct ViewportProjectView<'a> {
+    pub texture_views: &'a Storage<TextureViewId, TextureView>,
+}
+
 pub struct Viewport {
-    pub name: String,
-    pub texture: texture::Texture,
-    pub egui_id: egui::TextureId,
+    pub label: String,
+    pub texture_view_id: TextureViewId,
+    pub dimension_id: DimensionId,
+    egui_id: egui::TextureId,
 }
 
 #[allow(dead_code)]
 impl Viewport {
-    fn egui_texture_view(texture: &texture::Texture, label: &str) -> wgpu::TextureView {
-        texture.texture.create_view(&wgpu::TextureViewDescriptor {
-            label: Some(&format!("{label} egui texture view")),
-            // make this configurable later stating that to get the correct color, egui expects Rgba8Unorm
-            format: Some(texture.texture.format().remove_srgb_suffix()),
-            ..Default::default()
-        })
-    }
-
     pub fn new(
-        name: impl Into<String>,
+        project: ViewportProjectView,
+        label: impl Into<String>,
         device: &wgpu::Device,
-        initial_size: ui::Size2d,
-        texture_format: wgpu::TextureFormat,
+        texture_view_id: TextureViewId,
+        dimension_id: DimensionId,
         egui_renderer: &mut ui::renderer::EguiRenderer,
     ) -> Viewport {
-        let name = name.into();
+        let name = label.into();
 
-        let texture =
-            texture::Texture::create_2d_texture(device, &name, initial_size, texture_format);
-        let egui_texture_view = Self::egui_texture_view(&texture, &name);
+        let texture_view = project
+            .texture_views
+            .get(texture_view_id)
+            .expect("deal with this later");
 
         let egui_id = egui_renderer.register_egui_texture(
             device,
-            &egui_texture_view,
+            texture_view.inner(),
             wgpu::FilterMode::Linear,
         );
 
         Viewport {
-            name,
-            texture,
+            label: name,
+            texture_view_id,
+            dimension_id,
             egui_id,
         }
     }
 
-    pub fn resize(
+    pub fn update(
         &mut self,
-        size: ui::Size2d,
+        project: ViewportProjectView,
         device: &wgpu::Device,
         egui_renderer: &mut ui::renderer::EguiRenderer,
     ) {
-        let texture_format = self.texture.texture.format();
-        self.texture =
-            texture::Texture::create_2d_texture(device, &self.name, size, texture_format);
-        let egui_texture_view = Self::egui_texture_view(&self.texture, &self.name);
+        let texture_view = project
+            .texture_views
+            .get(self.texture_view_id)
+            .expect("deal with this later");
 
         egui_renderer.update_egui_texture(
             device,
-            &egui_texture_view,
+            texture_view.inner(),
             wgpu::FilterMode::Linear,
             self.egui_id,
         );
+    }
+
+    pub fn egui_id(&self) -> egui::TextureId {
+        self.egui_id
     }
 }
