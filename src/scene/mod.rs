@@ -3,11 +3,16 @@ use wgpu::util::DeviceExt;
 use crate::{
     model::{self, Vertex},
     project::{
-        self, Project,
+        self, BindGroupId, Project, TextureViewId, UniformId, ViewportId,
+        dimension::Dimension,
+        sampler::Sampler,
+        texture::{Texture, TextureProjectView, TextureSource},
+        texture_view::{TextureView, TextureViewFormat, TextureViewProjectView},
         uniform::{
             CameraFieldSource, Uniform, UniformData, UniformField, UniformFieldData,
             UniformFieldSource,
         },
+        viewport::ViewportProjectView,
     },
     render, resources,
     scene::hdr::HdrPipeline,
@@ -107,15 +112,17 @@ pub struct Scene {
     instance_buffer: wgpu::Buffer,
     instances: Vec<Instance>,
     depth_texture: texture::Texture,
-    camera_bind_group_id: project::BindGroupId,
-    light_uniform_id: project::UniformId,
-    light_bind_group_id: project::BindGroupId,
+    camera_bind_group_id: BindGroupId,
+    light_uniform_id: UniformId,
+    light_bind_group_id: BindGroupId,
     light_render_pipeline: wgpu::RenderPipeline,
     hdr: hdr::HdrPipeline,
-    environment_bind_group: wgpu::BindGroup,
+    environment_bind_group_id: BindGroupId,
     sky_pipeline: wgpu::RenderPipeline,
-    hdr_viewport_id: project::ViewportId,
-    pub output_viewport_id: project::ViewportId,
+    hdr_viewport_id: ViewportId,
+    pub output_viewport_id: ViewportId,
+    hdr_texture_view_id: TextureViewId,
+    output_viewport_view_id: TextureViewId,
 }
 
 impl Scene {
@@ -136,7 +143,7 @@ impl Scene {
                 entries: &[
                     wgpu::BindGroupLayoutEntry {
                         binding: 0,
-                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
                         ty: wgpu::BindingType::Texture {
                             multisampled: false,
                             view_dimension: wgpu::TextureViewDimension::D2,
@@ -146,7 +153,7 @@ impl Scene {
                     },
                     wgpu::BindGroupLayoutEntry {
                         binding: 1,
-                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
                         // This should match the filterable field of the
                         // corresponding Texture entry above.
                         ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
@@ -155,7 +162,7 @@ impl Scene {
                     // normal map
                     wgpu::BindGroupLayoutEntry {
                         binding: 2,
-                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
                         ty: wgpu::BindingType::Texture {
                             multisampled: false,
                             view_dimension: wgpu::TextureViewDimension::D2,
@@ -165,7 +172,7 @@ impl Scene {
                     },
                     wgpu::BindGroupLayoutEntry {
                         binding: 3,
-                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
                         ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
                         count: None,
                     },
@@ -242,89 +249,138 @@ impl Scene {
         );
         let light_bind_group_id = project.bind_groups.register(light_bind_group);
 
-        let obj_model =
-            resources::load_model("cube.obj", &device, &queue, &texture_bind_group_layout)
-                .await
-                .unwrap();
+        // TODO: Change this to some kind of default (use the same as when creating from the interface)
+        let image_texture_sampler_id = project.samplers.register(Sampler::new(
+            device,
+            "Image Texture Sampler".to_string(),
+            wgpu::AddressMode::ClampToEdge,
+            wgpu::FilterMode::Nearest,
+            wgpu::FilterMode::Nearest,
+            wgpu::MipmapFilterMode::Nearest,
+            0.0,
+            32.0,
+            None,
+        ));
+
+        let obj_model = resources::load_model(
+            project,
+            "cube.obj",
+            &device,
+            &queue,
+            image_texture_sampler_id,
+        )
+        .await
+        .unwrap();
+
+        let dimension = Dimension { size };
+        let dimension_id = project.dimensions.register(dimension);
+
+        let hdr_texture = Texture::new(
+            &TextureProjectView {
+                viewports: &project.viewports,
+                dimensions: &project.dimensions,
+            },
+            device,
+            queue,
+            "Hdr Texture".to_string(),
+            HdrPipeline::RENDER_FORMAT,
+            wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::RENDER_ATTACHMENT,
+            TextureSource::Dimension(dimension_id),
+        );
+        let hdr_texture_id = project.textures.register(hdr_texture);
+        let hdr_texture_view = TextureView::new(
+            &TextureViewProjectView {
+                textures: &project.textures,
+            },
+            "HDR Texture View".to_string(),
+            hdr_texture_id,
+            None,
+            None,
+            None,
+        );
+        let hdr_texture_view_id = project.texture_views.register(hdr_texture_view);
 
         let hdr_viewport = project::viewport::Viewport::new(
+            ViewportProjectView {
+                texture_views: &project.texture_views,
+            },
             "HDR Buffer",
             device,
-            size,
-            HdrPipeline::RENDER_FORMAT,
+            hdr_texture_view_id,
+            dimension_id,
             egui_renderer,
         );
         let hdr_viewport_id = project.viewports.register(hdr_viewport);
-        let hdr_texture = &project.viewports.get(hdr_viewport_id).unwrap().texture;
+        let hdr_texture_id = project
+            .viewports
+            .get(hdr_viewport_id)
+            .unwrap()
+            .texture_view_id;
 
         let viewport_texture_format = wgpu::TextureFormat::Rgba8UnormSrgb;
 
         let hdr = hdr::HdrPipeline::new(
             device,
-            hdr_texture,
+            project,
+            hdr_texture_id,
             viewport_texture_format,
-            &project,
+            image_texture_sampler_id,
             hdr_shader_id,
         )?;
 
         let hdr_loader = loader::HdrLoader::new(&device, &project, equirectangular_shader_id)?;
         let sky_bytes = resources::load_binary("pure-sky.hdr").await?;
-        let sky_texture = hdr_loader.from_equirectangular_bytes(
-            &device,
-            &queue,
-            &sky_bytes,
-            1080,
-            Some("Sky Texture"),
-        )?;
+        let sky_texture_id =
+            hdr_loader.from_equirectangular_bytes(project, &device, &queue, &sky_bytes, 1080)?;
 
-        let environment_layout =
-            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                label: Some("environment_layout"),
-                entries: &[
-                    wgpu::BindGroupLayoutEntry {
-                        binding: 0,
-                        visibility: wgpu::ShaderStages::FRAGMENT,
-                        ty: wgpu::BindingType::Texture {
-                            sample_type: wgpu::TextureSampleType::Float { filterable: false },
-                            view_dimension: wgpu::TextureViewDimension::Cube,
-                            multisampled: false,
-                        },
-                        count: None,
-                    },
-                    wgpu::BindGroupLayoutEntry {
-                        binding: 1,
-                        visibility: wgpu::ShaderStages::FRAGMENT,
-                        ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::NonFiltering),
-                        count: None,
-                    },
-                ],
-            });
+        let sky_texture_view = TextureView::new(
+            &TextureViewProjectView {
+                textures: &project.textures,
+            },
+            "Sky Texture View".to_string(),
+            sky_texture_id,
+            None,
+            Some(wgpu::TextureViewDimension::Cube),
+            Some(6),
+        );
+        let sky_texture_view_id = project.texture_views.register(sky_texture_view);
 
-        let environment_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("environment_bind_group"),
-            layout: &environment_layout,
-            entries: &[
-                wgpu::BindGroupEntry {
+        let environment_bind_group = project::bindgroup::BindGroup::new(
+            project,
+            device,
+            "Environment Bind Group",
+            vec![
+                project::bindgroup::BindGroupEntry {
                     binding: 0,
-                    resource: wgpu::BindingResource::TextureView(&sky_texture.view),
+                    resource: project::bindgroup::BindGroupResource::Texture {
+                        texture_view_id: sky_texture_view_id,
+                        view_dimension: wgpu::TextureViewDimension::Cube,
+                        sample_type: wgpu::TextureSampleType::Float { filterable: false },
+                    },
                 },
-                wgpu::BindGroupEntry {
+                project::bindgroup::BindGroupEntry {
                     binding: 1,
-                    resource: wgpu::BindingResource::Sampler(&sky_texture.sampler),
+                    resource: project::bindgroup::BindGroupResource::Sampler {
+                        sampler_id: image_texture_sampler_id,
+                        sampler_binding_type: wgpu::SamplerBindingType::NonFiltering,
+                    },
                 },
             ],
-        });
+        );
+
+        let environment_bind_group_id = project.bind_groups.register(environment_bind_group);
 
         let camera_bind_group = project.bind_groups.get(camera_bind_group_id).unwrap();
         let light_bind_group = project.bind_groups.get(light_bind_group_id).unwrap();
+        let environment_bind_group = project.bind_groups.get(environment_bind_group_id).unwrap();
         let render_pipeline_layout =
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("Render Pipeline Layout"),
                 bind_group_layouts: &[
                     &texture_bind_group_layout,
-                    &camera_bind_group.layout,
-                    &light_bind_group.layout,
-                    &environment_layout,
+                    &camera_bind_group.inner_layout(),
+                    &light_bind_group.inner_layout(),
+                    &environment_bind_group.inner_layout(),
                 ],
                 immediate_size: 0,
             });
@@ -346,7 +402,10 @@ impl Scene {
         let light_render_pipeline = {
             let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("Light Pipeline Layout"),
-                bind_group_layouts: &[&camera_bind_group.layout, &light_bind_group.layout],
+                bind_group_layouts: &[
+                    &camera_bind_group.inner_layout(),
+                    &light_bind_group.inner_layout(),
+                ],
                 immediate_size: 0,
             });
             let shader = project.shaders.get(light_shader_id).unwrap();
@@ -365,7 +424,10 @@ impl Scene {
         let sky_pipeline = {
             let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("Sky Pipeline Layout"),
-                bind_group_layouts: &[&camera_bind_group.layout, &environment_layout],
+                bind_group_layouts: &[
+                    &camera_bind_group.inner_layout(),
+                    &environment_bind_group.inner_layout(),
+                ],
                 immediate_size: 0,
             });
             let shader = project.shaders.get(sky_shader_id).unwrap();
@@ -381,14 +443,51 @@ impl Scene {
             )
         };
 
-        let viewport_texture = project::viewport::Viewport::new(
+        let viewport_texture = Texture::new(
+            &TextureProjectView {
+                viewports: &project.viewports,
+                dimensions: &project.dimensions,
+            },
+            device,
+            queue,
+            "Viewport Texture".to_string(),
+            viewport_texture_format,
+            wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::RENDER_ATTACHMENT,
+            TextureSource::Dimension(dimension_id),
+        );
+        let viewport_texture_id = project.textures.register(viewport_texture);
+        let output_viewport_view_id = project.texture_views.register(TextureView::new(
+            &TextureViewProjectView {
+                textures: &project.textures,
+            },
+            "Viewport Texture View".to_string(),
+            viewport_texture_id,
+            Some(TextureViewFormat::Srgb),
+            None,
+            None,
+        ));
+        let viewport_texture_view = TextureView::new(
+            &TextureViewProjectView {
+                textures: &project.textures,
+            },
+            "Viewport Texture View Egui".to_string(),
+            viewport_texture_id,
+            Some(TextureViewFormat::Linear),
+            None,
+            None,
+        );
+        let viewport_texture_view_id = project.texture_views.register(viewport_texture_view);
+        let viewport = project::viewport::Viewport::new(
+            ViewportProjectView {
+                texture_views: &project.texture_views,
+            },
             "Viewport Texture",
             device,
-            size,
-            viewport_texture_format,
+            viewport_texture_view_id,
+            dimension_id,
             egui_renderer,
         );
-        let viewport_id = project.viewports.register(viewport_texture);
+        let viewport_id = project.viewports.register(viewport);
 
         Ok(Scene {
             render_pipeline,
@@ -401,10 +500,12 @@ impl Scene {
             light_bind_group_id,
             light_render_pipeline,
             hdr,
-            environment_bind_group,
+            environment_bind_group_id,
             sky_pipeline,
             hdr_viewport_id,
             output_viewport_id: viewport_id,
+            hdr_texture_view_id,
+            output_viewport_view_id,
         })
     }
 
@@ -427,33 +528,26 @@ impl Scene {
         *position = new_position.into();
     }
 
-    pub fn resize(
-        &mut self,
-        size: ui::Size2d,
-        project: &mut Project,
-        device: &wgpu::Device,
-        egui_renderer: &mut ui::renderer::EguiRenderer,
-    ) {
-        if let Some(viewport) = project.viewports.get_mut(self.hdr_viewport_id) {
-            viewport.resize(size, device, egui_renderer);
-            self.hdr.update_texture(device, &viewport.texture);
+    pub fn resize(&mut self, size: ui::Size2d, project: &mut Project, device: &wgpu::Device) {
+        if let Some(viewport) = project.viewports.get(self.hdr_viewport_id) {
+            let dimension = project.dimensions.get_mut(viewport.dimension_id).unwrap();
+            dimension.size = size;
         }
 
-        if let Some(viewport) = project.viewports.get_mut(self.output_viewport_id) {
-            viewport.resize(size, device, egui_renderer);
+        if let Some(viewport) = project.viewports.get(self.output_viewport_id) {
+            let dimension = project.dimensions.get_mut(viewport.dimension_id).unwrap();
+            dimension.size = size;
         }
 
-        self.depth_texture = texture::Texture::create_depth_texture(device, size, "Depth Buffer");
+        // TODO:
+        // self.depth_texture = texture::Texture::create_depth_texture(device, size, "Depth Buffer");
     }
 
     pub fn render(&self, encoder: &mut wgpu::CommandEncoder, project: &project::Project) {
-        let camera_bind_group = project.bind_groups.get(self.camera_bind_group_id).unwrap();
-        let light_bind_group = project.bind_groups.get(self.light_bind_group_id).unwrap();
-
         let main_render_pass = render::RenderPassSpec {
             label: Some("Main Render Pass"),
             target_spec: render::RenderPassTargetSpec {
-                viewport_id: self.hdr_viewport_id,
+                texture_view_id: self.hdr_texture_view_id,
                 load_operation: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
             },
             depth_spec: Some(render::RenderPassDepthSpec {
@@ -464,8 +558,8 @@ impl Scene {
                 render::RenderPipelineSpec {
                     pipeline: &self.light_render_pipeline,
                     bind_groups: vec![
-                        render::RenderBindGroupSpec::new_fixed(0, &camera_bind_group.group),
-                        render::RenderBindGroupSpec::new_fixed(1, &light_bind_group.group),
+                        render::RenderBindGroupSpec::new_fixed(0, self.camera_bind_group_id),
+                        render::RenderBindGroupSpec::new_fixed(1, self.light_bind_group_id),
                     ],
                     vertex_buffers: vec![
                         render::RenderVertexBufferSpec::new_model_mesh(0),
@@ -480,9 +574,9 @@ impl Scene {
                     pipeline: &self.render_pipeline,
                     bind_groups: vec![
                         render::RenderBindGroupSpec::new_model_material(0),
-                        render::RenderBindGroupSpec::new_fixed(1, &camera_bind_group.group),
-                        render::RenderBindGroupSpec::new_fixed(2, &light_bind_group.group),
-                        render::RenderBindGroupSpec::new_fixed(3, &self.environment_bind_group),
+                        render::RenderBindGroupSpec::new_fixed(1, self.camera_bind_group_id),
+                        render::RenderBindGroupSpec::new_fixed(2, self.light_bind_group_id),
+                        render::RenderBindGroupSpec::new_fixed(3, self.environment_bind_group_id),
                     ],
                     vertex_buffers: vec![
                         render::RenderVertexBufferSpec::new_model_mesh(0),
@@ -496,8 +590,8 @@ impl Scene {
                 render::RenderPipelineSpec {
                     pipeline: &self.sky_pipeline,
                     bind_groups: vec![
-                        render::RenderBindGroupSpec::new_fixed(0, &camera_bind_group.group),
-                        render::RenderBindGroupSpec::new_fixed(1, &self.environment_bind_group),
+                        render::RenderBindGroupSpec::new_fixed(0, self.camera_bind_group_id),
+                        render::RenderBindGroupSpec::new_fixed(1, self.environment_bind_group_id),
                     ],
                     vertex_buffers: vec![],
                     draw: render::RenderDrawSpec::Single {
@@ -511,7 +605,7 @@ impl Scene {
         let hdr_pass = render::RenderPassSpec {
             label: Some("HDR Pass"),
             target_spec: render::RenderPassTargetSpec {
-                viewport_id: self.output_viewport_id,
+                texture_view_id: self.output_viewport_view_id,
                 load_operation: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
             },
             depth_spec: None,
@@ -520,7 +614,7 @@ impl Scene {
                 vertex_buffers: vec![],
                 bind_groups: vec![render::RenderBindGroupSpec::new_fixed(
                     0,
-                    self.hdr.bind_group(),
+                    self.hdr.bind_group_id,
                 )],
                 draw: render::RenderDrawSpec::Single {
                     vertices: 0..3,

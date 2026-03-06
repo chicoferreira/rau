@@ -11,7 +11,7 @@ use crate::{
     camera::{Camera, CameraInput},
     project::{
         self, BindGroupId, ShaderId, UniformId, ViewportId,
-        uniform::{UniformData, UniformField, UniformFieldSourceKind, UniformProjectContext},
+        uniform::{UniformData, UniformField, UniformFieldSourceKind, UniformProjectView},
     },
     resources, scene,
     ui::{
@@ -347,7 +347,7 @@ impl State {
                             .project
                             .viewports
                             .get(viewport_id)
-                            .map(|t| t.name.clone()),
+                            .map(|t| t.label.clone()),
                         RenameTarget::Shader(shader_id) => {
                             self.project.shaders.get(shader_id).map(|s| s.label.clone())
                         }
@@ -385,7 +385,7 @@ impl State {
                         }
                         RenameTarget::Viewport(id) => {
                             if let Some(viewport) = self.project.viewports.get_mut(id) {
-                                viewport.name = new_name;
+                                viewport.label = new_name;
                             }
                         }
                         RenameTarget::Shader(id) => {
@@ -441,12 +441,7 @@ impl State {
                     match viewport_event {
                         ViewportEvent::Resize { size } => {
                             camera.resize(size);
-                            self.scene.resize(
-                                size,
-                                &mut self.project,
-                                &self.device,
-                                &mut self.egui_renderer,
-                            );
+                            self.scene.resize(size, &mut self.project, &self.device);
                         }
                         ViewportEvent::Scroll { delta_y_px } => {
                             self.camera_input.handle_scroll_pixels(delta_y_px);
@@ -468,11 +463,11 @@ impl State {
         self.camera_input
             .update_camera(&mut self.project.camera, dt);
 
-        let context = UniformProjectContext {
+        let project_view = UniformProjectView {
             camera: &self.project.camera,
         };
         for (_, uniform) in self.project.uniforms.list_mut() {
-            uniform.update(&context, &self.device, &self.queue);
+            uniform.update(&project_view, &self.device, &self.queue);
         }
 
         self.scene.update(&mut self.project, dt);

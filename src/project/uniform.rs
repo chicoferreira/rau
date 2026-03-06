@@ -1,21 +1,13 @@
 use cgmath::SquareMatrix;
 use wgpu::util::DeviceExt;
 
-use crate::{camera::Camera, project::Project};
+use crate::camera::Camera;
 
 // We need this struct to avoid borrow checker being mad
 // when we are iterating over uniforms from a project
 // and then we need the project to update it
-pub struct UniformProjectContext<'a> {
+pub struct UniformProjectView<'a> {
     pub camera: &'a Camera,
-}
-
-impl<'a> From<&'a Project> for UniformProjectContext<'a> {
-    fn from(project: &'a Project) -> Self {
-        UniformProjectContext {
-            camera: &project.camera,
-        }
-    }
 }
 
 pub struct Uniform {
@@ -46,7 +38,7 @@ impl Uniform {
 
     pub fn update(
         &mut self,
-        context: &UniformProjectContext<'_>,
+        context: &UniformProjectView<'_>,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
     ) {
@@ -176,7 +168,7 @@ impl UniformField {
         self.last_data.kind()
     }
 
-    fn update(&mut self, context: &UniformProjectContext<'_>) -> bool {
+    fn update(&mut self, context: &UniformProjectView<'_>) -> bool {
         let new_data = self.source.compute(context);
         let updated = self.last_data != new_data;
         self.last_data = new_data;
@@ -191,7 +183,7 @@ pub enum UniformFieldSource {
 }
 
 impl UniformFieldSource {
-    fn compute(&self, context: &UniformProjectContext<'_>) -> UniformFieldData {
+    fn compute(&self, context: &UniformProjectView<'_>) -> UniformFieldData {
         match self {
             UniformFieldSource::UserDefined(data) => data.clone(),
             UniformFieldSource::Camera(source) => source.compute(&context.camera),

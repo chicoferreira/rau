@@ -2,7 +2,15 @@ use std::io::{BufReader, Cursor};
 
 use wgpu::util::DeviceExt;
 
-use crate::{model, texture};
+use crate::{
+    model,
+    project::{
+        self, Project, SamplerId, TextureViewId,
+        bindgroup::{BindGroup, BindGroupEntry, BindGroupResource},
+        texture::{Texture, TextureProjectView, TextureSource},
+        texture_view::{TextureView, TextureViewProjectView},
+    },
+};
 
 #[cfg(target_arch = "wasm32")]
 fn format_url(file_name: &str) -> reqwest::Url {
@@ -51,20 +59,84 @@ pub async fn load_binary(file_name: &str) -> anyhow::Result<Vec<u8>> {
 }
 
 pub async fn load_texture(
+    project: &TextureProjectView<'_>,
     file_name: &str,
     is_normal_map: bool,
     device: &wgpu::Device,
     queue: &wgpu::Queue,
-) -> anyhow::Result<texture::Texture> {
+) -> anyhow::Result<Texture> {
     let data = load_binary(file_name).await?;
-    texture::Texture::from_bytes(device, queue, &data, file_name, is_normal_map)
+    let img = image::load_from_memory(&data)?;
+
+    let format = match is_normal_map {
+        false => wgpu::TextureFormat::Rgba8UnormSrgb,
+        true => wgpu::TextureFormat::Rgba8Unorm,
+    };
+
+    let source = TextureSource::Image(img);
+
+    Ok(Texture::new(
+        project,
+        device,
+        queue,
+        file_name.to_string(),
+        format,
+        wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+        source,
+    ))
+}
+
+fn create_material_bind_group(
+    project: &Project,
+    device: &wgpu::Device,
+    label: String,
+    diffuse_texture_view_id: TextureViewId,
+    normal_texture_view_id: TextureViewId,
+    sampler_id: SamplerId,
+) -> BindGroup {
+    let entries = vec![
+        // TODO: Remove the duplicated sampler
+        BindGroupEntry {
+            binding: 0,
+            resource: BindGroupResource::Texture {
+                texture_view_id: diffuse_texture_view_id,
+                view_dimension: wgpu::TextureViewDimension::D2,
+                sample_type: wgpu::TextureSampleType::Float { filterable: true },
+            },
+        },
+        BindGroupEntry {
+            binding: 1,
+            resource: BindGroupResource::Sampler {
+                sampler_id,
+                sampler_binding_type: wgpu::SamplerBindingType::Filtering,
+            },
+        },
+        BindGroupEntry {
+            binding: 2,
+            resource: BindGroupResource::Texture {
+                texture_view_id: normal_texture_view_id,
+                view_dimension: wgpu::TextureViewDimension::D2,
+                sample_type: wgpu::TextureSampleType::Float { filterable: true },
+            },
+        },
+        BindGroupEntry {
+            binding: 3,
+            resource: BindGroupResource::Sampler {
+                sampler_id,
+                sampler_binding_type: wgpu::SamplerBindingType::Filtering,
+            },
+        },
+    ];
+
+    BindGroup::new(project, device, label, entries)
 }
 
 pub async fn load_model(
+    project: &mut project::Project,
     file_name: &str,
     device: &wgpu::Device,
     queue: &wgpu::Queue,
-    layout: &wgpu::BindGroupLayout,
+    sampler_id: SamplerId,
 ) -> anyhow::Result<model::Model> {
     let obj_text = load_string(file_name).await?;
     let obj_bytes = obj_text.as_bytes();
@@ -84,18 +156,62 @@ pub async fn load_model(
     .await?;
 
     let mut materials = Vec::new();
-    for m in obj_materials? {
-        let diffuse_texture =
-            load_texture(&m.diffuse_texture.unwrap(), false, device, queue).await?;
-        let normal_texture = load_texture(&m.normal_texture.unwrap(), true, device, queue).await?;
 
-        materials.push(model::Material::new(
-            device,
-            &m.name,
-            diffuse_texture,
-            normal_texture,
-            layout,
+    let texture_project_view = TextureProjectView {
+        viewports: &project.viewports,
+        dimensions: &project.dimensions,
+    };
+
+    for m in obj_materials? {
+        let file_name = m.diffuse_texture.unwrap();
+        let diffuse_texture =
+            load_texture(&texture_project_view, &file_name, false, device, queue).await?;
+
+        let diffuse_texture_id = project.textures.register(diffuse_texture);
+        let diffuse_texture_view_id = project.texture_views.register(TextureView::new(
+            &TextureViewProjectView {
+                textures: &project.textures,
+            },
+            file_name.clone(),
+            diffuse_texture_id,
+            None,
+            None,
+            None,
         ));
+
+        let normal_texture = load_texture(
+            &texture_project_view,
+            &m.normal_texture.unwrap(),
+            true,
+            device,
+            queue,
+        )
+        .await?;
+
+        let normal_texture_id = project.textures.register(normal_texture);
+        let normal_texture_view_id = project.texture_views.register(TextureView::new(
+            &TextureViewProjectView {
+                textures: &project.textures,
+            },
+            file_name.clone(),
+            normal_texture_id,
+            None,
+            None,
+            None,
+        ));
+
+        let material_bind_group = create_material_bind_group(
+            project,
+            device,
+            file_name.clone(),
+            diffuse_texture_view_id,
+            normal_texture_view_id,
+            sampler_id,
+        );
+
+        let material_bind_group_id = project.bind_groups.register(material_bind_group);
+
+        materials.push(material_bind_group_id);
     }
 
     let meshes = models
