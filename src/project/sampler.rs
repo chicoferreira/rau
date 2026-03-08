@@ -1,5 +1,6 @@
-pub struct Sampler {
-    pub label: String,
+use crate::rebuild::Recreatable;
+
+pub struct SamplerSpec {
     pub address_mode: wgpu::AddressMode,
     pub mag_filter: wgpu::FilterMode,
     pub min_filter: wgpu::FilterMode,
@@ -7,43 +8,36 @@ pub struct Sampler {
     pub lod_min_clamp: f32,
     pub lod_max_clamp: f32,
     pub compare: Option<wgpu::CompareFunction>,
+}
+
+impl Default for SamplerSpec {
+    fn default() -> Self {
+        SamplerSpec {
+            address_mode: Default::default(),
+            mag_filter: Default::default(),
+            min_filter: Default::default(),
+            mipmap_filter: Default::default(),
+            lod_min_clamp: 0.0,
+            lod_max_clamp: 32.0,
+            compare: None,
+        }
+    }
+}
+
+pub struct Sampler {
+    pub label: String,
+    pub spec: SamplerSpec,
     dirty: bool,
     inner: wgpu::Sampler,
 }
 
 impl Sampler {
-    pub fn new(
-        device: &wgpu::Device,
-        label: String,
-        address_mode: wgpu::AddressMode,
-        mag_filter: wgpu::FilterMode,
-        min_filter: wgpu::FilterMode,
-        mipmap_filter: wgpu::MipmapFilterMode,
-        lod_min_clamp: f32,
-        lod_max_clamp: f32,
-        compare: Option<wgpu::CompareFunction>,
-    ) -> Sampler {
-        let sampler = Self::create_sampler(
-            device,
-            &label,
-            address_mode,
-            mag_filter,
-            min_filter,
-            mipmap_filter,
-            lod_min_clamp,
-            lod_max_clamp,
-            compare,
-        );
+    pub fn new(device: &wgpu::Device, label: String, spec: SamplerSpec) -> Sampler {
+        let sampler = Self::create_sampler(device, &label, &spec);
 
         Sampler {
             label,
-            address_mode,
-            mag_filter,
-            min_filter,
-            mipmap_filter,
-            lod_min_clamp,
-            lod_max_clamp,
-            compare,
+            spec,
             dirty: false,
             inner: sampler,
         }
@@ -53,50 +47,40 @@ impl Sampler {
         &self.inner
     }
 
-    pub fn update_on_next_frame(&mut self) {
-        self.dirty = true;
-    }
-
-    // TODO: only needs updating when any of these parameters change
-    pub fn update(&mut self, device: &wgpu::Device) {
-        if self.dirty {
-            self.inner = Self::create_sampler(
-                device,
-                &self.label,
-                self.address_mode,
-                self.mag_filter,
-                self.min_filter,
-                self.mipmap_filter,
-                self.lod_min_clamp,
-                self.lod_max_clamp,
-                self.compare,
-            );
-        }
-    }
-
-    fn create_sampler(
-        device: &wgpu::Device,
-        label: &str,
-        address_mode: wgpu::AddressMode,
-        mag_filter: wgpu::FilterMode,
-        min_filter: wgpu::FilterMode,
-        mipmap_filter: wgpu::MipmapFilterMode,
-        lod_min_clamp: f32,
-        lod_max_clamp: f32,
-        compare: Option<wgpu::CompareFunction>,
-    ) -> wgpu::Sampler {
+    fn create_sampler(device: &wgpu::Device, label: &str, spec: &SamplerSpec) -> wgpu::Sampler {
         device.create_sampler(&wgpu::SamplerDescriptor {
             label: Some(label),
-            address_mode_u: address_mode,
-            address_mode_v: address_mode,
-            address_mode_w: address_mode,
-            mag_filter,
-            min_filter,
-            mipmap_filter,
-            lod_min_clamp,
-            lod_max_clamp,
-            compare,
+            address_mode_u: spec.address_mode,
+            address_mode_v: spec.address_mode,
+            address_mode_w: spec.address_mode,
+            mag_filter: spec.mag_filter,
+            min_filter: spec.min_filter,
+            mipmap_filter: spec.mipmap_filter,
+            lod_min_clamp: spec.lod_min_clamp,
+            lod_max_clamp: spec.lod_max_clamp,
+            compare: spec.compare,
             ..Default::default()
         })
+    }
+}
+
+impl Recreatable for Sampler {
+    type Context<'a> = ();
+
+    fn should_recreate(
+        &self,
+        _context: &Self::Context<'_>,
+        _recreate_list: &crate::rebuild::RebuildTracker,
+    ) -> bool {
+        self.dirty
+    }
+
+    fn recreate<'a>(
+        &mut self,
+        _context: &mut Self::Context<'a>,
+        device: &wgpu::Device,
+        _queue: &wgpu::Queue,
+    ) {
+        self.inner = Self::create_sampler(device, &self.label, &self.spec);
     }
 }

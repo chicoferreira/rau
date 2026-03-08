@@ -1,4 +1,4 @@
-use crate::project::{BindGroupId, ShaderId, ViewportId, UniformId};
+use crate::project::{BindGroupId, ShaderId, UniformId, ViewportId};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct RenameState {

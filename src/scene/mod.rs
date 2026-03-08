@@ -5,18 +5,18 @@ use crate::{
     project::{
         self, BindGroupId, Project, TextureViewId, UniformId, ViewportId,
         dimension::Dimension,
-        sampler::Sampler,
+        sampler::{Sampler, SamplerSpec},
         texture::{Texture, TextureProjectView, TextureSource},
         texture_view::{TextureView, TextureViewFormat, TextureViewProjectView},
         uniform::{
             CameraFieldSource, Uniform, UniformData, UniformField, UniformFieldData,
             UniformFieldSource,
         },
-        viewport::ViewportProjectView,
+        viewport::ViewportContext,
     },
     render, resources,
     scene::hdr::HdrPipeline,
-    state, texture,
+    state,
     ui::{self},
 };
 use cgmath::{InnerSpace, Rotation3, Vector3, Zero};
@@ -111,7 +111,7 @@ pub struct Scene {
     obj_model: model::Model,
     instance_buffer: wgpu::Buffer,
     instances: Vec<Instance>,
-    depth_texture: texture::Texture,
+    depth_texture_view_id: TextureViewId,
     camera_bind_group_id: BindGroupId,
     light_uniform_id: UniformId,
     light_bind_group_id: BindGroupId,
@@ -180,7 +180,6 @@ impl Scene {
                 label: Some("texture_bind_group_layout"),
             });
 
-        let depth_texture = texture::Texture::create_depth_texture(&device, size, "depth texture");
         let camera_uniform_data = UniformData {
             fields: vec![
                 UniformField::new_camera_sourced("view_position", CameraFieldSource::Position),
@@ -226,7 +225,7 @@ impl Scene {
         let camera_bind_group = project::bindgroup::BindGroup::new(
             project,
             device,
-            "camera bind group",
+            "camera bind group".to_string(),
             vec![project::bindgroup::BindGroupEntry {
                 binding: 0,
                 resource: project::bindgroup::BindGroupResource::Uniform(camera_uniform_id),
@@ -241,7 +240,7 @@ impl Scene {
         let light_bind_group = project::bindgroup::BindGroup::new(
             project,
             device,
-            "light bind group",
+            "light bind group".to_string(),
             vec![project::bindgroup::BindGroupEntry {
                 binding: 0,
                 resource: project::bindgroup::BindGroupResource::Uniform(light_uniform_id),
@@ -253,13 +252,7 @@ impl Scene {
         let image_texture_sampler_id = project.samplers.register(Sampler::new(
             device,
             "Image Texture Sampler".to_string(),
-            wgpu::AddressMode::ClampToEdge,
-            wgpu::FilterMode::Nearest,
-            wgpu::FilterMode::Nearest,
-            wgpu::MipmapFilterMode::Nearest,
-            0.0,
-            32.0,
-            None,
+            SamplerSpec::default(),
         ));
 
         let obj_model = resources::load_model(
@@ -301,14 +294,14 @@ impl Scene {
         let hdr_texture_view_id = project.texture_views.register(hdr_texture_view);
 
         let hdr_viewport = project::viewport::Viewport::new(
-            ViewportProjectView {
+            ViewportContext {
                 texture_views: &project.texture_views,
+                egui_renderer,
             },
             "HDR Buffer",
             device,
             hdr_texture_view_id,
             dimension_id,
-            egui_renderer,
         );
         let hdr_viewport_id = project.viewports.register(hdr_viewport);
         let hdr_texture_id = project
@@ -348,7 +341,7 @@ impl Scene {
         let environment_bind_group = project::bindgroup::BindGroup::new(
             project,
             device,
-            "Environment Bind Group",
+            "Environment Bind Group".to_string(),
             vec![
                 project::bindgroup::BindGroupEntry {
                     binding: 0,
@@ -392,7 +385,7 @@ impl Scene {
                 &device,
                 &render_pipeline_layout,
                 HdrPipeline::RENDER_FORMAT,
-                Some(texture::Texture::DEPTH_FORMAT),
+                Some(wgpu::TextureFormat::Depth32Float),
                 &[model::ModelVertex::desc(), InstanceRaw::desc()],
                 wgpu::PrimitiveTopology::TriangleList,
                 shader.create_wgpu_shader_module(device)?,
@@ -414,7 +407,7 @@ impl Scene {
                 &device,
                 &layout,
                 HdrPipeline::RENDER_FORMAT,
-                Some(texture::Texture::DEPTH_FORMAT),
+                Some(wgpu::TextureFormat::Depth32Float),
                 &[model::ModelVertex::desc()],
                 wgpu::PrimitiveTopology::TriangleList,
                 shader.create_wgpu_shader_module(device)?,
@@ -436,12 +429,37 @@ impl Scene {
                 &device,
                 &layout,
                 HdrPipeline::RENDER_FORMAT,
-                Some(texture::Texture::DEPTH_FORMAT),
+                Some(wgpu::TextureFormat::Depth32Float),
                 &[],
                 wgpu::PrimitiveTopology::TriangleList,
                 shader.create_wgpu_shader_module(device)?,
             )
         };
+
+        let depth_texture = Texture::new(
+            &TextureProjectView {
+                viewports: &project.viewports,
+                dimensions: &project.dimensions,
+            },
+            device,
+            queue,
+            "depth texture".to_string(),
+            wgpu::TextureFormat::Depth32Float,
+            wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::RENDER_ATTACHMENT,
+            TextureSource::Dimension(dimension_id),
+        );
+        let depth_texture_id = project.textures.register(depth_texture);
+        let depth_texture_view = TextureView::new(
+            &TextureViewProjectView {
+                textures: &project.textures,
+            },
+            "Depth Texture View".to_string(),
+            depth_texture_id,
+            None,
+            None,
+            None,
+        );
+        let depth_texture_view_id = project.texture_views.register(depth_texture_view);
 
         let viewport_texture = Texture::new(
             &TextureProjectView {
@@ -478,14 +496,14 @@ impl Scene {
         );
         let viewport_texture_view_id = project.texture_views.register(viewport_texture_view);
         let viewport = project::viewport::Viewport::new(
-            ViewportProjectView {
+            ViewportContext {
                 texture_views: &project.texture_views,
+                egui_renderer,
             },
             "Viewport Texture",
             device,
             viewport_texture_view_id,
             dimension_id,
-            egui_renderer,
         );
         let viewport_id = project.viewports.register(viewport);
 
@@ -494,7 +512,7 @@ impl Scene {
             obj_model,
             instance_buffer,
             instances,
-            depth_texture,
+            depth_texture_view_id,
             camera_bind_group_id,
             light_uniform_id,
             light_bind_group_id,
@@ -528,7 +546,7 @@ impl Scene {
         *position = new_position.into();
     }
 
-    pub fn resize(&mut self, size: ui::Size2d, project: &mut Project, device: &wgpu::Device) {
+    pub fn resize(&mut self, size: ui::Size2d, project: &mut Project) {
         if let Some(viewport) = project.viewports.get(self.hdr_viewport_id) {
             let dimension = project.dimensions.get_mut(viewport.dimension_id).unwrap();
             dimension.size = size;
@@ -538,12 +556,14 @@ impl Scene {
             let dimension = project.dimensions.get_mut(viewport.dimension_id).unwrap();
             dimension.size = size;
         }
-
-        // TODO:
-        // self.depth_texture = texture::Texture::create_depth_texture(device, size, "Depth Buffer");
     }
 
     pub fn render(&self, encoder: &mut wgpu::CommandEncoder, project: &project::Project) {
+        let depth_texture_view = project
+            .texture_views
+            .get(self.depth_texture_view_id)
+            .expect("deal with this later");
+
         let main_render_pass = render::RenderPassSpec {
             label: Some("Main Render Pass"),
             target_spec: render::RenderPassTargetSpec {
@@ -551,7 +571,7 @@ impl Scene {
                 load_operation: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
             },
             depth_spec: Some(render::RenderPassDepthSpec {
-                texture: &self.depth_texture.view,
+                texture: depth_texture_view.inner(),
                 load_operation: wgpu::LoadOp::Clear(1.0),
             }),
             pipelines: vec![

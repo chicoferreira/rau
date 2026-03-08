@@ -66,7 +66,7 @@ fn resource_detail_label(
             let texture_name = project
                 .texture_views
                 .get(texture_view_id)
-                .map(|texture| texture.label.to_owned())
+                .map(|texture| texture.label().to_owned())
                 .unwrap_or_else(|| "missing texture".to_owned());
             format!("texture: {texture_name}, view: {view_dimension:?}")
         }

@@ -25,7 +25,7 @@ impl HdrPipeline {
         let bind_group = BindGroup::new(
             project,
             device,
-            "HDR Bind Group",
+            "HDR Bind Group".to_string(),
             vec![
                 BindGroupEntry {
                     binding: 0,

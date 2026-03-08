@@ -38,13 +38,13 @@ impl Uniform {
 
     pub fn update(
         &mut self,
-        context: &UniformProjectView<'_>,
+        context: UniformProjectView<'_>,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
     ) {
         let mut updated = false;
         for field in &mut self.data.fields {
-            updated |= field.update(context);
+            updated |= field.update(&context);
         }
 
         if updated {

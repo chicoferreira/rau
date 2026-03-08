@@ -1,9 +1,13 @@
 use image::GenericImageView;
 
-use crate::project::{
-    DimensionId, ViewportId, dimension::Dimension, storage::Storage, viewport::Viewport,
+use crate::{
+    project::{
+        DimensionId, ViewportId, dimension::Dimension, storage::Storage, viewport::Viewport,
+    },
+    rebuild::Recreatable,
 };
 
+#[derive(Clone, Copy)]
 pub struct TextureProjectView<'a> {
     pub viewports: &'a Storage<ViewportId, Viewport>,
     pub dimensions: &'a Storage<DimensionId, Dimension>,
@@ -11,12 +15,20 @@ pub struct TextureProjectView<'a> {
 
 pub struct Texture {
     pub label: String,
-    pub format: wgpu::TextureFormat,
-    pub usage: wgpu::TextureUsages,
+    format: wgpu::TextureFormat,
+    usage: wgpu::TextureUsages,
     // TODO: decide if we want that the texture decides which source to grab the size to,
     // or it is the source's job to update the size if it changes
-    pub source: TextureSource,
+    source: TextureSource,
     inner: wgpu::Texture,
+    dirty: bool,
+}
+
+pub enum TextureSource {
+    // Grab size from dimension
+    Dimension(DimensionId),
+    Image(image::DynamicImage), // TODO: change this to image_id once we have it in the project
+    Manual { size: wgpu::Extent3d },
 }
 
 impl Texture {
@@ -36,11 +48,16 @@ impl Texture {
             usage,
             source,
             inner,
+            dirty: false,
         }
     }
 
     pub fn inner(&self) -> &wgpu::Texture {
         &self.inner
+    }
+
+    pub fn format(&self) -> wgpu::TextureFormat {
+        self.format
     }
 
     fn create_texture(
@@ -123,9 +140,45 @@ impl Texture {
     // TODO: Only needs updating when either the source changes size or any parameter updates
 }
 
-pub enum TextureSource {
-    // Grab size from dimension
-    Dimension(DimensionId),
-    Image(image::DynamicImage), // TODO: change this to image_id once we have it in the project
-    Manual { size: wgpu::Extent3d },
+impl Recreatable for Texture {
+    type Context<'a> = TextureProjectView<'a>;
+
+    fn recreate<'a>(
+        &mut self,
+        project: &mut Self::Context<'a>,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+    ) {
+        self.inner = Self::create_texture(
+            &project,
+            device,
+            queue,
+            &self.label,
+            self.format,
+            self.usage,
+            &self.source,
+        );
+    }
+
+    fn should_recreate(
+        &self,
+        project: &Self::Context<'_>,
+        _recreate_list: &crate::rebuild::RebuildTracker,
+    ) -> bool {
+        if self.dirty {
+            return true;
+        }
+
+        match &self.source {
+            TextureSource::Dimension(dimension_id) => {
+                if let Some(dimension) = project.dimensions.get(*dimension_id) {
+                    let current_size = self.inner.size();
+                    return dimension.size.width() != current_size.width
+                        || dimension.size.height() != current_size.height;
+                }
+            }
+            _ => (),
+        };
+        false
+    }
 }

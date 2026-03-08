@@ -3,7 +3,9 @@ use slotmap::new_key_type;
 use crate::{
     camera::Camera,
     project::{
-        bindgroup::BindGroup, dimension::Dimension, sampler::Sampler, shader::Shader, storage::Storage, texture::Texture, texture_view::TextureView, uniform::Uniform, viewport::Viewport
+        bindgroup::BindGroup, dimension::Dimension, sampler::Sampler, shader::Shader,
+        storage::Storage, texture::Texture, texture_view::TextureView, uniform::Uniform,
+        viewport::Viewport,
     },
 };
 

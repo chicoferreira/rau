@@ -11,8 +11,13 @@ use crate::{
     camera::{Camera, CameraInput},
     project::{
         self, BindGroupId, ShaderId, UniformId, ViewportId,
+        bindgroup::BindGroupProjectView,
+        texture::TextureProjectView,
+        texture_view::TextureViewProjectView,
         uniform::{UniformData, UniformField, UniformFieldSourceKind, UniformProjectView},
+        viewport::ViewportContext,
     },
+    rebuild::RebuildTracker,
     resources, scene,
     ui::{
         self,
@@ -291,9 +296,124 @@ impl State {
                     });
             });
 
-        let events = self.pending_events.drain(..);
+        self.handle_events();
 
-        for event in events {
+        self.camera_input
+            .update_camera(&mut self.project.camera, dt);
+
+        for (_, uniform) in self.project.uniforms.list_mut() {
+            uniform.update(
+                UniformProjectView {
+                    camera: &self.project.camera,
+                },
+                &self.device,
+                &self.queue,
+            );
+        }
+
+        self.tick_objects();
+
+        self.scene.update(&mut self.project, dt);
+
+        self.scene.render(&mut encoder, &self.project);
+
+        self.egui_renderer.render_egui_frame(
+            &frame,
+            &self.device,
+            &self.queue,
+            &mut encoder,
+            &view,
+            &screen_descriptor,
+        );
+
+        self.queue.submit(std::iter::once(encoder.finish()));
+        output.present();
+
+        Ok(())
+    }
+
+    pub fn handle_window_event(
+        &mut self,
+        event_loop: &winit::event_loop::ActiveEventLoop,
+        event: winit::event::WindowEvent,
+    ) {
+        let egui_response = self.egui_renderer.handle_input(&self.window, &event);
+        if egui_response.consumed {
+            return;
+        }
+
+        match event {
+            WindowEvent::CloseRequested => event_loop.exit(),
+            WindowEvent::Resized(size) => self.resize(size.width, size.height),
+            WindowEvent::RedrawRequested => {
+                let now = instant::Instant::now();
+                let dt = now - self.last_render_time;
+                self.last_render_time = now;
+                match self.render(dt) {
+                    Ok(_) => {}
+                    Err(wgpu::SurfaceError::Lost | wgpu::SurfaceError::Outdated) => {
+                        let size = self.window.inner_size();
+                        self.resize(size.width, size.height);
+                    }
+                    Err(e) => {
+                        log::error!("Unable to render {}", e);
+                    }
+                }
+            }
+            WindowEvent::KeyboardInput {
+                event:
+                    KeyEvent {
+                        physical_key: PhysicalKey::Code(code),
+                        state: key_state,
+                        ..
+                    },
+                ..
+            } => match (code, key_state) {
+                (KeyCode::Escape, ElementState::Pressed) => event_loop.exit(),
+                (key_code, element_state) => {
+                    self.pending_events.push(StateEvent::ViewportEvent(
+                        ViewportId::from(KeyData::from_ffi(0)), // TODO: fix me
+                        ViewportEvent::Keyboard {
+                            key_code,
+                            element_state,
+                        },
+                    ));
+                }
+            },
+            _ => {}
+        }
+    }
+
+    fn tick_objects(&mut self) {
+        let mut recreate_list = RebuildTracker::new(&self.device, &self.queue);
+
+        let view = &mut TextureProjectView {
+            viewports: &self.project.viewports,
+            dimensions: &self.project.dimensions,
+        };
+        recreate_list.recreate_storage(&mut self.project.textures, view);
+
+        let view = &mut TextureViewProjectView {
+            textures: &self.project.textures,
+        };
+        recreate_list.recreate_storage(&mut self.project.texture_views, view);
+
+        let view = &mut ViewportContext {
+            texture_views: &self.project.texture_views,
+            egui_renderer: &mut self.egui_renderer,
+        };
+        recreate_list.recreate_storage(&mut self.project.viewports, view);
+
+        let view = &mut BindGroupProjectView {
+            uniforms: &self.project.uniforms,
+            texture_views: &self.project.texture_views,
+            samplers: &self.project.samplers,
+        };
+        recreate_list.recreate_storage(&mut self.project.bind_groups, view);
+    }
+
+    fn handle_events(&mut self) {
+        for event in self.pending_events.drain(..) {
             match event {
                 StateEvent::InspectUniform(id) => {
                     self.inspector_tree_pane
@@ -441,7 +561,7 @@ impl State {
                     match viewport_event {
                         ViewportEvent::Resize { size } => {
                             camera.resize(size);
-                            self.scene.resize(size, &mut self.project, &self.device);
+                            self.scene.resize(size, &mut self.project);
                         }
                         ViewportEvent::Scroll { delta_y_px } => {
                             self.camera_input.handle_scroll_pixels(delta_y_px);
@@ -458,86 +578,6 @@ impl State {
                     }
                 }
             }
-        }
-
-        self.camera_input
-            .update_camera(&mut self.project.camera, dt);
-
-        let project_view = UniformProjectView {
-            camera: &self.project.camera,
-        };
-        for (_, uniform) in self.project.uniforms.list_mut() {
-            uniform.update(&project_view, &self.device, &self.queue);
-        }
-
-        self.scene.update(&mut self.project, dt);
-
-        self.scene.render(&mut encoder, &self.project);
-
-        self.egui_renderer.render_egui_frame(
-            &frame,
-            &self.device,
-            &self.queue,
-            &mut encoder,
-            &view,
-            &screen_descriptor,
-        );
-
-        self.queue.submit(std::iter::once(encoder.finish()));
-        output.present();
-
-        Ok(())
-    }
-
-    pub fn handle_window_event(
-        &mut self,
-        event_loop: &winit::event_loop::ActiveEventLoop,
-        event: winit::event::WindowEvent,
-    ) {
-        let egui_response = self.egui_renderer.handle_input(&self.window, &event);
-        if egui_response.consumed {
-            return;
-        }
-
-        match event {
-            WindowEvent::CloseRequested => event_loop.exit(),
-            WindowEvent::Resized(size) => self.resize(size.width, size.height),
-            WindowEvent::RedrawRequested => {
-                let now = instant::Instant::now();
-                let dt = now - self.last_render_time;
-                self.last_render_time = now;
-                match self.render(dt) {
-                    Ok(_) => {}
-                    Err(wgpu::SurfaceError::Lost | wgpu::SurfaceError::Outdated) => {
-                        let size = self.window.inner_size();
-                        self.resize(size.width, size.height);
-                    }
-                    Err(e) => {
-                        log::error!("Unable to render {}", e);
-                    }
-                }
-            }
-            WindowEvent::KeyboardInput {
-                event:
-                    KeyEvent {
-                        physical_key: PhysicalKey::Code(code),
-                        state: key_state,
-                        ..
-                    },
-                ..
-            } => match (code, key_state) {
-                (KeyCode::Escape, ElementState::Pressed) => event_loop.exit(),
-                (key_code, element_state) => {
-                    self.pending_events.push(StateEvent::ViewportEvent(
-                        ViewportId::from(KeyData::from_ffi(0)), // TODO: fix me
-                        ViewportEvent::Keyboard {
-                            key_code,
-                            element_state,
-                        },
-                    ));
-                }
-            },
-            _ => {}
         }
     }
 }

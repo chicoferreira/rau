@@ -1,16 +1,31 @@
-use crate::project::{TextureId, storage::Storage, texture::Texture};
+use crate::{
+    project::{TextureId, storage::Storage, texture::Texture},
+    rebuild::Recreatable,
+};
 
+#[derive(Clone, Copy)]
 pub struct TextureViewProjectView<'a> {
     pub textures: &'a Storage<TextureId, Texture>,
 }
 
 pub struct TextureView {
-    pub label: String,
-    pub format: Option<TextureViewFormat>,
-    pub dimension: Option<wgpu::TextureViewDimension>,
-    pub array_layer_count: Option<u32>,
-    pub texture_id: TextureId,
+    label: String,
+    format: Option<TextureViewFormat>,
+    dimension: Option<wgpu::TextureViewDimension>,
+    array_layer_count: Option<u32>,
+    texture_id: TextureId,
     inner: wgpu::TextureView,
+    dirty: bool,
+}
+
+/// As currently the texture view format is only allowed to change by srgb-ness
+/// This will allow the user to easily specify it
+///
+/// Check [`wgpu::wgt::TextureDescriptor::view_formats`]
+#[derive(Debug, Clone, Copy)]
+pub enum TextureViewFormat {
+    Srgb,
+    Linear,
 }
 
 impl TextureView {
@@ -39,6 +54,7 @@ impl TextureView {
             array_layer_count,
             texture_id,
             inner,
+            dirty: false,
         }
     }
 
@@ -46,16 +62,8 @@ impl TextureView {
         &self.inner
     }
 
-    // TODO: Only needs updating when either the texture or any parameter changes
-    pub fn update(&mut self, project: &TextureViewProjectView) {
-        self.inner = Self::create_view(
-            project,
-            &self.label,
-            self.texture_id,
-            self.format,
-            self.dimension,
-            self.array_layer_count,
-        );
+    pub fn label(&self) -> &str {
+        &self.label
     }
 
     fn create_view(
@@ -72,8 +80,8 @@ impl TextureView {
             .expect("deal with this later");
 
         let wgpu_format = format.as_ref().map(|format| match format {
-            TextureViewFormat::Srgb => texture.format.add_srgb_suffix(),
-            TextureViewFormat::Linear => texture.format.remove_srgb_suffix(),
+            TextureViewFormat::Srgb => texture.format().add_srgb_suffix(),
+            TextureViewFormat::Linear => texture.format().remove_srgb_suffix(),
         });
 
         texture.inner().create_view(&wgpu::TextureViewDescriptor {
@@ -86,12 +94,30 @@ impl TextureView {
     }
 }
 
-/// As currently the texture view format is only allowed to change by srgb-ness
-/// This will allow the user to easily specify it
-///
-/// Check [`wgpu::wgt::TextureDescriptor::view_formats`]
-#[derive(Debug, Clone, Copy)]
-pub enum TextureViewFormat {
-    Srgb,
-    Linear,
+impl Recreatable for TextureView {
+    type Context<'a> = TextureViewProjectView<'a>;
+
+    fn should_recreate(
+        &self,
+        _context: &Self::Context<'_>,
+        recreate_list: &crate::rebuild::RebuildTracker,
+    ) -> bool {
+        self.dirty || recreate_list.was_recreated(self.texture_id)
+    }
+
+    fn recreate<'a>(
+        &mut self,
+        context: &mut Self::Context<'a>,
+        _device: &wgpu::Device,
+        _queue: &wgpu::Queue,
+    ) {
+        self.inner = Self::create_view(
+            context,
+            &self.label,
+            self.texture_id,
+            self.format,
+            self.dimension,
+            self.array_layer_count,
+        );
+    }
 }
