@@ -6,13 +6,13 @@ use crate::{
         self, BindGroupId, Project, TextureViewId, UniformId, ViewportId,
         dimension::Dimension,
         sampler::{Sampler, SamplerSpec},
-        texture::{Texture, TextureProjectView, TextureSource},
-        texture_view::{TextureView, TextureViewFormat, TextureViewProjectView},
+        texture::{Texture, TextureCreationContext, TextureSource},
+        texture_view::{TextureView, TextureViewCreationContext, TextureViewFormat},
         uniform::{
             CameraFieldSource, Uniform, UniformData, UniformField, UniformFieldData,
             UniformFieldSource,
         },
-        viewport::ViewportContext,
+        viewport::ViewportCreationContext,
     },
     render, resources,
     scene::hdr::HdrPipeline,
@@ -269,12 +269,12 @@ impl Scene {
         let dimension_id = project.dimensions.register(dimension);
 
         let hdr_texture = Texture::new(
-            &TextureProjectView {
+            &TextureCreationContext {
                 viewports: &project.viewports,
                 dimensions: &project.dimensions,
+                device,
+                queue,
             },
-            device,
-            queue,
             "Hdr Texture".to_string(),
             HdrPipeline::RENDER_FORMAT,
             wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::RENDER_ATTACHMENT,
@@ -282,7 +282,7 @@ impl Scene {
         );
         let hdr_texture_id = project.textures.register(hdr_texture);
         let hdr_texture_view = TextureView::new(
-            &TextureViewProjectView {
+            &TextureViewCreationContext {
                 textures: &project.textures,
             },
             "HDR Texture View".to_string(),
@@ -294,12 +294,12 @@ impl Scene {
         let hdr_texture_view_id = project.texture_views.register(hdr_texture_view);
 
         let hdr_viewport = project::viewport::Viewport::new(
-            ViewportContext {
+            ViewportCreationContext {
                 texture_views: &project.texture_views,
                 egui_renderer,
+                device,
             },
             "HDR Buffer",
-            device,
             hdr_texture_view_id,
             dimension_id,
         );
@@ -327,7 +327,7 @@ impl Scene {
             hdr_loader.from_equirectangular_bytes(project, &device, &queue, &sky_bytes, 1080)?;
 
         let sky_texture_view = TextureView::new(
-            &TextureViewProjectView {
+            &TextureViewCreationContext {
                 textures: &project.textures,
             },
             "Sky Texture View".to_string(),
@@ -437,12 +437,12 @@ impl Scene {
         };
 
         let depth_texture = Texture::new(
-            &TextureProjectView {
+            &TextureCreationContext {
                 viewports: &project.viewports,
                 dimensions: &project.dimensions,
+                device,
+                queue,
             },
-            device,
-            queue,
             "depth texture".to_string(),
             wgpu::TextureFormat::Depth32Float,
             wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::RENDER_ATTACHMENT,
@@ -450,7 +450,7 @@ impl Scene {
         );
         let depth_texture_id = project.textures.register(depth_texture);
         let depth_texture_view = TextureView::new(
-            &TextureViewProjectView {
+            &TextureViewCreationContext {
                 textures: &project.textures,
             },
             "Depth Texture View".to_string(),
@@ -462,12 +462,12 @@ impl Scene {
         let depth_texture_view_id = project.texture_views.register(depth_texture_view);
 
         let viewport_texture = Texture::new(
-            &TextureProjectView {
+            &TextureCreationContext {
                 viewports: &project.viewports,
                 dimensions: &project.dimensions,
+                device,
+                queue,
             },
-            device,
-            queue,
             "Viewport Texture".to_string(),
             viewport_texture_format,
             wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::RENDER_ATTACHMENT,
@@ -475,7 +475,7 @@ impl Scene {
         );
         let viewport_texture_id = project.textures.register(viewport_texture);
         let output_viewport_view_id = project.texture_views.register(TextureView::new(
-            &TextureViewProjectView {
+            &TextureViewCreationContext {
                 textures: &project.textures,
             },
             "Viewport Texture View".to_string(),
@@ -485,7 +485,7 @@ impl Scene {
             None,
         ));
         let viewport_texture_view = TextureView::new(
-            &TextureViewProjectView {
+            &TextureViewCreationContext {
                 textures: &project.textures,
             },
             "Viewport Texture View Egui".to_string(),
@@ -496,12 +496,12 @@ impl Scene {
         );
         let viewport_texture_view_id = project.texture_views.register(viewport_texture_view);
         let viewport = project::viewport::Viewport::new(
-            ViewportContext {
+            ViewportCreationContext {
                 texture_views: &project.texture_views,
                 egui_renderer,
+                device,
             },
             "Viewport Texture",
-            device,
             viewport_texture_view_id,
             dimension_id,
         );

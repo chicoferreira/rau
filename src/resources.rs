@@ -7,8 +7,8 @@ use crate::{
     project::{
         self, Project, SamplerId, TextureViewId,
         bindgroup::{BindGroup, BindGroupEntry, BindGroupResource},
-        texture::{Texture, TextureProjectView, TextureSource},
-        texture_view::{TextureView, TextureViewProjectView},
+        texture::{Texture, TextureCreationContext, TextureSource},
+        texture_view::{TextureView, TextureViewCreationContext},
     },
 };
 
@@ -59,11 +59,9 @@ pub async fn load_binary(file_name: &str) -> anyhow::Result<Vec<u8>> {
 }
 
 pub async fn load_texture(
-    project: &TextureProjectView<'_>,
+    ctx: &TextureCreationContext<'_>,
     file_name: &str,
     is_normal_map: bool,
-    device: &wgpu::Device,
-    queue: &wgpu::Queue,
 ) -> anyhow::Result<Texture> {
     let data = load_binary(file_name).await?;
     let img = image::load_from_memory(&data)?;
@@ -76,9 +74,7 @@ pub async fn load_texture(
     let source = TextureSource::Image(img);
 
     Ok(Texture::new(
-        project,
-        device,
-        queue,
+        ctx,
         file_name.to_string(),
         format,
         wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
@@ -157,19 +153,20 @@ pub async fn load_model(
 
     let mut materials = Vec::new();
 
-    let texture_project_view = TextureProjectView {
+    let ctx = TextureCreationContext {
         viewports: &project.viewports,
         dimensions: &project.dimensions,
+        device,
+        queue,
     };
 
     for m in obj_materials? {
         let file_name = m.diffuse_texture.unwrap();
-        let diffuse_texture =
-            load_texture(&texture_project_view, &file_name, false, device, queue).await?;
+        let diffuse_texture = load_texture(&ctx, &file_name, false).await?;
 
         let diffuse_texture_id = project.textures.register(diffuse_texture);
         let diffuse_texture_view_id = project.texture_views.register(TextureView::new(
-            &TextureViewProjectView {
+            &TextureViewCreationContext {
                 textures: &project.textures,
             },
             file_name.clone(),
@@ -179,18 +176,11 @@ pub async fn load_model(
             None,
         ));
 
-        let normal_texture = load_texture(
-            &texture_project_view,
-            &m.normal_texture.unwrap(),
-            true,
-            device,
-            queue,
-        )
-        .await?;
+        let normal_texture = load_texture(&ctx, &m.normal_texture.unwrap(), true).await?;
 
         let normal_texture_id = project.textures.register(normal_texture);
         let normal_texture_view_id = project.texture_views.register(TextureView::new(
-            &TextureViewProjectView {
+            &TextureViewCreationContext {
                 textures: &project.textures,
             },
             file_name.clone(),

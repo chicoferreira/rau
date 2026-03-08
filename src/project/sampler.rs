@@ -65,14 +65,12 @@ impl Sampler {
 }
 
 impl Recreatable for Sampler {
-    type Context<'a> = ();
+    type Context<'a> = &'a wgpu::Device;
 
     fn recreate<'a>(
         &mut self,
-        _context: &mut Self::Context<'a>,
+        device: &mut Self::Context<'a>,
         _tracker: &RecreateTracker,
-        device: &wgpu::Device,
-        _queue: &wgpu::Queue,
     ) -> RecreateResult {
         if !self.dirty {
             return RecreateResult::Unchanged;

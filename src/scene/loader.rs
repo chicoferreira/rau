@@ -2,7 +2,7 @@ use std::io::Cursor;
 
 use crate::project::{
     Project, ShaderId, TextureId,
-    texture::{Texture, TextureProjectView, TextureSource},
+    texture::{Texture, TextureCreationContext, TextureSource},
 };
 
 pub struct HdrLoader {
@@ -137,12 +137,12 @@ impl HdrLoader {
         );
 
         let dst_texture = Texture::new(
-            &TextureProjectView {
+            &TextureCreationContext {
                 viewports: &project.viewports,
                 dimensions: &project.dimensions,
+                device,
+                queue,
             },
-            device,
-            queue,
             "Sky Texture".to_string(),
             self.texture_format,
             wgpu::TextureUsages::STORAGE_BINDING
