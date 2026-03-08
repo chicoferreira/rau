@@ -70,10 +70,9 @@ impl<'a> RecreateTracker<'a> {
         object_id: ProjectResourceId,
         object: &mut R,
         mut project: &mut R::Context<'ctx>,
-        device: &wgpu::Device,
-        queue: &wgpu::Queue,
     ) {
-        if let RecreateResult::Recreated = object.recreate(&mut project, self, device, queue) {
+        let recreate_result = object.recreate(&mut project, self, self.device, self.queue);
+        if let RecreateResult::Recreated = recreate_result {
             log::debug!("Recreated {object_id:?}");
             self.recreated_ids.push(object_id);
         }
@@ -85,7 +84,7 @@ impl<'a> RecreateTracker<'a> {
         project: &mut R::Context<'ctx>,
     ) {
         for (id, object) in storage.list_mut() {
-            self.recreate_if_needed(id.into(), object, project, self.device, self.queue);
+            self.recreate_if_needed(id.into(), object, project);
         }
     }
 
