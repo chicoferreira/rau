@@ -2,7 +2,7 @@ use crate::project::{
     BindGroupId, SamplerId, TextureId, TextureViewId, UniformId, ViewportId, storage::Storage,
 };
 
-pub struct RebuildTracker<'a> {
+pub struct RecreateTracker<'a> {
     recreated_ids: Vec<ProjectResourceId>,
     device: &'a wgpu::Device,
     queue: &'a wgpu::Queue,
@@ -39,20 +39,24 @@ impl_project_resource_from_id!(
     SamplerId => Sampler,
 );
 
+pub enum RecreateResult {
+    Recreated,
+    Unchanged,
+}
+
 pub trait Recreatable {
     type Context<'a>;
-
-    fn should_recreate(&self, context: &Self::Context<'_>, recreate_list: &RebuildTracker) -> bool;
 
     fn recreate<'a>(
         &mut self,
         context: &mut Self::Context<'a>,
+        tracker: &RecreateTracker,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
-    );
+    ) -> RecreateResult;
 }
 
-impl<'a> RebuildTracker<'a> {
+impl<'a> RecreateTracker<'a> {
     pub fn new(device: &'a wgpu::Device, queue: &'a wgpu::Queue) -> Self {
         Self {
             recreated_ids: Vec::new(),
@@ -69,9 +73,8 @@ impl<'a> RebuildTracker<'a> {
         device: &wgpu::Device,
         queue: &wgpu::Queue,
     ) {
-        if object.should_recreate(&project, self) {
-            log::debug!("Recreating {object_id:?}");
-            object.recreate(&mut project, device, queue);
+        if let RecreateResult::Recreated = object.recreate(&mut project, self, device, queue) {
+            log::debug!("Recreated {object_id:?}");
             self.recreated_ids.push(object_id);
         }
     }

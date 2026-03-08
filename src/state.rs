@@ -12,12 +12,12 @@ use crate::{
     project::{
         self, BindGroupId, ShaderId, UniformId, ViewportId,
         bindgroup::BindGroupProjectView,
+        recreate::RecreateTracker,
         texture::TextureProjectView,
         texture_view::TextureViewProjectView,
         uniform::{UniformData, UniformField, UniformFieldSourceKind, UniformProjectView},
         viewport::ViewportContext,
     },
-    rebuild::RebuildTracker,
     resources, scene,
     ui::{
         self,
@@ -385,31 +385,31 @@ impl State {
     }
 
     fn tick_objects(&mut self) {
-        let mut recreate_list = RebuildTracker::new(&self.device, &self.queue);
+        let mut tracker = RecreateTracker::new(&self.device, &self.queue);
 
         let view = &mut TextureProjectView {
             viewports: &self.project.viewports,
             dimensions: &self.project.dimensions,
         };
-        recreate_list.recreate_storage(&mut self.project.textures, view);
+        tracker.recreate_storage(&mut self.project.textures, view);
 
         let view = &mut TextureViewProjectView {
             textures: &self.project.textures,
         };
-        recreate_list.recreate_storage(&mut self.project.texture_views, view);
+        tracker.recreate_storage(&mut self.project.texture_views, view);
 
         let view = &mut ViewportContext {
             texture_views: &self.project.texture_views,
             egui_renderer: &mut self.egui_renderer,
         };
-        recreate_list.recreate_storage(&mut self.project.viewports, view);
+        tracker.recreate_storage(&mut self.project.viewports, view);
 
         let view = &mut BindGroupProjectView {
             uniforms: &self.project.uniforms,
             texture_views: &self.project.texture_views,
             samplers: &self.project.samplers,
         };
-        recreate_list.recreate_storage(&mut self.project.bind_groups, view);
+        tracker.recreate_storage(&mut self.project.bind_groups, view);
     }
 
     fn handle_events(&mut self) {

@@ -11,6 +11,7 @@ use crate::{
 
 pub mod bindgroup;
 pub mod dimension;
+pub mod recreate;
 pub mod sampler;
 pub mod shader;
 pub mod storage;

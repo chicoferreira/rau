@@ -1,10 +1,11 @@
 use image::GenericImageView;
 
-use crate::{
-    project::{
-        DimensionId, ViewportId, dimension::Dimension, storage::Storage, viewport::Viewport,
-    },
-    rebuild::Recreatable,
+use crate::project::{
+    DimensionId, ViewportId,
+    dimension::Dimension,
+    recreate::{Recreatable, RecreateResult, RecreateTracker},
+    storage::Storage,
+    viewport::Viewport,
 };
 
 #[derive(Clone, Copy)]
@@ -136,8 +137,6 @@ impl Texture {
 
         texture
     }
-
-    // TODO: Only needs updating when either the source changes size or any parameter updates
 }
 
 impl Recreatable for Texture {
@@ -146,9 +145,29 @@ impl Recreatable for Texture {
     fn recreate<'a>(
         &mut self,
         project: &mut Self::Context<'a>,
+        _tracker: &RecreateTracker,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
-    ) {
+    ) -> RecreateResult {
+        let dirty_source = {
+            let mut result = false;
+            match &self.source {
+                TextureSource::Dimension(dimension_id) => {
+                    if let Some(dimension) = project.dimensions.get(*dimension_id) {
+                        let current_size = self.inner.size();
+                        result = dimension.size.width() != current_size.width
+                            || dimension.size.height() != current_size.height;
+                    }
+                }
+                _ => (),
+            }
+            result
+        };
+
+        if self.dirty || !dirty_source {
+            return RecreateResult::Unchanged;
+        }
+
         self.inner = Self::create_texture(
             &project,
             device,
@@ -158,27 +177,6 @@ impl Recreatable for Texture {
             self.usage,
             &self.source,
         );
-    }
-
-    fn should_recreate(
-        &self,
-        project: &Self::Context<'_>,
-        _recreate_list: &crate::rebuild::RebuildTracker,
-    ) -> bool {
-        if self.dirty {
-            return true;
-        }
-
-        match &self.source {
-            TextureSource::Dimension(dimension_id) => {
-                if let Some(dimension) = project.dimensions.get(*dimension_id) {
-                    let current_size = self.inner.size();
-                    return dimension.size.width() != current_size.width
-                        || dimension.size.height() != current_size.height;
-                }
-            }
-            _ => (),
-        };
-        false
+        RecreateResult::Recreated
     }
 }

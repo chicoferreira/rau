@@ -1,4 +1,4 @@
-use crate::rebuild::Recreatable;
+use crate::project::recreate::{Recreatable, RecreateResult, RecreateTracker};
 
 pub struct SamplerSpec {
     pub address_mode: wgpu::AddressMode,
@@ -67,20 +67,18 @@ impl Sampler {
 impl Recreatable for Sampler {
     type Context<'a> = ();
 
-    fn should_recreate(
-        &self,
-        _context: &Self::Context<'_>,
-        _recreate_list: &crate::rebuild::RebuildTracker,
-    ) -> bool {
-        self.dirty
-    }
-
     fn recreate<'a>(
         &mut self,
         _context: &mut Self::Context<'a>,
+        _tracker: &RecreateTracker,
         device: &wgpu::Device,
         _queue: &wgpu::Queue,
-    ) {
+    ) -> RecreateResult {
+        if !self.dirty {
+            return RecreateResult::Unchanged;
+        }
+
         self.inner = Self::create_sampler(device, &self.label, &self.spec);
+        RecreateResult::Recreated
     }
 }

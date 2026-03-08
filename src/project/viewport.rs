@@ -1,6 +1,10 @@
 use crate::{
-    project::{DimensionId, TextureViewId, storage::Storage, texture_view::TextureView},
-    rebuild::Recreatable,
+    project::{
+        DimensionId, TextureViewId,
+        recreate::{Recreatable, RecreateResult, RecreateTracker},
+        storage::Storage,
+        texture_view::TextureView,
+    },
     ui::{self},
 };
 
@@ -75,27 +79,27 @@ impl Viewport {
 impl Recreatable for Viewport {
     type Context<'a> = ViewportContext<'a>;
 
-    fn should_recreate(
-        &self,
-        _project: &Self::Context<'_>,
-        recreate_list: &crate::rebuild::RebuildTracker,
-    ) -> bool {
-        self.dirty || recreate_list.was_recreated(self.texture_view_id)
-    }
-
     fn recreate<'a>(
         &mut self,
         context: &mut Self::Context<'a>,
+        tracker: &RecreateTracker,
         device: &wgpu::Device,
         _queue: &wgpu::Queue,
-    ) {
-        if let Some(texture_view) = context.texture_views.get(self.texture_view_id) {
-            context.egui_renderer.update_egui_texture(
-                device,
-                texture_view.inner(),
-                wgpu::FilterMode::Linear,
-                self.egui_id,
-            );
+    ) -> RecreateResult {
+        if !self.dirty && !tracker.was_recreated(self.texture_view_id) {
+            return RecreateResult::Unchanged;
         }
+        let Some(texture_view) = context.texture_views.get(self.texture_view_id) else {
+            return RecreateResult::Unchanged;
+        };
+
+        context.egui_renderer.update_egui_texture(
+            device,
+            texture_view.inner(),
+            wgpu::FilterMode::Linear,
+            self.egui_id,
+        );
+
+        RecreateResult::Recreated
     }
 }

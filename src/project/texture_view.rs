@@ -1,6 +1,8 @@
-use crate::{
-    project::{TextureId, storage::Storage, texture::Texture},
-    rebuild::Recreatable,
+use crate::project::{
+    TextureId,
+    recreate::{Recreatable, RecreateResult, RecreateTracker},
+    storage::Storage,
+    texture::Texture,
 };
 
 #[derive(Clone, Copy)]
@@ -97,20 +99,16 @@ impl TextureView {
 impl Recreatable for TextureView {
     type Context<'a> = TextureViewProjectView<'a>;
 
-    fn should_recreate(
-        &self,
-        _context: &Self::Context<'_>,
-        recreate_list: &crate::rebuild::RebuildTracker,
-    ) -> bool {
-        self.dirty || recreate_list.was_recreated(self.texture_id)
-    }
-
     fn recreate<'a>(
         &mut self,
         context: &mut Self::Context<'a>,
+        tracker: &RecreateTracker,
         _device: &wgpu::Device,
         _queue: &wgpu::Queue,
-    ) {
+    ) -> RecreateResult {
+        if !self.dirty && !tracker.was_recreated(self.texture_id) {
+            return RecreateResult::Unchanged;
+        }
         self.inner = Self::create_view(
             context,
             &self.label,
@@ -119,5 +117,6 @@ impl Recreatable for TextureView {
             self.dimension,
             self.array_layer_count,
         );
+        RecreateResult::Recreated
     }
 }
