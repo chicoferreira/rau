@@ -6,7 +6,7 @@ use crate::camera::Camera;
 // We need this struct to avoid borrow checker being mad
 // when we are iterating over uniforms from a project
 // and then we need the project to update it
-pub struct UniformProjectView<'a> {
+pub struct UniformProjectContext<'a> {
     pub camera: &'a Camera,
 }
 
@@ -38,7 +38,7 @@ impl Uniform {
 
     pub fn update(
         &mut self,
-        context: UniformProjectView<'_>,
+        context: UniformProjectContext<'_>,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
     ) {
@@ -168,7 +168,7 @@ impl UniformField {
         self.last_data.kind()
     }
 
-    fn update(&mut self, context: &UniformProjectView<'_>) -> bool {
+    fn update(&mut self, context: &UniformProjectContext<'_>) -> bool {
         let new_data = self.source.compute(context);
         let updated = self.last_data != new_data;
         self.last_data = new_data;
@@ -183,7 +183,7 @@ pub enum UniformFieldSource {
 }
 
 impl UniformFieldSource {
-    fn compute(&self, context: &UniformProjectView<'_>) -> UniformFieldData {
+    fn compute(&self, context: &UniformProjectContext<'_>) -> UniformFieldData {
         match self {
             UniformFieldSource::UserDefined(data) => data.clone(),
             UniformFieldSource::Camera(source) => source.compute(&context.camera),

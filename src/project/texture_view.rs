@@ -6,7 +6,7 @@ use crate::project::{
 };
 
 #[derive(Clone, Copy)]
-pub struct TextureViewProjectView<'a> {
+pub struct TextureViewCreationContext<'a> {
     pub textures: &'a Storage<TextureId, Texture>,
 }
 
@@ -33,7 +33,7 @@ pub enum TextureViewFormat {
 impl TextureView {
     // Change this to descriptor to avoid huge constructors
     pub fn new(
-        project: &TextureViewProjectView,
+        project: &TextureViewCreationContext,
         label: String,
         texture_id: TextureId,
         format: Option<TextureViewFormat>,
@@ -69,17 +69,14 @@ impl TextureView {
     }
 
     fn create_view(
-        project: &TextureViewProjectView,
+        ctx: &TextureViewCreationContext,
         label: &str,
         texture_id: TextureId,
         format: Option<TextureViewFormat>,
         dimension: Option<wgpu::TextureViewDimension>,
         array_layer_count: Option<u32>,
     ) -> wgpu::TextureView {
-        let texture = project
-            .textures
-            .get(texture_id)
-            .expect("deal with this later");
+        let texture = ctx.textures.get(texture_id).expect("deal with this later");
 
         let wgpu_format = format.as_ref().map(|format| match format {
             TextureViewFormat::Srgb => texture.format().add_srgb_suffix(),
@@ -97,14 +94,12 @@ impl TextureView {
 }
 
 impl Recreatable for TextureView {
-    type Context<'a> = TextureViewProjectView<'a>;
+    type Context<'a> = TextureViewCreationContext<'a>;
 
     fn recreate<'a>(
         &mut self,
         context: &mut Self::Context<'a>,
         tracker: &RecreateTracker,
-        _device: &wgpu::Device,
-        _queue: &wgpu::Queue,
     ) -> RecreateResult {
         if !self.dirty && !tracker.was_recreated(self.texture_id) {
             return RecreateResult::Unchanged;

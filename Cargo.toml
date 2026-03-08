@@ -64,6 +64,3 @@ egui-winit = { git = "https://github.com/emilk/egui.git", rev = "4a9fc7e6417b9ca
 anyhow = "1.0"
 fs_extra = "1.2"
 glob = "0.3"
-
-
-

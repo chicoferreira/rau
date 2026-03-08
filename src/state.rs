@@ -11,12 +11,12 @@ use crate::{
     camera::{Camera, CameraInput},
     project::{
         self, BindGroupId, ShaderId, UniformId, ViewportId,
-        bindgroup::BindGroupProjectView,
+        bindgroup::BindGroupCreationContext,
         recreate::RecreateTracker,
-        texture::TextureProjectView,
-        texture_view::TextureViewProjectView,
-        uniform::{UniformData, UniformField, UniformFieldSourceKind, UniformProjectView},
-        viewport::ViewportContext,
+        texture::TextureCreationContext,
+        texture_view::TextureViewCreationContext,
+        uniform::{UniformData, UniformField, UniformFieldSourceKind, UniformProjectContext},
+        viewport::ViewportCreationContext,
     },
     resources, scene,
     ui::{
@@ -303,7 +303,7 @@ impl State {
 
         for (_, uniform) in self.project.uniforms.list_mut() {
             uniform.update(
-                UniformProjectView {
+                UniformProjectContext {
                     camera: &self.project.camera,
                 },
                 &self.device,
@@ -385,29 +385,33 @@ impl State {
     }
 
     fn tick_objects(&mut self) {
-        let mut tracker = RecreateTracker::new(&self.device, &self.queue);
+        let mut tracker = RecreateTracker::new();
 
-        let view = &mut TextureProjectView {
+        let view = &mut TextureCreationContext {
             viewports: &self.project.viewports,
             dimensions: &self.project.dimensions,
+            device: &self.device,
+            queue: &self.queue,
         };
         tracker.recreate_storage(&mut self.project.textures, view);
 
-        let view = &mut TextureViewProjectView {
+        let view = &mut TextureViewCreationContext {
             textures: &self.project.textures,
         };
         tracker.recreate_storage(&mut self.project.texture_views, view);
 
-        let view = &mut ViewportContext {
+        let view = &mut ViewportCreationContext {
             texture_views: &self.project.texture_views,
             egui_renderer: &mut self.egui_renderer,
+            device: &self.device,
         };
         tracker.recreate_storage(&mut self.project.viewports, view);
 
-        let view = &mut BindGroupProjectView {
+        let view = &mut BindGroupCreationContext {
             uniforms: &self.project.uniforms,
             texture_views: &self.project.texture_views,
             samplers: &self.project.samplers,
+            device: &self.device,
         };
         tracker.recreate_storage(&mut self.project.bind_groups, view);
     }

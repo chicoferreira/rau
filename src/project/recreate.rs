@@ -2,10 +2,8 @@ use crate::project::{
     BindGroupId, SamplerId, TextureId, TextureViewId, UniformId, ViewportId, storage::Storage,
 };
 
-pub struct RecreateTracker<'a> {
+pub struct RecreateTracker {
     recreated_ids: Vec<ProjectResourceId>,
-    device: &'a wgpu::Device,
-    queue: &'a wgpu::Queue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -49,19 +47,15 @@ pub trait Recreatable {
 
     fn recreate<'a>(
         &mut self,
-        context: &mut Self::Context<'a>,
+        ctx: &mut Self::Context<'a>,
         tracker: &RecreateTracker,
-        device: &wgpu::Device,
-        queue: &wgpu::Queue,
     ) -> RecreateResult;
 }
 
-impl<'a> RecreateTracker<'a> {
-    pub fn new(device: &'a wgpu::Device, queue: &'a wgpu::Queue) -> Self {
+impl RecreateTracker {
+    pub fn new() -> Self {
         Self {
             recreated_ids: Vec::new(),
-            device,
-            queue,
         }
     }
 
@@ -71,7 +65,7 @@ impl<'a> RecreateTracker<'a> {
         object: &mut R,
         mut project: &mut R::Context<'ctx>,
     ) {
-        let recreate_result = object.recreate(&mut project, self, self.device, self.queue);
+        let recreate_result = object.recreate(&mut project, self);
         if let RecreateResult::Recreated = recreate_result {
             log::debug!("Recreated {object_id:?}");
             self.recreated_ids.push(object_id);

@@ -7,10 +7,11 @@ use crate::project::{
     uniform::Uniform,
 };
 
-pub struct BindGroupProjectView<'a> {
+pub struct BindGroupCreationContext<'a> {
     pub uniforms: &'a Storage<UniformId, Uniform>,
     pub texture_views: &'a Storage<TextureViewId, TextureView>,
     pub samplers: &'a Storage<SamplerId, Sampler>,
+    pub device: &'a wgpu::Device,
 }
 
 pub struct BindGroup {
@@ -52,13 +53,14 @@ impl BindGroup {
         label: String,
         entries: Vec<BindGroupEntry>,
     ) -> BindGroup {
-        let view = &BindGroupProjectView {
+        let ctx = &BindGroupCreationContext {
             uniforms: &project.uniforms,
             texture_views: &project.texture_views,
             samplers: &project.samplers,
+            device,
         };
 
-        let (layout, inner) = Self::create_layout_and_bind_group(view, &label, &entries, device);
+        let (layout, inner) = Self::create_layout_and_bind_group(ctx, &label, &entries);
 
         BindGroup {
             label,
@@ -77,12 +79,12 @@ impl BindGroup {
     }
 
     fn create_layout_and_bind_group(
-        project: &BindGroupProjectView,
+        ctx: &BindGroupCreationContext,
         label: &str,
         entries: &[BindGroupEntry],
-        device: &wgpu::Device,
     ) -> (wgpu::BindGroupLayout, wgpu::BindGroup) {
         let layout_entries = entries.iter().copied().map(Into::into).collect::<Vec<_>>();
+        let device = ctx.device;
 
         let layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some(&format!("{label} Layout")),
@@ -91,7 +93,7 @@ impl BindGroup {
 
         let group_entries = entries
             .iter()
-            .map(|entry| entry.into_bind_group_entry(project))
+            .map(|entry| entry.into_bind_group_entry(ctx))
             .collect::<Vec<_>>();
 
         let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
@@ -107,7 +109,7 @@ impl BindGroup {
 impl BindGroupEntry {
     pub fn into_bind_group_entry<'a>(
         &self,
-        project: &'a BindGroupProjectView<'a>,
+        project: &'a BindGroupCreationContext<'a>,
     ) -> wgpu::BindGroupEntry<'a> {
         let resource = match self.resource {
             BindGroupResource::Texture {
@@ -190,22 +192,19 @@ impl From<BindGroupResource> for wgpu::BindingType {
 }
 
 impl Recreatable for BindGroup {
-    type Context<'a> = BindGroupProjectView<'a>;
+    type Context<'a> = BindGroupCreationContext<'a>;
 
     fn recreate<'a>(
         &mut self,
-        context: &mut Self::Context<'a>,
+        ctx: &mut Self::Context<'a>,
         tracker: &RecreateTracker,
-        device: &wgpu::Device,
-        _queue: &wgpu::Queue,
     ) -> RecreateResult {
         let entries_dirty = self.entries.iter().any(|entry| entry.is_dirty(tracker));
         if !entries_dirty {
             return RecreateResult::Unchanged;
         }
 
-        let (layout, inner) =
-            Self::create_layout_and_bind_group(context, &self.label, &self.entries, device);
+        let (layout, inner) = Self::create_layout_and_bind_group(ctx, &self.label, &self.entries);
 
         self.layout = layout;
         self.inner = inner;

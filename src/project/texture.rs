@@ -9,9 +9,11 @@ use crate::project::{
 };
 
 #[derive(Clone, Copy)]
-pub struct TextureProjectView<'a> {
+pub struct TextureCreationContext<'a> {
     pub viewports: &'a Storage<ViewportId, Viewport>,
     pub dimensions: &'a Storage<DimensionId, Dimension>,
+    pub device: &'a wgpu::Device,
+    pub queue: &'a wgpu::Queue,
 }
 
 pub struct Texture {
@@ -34,15 +36,13 @@ pub enum TextureSource {
 
 impl Texture {
     pub fn new(
-        project: &TextureProjectView,
-        device: &wgpu::Device,
-        queue: &wgpu::Queue,
+        project: &TextureCreationContext,
         label: String,
         format: wgpu::TextureFormat,
         usage: wgpu::TextureUsages,
         source: TextureSource,
     ) -> Texture {
-        let inner = Self::create_texture(project, device, queue, &label, format, usage, &source);
+        let inner = Self::create_texture(project, &label, format, usage, &source);
         Texture {
             label,
             format,
@@ -62,9 +62,7 @@ impl Texture {
     }
 
     fn create_texture(
-        project: &TextureProjectView,
-        device: &wgpu::Device,
-        queue: &wgpu::Queue,
+        ctx: &TextureCreationContext,
         label: &str,
         format: wgpu::TextureFormat,
         usage: wgpu::TextureUsages,
@@ -81,7 +79,7 @@ impl Texture {
 
         let size = match source {
             TextureSource::Dimension(dimension_id) => {
-                let size = project
+                let size = ctx
                     .dimensions
                     .get(*dimension_id)
                     .expect("deal with this later")
@@ -104,7 +102,7 @@ impl Texture {
             TextureSource::Manual { size } => *size,
         };
 
-        let texture = device.create_texture(&wgpu::TextureDescriptor {
+        let texture = ctx.device.create_texture(&wgpu::TextureDescriptor {
             label: Some(&label),
             size,
             mip_level_count: 1,
@@ -118,7 +116,7 @@ impl Texture {
         if let TextureSource::Image(image) = source {
             let rgba = image.to_rgba8();
 
-            queue.write_texture(
+            ctx.queue.write_texture(
                 wgpu::TexelCopyTextureInfo {
                     aspect: wgpu::TextureAspect::All,
                     texture: &texture,
@@ -140,20 +138,18 @@ impl Texture {
 }
 
 impl Recreatable for Texture {
-    type Context<'a> = TextureProjectView<'a>;
+    type Context<'a> = TextureCreationContext<'a>;
 
     fn recreate<'a>(
         &mut self,
-        project: &mut Self::Context<'a>,
+        ctx: &mut Self::Context<'a>,
         _tracker: &RecreateTracker,
-        device: &wgpu::Device,
-        queue: &wgpu::Queue,
     ) -> RecreateResult {
         let dirty_source = {
             let mut result = false;
             match &self.source {
                 TextureSource::Dimension(dimension_id) => {
-                    if let Some(dimension) = project.dimensions.get(*dimension_id) {
+                    if let Some(dimension) = ctx.dimensions.get(*dimension_id) {
                         let current_size = self.inner.size();
                         result = dimension.size.width() != current_size.width
                             || dimension.size.height() != current_size.height;
@@ -168,15 +164,7 @@ impl Recreatable for Texture {
             return RecreateResult::Unchanged;
         }
 
-        self.inner = Self::create_texture(
-            &project,
-            device,
-            queue,
-            &self.label,
-            self.format,
-            self.usage,
-            &self.source,
-        );
+        self.inner = Self::create_texture(&ctx, &self.label, self.format, self.usage, &self.source);
         RecreateResult::Recreated
     }
 }
