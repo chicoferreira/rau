@@ -1,4 +1,16 @@
-use crate::project::{Project, SamplerId, TextureViewId, UniformId};
+use crate::{
+    project::{
+        Project, SamplerId, TextureViewId, UniformId, sampler::Sampler, storage::Storage,
+        texture_view::TextureView, uniform::Uniform,
+    },
+    rebuild::Recreatable,
+};
+
+pub struct BindGroupProjectView<'a> {
+    pub uniforms: &'a Storage<UniformId, Uniform>,
+    pub texture_views: &'a Storage<TextureViewId, TextureView>,
+    pub samplers: &'a Storage<SamplerId, Sampler>,
+}
 
 pub struct BindGroup {
     pub label: String,
@@ -7,15 +19,68 @@ pub struct BindGroup {
     pub entries: Vec<BindGroupEntry>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct BindGroupEntry {
+    pub binding: u32,
+    pub resource: BindGroupResource,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum BindGroupResource {
+    Texture {
+        texture_view_id: TextureViewId,
+        // These two fields are used on the layout creation
+        // TODO: Decide if we keep this here, or move it to the TextureViewId, or separate the layout from the BindGroup
+        view_dimension: wgpu::TextureViewDimension,
+        // TODO: As when [`wgpu::wgt::TextureSampleType::Float::filterable`] is true it accepts both, maybe we can hardcode it to always be true
+        sample_type: wgpu::TextureSampleType,
+    },
+    Sampler {
+        sampler_id: SamplerId,
+        // This field is used on the layout creation
+        // TODO: Decide if we keep this here, or move it to the TextureViewId, or separate the layout from the BindGroup
+        sampler_binding_type: wgpu::SamplerBindingType,
+    },
+    Uniform(UniformId),
+}
+
 impl BindGroup {
     pub fn new(
         project: &Project,
         device: &wgpu::Device,
-        label: impl Into<String>,
+        label: String,
         entries: Vec<BindGroupEntry>,
     ) -> BindGroup {
-        let label = label.into();
+        let view = &BindGroupProjectView {
+            uniforms: &project.uniforms,
+            texture_views: &project.texture_views,
+            samplers: &project.samplers,
+        };
 
+        let (layout, inner) = Self::create_layout_and_bind_group(view, &label, &entries, device);
+
+        BindGroup {
+            label,
+            layout,
+            inner,
+            entries,
+        }
+    }
+
+    pub fn inner_layout(&self) -> &wgpu::BindGroupLayout {
+        &self.layout
+    }
+
+    pub fn inner(&self) -> &wgpu::BindGroup {
+        &self.inner
+    }
+
+    fn create_layout_and_bind_group(
+        project: &BindGroupProjectView,
+        label: &str,
+        entries: &[BindGroupEntry],
+        device: &wgpu::Device,
+    ) -> (wgpu::BindGroupLayout, wgpu::BindGroup) {
         let layout_entries = entries.iter().copied().map(Into::into).collect::<Vec<_>>();
 
         let layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
@@ -28,41 +93,21 @@ impl BindGroup {
             .map(|entry| entry.into_bind_group_entry(project))
             .collect::<Vec<_>>();
 
-        let inner = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some(&label),
+        let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some(label),
             layout: &layout,
             entries: &group_entries,
         });
 
-        BindGroup {
-            label,
-            layout,
-            inner,
-            entries,
-        }
+        (layout, bind_group)
     }
-
-    // TODO: needs to be upated  when either of the entries was updated
-    // For example, when the texture view is updated, it should recreate the texture view with the correct reference
-    // the same applies for the sampler
-
-    pub fn inner_layout(&self) -> &wgpu::BindGroupLayout {
-        &self.layout
-    }
-
-    pub fn inner(&self) -> &wgpu::BindGroup {
-        &self.inner
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct BindGroupEntry {
-    pub binding: u32,
-    pub resource: BindGroupResource,
 }
 
 impl BindGroupEntry {
-    pub fn into_bind_group_entry<'a>(&self, project: &'a Project) -> wgpu::BindGroupEntry<'a> {
+    pub fn into_bind_group_entry<'a>(
+        &self,
+        project: &'a BindGroupProjectView<'a>,
+    ) -> wgpu::BindGroupEntry<'a> {
         let resource = match self.resource {
             BindGroupResource::Texture {
                 texture_view_id, ..
@@ -108,25 +153,6 @@ impl From<BindGroupEntry> for wgpu::BindGroupLayoutEntry {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum BindGroupResource {
-    Texture {
-        texture_view_id: TextureViewId,
-        // These two fields are used on the layout creation
-        // TODO: Decide if we keep this here, or move it to the TextureViewId, or separate the layout from the BindGroup
-        view_dimension: wgpu::TextureViewDimension,
-        // TODO: As when [`wgpu::wgt::TextureSampleType::Float::filterable`] is true it accepts both, maybe we can hardcode it to always be true
-        sample_type: wgpu::TextureSampleType,
-    },
-    Sampler {
-        sampler_id: SamplerId,
-        // This field is used on the layout creation
-        // TODO: Decide if we keep this here, or move it to the TextureViewId, or separate the layout from the BindGroup
-        sampler_binding_type: wgpu::SamplerBindingType,
-    },
-    Uniform(UniformId),
-}
-
 impl From<BindGroupResource> for wgpu::BindingType {
     fn from(value: BindGroupResource) -> Self {
         match value {
@@ -149,5 +175,51 @@ impl From<BindGroupResource> for wgpu::BindingType {
                 min_binding_size: None,
             },
         }
+    }
+}
+
+impl Recreatable for BindGroup {
+    type Context<'a> = BindGroupProjectView<'a>;
+
+    fn should_recreate(
+        &self,
+        _context: &Self::Context<'_>,
+        recreate_list: &crate::rebuild::RebuildTracker,
+    ) -> bool {
+        for entry in &self.entries {
+            match entry.resource {
+                BindGroupResource::Texture {
+                    texture_view_id, ..
+                } => {
+                    if recreate_list.was_recreated(texture_view_id) {
+                        return true;
+                    }
+                }
+                BindGroupResource::Sampler { sampler_id, .. } => {
+                    if recreate_list.was_recreated(sampler_id) {
+                        return true;
+                    }
+                }
+                BindGroupResource::Uniform(uniform_id) => {
+                    if recreate_list.was_recreated(uniform_id) {
+                        return true;
+                    }
+                }
+            }
+        }
+        false
+    }
+
+    fn recreate<'a>(
+        &mut self,
+        context: &mut Self::Context<'a>,
+        device: &wgpu::Device,
+        _queue: &wgpu::Queue,
+    ) {
+        let (layout, inner) =
+            Self::create_layout_and_bind_group(context, &self.label, &self.entries, device);
+
+        self.layout = layout;
+        self.inner = inner;
     }
 }

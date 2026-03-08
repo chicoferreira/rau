@@ -4,11 +4,11 @@ mod app;
 mod camera;
 mod model;
 mod project;
+mod rebuild;
 mod render;
 mod resources;
 mod scene;
 mod state;
-mod texture;
 mod ui;
 
 pub fn run() -> anyhow::Result<()> {

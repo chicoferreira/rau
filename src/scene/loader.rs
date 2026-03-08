@@ -1,11 +1,8 @@
 use std::io::Cursor;
 
-use crate::{
-    project::{
-        Project, ShaderId, TextureId,
-        texture::{Texture, TextureProjectView, TextureSource},
-    },
-    texture,
+use crate::project::{
+    Project, ShaderId, TextureId,
+    texture::{Texture, TextureProjectView, TextureSource},
 };
 
 pub struct HdrLoader {
@@ -111,19 +108,21 @@ impl HdrLoader {
             depth_or_array_layers: 1,
         };
 
-        let src = texture::Texture::create_texture(
-            device,
-            None,
+        let src = device.create_texture(&wgpu::TextureDescriptor {
+            label: None,
             size,
-            self.texture_format,
-            &[],
-            wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
-            wgpu::FilterMode::Linear,
-        );
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: self.texture_format,
+            usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+            view_formats: &[],
+        });
+        let src_view = src.create_view(&wgpu::TextureViewDescriptor::default());
 
         queue.write_texture(
             wgpu::TexelCopyTextureInfo {
-                texture: &src.texture,
+                texture: &src,
                 mip_level: 0,
                 origin: wgpu::Origin3d::ZERO,
                 aspect: wgpu::TextureAspect::All,
@@ -175,7 +174,7 @@ impl HdrLoader {
             entries: &[
                 wgpu::BindGroupEntry {
                     binding: 0,
-                    resource: wgpu::BindingResource::TextureView(&src.view),
+                    resource: wgpu::BindingResource::TextureView(&src_view),
                 },
                 wgpu::BindGroupEntry {
                     binding: 1,
