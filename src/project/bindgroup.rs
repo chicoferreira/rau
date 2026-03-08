@@ -1,9 +1,10 @@
-use crate::{
-    project::{
-        Project, SamplerId, TextureViewId, UniformId, sampler::Sampler, storage::Storage,
-        texture_view::TextureView, uniform::Uniform,
-    },
-    rebuild::Recreatable,
+use crate::project::{
+    Project, SamplerId, TextureViewId, UniformId,
+    recreate::{Recreatable, RecreateResult, RecreateTracker},
+    sampler::Sampler,
+    storage::Storage,
+    texture_view::TextureView,
+    uniform::Uniform,
 };
 
 pub struct BindGroupProjectView<'a> {
@@ -140,6 +141,16 @@ impl BindGroupEntry {
             resource,
         }
     }
+
+    fn is_dirty(&self, tracker: &RecreateTracker) -> bool {
+        match self.resource {
+            BindGroupResource::Texture {
+                texture_view_id, ..
+            } => tracker.was_recreated(texture_view_id),
+            BindGroupResource::Sampler { sampler_id, .. } => tracker.was_recreated(sampler_id),
+            BindGroupResource::Uniform(uniform_id) => tracker.was_recreated(uniform_id),
+        }
+    }
 }
 
 impl From<BindGroupEntry> for wgpu::BindGroupLayoutEntry {
@@ -181,45 +192,23 @@ impl From<BindGroupResource> for wgpu::BindingType {
 impl Recreatable for BindGroup {
     type Context<'a> = BindGroupProjectView<'a>;
 
-    fn should_recreate(
-        &self,
-        _context: &Self::Context<'_>,
-        recreate_list: &crate::rebuild::RebuildTracker,
-    ) -> bool {
-        for entry in &self.entries {
-            match entry.resource {
-                BindGroupResource::Texture {
-                    texture_view_id, ..
-                } => {
-                    if recreate_list.was_recreated(texture_view_id) {
-                        return true;
-                    }
-                }
-                BindGroupResource::Sampler { sampler_id, .. } => {
-                    if recreate_list.was_recreated(sampler_id) {
-                        return true;
-                    }
-                }
-                BindGroupResource::Uniform(uniform_id) => {
-                    if recreate_list.was_recreated(uniform_id) {
-                        return true;
-                    }
-                }
-            }
-        }
-        false
-    }
-
     fn recreate<'a>(
         &mut self,
         context: &mut Self::Context<'a>,
+        tracker: &RecreateTracker,
         device: &wgpu::Device,
         _queue: &wgpu::Queue,
-    ) {
+    ) -> RecreateResult {
+        let entries_dirty = self.entries.iter().any(|entry| entry.is_dirty(tracker));
+        if !entries_dirty {
+            return RecreateResult::Unchanged;
+        }
+
         let (layout, inner) =
             Self::create_layout_and_bind_group(context, &self.label, &self.entries, device);
 
         self.layout = layout;
         self.inner = inner;
+        RecreateResult::Recreated
     }
 }
