@@ -19,75 +19,66 @@ use crate::{
 
 impl StateSnapshot<'_> {
     pub fn uniform_inspector_ui(&mut self, uniform_id: UniformId, ui: &mut egui::Ui) {
-        egui::CentralPanel::default().show_inside(ui, |ui| {
-            egui::ScrollArea::both().auto_shrink(false).show(ui, |ui| {
-                let Some(uniform) = self.project.uniforms.get_mut(uniform_id) else {
-                    ui.label("Uniform couldn't be found.");
-                    return;
-                };
+        let Some(uniform) = self.project.uniforms.get_mut(uniform_id) else {
+            ui.label("Uniform couldn't be found.");
+            return;
+        };
 
-                let data = &mut uniform.data;
+        let data = &mut uniform.data;
 
-                let (total_size, _) = data.layout();
-                ui.horizontal(|ui| {
-                    ui.label("Total size");
-                    ui.strong(format!("{total_size} bytes"));
-                });
-
-                ui.add_space(6.0);
-
-                for (index, field) in data.fields.iter_mut().enumerate() {
-                    if index != 0 {
-                        ui.add_space(5.0);
-                    }
-                    ui.push_id(index, |ui| {
-                        ui.vertical(|ui| {
-                            ui.horizontal(|ui| {
-                                ui_uniform_field_label(
-                                    ui,
-                                    uniform_id,
-                                    field,
-                                    index,
-                                    self.pending_events,
-                                    self.rename_state,
-                                );
-
-                                let mut source = field.source.kind();
-                                let source_before = source;
-                                ui.add(ui_uniform_field_source(&mut source));
-                                if source != source_before {
-                                    let event = StateEvent::UpdateUniformFieldSource(
-                                        uniform_id, index, source,
-                                    );
-                                    self.pending_events.push(event);
-                                }
-
-                                ui_uniform_type_label(ui, field.kind());
-                            });
-
-                            ui.horizontal(|ui| match &mut field.source {
-                                UniformFieldSource::UserDefined(data) => {
-                                    ui_uniform_field_data(ui, data, drag_value_widget);
-                                }
-                                _ => {
-                                    ui.horizontal(|ui| {
-                                        ui_uniform_field_data(
-                                            ui,
-                                            &mut field.last_data,
-                                            label_widget,
-                                        );
-                                    });
-                                }
-                            });
-                        });
-                    });
-                }
-
-                ui.add_space(6.0);
-
-                ui.add(ui_add_uniform(uniform_id, &mut self.pending_events));
-            });
+        let (total_size, _) = data.layout();
+        ui.horizontal(|ui| {
+            ui.label("Total size");
+            ui.strong(format!("{total_size} bytes"));
         });
+
+        ui.add_space(6.0);
+
+        for (index, field) in data.fields.iter_mut().enumerate() {
+            if index != 0 {
+                ui.add_space(5.0);
+            }
+            ui.push_id(index, |ui| {
+                ui.vertical(|ui| {
+                    ui.horizontal(|ui| {
+                        ui_uniform_field_label(
+                            ui,
+                            uniform_id,
+                            field,
+                            index,
+                            self.pending_events,
+                            self.rename_state,
+                        );
+
+                        let mut source = field.source.kind();
+                        let source_before = source;
+                        ui.add(ui_uniform_field_source(&mut source));
+                        if source != source_before {
+                            let event =
+                                StateEvent::UpdateUniformFieldSource(uniform_id, index, source);
+                            self.pending_events.push(event);
+                        }
+
+                        ui_uniform_type_label(ui, field.kind());
+                    });
+
+                    ui.horizontal(|ui| match &mut field.source {
+                        UniformFieldSource::UserDefined(data) => {
+                            ui_uniform_field_data(ui, data, drag_value_widget);
+                        }
+                        _ => {
+                            ui.horizontal(|ui| {
+                                ui_uniform_field_data(ui, &mut field.last_data, label_widget);
+                            });
+                        }
+                    });
+                });
+            });
+        }
+
+        ui.add_space(6.0);
+
+        ui.add(ui_add_uniform(uniform_id, &mut self.pending_events));
     }
 }
 

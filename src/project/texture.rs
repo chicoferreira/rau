@@ -1,16 +1,14 @@
 use image::GenericImageView;
 
 use crate::project::{
-    DimensionId, ViewportId,
+    DimensionId,
     dimension::Dimension,
     recreate::{Recreatable, RecreateResult, RecreateTracker},
     storage::Storage,
-    viewport::Viewport,
 };
 
 #[derive(Clone, Copy)]
 pub struct TextureCreationContext<'a> {
-    pub viewports: &'a Storage<ViewportId, Viewport>,
     pub dimensions: &'a Storage<DimensionId, Dimension>,
     pub device: &'a wgpu::Device,
     pub queue: &'a wgpu::Queue,

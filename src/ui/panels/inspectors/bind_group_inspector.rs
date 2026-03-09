@@ -1,93 +1,411 @@
-use crate::{project::BindGroupId, ui::pane::StateSnapshot};
+use crate::{
+    project::{
+        BindGroupId, SamplerId, TextureViewId, UniformId,
+        bindgroup::{BindGroupEntry, BindGroupResource},
+    },
+    state::StateEvent,
+    ui::pane::StateSnapshot,
+};
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ResourceKind {
+    Uniform,
+    Texture,
+    Sampler,
+}
+
+impl ResourceKind {
+    fn label(self) -> &'static str {
+        match self {
+            ResourceKind::Uniform => "Uniform",
+            ResourceKind::Texture => "Texture",
+            ResourceKind::Sampler => "Sampler",
+        }
+    }
+}
+
+fn resource_kind(resource: &BindGroupResource) -> ResourceKind {
+    match resource {
+        BindGroupResource::Uniform(_) => ResourceKind::Uniform,
+        BindGroupResource::Texture { .. } => ResourceKind::Texture,
+        BindGroupResource::Sampler { .. } => ResourceKind::Sampler,
+    }
+}
 
 impl StateSnapshot<'_> {
     pub fn bind_group_inspector_ui(&mut self, bind_group_id: BindGroupId, ui: &mut egui::Ui) {
-        egui::CentralPanel::default().show_inside(ui, |ui| {
-            egui::ScrollArea::both().auto_shrink(false).show(ui, |ui| {
-                let Some(bind_group) = self.project.bind_groups.get(bind_group_id) else {
-                    ui.label("Bind group not found.");
-                    return;
-                };
+        let entries = match self.project.bind_groups.get(bind_group_id) {
+            Some(bg) => bg.entries().to_vec(),
+            None => {
+                ui.label("Bind group not found.");
+                return;
+            }
+        };
 
-                let header_label =
-                    egui::RichText::new(format!("{} ({bind_group_id:?})", bind_group.label))
-                        .size(ui.text_style_height(&egui::TextStyle::Body) + 2.0)
-                        .strong();
+        let uniforms: Vec<(UniformId, &str)> = self
+            .project
+            .uniforms
+            .list()
+            .map(|(id, u)| (id, u.label.as_str()))
+            .collect();
 
-                egui::CollapsingHeader::new(header_label)
-                    .default_open(true)
-                    .show(ui, |ui| {
-                        if bind_group.entries.is_empty() {
-                            ui.label("No bindings.");
-                            return;
-                        }
+        let texture_views: Vec<(TextureViewId, &str)> = self
+            .project
+            .texture_views
+            .list()
+            .map(|(id, tv)| (id, tv.label()))
+            .collect();
 
-                        for entry in &bind_group.entries {
-                            ui.horizontal(|ui| {
-                                ui.label("binding");
-                                ui.strong(entry.binding.to_string());
-                                ui.separator();
-                                ui.label(resource_label(entry.resource));
-                            });
+        let samplers: Vec<(SamplerId, &str)> = self
+            .project
+            .samplers
+            .list()
+            .map(|(id, s)| (id, s.label.as_ref()))
+            .collect();
 
-                            ui.label(
-                                egui::RichText::new(resource_detail_label(
-                                    self.project,
-                                    entry.resource,
-                                ))
-                                .weak(),
-                            );
-                            ui.add_space(6.0);
-                        }
-                    });
+        ui.add_space(4.0);
+
+        for (index, entry) in entries.iter().enumerate() {
+            if index != 0 {
+                ui.separator();
+            }
+
+            ui.push_id(index, |ui| {
+                if let Some(event) = ui_entry(
+                    ui,
+                    bind_group_id,
+                    index,
+                    entry,
+                    &uniforms,
+                    &texture_views,
+                    &samplers,
+                ) {
+                    self.pending_events.push(event);
+                }
             });
-        });
-    }
-}
-
-fn resource_label(resource: crate::project::bindgroup::BindGroupResource) -> &'static str {
-    match resource {
-        crate::project::bindgroup::BindGroupResource::Texture { .. } => "Texture",
-        crate::project::bindgroup::BindGroupResource::Sampler { .. } => "Sampler",
-        crate::project::bindgroup::BindGroupResource::Uniform(_) => "Uniform",
-    }
-}
-
-fn resource_detail_label(
-    project: &crate::project::Project,
-    resource: crate::project::bindgroup::BindGroupResource,
-) -> String {
-    match resource {
-        crate::project::bindgroup::BindGroupResource::Texture {
-            view_dimension,
-            texture_view_id,
-            ..
-        } => {
-            let texture_name = project
-                .texture_views
-                .get(texture_view_id)
-                .map(|texture| texture.label().to_owned())
-                .unwrap_or_else(|| "missing texture".to_owned());
-            format!("texture: {texture_name}, view: {view_dimension:?}")
         }
-        crate::project::bindgroup::BindGroupResource::Sampler {
+
+        ui.add_space(6.0);
+
+        if let Some(event) =
+            ui_add_entry_menu(ui, bind_group_id, &uniforms, &texture_views, &samplers)
+        {
+            self.pending_events.push(event);
+        }
+    }
+}
+
+fn ui_entry(
+    ui: &mut egui::Ui,
+    bind_group_id: BindGroupId,
+    index: usize,
+    entry: &BindGroupEntry,
+    uniforms: &[(UniformId, &str)],
+    texture_views: &[(TextureViewId, &str)],
+    samplers: &[(SamplerId, &str)],
+) -> Option<StateEvent> {
+    let mut delete = false;
+    let mut kind = resource_kind(&entry.resource);
+    let kind_before = kind;
+
+    ui.horizontal(|ui| {
+        ui.add(
+            egui::Label::new(egui::RichText::new(format!("Binding {index}")).strong())
+                .selectable(false)
+                .sense(egui::Sense::click()),
+        )
+        .context_menu(|ui| {
+            if ui.button("Delete Entry").clicked() {
+                delete = true;
+                ui.close();
+            }
+        });
+
+        egui::ComboBox::from_id_salt("kind")
+            .selected_text(kind.label())
+            .show_ui(ui, |ui| {
+                ui.selectable_value(&mut kind, ResourceKind::Uniform, "Uniform");
+                ui.selectable_value(&mut kind, ResourceKind::Texture, "Texture");
+                ui.selectable_value(&mut kind, ResourceKind::Sampler, "Sampler");
+            });
+    });
+
+    if delete {
+        return Some(StateEvent::DeleteBindGroupEntry(bind_group_id, index));
+    }
+
+    if kind != kind_before {
+        let updated = match kind {
+            ResourceKind::Uniform => uniforms
+                .first()
+                .map(|(id, _)| BindGroupResource::Uniform(*id)),
+            ResourceKind::Texture => {
+                texture_views
+                    .first()
+                    .map(|(id, _)| BindGroupResource::Texture {
+                        texture_view_id: *id,
+                        view_dimension: wgpu::TextureViewDimension::D2,
+                        sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                    })
+            }
+            ResourceKind::Sampler => samplers.first().map(|(id, _)| BindGroupResource::Sampler {
+                sampler_id: *id,
+                sampler_binding_type: wgpu::SamplerBindingType::Filtering,
+            }),
+        };
+        return updated
+            .map(|resource| StateEvent::UpdateBindGroupEntry(bind_group_id, index, resource));
+    }
+
+    egui::Grid::new("entry_grid")
+        .num_columns(2)
+        .spacing([8.0, 4.0])
+        .show(ui, |ui| {
+            ui_entry_grid(
+                ui,
+                bind_group_id,
+                index,
+                entry,
+                uniforms,
+                texture_views,
+                samplers,
+            )
+        })
+        .inner
+}
+
+fn ui_entry_grid(
+    ui: &mut egui::Ui,
+    bind_group_id: BindGroupId,
+    index: usize,
+    entry: &BindGroupEntry,
+    uniforms: &[(UniformId, &str)],
+    texture_views: &[(TextureViewId, &str)],
+    samplers: &[(SamplerId, &str)],
+) -> Option<StateEvent> {
+    let resource = match entry.resource {
+        BindGroupResource::Uniform(id) => ui_uniform_rows(ui, id, uniforms),
+        BindGroupResource::Texture {
+            texture_view_id,
+            view_dimension,
+            sample_type,
+        } => ui_texture_rows(
+            ui,
+            texture_view_id,
+            view_dimension,
+            sample_type,
+            texture_views,
+        ),
+        BindGroupResource::Sampler {
             sampler_id,
             sampler_binding_type,
-        } => {
-            let texture_name = project
-                .samplers
-                .get(sampler_id)
-                .map(|texture| texture.label.to_owned())
-                .unwrap_or_else(|| "missing texture".to_owned());
-            format!("sampler: {texture_name}, type: {sampler_binding_type:?}")
+        } => ui_sampler_rows(ui, sampler_id, sampler_binding_type, samplers),
+    };
+    resource.map(|r| StateEvent::UpdateBindGroupEntry(bind_group_id, index, r))
+}
+
+fn ui_combo<T>(
+    ui: &mut egui::Ui,
+    row_label: &str,
+    combo_id: impl std::hash::Hash,
+    current: &mut T,
+    options: &[(T, &str)],
+    empty_msg: &str,
+) where
+    T: PartialEq + Copy,
+{
+    ui.label(row_label);
+    let selected_text = options
+        .iter()
+        .find(|(v, _)| v == current)
+        .map(|(_, l)| *l)
+        .unwrap_or("Unknown");
+    egui::ComboBox::from_id_salt(combo_id)
+        .selected_text(selected_text)
+        .show_ui(ui, |ui| {
+            for (value, label) in options {
+                ui.selectable_value(current, *value, *label);
+            }
+            if options.is_empty() {
+                ui.label(egui::RichText::new(empty_msg).weak());
+            }
+        });
+    ui.end_row();
+}
+
+fn ui_uniform_rows(
+    ui: &mut egui::Ui,
+    mut uniform_id: UniformId,
+    uniforms: &[(UniformId, &str)],
+) -> Option<BindGroupResource> {
+    let before = uniform_id;
+    ui_combo(
+        ui,
+        "Uniform",
+        "resource",
+        &mut uniform_id,
+        uniforms,
+        "No uniforms available",
+    );
+    (uniform_id != before).then_some(BindGroupResource::Uniform(uniform_id))
+}
+
+fn ui_texture_rows(
+    ui: &mut egui::Ui,
+    mut texture_view_id: TextureViewId,
+    mut view_dimension: wgpu::TextureViewDimension,
+    mut sample_type: wgpu::TextureSampleType,
+    texture_views: &[(TextureViewId, &str)],
+) -> Option<BindGroupResource> {
+    let (tvid_before, vd_before, st_before) = (texture_view_id, view_dimension, sample_type);
+
+    ui_combo(
+        ui,
+        "Texture View",
+        "resource",
+        &mut texture_view_id,
+        texture_views,
+        "No texture views available",
+    );
+    ui_combo(
+        ui,
+        "Dimension",
+        "view_dimension",
+        &mut view_dimension,
+        &[
+            (wgpu::TextureViewDimension::D1, "1D"),
+            (wgpu::TextureViewDimension::D2, "2D"),
+            (wgpu::TextureViewDimension::D2Array, "2D Array"),
+            (wgpu::TextureViewDimension::Cube, "Cube"),
+            (wgpu::TextureViewDimension::CubeArray, "Cube Array"),
+            (wgpu::TextureViewDimension::D3, "3D"),
+        ],
+        "",
+    );
+    ui_combo(
+        ui,
+        "Sample Type",
+        "sample_type",
+        &mut sample_type,
+        &[
+            (
+                wgpu::TextureSampleType::Float { filterable: true },
+                "Float (Filterable)",
+            ),
+            (
+                wgpu::TextureSampleType::Float { filterable: false },
+                "Float (Non-Filterable)",
+            ),
+            (wgpu::TextureSampleType::Depth, "Depth"),
+            (wgpu::TextureSampleType::Sint, "Sint"),
+            (wgpu::TextureSampleType::Uint, "Uint"),
+        ],
+        "",
+    );
+
+    (texture_view_id != tvid_before || view_dimension != vd_before || sample_type != st_before)
+        .then_some(BindGroupResource::Texture {
+            texture_view_id,
+            view_dimension,
+            sample_type,
+        })
+}
+
+fn ui_sampler_rows(
+    ui: &mut egui::Ui,
+    mut sampler_id: SamplerId,
+    mut sampler_binding_type: wgpu::SamplerBindingType,
+    samplers: &[(SamplerId, &str)],
+) -> Option<BindGroupResource> {
+    let (sid_before, sbt_before) = (sampler_id, sampler_binding_type);
+
+    ui_combo(
+        ui,
+        "Sampler",
+        "resource",
+        &mut sampler_id,
+        samplers,
+        "No samplers available",
+    );
+    ui_combo(
+        ui,
+        "Binding Type",
+        "sampler_binding_type",
+        &mut sampler_binding_type,
+        &[
+            (wgpu::SamplerBindingType::Filtering, "Filtering"),
+            (wgpu::SamplerBindingType::NonFiltering, "Non-Filtering"),
+            (wgpu::SamplerBindingType::Comparison, "Comparison"),
+        ],
+        "",
+    );
+
+    (sampler_id != sid_before || sampler_binding_type != sbt_before).then_some(
+        BindGroupResource::Sampler {
+            sampler_id,
+            sampler_binding_type,
+        },
+    )
+}
+
+/// Renders a single "Add X" submenu inside an existing menu.
+/// Returns the chosen resource, if any button was clicked.
+fn ui_add_entry_submenu<Id: Copy>(
+    ui: &mut egui::Ui,
+    title: &str,
+    options: &[(Id, &str)],
+    empty_msg: &str,
+    make_resource: impl Fn(Id) -> BindGroupResource,
+) -> Option<BindGroupResource> {
+    let mut result = None;
+    ui.menu_button(title, |ui| {
+        if options.is_empty() {
+            ui.label(egui::RichText::new(empty_msg).weak());
         }
-        crate::project::bindgroup::BindGroupResource::Uniform(uniform_id) => {
-            let uniform_label = project
-                .uniforms
-                .get(uniform_id)
-                .map(|uniform| uniform.label.clone())
-                .unwrap_or_else(|| "missing uniform".to_owned());
-            format!("uniform: {uniform_label}")
+        for (id, label) in options {
+            if ui.button(*label).clicked() {
+                result = Some(make_resource(*id));
+                ui.close();
+            }
         }
-    }
+    });
+    result
+}
+
+fn ui_add_entry_menu(
+    ui: &mut egui::Ui,
+    bind_group_id: BindGroupId,
+    uniforms: &[(UniformId, &str)],
+    texture_views: &[(TextureViewId, &str)],
+    samplers: &[(SamplerId, &str)],
+) -> Option<StateEvent> {
+    let mut result = None;
+
+    ui.menu_button("Add Entry", |ui| {
+        let uniform =
+            ui_add_entry_submenu(ui, "Uniform", uniforms, "No uniforms available", |id| {
+                BindGroupResource::Uniform(id)
+            });
+        let texture = ui_add_entry_submenu(
+            ui,
+            "Texture",
+            texture_views,
+            "No texture views available",
+            |id| BindGroupResource::Texture {
+                texture_view_id: id,
+                view_dimension: wgpu::TextureViewDimension::D2,
+                sample_type: wgpu::TextureSampleType::Float { filterable: true },
+            },
+        );
+        let sampler =
+            ui_add_entry_submenu(ui, "Sampler", samplers, "No samplers available", |id| {
+                BindGroupResource::Sampler {
+                    sampler_id: id,
+                    sampler_binding_type: wgpu::SamplerBindingType::Filtering,
+                }
+            });
+        result = uniform.or(texture).or(sampler);
+    });
+
+    result.map(|r| StateEvent::CreateBindGroupEntry(bind_group_id, r))
 }

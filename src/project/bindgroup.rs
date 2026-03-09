@@ -18,12 +18,12 @@ pub struct BindGroup {
     pub label: String,
     layout: wgpu::BindGroupLayout,
     inner: wgpu::BindGroup,
-    pub entries: Vec<BindGroupEntry>,
+    entries: Vec<BindGroupEntry>,
+    dirty: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct BindGroupEntry {
-    pub binding: u32,
     pub resource: BindGroupResource,
 }
 
@@ -67,6 +67,7 @@ impl BindGroup {
             layout,
             inner,
             entries,
+            dirty: false,
         }
     }
 
@@ -78,12 +79,41 @@ impl BindGroup {
         &self.inner
     }
 
+    pub fn entries(&self) -> &[BindGroupEntry] {
+        &self.entries
+    }
+
+    pub fn add_entry(&mut self, entry: BindGroupEntry) {
+        self.entries.push(entry);
+        self.dirty = true;
+    }
+
+    pub fn remove_entry(&mut self, index: usize) {
+        if index < self.entries.len() {
+            self.entries.remove(index);
+            self.dirty = true;
+        }
+    }
+
+    pub fn update_entry(&mut self, index: usize, entry: BindGroupEntry) {
+        if index < self.entries.len() {
+            self.entries[index] = entry;
+            self.dirty = true;
+        }
+    }
+
     fn create_layout_and_bind_group(
         ctx: &BindGroupCreationContext,
         label: &str,
         entries: &[BindGroupEntry],
     ) -> (wgpu::BindGroupLayout, wgpu::BindGroup) {
-        let layout_entries = entries.iter().copied().map(Into::into).collect::<Vec<_>>();
+        let layout_entries = entries
+            .iter()
+            .copied()
+            .enumerate()
+            .map(|(index, entry)| entry.into_bind_group_layout_entry(index as u32))
+            .collect::<Vec<_>>();
+
         let device = ctx.device;
 
         let layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
@@ -93,7 +123,8 @@ impl BindGroup {
 
         let group_entries = entries
             .iter()
-            .map(|entry| entry.into_bind_group_entry(ctx))
+            .enumerate()
+            .map(|(index, entry)| entry.into_bind_group_entry(index as u32, ctx))
             .collect::<Vec<_>>();
 
         let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
@@ -109,6 +140,7 @@ impl BindGroup {
 impl BindGroupEntry {
     pub fn into_bind_group_entry<'a>(
         &self,
+        binding: u32,
         project: &'a BindGroupCreationContext<'a>,
     ) -> wgpu::BindGroupEntry<'a> {
         let resource = match self.resource {
@@ -138,30 +170,25 @@ impl BindGroupEntry {
             }
         };
 
-        wgpu::BindGroupEntry {
-            binding: self.binding,
-            resource,
+        wgpu::BindGroupEntry { binding, resource }
+    }
+
+    fn into_bind_group_layout_entry(&self, binding: u32) -> wgpu::BindGroupLayoutEntry {
+        wgpu::BindGroupLayoutEntry {
+            binding,
+            visibility: wgpu::ShaderStages::VERTEX | wgpu::ShaderStages::FRAGMENT,
+            ty: self.resource.into(),
+            count: None,
         }
     }
 
-    fn is_dirty(&self, tracker: &RecreateTracker) -> bool {
+    fn resource_recreated(&self, tracker: &RecreateTracker) -> bool {
         match self.resource {
             BindGroupResource::Texture {
                 texture_view_id, ..
             } => tracker.was_recreated(texture_view_id),
             BindGroupResource::Sampler { sampler_id, .. } => tracker.was_recreated(sampler_id),
             BindGroupResource::Uniform(uniform_id) => tracker.was_recreated(uniform_id),
-        }
-    }
-}
-
-impl From<BindGroupEntry> for wgpu::BindGroupLayoutEntry {
-    fn from(value: BindGroupEntry) -> Self {
-        wgpu::BindGroupLayoutEntry {
-            binding: value.binding,
-            visibility: wgpu::ShaderStages::VERTEX | wgpu::ShaderStages::FRAGMENT,
-            ty: value.resource.into(),
-            count: None,
         }
     }
 }
@@ -199,8 +226,11 @@ impl Recreatable for BindGroup {
         ctx: &mut Self::Context<'a>,
         tracker: &RecreateTracker,
     ) -> RecreateResult {
-        let entries_dirty = self.entries.iter().any(|entry| entry.is_dirty(tracker));
-        if !entries_dirty {
+        let resources_recreated = self
+            .entries
+            .iter()
+            .any(|entry| entry.resource_recreated(tracker));
+        if !self.dirty && !resources_recreated {
             return RecreateResult::Unchanged;
         }
 
