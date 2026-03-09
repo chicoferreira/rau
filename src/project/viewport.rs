@@ -5,7 +5,7 @@ use crate::{
         storage::Storage,
         texture_view::TextureView,
     },
-    ui::{self},
+    ui::{self, Size2d},
 };
 
 pub struct ViewportCreationContext<'a> {
@@ -18,6 +18,7 @@ pub struct Viewport {
     pub label: String,
     pub texture_view_id: TextureViewId,
     pub dimension_id: DimensionId,
+    pub requested_ui_size: Option<Size2d>,
     egui_id: egui::TextureId,
     dirty: bool,
 }
@@ -48,6 +49,7 @@ impl Viewport {
             texture_view_id,
             dimension_id,
             egui_id,
+            requested_ui_size: None,
             dirty: false,
         }
     }

@@ -1,6 +1,5 @@
-use slotmap::KeyData;
-
 use crate::{
+    key::KeyboardState,
     project::ViewportId,
     state::{self, StateEvent, ViewportEvent},
     ui,
@@ -8,8 +7,9 @@ use crate::{
 
 pub fn ui(
     ui: &mut egui::Ui,
+    viewport_id: ViewportId,
     egui_texture_id: egui::TextureId,
-    size: ui::Size2d,
+    last_size: Option<ui::Size2d>,
 ) -> Vec<state::StateEvent> {
     let mut events = Vec::new();
 
@@ -18,26 +18,46 @@ pub fn ui(
 
     let requested_width = (size_points.x * pixels_per_point).round() as u32;
     let requested_height = (size_points.y * pixels_per_point).round() as u32;
+    let requested_size = ui::Size2d::new(requested_width, requested_height);
 
-    if requested_width != size.width() || requested_height != size.height() {
-        let viewport_id = ViewportId::from(KeyData::from_ffi(0)); // TODO: fix me
-        let size = ui::Size2d::new(requested_width, requested_height);
+    if last_size != Some(requested_size) {
         events.push(StateEvent::ViewportEvent(
             viewport_id,
-            ViewportEvent::Resize { size },
+            ViewportEvent::Resize {
+                size: requested_size,
+            },
         ));
     }
 
     let sized_texture = egui::load::SizedTexture::new(egui_texture_id, size_points);
-    let image = egui::Image::new(sized_texture).sense(egui::Sense::drag());
+    let image = egui::Image::new(sized_texture).sense(egui::Sense::click_and_drag());
 
     let response = ui.add(image);
 
-    if response.dragged_by(egui::PointerButton::Primary) {
+    if response.clicked() || response.drag_started() {
+        response.request_focus();
+        events.push(StateEvent::ViewportEvent(viewport_id, ViewportEvent::Focus));
+    }
+
+    if response.has_focus() {
+        let data_id = egui::Id::new(("viewport_keyboard_state", viewport_id));
+        let keyboard_state = ui.input(|input| KeyboardState::from_egui_input(input));
+        let prev: Option<KeyboardState> = ui.ctx().data(|d| d.get_temp(data_id));
+        if prev.as_ref() != Some(&keyboard_state) {
+            ui.ctx()
+                .data_mut(|d| d.insert_temp(data_id, keyboard_state.clone()));
+
+            events.push(StateEvent::ViewportEvent(
+                viewport_id,
+                ViewportEvent::KeyboardKeys { keyboard_state },
+            ));
+        }
+    }
+
+    if response.dragged() {
         let delta_points = ui.input(|i| i.pointer.delta());
         if delta_points.x != 0.0 || delta_points.y != 0.0 {
             let delta_px = delta_points * pixels_per_point;
-            let viewport_id = ViewportId::from(KeyData::from_ffi(0)); // TODO: fix me
             events.push(StateEvent::ViewportEvent(
                 viewport_id,
                 ViewportEvent::Drag {
@@ -51,7 +71,6 @@ pub fn ui(
     if response.hovered() {
         let scroll_points = ui.input(|i| i.smooth_scroll_delta.y);
         if scroll_points != 0.0 {
-            let viewport_id = ViewportId::from(KeyData::from_ffi(0)); // TODO: fix me
             events.push(StateEvent::ViewportEvent(
                 viewport_id,
                 ViewportEvent::Scroll {

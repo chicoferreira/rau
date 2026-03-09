@@ -3,7 +3,7 @@ use wgpu::util::DeviceExt;
 use crate::{
     model::{self, Vertex},
     project::{
-        self, BindGroupId, Project, TextureViewId, UniformId, ViewportId,
+        self, BindGroupId, TextureViewId, UniformId, ViewportId,
         dimension::Dimension,
         sampler::{Sampler, SamplerSpec},
         texture::{Texture, TextureCreationContext, TextureSource},
@@ -119,7 +119,6 @@ pub struct Scene {
     hdr: hdr::HdrPipeline,
     environment_bind_group_id: BindGroupId,
     sky_pipeline: wgpu::RenderPipeline,
-    hdr_viewport_id: ViewportId,
     pub output_viewport_id: ViewportId,
     hdr_texture_view_id: TextureViewId,
     output_viewport_view_id: TextureViewId,
@@ -513,7 +512,6 @@ impl Scene {
             hdr,
             environment_bind_group_id,
             sky_pipeline,
-            hdr_viewport_id,
             output_viewport_id: viewport_id,
             hdr_texture_view_id,
             output_viewport_view_id,
@@ -537,18 +535,6 @@ impl Scene {
         ) * position_vec;
 
         *position = new_position.into();
-    }
-
-    pub fn resize(&mut self, size: ui::Size2d, project: &mut Project) {
-        if let Some(viewport) = project.viewports.get(self.hdr_viewport_id) {
-            let dimension = project.dimensions.get_mut(viewport.dimension_id).unwrap();
-            dimension.size = size;
-        }
-
-        if let Some(viewport) = project.viewports.get(self.output_viewport_id) {
-            let dimension = project.dimensions.get_mut(viewport.dimension_id).unwrap();
-            dimension.size = size;
-        }
     }
 
     pub fn render(&self, encoder: &mut wgpu::CommandEncoder, project: &project::Project) {

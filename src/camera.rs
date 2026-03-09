@@ -1,7 +1,8 @@
 use std::f32::consts::FRAC_PI_2;
 
 use cgmath::{InnerSpace, Matrix4, Point3, Rad, Vector3, perspective};
-use winit::{event::ElementState, keyboard::KeyCode};
+
+use crate::key::{Key, KeyboardState};
 
 #[rustfmt::skip]
 pub const OPENGL_TO_WGPU_MATRIX: cgmath::Matrix4<f32> = cgmath::Matrix4::from_cols(
@@ -98,39 +99,23 @@ impl CameraInput {
         }
     }
 
-    pub fn handle_keyboard(&mut self, key: KeyCode, state: ElementState) -> bool {
-        let amount = if state == ElementState::Pressed {
-            1.0
-        } else {
-            0.0
-        };
-        match key {
-            KeyCode::KeyW | KeyCode::ArrowUp => {
-                self.amount_forward = amount;
-                true
-            }
-            KeyCode::KeyS | KeyCode::ArrowDown => {
-                self.amount_backward = amount;
-                true
-            }
-            KeyCode::KeyA | KeyCode::ArrowLeft => {
-                self.amount_left = amount;
-                true
-            }
-            KeyCode::KeyD | KeyCode::ArrowRight => {
-                self.amount_right = amount;
-                true
-            }
-            KeyCode::Space => {
-                self.amount_up = amount;
-                true
-            }
-            KeyCode::ShiftLeft => {
-                self.amount_down = amount;
-                true
-            }
-            _ => false,
+    pub fn handle_keyboard(&mut self, keyboard: KeyboardState) {
+        macro_rules! handle_keys {
+            ($kb:expr, $( $field:ident => $($key:path),+ );+ $(;)?) => {
+                $(
+                    self.$field = ($($kb.is_pressed($key))||+) as u8 as f32;
+                )+
+            };
         }
+
+        handle_keys!(keyboard,
+            amount_forward  => Key::W, Key::ArrowUp;
+            amount_backward => Key::S, Key::ArrowDown;
+            amount_left     => Key::A, Key::ArrowLeft;
+            amount_right    => Key::D, Key::ArrowRight;
+            amount_up       => Key::Space;
+            amount_down     => Key::Shift;
+        );
     }
 
     pub fn handle_mouse(&mut self, mouse_dx: f32, mouse_dy: f32) {

@@ -1,16 +1,12 @@
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc};
 
-use slotmap::KeyData;
-use winit::{
-    event::{ElementState, KeyEvent, WindowEvent},
-    keyboard::{KeyCode, PhysicalKey},
-    window::Window,
-};
+use winit::{event::WindowEvent, window::Window};
 
 use crate::{
     camera::{Camera, CameraInput},
+    key::KeyboardState,
     project::{
-        self, BindGroupId, ShaderId, UniformId, ViewportId,
+        self, BindGroupId, DimensionId, ShaderId, UniformId, ViewportId,
         bindgroup::{BindGroupCreationContext, BindGroupEntry, BindGroupResource},
         recreate::RecreateTracker,
         texture::TextureCreationContext,
@@ -31,20 +27,11 @@ use crate::{
 
 #[derive(Debug, Clone)]
 pub enum ViewportEvent {
-    Resize {
-        size: ui::Size2d,
-    },
-    Scroll {
-        delta_y_px: f32,
-    },
-    Drag {
-        mouse_dx: f32,
-        mouse_dy: f32,
-    },
-    Keyboard {
-        key_code: winit::keyboard::KeyCode,
-        element_state: winit::event::ElementState,
-    },
+    Resize { size: ui::Size2d },
+    Scroll { delta_y_px: f32 },
+    Drag { mouse_dx: f32, mouse_dy: f32 },
+    KeyboardKeys { keyboard_state: KeyboardState },
+    Focus,
 }
 
 #[derive(Debug, Clone)]
@@ -84,6 +71,7 @@ pub struct State {
     inspector_tree_pane: InspectorTreePane,
     viewport_tree_pane: ViewportTreePane,
     camera_input: CameraInput,
+    dimension_owners: HashMap<DimensionId, ViewportId>,
     project: project::Project,
 }
 
@@ -231,6 +219,7 @@ impl State {
             window,
             last_render_time: instant::Instant::now(),
             egui_renderer,
+            dimension_owners: Default::default(),
             scene,
             rename_state: None,
             pending_events: vec![],
@@ -365,26 +354,6 @@ impl State {
                     }
                 }
             }
-            WindowEvent::KeyboardInput {
-                event:
-                    KeyEvent {
-                        physical_key: PhysicalKey::Code(code),
-                        state: key_state,
-                        ..
-                    },
-                ..
-            } => match (code, key_state) {
-                (KeyCode::Escape, ElementState::Pressed) => event_loop.exit(),
-                (key_code, element_state) => {
-                    self.pending_events.push(StateEvent::ViewportEvent(
-                        ViewportId::from(KeyData::from_ffi(0)), // TODO: fix me
-                        ViewportEvent::Keyboard {
-                            key_code,
-                            element_state,
-                        },
-                    ));
-                }
-            },
             _ => {}
         }
     }
@@ -422,6 +391,7 @@ impl State {
 
     fn handle_events(&mut self) {
         for event in self.pending_events.drain(..) {
+            log::debug!("Handling event {event:?}");
             match event {
                 StateEvent::InspectUniform(id) => {
                     self.inspector_tree_pane
@@ -603,8 +573,49 @@ impl State {
 
                     match viewport_event {
                         ViewportEvent::Resize { size } => {
-                            camera.resize(size);
-                            self.scene.resize(size, &mut self.project);
+                            if let Some(viewport) = self.project.viewports.get_mut(viewport_id) {
+                                // set the requested_ui_size so:
+                                // 1. the viewport doesn't keep sending resize events when it doesn't match the actual size of the viewport
+                                // 2. we know to which size to resize the camera when the viewport gets focused (handled in the event below)
+                                viewport.requested_ui_size = Some(size);
+
+                                let is_owner = self
+                                    .dimension_owners
+                                    .get(&viewport.dimension_id)
+                                    .map_or(true, |&owner| owner == viewport_id);
+
+                                // relevant issue: https://github.com/chicoferreira/rau/issues/8
+                                //
+                                // this is a bit hacky, but we want the camera to resize immediately if this
+                                // viewport is the owner of the dimension or the viewport has no owners, otherwise
+                                // we'll wait until it gets focused (handled in the event below). this avoids the
+                                // problem of fighting when there are two viewports with different sizes for the same dimension.
+                                // this way, only one of them (the owner) will control the dimension size.
+                                if is_owner {
+                                    // TODO: make camera dependent on dimension
+                                    camera.resize(size);
+                                    if let Some(dimension) =
+                                        self.project.dimensions.get_mut(viewport.dimension_id)
+                                    {
+                                        dimension.size = size;
+                                    }
+                                }
+                            }
+                        }
+                        ViewportEvent::Focus => {
+                            if let Some(viewport) = self.project.viewports.get(viewport_id) {
+                                // read the comment in the event above for more context
+                                self.dimension_owners
+                                    .insert(viewport.dimension_id, viewport_id);
+                                if let Some(ui_size) = viewport.requested_ui_size {
+                                    self.project.camera.resize(ui_size);
+                                    if let Some(dimension) =
+                                        self.project.dimensions.get_mut(viewport.dimension_id)
+                                    {
+                                        dimension.size = ui_size;
+                                    }
+                                }
+                            }
                         }
                         ViewportEvent::Scroll { delta_y_px } => {
                             self.camera_input.handle_scroll_pixels(delta_y_px);
@@ -612,11 +623,8 @@ impl State {
                         ViewportEvent::Drag { mouse_dx, mouse_dy } => {
                             self.camera_input.handle_mouse(mouse_dx, mouse_dy);
                         }
-                        ViewportEvent::Keyboard {
-                            key_code,
-                            element_state,
-                        } => {
-                            self.camera_input.handle_keyboard(key_code, element_state);
+                        ViewportEvent::KeyboardKeys { keyboard_state } => {
+                            self.camera_input.handle_keyboard(keyboard_state);
                         }
                     }
                 }
