@@ -65,17 +65,21 @@ impl<'a> egui_tiles::Behavior<InspectorPane> for StateSnapshot<'a> {
         _tile_id: egui_tiles::TileId,
         pane: &mut InspectorPane,
     ) -> egui_tiles::UiResponse {
-        match pane {
-            InspectorPane::Uniform(uniform_id) => {
-                self.uniform_inspector_ui(*uniform_id, ui);
-            }
-            InspectorPane::BindGroup(bind_group_id) => {
-                self.bind_group_inspector_ui(*bind_group_id, ui);
-            }
-            InspectorPane::Shader(shader_id) => {
-                self.shader_inspector_ui(ui, *shader_id);
-            }
-        };
+        egui::CentralPanel::default().show_inside(ui, |ui| {
+            egui::ScrollArea::both().auto_shrink(false).show(ui, |ui| {
+                match pane {
+                    InspectorPane::Uniform(uniform_id) => {
+                        self.uniform_inspector_ui(*uniform_id, ui);
+                    }
+                    InspectorPane::BindGroup(bind_group_id) => {
+                        self.bind_group_inspector_ui(*bind_group_id, ui);
+                    }
+                    InspectorPane::Shader(shader_id) => {
+                        self.shader_inspector_ui(ui, *shader_id);
+                    }
+                };
+            });
+        });
 
         egui_tiles::UiResponse::None
     }

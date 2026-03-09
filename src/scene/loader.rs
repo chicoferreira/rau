@@ -138,7 +138,6 @@ impl HdrLoader {
 
         let dst_texture = Texture::new(
             &TextureCreationContext {
-                viewports: &project.viewports,
                 dimensions: &project.dimensions,
                 device,
                 queue,

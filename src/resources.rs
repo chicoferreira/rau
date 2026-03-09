@@ -93,7 +93,6 @@ fn create_material_bind_group(
     let entries = vec![
         // TODO: Remove the duplicated sampler
         BindGroupEntry {
-            binding: 0,
             resource: BindGroupResource::Texture {
                 texture_view_id: diffuse_texture_view_id,
                 view_dimension: wgpu::TextureViewDimension::D2,
@@ -101,14 +100,12 @@ fn create_material_bind_group(
             },
         },
         BindGroupEntry {
-            binding: 1,
             resource: BindGroupResource::Sampler {
                 sampler_id,
                 sampler_binding_type: wgpu::SamplerBindingType::Filtering,
             },
         },
         BindGroupEntry {
-            binding: 2,
             resource: BindGroupResource::Texture {
                 texture_view_id: normal_texture_view_id,
                 view_dimension: wgpu::TextureViewDimension::D2,
@@ -116,7 +113,6 @@ fn create_material_bind_group(
             },
         },
         BindGroupEntry {
-            binding: 3,
             resource: BindGroupResource::Sampler {
                 sampler_id,
                 sampler_binding_type: wgpu::SamplerBindingType::Filtering,
@@ -154,7 +150,6 @@ pub async fn load_model(
     let mut materials = Vec::new();
 
     let ctx = TextureCreationContext {
-        viewports: &project.viewports,
         dimensions: &project.dimensions,
         device,
         queue,

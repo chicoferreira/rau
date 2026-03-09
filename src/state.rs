@@ -11,7 +11,7 @@ use crate::{
     camera::{Camera, CameraInput},
     project::{
         self, BindGroupId, ShaderId, UniformId, ViewportId,
-        bindgroup::BindGroupCreationContext,
+        bindgroup::{BindGroupCreationContext, BindGroupEntry, BindGroupResource},
         recreate::RecreateTracker,
         texture::TextureCreationContext,
         texture_view::TextureViewCreationContext,
@@ -62,6 +62,11 @@ pub enum StateEvent {
     CancelRename,
     ApplyRename(RenameTarget, String),
     InspectShader(ShaderId),
+    CreateBindGroup,
+    DeleteBindGroup(BindGroupId),
+    CreateBindGroupEntry(BindGroupId, BindGroupResource),
+    DeleteBindGroupEntry(BindGroupId, usize),
+    UpdateBindGroupEntry(BindGroupId, usize, BindGroupResource),
 }
 
 pub struct State {
@@ -388,7 +393,6 @@ impl State {
         let mut tracker = RecreateTracker::new();
 
         let view = &mut TextureCreationContext {
-            viewports: &self.project.viewports,
             dimensions: &self.project.dimensions,
             device: &self.device,
             queue: &self.queue,
@@ -557,6 +561,41 @@ impl State {
                 StateEvent::InspectShader(shader_id) => {
                     self.inspector_tree_pane
                         .add_inspector_pane(InspectorPane::Shader(shader_id));
+                }
+                StateEvent::CreateBindGroup => {
+                    const DEFAULT_NAME: &str = "Bind Group";
+
+                    let bind_group = project::bindgroup::BindGroup::new(
+                        &self.project,
+                        &self.device,
+                        DEFAULT_NAME.to_string(),
+                        vec![],
+                    );
+
+                    let bind_group_id = self.project.bind_groups.register(bind_group);
+
+                    self.rename_state = Some(RenameState {
+                        target: RenameTarget::BindGroup(bind_group_id),
+                        current_label: DEFAULT_NAME.to_string(),
+                    });
+                }
+                StateEvent::DeleteBindGroup(bind_group_id) => {
+                    self.project.bind_groups.unregister(bind_group_id);
+                }
+                StateEvent::CreateBindGroupEntry(id, resource) => {
+                    if let Some(bind_group) = self.project.bind_groups.get_mut(id) {
+                        bind_group.add_entry(BindGroupEntry { resource });
+                    }
+                }
+                StateEvent::DeleteBindGroupEntry(id, index) => {
+                    if let Some(bind_group) = self.project.bind_groups.get_mut(id) {
+                        bind_group.remove_entry(index);
+                    }
+                }
+                StateEvent::UpdateBindGroupEntry(id, index, resource) => {
+                    if let Some(bind_group) = self.project.bind_groups.get_mut(id) {
+                        bind_group.update_entry(index, BindGroupEntry { resource });
+                    }
                 }
                 StateEvent::ViewportEvent(viewport_id, viewport_event) => {
                     let _viewport = self.project.viewports.get_mut(viewport_id);

@@ -227,7 +227,6 @@ impl Scene {
             device,
             "camera bind group".to_string(),
             vec![project::bindgroup::BindGroupEntry {
-                binding: 0,
                 resource: project::bindgroup::BindGroupResource::Uniform(camera_uniform_id),
             }],
         );
@@ -242,7 +241,6 @@ impl Scene {
             device,
             "light bind group".to_string(),
             vec![project::bindgroup::BindGroupEntry {
-                binding: 0,
                 resource: project::bindgroup::BindGroupResource::Uniform(light_uniform_id),
             }],
         );
@@ -270,7 +268,6 @@ impl Scene {
 
         let hdr_texture = Texture::new(
             &TextureCreationContext {
-                viewports: &project.viewports,
                 dimensions: &project.dimensions,
                 device,
                 queue,
@@ -344,7 +341,6 @@ impl Scene {
             "Environment Bind Group".to_string(),
             vec![
                 project::bindgroup::BindGroupEntry {
-                    binding: 0,
                     resource: project::bindgroup::BindGroupResource::Texture {
                         texture_view_id: sky_texture_view_id,
                         view_dimension: wgpu::TextureViewDimension::Cube,
@@ -352,7 +348,6 @@ impl Scene {
                     },
                 },
                 project::bindgroup::BindGroupEntry {
-                    binding: 1,
                     resource: project::bindgroup::BindGroupResource::Sampler {
                         sampler_id: image_texture_sampler_id,
                         sampler_binding_type: wgpu::SamplerBindingType::NonFiltering,
@@ -438,7 +433,6 @@ impl Scene {
 
         let depth_texture = Texture::new(
             &TextureCreationContext {
-                viewports: &project.viewports,
                 dimensions: &project.dimensions,
                 device,
                 queue,
@@ -463,7 +457,6 @@ impl Scene {
 
         let viewport_texture = Texture::new(
             &TextureCreationContext {
-                viewports: &project.viewports,
                 dimensions: &project.dimensions,
                 device,
                 queue,

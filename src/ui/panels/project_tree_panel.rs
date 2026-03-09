@@ -1,4 +1,4 @@
-use egui::Response;
+use egui::{Response, WidgetText};
 use egui_ltreeview::{Action, NodeBuilder, NodeConfig, TreeView};
 use std::hash::Hash;
 
@@ -23,17 +23,19 @@ pub enum TreeNodeId {
 }
 
 impl TreeNodeId {
-    fn new_uniform_folder_node(
-        pending_events: &mut Vec<StateEvent>,
+    fn new_folder_node<'a>(
+        id: TreeNodeId,
+        label: impl Into<WidgetText> + 'a,
+        create_new_label: impl Into<WidgetText> + Clone + 'a,
+        create_event: StateEvent,
+        pending_events: &'a mut Vec<StateEvent>,
     ) -> impl NodeConfig<TreeNodeId> {
-        NodeBuilder::dir(TreeNodeId::UniformFolder)
-            .label("Uniforms")
-            .context_menu(|ui| {
-                ui.set_min_width(130.0);
-                if ui.button("Create New Uniform").clicked() {
-                    pending_events.push(StateEvent::CreateUniform);
-                }
-            })
+        NodeBuilder::dir(id).label(label).context_menu(move |ui| {
+            ui.set_min_width(130.0);
+            if ui.button(create_new_label.clone()).clicked() {
+                pending_events.push(create_event.clone());
+            }
+        })
     }
 }
 
@@ -41,7 +43,13 @@ pub fn ui(state: &mut StateSnapshot, ui: &mut egui::Ui) -> Response {
     let (response, actions) = TreeView::new(ui.make_persistent_id("project_tree_view"))
         .allow_multi_selection(false)
         .show(ui, |builder| {
-            builder.node(TreeNodeId::new_uniform_folder_node(state.pending_events));
+            builder.node(TreeNodeId::new_folder_node(
+                TreeNodeId::UniformFolder,
+                "Uniforms",
+                "Create New Uniform",
+                StateEvent::CreateUniform,
+                state.pending_events,
+            ));
 
             for (id, uniform) in state.project.uniforms.list() {
                 let node = ProjectLeafNode::new(TreeNodeId::Uniform(id), &uniform.label)
@@ -54,13 +62,19 @@ pub fn ui(state: &mut StateSnapshot, ui: &mut egui::Ui) -> Response {
             }
             builder.close_dir();
 
-            builder.dir(TreeNodeId::BindGroupFolder, "Bind Groups");
+            builder.node(TreeNodeId::new_folder_node(
+                TreeNodeId::BindGroupFolder,
+                "Bind Groups",
+                "Create New Bind Group",
+                StateEvent::CreateBindGroup,
+                state.pending_events,
+            ));
             for (id, bind_group) in state.project.bind_groups.list() {
                 let node = ProjectLeafNode::new(TreeNodeId::BindGroup(id), &bind_group.label)
                     .with_rename_target(RenameTarget::BindGroup(id))
                     .with_inspect_event(StateEvent::InspectBindGroup(id))
-                    // .with_create_event(StateEvent::CreateBindGroup)
-                    // .with_delete_event(StateEvent::DeleteBindGroup(id))
+                    .with_create_event(StateEvent::CreateBindGroup, "Create New Bind Group")
+                    .with_delete_event(StateEvent::DeleteBindGroup(id))
                     .build(state.pending_events, state.rename_state);
                 builder.node(node);
             }
