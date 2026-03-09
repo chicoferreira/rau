@@ -20,6 +20,12 @@ pub struct KeyboardState {
 }
 
 impl KeyboardState {
+    pub fn empty() -> Self {
+        Self {
+            pressed_keys: EnumSet::empty(),
+        }
+    }
+
     pub fn from_egui_input(input: &egui::InputState) -> Self {
         let mut pressed_keys: EnumSet<Key> = input
             .keys_down

@@ -1,3 +1,5 @@
+use egui::Ui;
+
 use crate::{
     key::KeyboardState,
     project::ViewportId,
@@ -6,7 +8,7 @@ use crate::{
 };
 
 pub fn ui(
-    ui: &mut egui::Ui,
+    ui: &mut Ui,
     viewport_id: ViewportId,
     egui_texture_id: egui::TextureId,
     last_size: Option<ui::Size2d>,
@@ -39,19 +41,21 @@ pub fn ui(
         events.push(StateEvent::ViewportEvent(viewport_id, ViewportEvent::Focus));
     }
 
-    if response.has_focus() {
-        let data_id = egui::Id::new(("viewport_keyboard_state", viewport_id));
-        let keyboard_state = ui.input(|input| KeyboardState::from_egui_input(input));
-        let prev: Option<KeyboardState> = ui.ctx().data(|d| d.get_temp(data_id));
-        if prev.as_ref() != Some(&keyboard_state) {
-            ui.ctx()
-                .data_mut(|d| d.insert_temp(data_id, keyboard_state.clone()));
+    let keyboard_state = if response.has_focus() {
+        ui.input(|input| KeyboardState::from_egui_input(input))
+    } else {
+        // TODO: remove me once camera gets refactored
+        KeyboardState::empty()
+    };
 
-            events.push(StateEvent::ViewportEvent(
-                viewport_id,
-                ViewportEvent::KeyboardKeys { keyboard_state },
-            ));
-        }
+    let prev_keyboard_state = get_last_sent_keyboard_state(ui, viewport_id);
+    if prev_keyboard_state.as_ref() != Some(&keyboard_state) {
+        set_last_sent_keyboard_state(ui, viewport_id, keyboard_state.clone());
+
+        events.push(StateEvent::ViewportEvent(
+            viewport_id,
+            ViewportEvent::KeyboardKeys { keyboard_state },
+        ));
     }
 
     if response.dragged() {
@@ -81,4 +85,18 @@ pub fn ui(
     }
 
     events
+}
+
+fn get_last_sent_keyboard_state(ui: &mut Ui, viewport_id: ViewportId) -> Option<KeyboardState> {
+    let data_id = last_sent_keyboard_state_data_id(viewport_id);
+    ui.ctx().data(|d| d.get_temp(data_id))
+}
+
+fn set_last_sent_keyboard_state(ui: &mut Ui, viewport_id: ViewportId, state: KeyboardState) {
+    let data_id = last_sent_keyboard_state_data_id(viewport_id);
+    ui.ctx().data_mut(|d| d.insert_temp(data_id, state));
+}
+
+fn last_sent_keyboard_state_data_id(viewport_id: ViewportId) -> egui::Id {
+    egui::Id::new(("viewport_keyboard_state", viewport_id))
 }

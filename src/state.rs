@@ -1,5 +1,6 @@
-use std::{collections::HashMap, sync::Arc};
+use std::sync::Arc;
 
+use slotmap::SecondaryMap;
 use winit::{event::WindowEvent, window::Window};
 
 use crate::{
@@ -71,7 +72,7 @@ pub struct State {
     inspector_tree_pane: InspectorTreePane,
     viewport_tree_pane: ViewportTreePane,
     camera_input: CameraInput,
-    dimension_owners: HashMap<DimensionId, ViewportId>,
+    dimension_owners: SecondaryMap<DimensionId, ViewportId>,
     project: project::Project,
 }
 
@@ -581,7 +582,7 @@ impl State {
 
                                 let is_owner = self
                                     .dimension_owners
-                                    .get(&viewport.dimension_id)
+                                    .get(viewport.dimension_id)
                                     .map_or(true, |&owner| owner == viewport_id);
 
                                 // relevant issue: https://github.com/chicoferreira/rau/issues/8
