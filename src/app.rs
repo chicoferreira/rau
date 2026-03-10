@@ -8,6 +8,7 @@ pub struct App {
     #[cfg(target_arch = "wasm32")]
     proxy: Option<winit::event_loop::EventLoopProxy<State>>,
     state: Option<State>,
+    pending_window_events: Vec<WindowEvent>,
 }
 
 impl App {
@@ -20,6 +21,7 @@ impl App {
             state: None,
             #[cfg(target_arch = "wasm32")]
             proxy,
+            pending_window_events: Vec::new(),
         }
     }
 }
@@ -66,16 +68,13 @@ impl ApplicationHandler<State> for App {
     }
 
     #[allow(unused_mut)]
-    fn user_event(&mut self, _event_loop: &ActiveEventLoop, mut event: State) {
-        #[cfg(target_arch = "wasm32")]
-        {
-            event.window().request_redraw();
-            event.resize(
-                event.window().inner_size().width,
-                event.window().inner_size().height,
-            );
+    fn user_event(&mut self, event_loop: &ActiveEventLoop, mut state: State) {
+        let pending = self.pending_window_events.drain(..);
+        for event in pending {
+            state.handle_window_event(event_loop, event);
         }
-        self.state = Some(event);
+
+        self.state = Some(state);
     }
 
     fn window_event(
@@ -86,7 +85,10 @@ impl ApplicationHandler<State> for App {
     ) {
         let state = match &mut self.state {
             Some(canvas) => canvas,
-            None => return,
+            None => {
+                self.pending_window_events.push(event);
+                return;
+            }
         };
 
         state.handle_window_event(event_loop, event);

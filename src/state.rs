@@ -231,11 +231,6 @@ impl State {
         })
     }
 
-    #[cfg(target_arch = "wasm32")]
-    pub fn window(&self) -> &winit::window::Window {
-        &self.window
-    }
-
     pub fn resize(&mut self, width: u32, height: u32) {
         if width > 0 && height > 0 {
             self.config.width = width;
