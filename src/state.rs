@@ -4,11 +4,11 @@ use slotmap::SecondaryMap;
 use winit::{event::WindowEvent, window::Window};
 
 use crate::{
-    camera::{Camera, CameraInput},
     key::KeyboardState,
     project::{
-        self, BindGroupId, DimensionId, ShaderId, UniformId, ViewportId,
+        self, BindGroupId, CameraId, DimensionId, ShaderId, UniformId, ViewportId,
         bindgroup::{BindGroupCreationContext, BindGroupEntry, BindGroupResource},
+        camera::CameraCreationContext,
         recreate::RecreateTracker,
         texture::TextureCreationContext,
         texture_view::TextureViewCreationContext,
@@ -55,6 +55,7 @@ pub enum StateEvent {
     CreateBindGroupEntry(BindGroupId, BindGroupResource),
     DeleteBindGroupEntry(BindGroupId, usize),
     UpdateBindGroupEntry(BindGroupId, usize, BindGroupResource),
+    InspectCamera(CameraId),
 }
 
 pub struct State {
@@ -71,7 +72,6 @@ pub struct State {
     pending_events: Vec<StateEvent>,
     inspector_tree_pane: InspectorTreePane,
     viewport_tree_pane: ViewportTreePane,
-    camera_input: CameraInput,
     dimension_owners: SecondaryMap<DimensionId, ViewportId>,
     project: project::Project,
 }
@@ -145,20 +145,7 @@ impl State {
 
         let size = ui::Size2d::new(config.width, config.height);
 
-        let camera = Camera::new(
-            (0.0, 5.0, 10.0),
-            cgmath::Deg(-90.0),
-            cgmath::Deg(-20.0),
-            size.width(),
-            size.height(),
-            cgmath::Deg(45.0),
-            0.1,
-            100.0,
-        );
-
-        let camera_input = CameraInput::new(4.0, 0.4);
-
-        let mut project = project::Project::new(camera);
+        let mut project = project::Project::new();
 
         let equirectangular_shader = project::shader::Shader::new(
             "Equirectengular Shader",
@@ -226,7 +213,6 @@ impl State {
             pending_events: vec![],
             inspector_tree_pane,
             viewport_tree_pane,
-            camera_input,
             project,
         })
     }
@@ -288,20 +274,17 @@ impl State {
 
         self.handle_events();
 
-        self.camera_input
-            .update_camera(&mut self.project.camera, dt);
+        self.tick_objects(dt);
 
         for (_, uniform) in self.project.uniforms.list_mut() {
             uniform.update(
                 UniformProjectContext {
-                    camera: &self.project.camera,
+                    cameras: &self.project.cameras,
                 },
                 &self.device,
                 &self.queue,
             );
         }
-
-        self.tick_objects();
 
         self.scene.update(&mut self.project, dt);
 
@@ -354,7 +337,7 @@ impl State {
         }
     }
 
-    fn tick_objects(&mut self) {
+    fn tick_objects(&mut self, dt: std::time::Duration) {
         let mut tracker = RecreateTracker::new();
 
         let view = &mut TextureCreationContext {
@@ -375,6 +358,12 @@ impl State {
             device: &self.device,
         };
         tracker.recreate_storage(&mut self.project.viewports, view);
+
+        let view = &mut CameraCreationContext {
+            dimensions: &self.project.dimensions,
+            dt,
+        };
+        tracker.recreate_storage(&mut self.project.cameras, view);
 
         let view = &mut BindGroupCreationContext {
             uniforms: &self.project.uniforms,
@@ -445,6 +434,9 @@ impl State {
                         RenameTarget::Shader(shader_id) => {
                             self.project.shaders.get(shader_id).map(|s| s.label.clone())
                         }
+                        RenameTarget::Camera(camera_id) => {
+                            self.project.cameras.get(camera_id).map(|c| c.label.clone())
+                        }
                     };
 
                     if let Some(current_name) = current_name {
@@ -485,6 +477,11 @@ impl State {
                         RenameTarget::Shader(id) => {
                             if let Some(shader) = self.project.shaders.get_mut(id) {
                                 shader.label = new_name;
+                            }
+                        }
+                        RenameTarget::Camera(id) => {
+                            if let Some(camera) = self.project.cameras.get_mut(id) {
+                                camera.label = new_name;
                             }
                         }
                     }
@@ -564,12 +561,9 @@ impl State {
                     }
                 }
                 StateEvent::ViewportEvent(viewport_id, viewport_event) => {
-                    let _viewport = self.project.viewports.get_mut(viewport_id);
-                    let camera = &mut self.project.camera;
-
-                    match viewport_event {
-                        ViewportEvent::Resize { size } => {
-                            if let Some(viewport) = self.project.viewports.get_mut(viewport_id) {
+                    if let Some(viewport) = self.project.viewports.get_mut(viewport_id) {
+                        match viewport_event {
+                            ViewportEvent::Resize { size } => {
                                 // set the requested_ui_size so:
                                 // 1. the viewport doesn't keep sending resize events when it doesn't match the actual size of the viewport
                                 // 2. we know to which size to resize the camera when the viewport gets focused (handled in the event below)
@@ -588,8 +582,6 @@ impl State {
                                 // problem of fighting when there are two viewports with different sizes for the same dimension.
                                 // this way, only one of them (the owner) will control the dimension size.
                                 if is_owner {
-                                    // TODO: make camera dependent on dimension
-                                    camera.resize(size);
                                     if let Some(dimension) =
                                         self.project.dimensions.get_mut(viewport.dimension_id)
                                     {
@@ -597,14 +589,11 @@ impl State {
                                     }
                                 }
                             }
-                        }
-                        ViewportEvent::Focus => {
-                            if let Some(viewport) = self.project.viewports.get(viewport_id) {
+                            ViewportEvent::Focus => {
                                 // read the comment in the event above for more context
                                 self.dimension_owners
                                     .insert(viewport.dimension_id, viewport_id);
                                 if let Some(ui_size) = viewport.requested_ui_size {
-                                    self.project.camera.resize(ui_size);
                                     if let Some(dimension) =
                                         self.project.dimensions.get_mut(viewport.dimension_id)
                                     {
@@ -612,17 +601,33 @@ impl State {
                                     }
                                 }
                             }
-                        }
-                        ViewportEvent::Scroll { delta_y_px } => {
-                            self.camera_input.handle_scroll_pixels(delta_y_px);
-                        }
-                        ViewportEvent::Drag { mouse_dx, mouse_dy } => {
-                            self.camera_input.handle_mouse(mouse_dx, mouse_dy);
-                        }
-                        ViewportEvent::KeyboardKeys { keyboard_state } => {
-                            self.camera_input.handle_keyboard(keyboard_state);
+                            ViewportEvent::Scroll { delta_y_px } => {
+                                if let Some(camera) =
+                                    self.project.cameras.get_mut(viewport.controls_camera_id)
+                                {
+                                    camera.input_mut().handle_scroll_pixels(delta_y_px);
+                                }
+                            }
+                            ViewportEvent::Drag { mouse_dx, mouse_dy } => {
+                                if let Some(camera) =
+                                    self.project.cameras.get_mut(viewport.controls_camera_id)
+                                {
+                                    camera.input_mut().handle_mouse(mouse_dx, mouse_dy);
+                                }
+                            }
+                            ViewportEvent::KeyboardKeys { keyboard_state } => {
+                                if let Some(camera) =
+                                    self.project.cameras.get_mut(viewport.controls_camera_id)
+                                {
+                                    camera.input_mut().handle_keyboard(keyboard_state);
+                                }
+                            }
                         }
                     }
+                }
+                StateEvent::InspectCamera(camera_id) => {
+                    self.inspector_tree_pane
+                        .add_inspector_pane(InspectorPane::Camera(camera_id));
                 }
             }
         }

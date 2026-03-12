@@ -1,19 +1,77 @@
-use cgmath::SquareMatrix;
 use wgpu::util::DeviceExt;
 
-use crate::camera::Camera;
+use crate::project::{CameraId, camera::Camera, storage::Storage};
 
 // We need this struct to avoid borrow checker being mad
 // when we are iterating over uniforms from a project
 // and then we need the project to update it
 pub struct UniformProjectContext<'a> {
-    pub camera: &'a Camera,
+    pub cameras: &'a Storage<CameraId, Camera>,
 }
 
 pub struct Uniform {
     pub label: String,
     pub data: UniformData,
     buffer: wgpu::Buffer,
+}
+
+#[derive(Debug, Default)]
+pub struct UniformData {
+    pub fields: Vec<UniformField>,
+}
+
+#[derive(Debug)]
+pub struct UniformField {
+    pub name: String,
+    pub source: UniformFieldSource,
+    pub last_data: UniformFieldData,
+}
+
+#[derive(Debug)]
+pub enum UniformFieldSource {
+    UserDefined(UniformFieldData),
+    Camera(Option<CameraId>, CameraField),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, strum::Display)]
+pub enum UniformFieldSourceKind {
+    #[strum(to_string = "{0}")]
+    UserDefined(UniformFieldKind),
+    #[strum(to_string = "Camera {0}")]
+    Camera(CameraField),
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum UniformFieldData {
+    Vec2f([f32; 2]),
+    Vec3f([f32; 3]),
+    Vec4f([f32; 4]),
+    Rgb([f32; 3]),
+    Rgba([f32; 4]),
+    Mat4x4f([[f32; 4]; 4]),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, strum::EnumIter, strum::Display)]
+pub enum UniformFieldKind {
+    Vec2f,
+    Vec3f,
+    Vec4f,
+    Rgb,
+    Rgba,
+    Mat4x4f,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, strum::EnumIter, strum::Display)]
+pub enum CameraField {
+    Position,
+    Projection,
+    View,
+    #[strum(to_string = "Projection View")]
+    ProjectionView,
+    #[strum(to_string = "Inverse Projection")]
+    InverseProjection,
+    #[strum(to_string = "Inverse View")]
+    InverseView,
 }
 
 impl Uniform {
@@ -68,11 +126,6 @@ impl Uniform {
     }
 }
 
-#[derive(Debug, Default)]
-pub struct UniformData {
-    pub fields: Vec<UniformField>,
-}
-
 impl UniformData {
     fn cast(&self) -> Vec<u8> {
         let mut buf = vec![];
@@ -110,19 +163,16 @@ impl UniformData {
     }
 }
 
-#[derive(Debug)]
-pub struct UniformField {
-    pub name: String,
-    pub source: UniformFieldSource,
-    pub last_data: UniformFieldData,
-}
-
 impl UniformField {
-    pub fn new_camera_sourced(name: impl Into<String>, source: CameraFieldSource) -> Self {
-        let data = source.default_data();
+    pub fn new_camera_sourced(
+        name: impl Into<String>,
+        camera_id: Option<CameraId>,
+        field: CameraField,
+    ) -> Self {
+        let data = field.default_data();
         Self {
             name: name.into(),
-            source: UniformFieldSource::Camera(source),
+            source: UniformFieldSource::Camera(camera_id, field),
             last_data: data,
         }
     }
@@ -135,6 +185,8 @@ impl UniformField {
         }
     }
 
+    // TODO: Remove this constructors
+    #[allow(unused)]
     pub fn new_user_defined_vec2f(name: impl Into<String>, value: [f32; 2]) -> Self {
         Self::new_user_defined(name, UniformFieldData::Vec2f(value))
     }
@@ -143,6 +195,7 @@ impl UniformField {
         Self::new_user_defined(name, UniformFieldData::Vec3f(value))
     }
 
+    #[allow(unused)]
     pub fn new_user_defined_vec4f(name: impl Into<String>, value: [f32; 4]) -> Self {
         Self::new_user_defined(name, UniformFieldData::Vec4f(value))
     }
@@ -151,6 +204,7 @@ impl UniformField {
         Self::new_user_defined(name, UniformFieldData::Rgb(value))
     }
 
+    #[allow(unused)]
     pub fn new_user_defined_rgba(name: impl Into<String>, value: [f32; 4]) -> Self {
         Self::new_user_defined(name, UniformFieldData::Rgba(value))
     }
@@ -160,7 +214,7 @@ impl UniformField {
             UniformFieldSourceKind::UserDefined(kind) => {
                 Self::new_user_defined(name, UniformFieldData::from_kind(kind))
             }
-            UniformFieldSourceKind::Camera(kind) => Self::new_camera_sourced(name, kind),
+            UniformFieldSourceKind::Camera(kind) => Self::new_camera_sourced(name, None, kind),
         }
     }
 
@@ -176,17 +230,19 @@ impl UniformField {
     }
 }
 
-#[derive(Debug)]
-pub enum UniformFieldSource {
-    UserDefined(UniformFieldData),
-    Camera(CameraFieldSource),
-}
-
 impl UniformFieldSource {
     fn compute(&self, context: &UniformProjectContext<'_>) -> UniformFieldData {
         match self {
             UniformFieldSource::UserDefined(data) => data.clone(),
-            UniformFieldSource::Camera(source) => source.compute(&context.camera),
+            UniformFieldSource::Camera(camera_id, source) => {
+                if let Some(camera_id) = camera_id
+                    && let Some(camera) = context.cameras.get(*camera_id)
+                {
+                    source.compute(camera)
+                } else {
+                    source.default_data()
+                }
+            }
         }
     }
 
@@ -195,27 +251,9 @@ impl UniformFieldSource {
             UniformFieldSource::UserDefined(data) => {
                 UniformFieldSourceKind::UserDefined(data.kind())
             }
-            UniformFieldSource::Camera(source) => UniformFieldSourceKind::Camera(source.clone()),
+            UniformFieldSource::Camera(_, source) => UniformFieldSourceKind::Camera(source.clone()),
         }
     }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, strum::Display)]
-pub enum UniformFieldSourceKind {
-    #[strum(to_string = "{0}")]
-    UserDefined(UniformFieldKind),
-    #[strum(to_string = "Camera {0}")]
-    Camera(CameraFieldSource),
-}
-
-#[derive(Clone, Debug, PartialEq)]
-pub enum UniformFieldData {
-    Vec2f([f32; 2]),
-    Vec3f([f32; 3]),
-    Vec4f([f32; 4]),
-    Rgb([f32; 3]),
-    Rgba([f32; 4]),
-    Mat4x4f([[f32; 4]; 4]),
 }
 
 impl UniformFieldData {
@@ -265,16 +303,6 @@ impl UniformFieldData {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, strum::EnumIter, strum::Display)]
-pub enum UniformFieldKind {
-    Vec2f,
-    Vec3f,
-    Vec4f,
-    Rgb,
-    Rgba,
-    Mat4x4f,
-}
-
 impl UniformFieldKind {
     pub fn layout(&self) -> (usize, usize) {
         match self {
@@ -299,52 +327,33 @@ impl UniformFieldKind {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, strum::EnumIter, strum::Display)]
-pub enum CameraFieldSource {
-    Position,
-    Projection,
-    View,
-    #[strum(to_string = "Projection View")]
-    ProjectionView,
-    #[strum(to_string = "Inverse Projection")]
-    InverseProjection,
-    #[strum(to_string = "Inverse View")]
-    InverseView,
-}
-
-impl CameraFieldSource {
+impl CameraField {
     fn default_data(&self) -> UniformFieldData {
         match self {
-            CameraFieldSource::Projection => UniformFieldData::Mat4x4f([[1.0; 4]; 4]),
-            CameraFieldSource::Position => UniformFieldData::Vec4f([0.0; 4]),
-            CameraFieldSource::View => UniformFieldData::Mat4x4f([[1.0; 4]; 4]),
-            CameraFieldSource::ProjectionView => UniformFieldData::Mat4x4f([[1.0; 4]; 4]),
-            CameraFieldSource::InverseProjection => UniformFieldData::Mat4x4f([[1.0; 4]; 4]),
-            CameraFieldSource::InverseView => UniformFieldData::Mat4x4f([[1.0; 4]; 4]),
+            CameraField::Projection => UniformFieldData::Mat4x4f([[1.0; 4]; 4]),
+            CameraField::Position => UniformFieldData::Vec4f([0.0; 4]),
+            CameraField::View => UniformFieldData::Mat4x4f([[1.0; 4]; 4]),
+            CameraField::ProjectionView => UniformFieldData::Mat4x4f([[1.0; 4]; 4]),
+            CameraField::InverseProjection => UniformFieldData::Mat4x4f([[1.0; 4]; 4]),
+            CameraField::InverseView => UniformFieldData::Mat4x4f([[1.0; 4]; 4]),
         }
     }
 
     fn compute(&self, camera: &Camera) -> UniformFieldData {
         match self {
-            CameraFieldSource::Projection => {
-                UniformFieldData::Mat4x4f(camera.calc_proj_matrix().into())
+            CameraField::Position => {
+                UniformFieldData::Vec4f(camera.position().to_homogeneous().into())
             }
-            CameraFieldSource::Position => {
-                UniformFieldData::Vec4f(camera.position.to_homogeneous().into())
+            CameraField::Projection => UniformFieldData::Mat4x4f(camera.matrix().projection.into()),
+            CameraField::View => UniformFieldData::Mat4x4f(camera.matrix().view.into()),
+            CameraField::ProjectionView => {
+                UniformFieldData::Mat4x4f(camera.matrix().projection_view.into())
             }
-            CameraFieldSource::View => UniformFieldData::Mat4x4f(camera.calc_view_matrix().into()),
-            CameraFieldSource::ProjectionView => {
-                let proj = camera.calc_proj_matrix();
-                let view = camera.calc_view_matrix();
-                UniformFieldData::Mat4x4f((proj * view).into())
+            CameraField::InverseProjection => {
+                UniformFieldData::Mat4x4f(camera.matrix().inverse_projection.into())
             }
-            CameraFieldSource::InverseProjection => {
-                let proj = camera.calc_proj_matrix();
-                UniformFieldData::Mat4x4f(proj.invert().unwrap().into())
-            }
-            CameraFieldSource::InverseView => {
-                let view = camera.calc_view_matrix();
-                UniformFieldData::Mat4x4f(view.invert().unwrap().into())
+            CameraField::InverseView => {
+                UniformFieldData::Mat4x4f(camera.matrix().inverse_view.into())
             }
         }
     }

@@ -4,13 +4,13 @@ use crate::{
     model::{self, Vertex},
     project::{
         self, BindGroupId, TextureViewId, UniformId, ViewportId,
+        camera::Camera,
         dimension::Dimension,
         sampler::{Sampler, SamplerSpec},
         texture::{Texture, TextureCreationContext, TextureSource},
         texture_view::{TextureView, TextureViewCreationContext, TextureViewFormat},
         uniform::{
-            CameraFieldSource, Uniform, UniformData, UniformField, UniformFieldData,
-            UniformFieldSource,
+            CameraField, Uniform, UniformData, UniformField, UniformFieldData, UniformFieldSource,
         },
         viewport::ViewportCreationContext,
     },
@@ -179,13 +179,51 @@ impl Scene {
                 label: Some("texture_bind_group_layout"),
             });
 
+        let dimension = Dimension { size };
+        let dimension_id = project.dimensions.register(dimension);
+
+        let camera = Camera::new(
+            "Main Camera".to_string(),
+            project,
+            dimension_id,
+            (0.0, 5.0, 10.0),
+            cgmath::Deg(-90.0),
+            cgmath::Deg(-20.0),
+            cgmath::Deg(60.0),
+            0.1,
+            100.0,
+            10.0,
+            10.0,
+            10.0,
+            0.1,
+            0.1,
+        );
+
+        let camera_id = project.cameras.register(camera);
+
         let camera_uniform_data = UniformData {
             fields: vec![
-                UniformField::new_camera_sourced("view_position", CameraFieldSource::Position),
-                UniformField::new_camera_sourced("view", CameraFieldSource::View),
-                UniformField::new_camera_sourced("proj_view", CameraFieldSource::ProjectionView),
-                UniformField::new_camera_sourced("inv_proj", CameraFieldSource::InverseProjection),
-                UniformField::new_camera_sourced("inv_view", CameraFieldSource::InverseView),
+                UniformField::new_camera_sourced(
+                    "view_position",
+                    Some(camera_id),
+                    CameraField::Position,
+                ),
+                UniformField::new_camera_sourced("view", Some(camera_id), CameraField::View),
+                UniformField::new_camera_sourced(
+                    "proj_view",
+                    Some(camera_id),
+                    CameraField::ProjectionView,
+                ),
+                UniformField::new_camera_sourced(
+                    "inv_proj",
+                    Some(camera_id),
+                    CameraField::InverseProjection,
+                ),
+                UniformField::new_camera_sourced(
+                    "inv_view",
+                    Some(camera_id),
+                    CameraField::InverseView,
+                ),
             ],
         };
         let camera_uniform = Uniform::new(device, "Camera Buffer", camera_uniform_data);
@@ -262,9 +300,6 @@ impl Scene {
         .await
         .unwrap();
 
-        let dimension = Dimension { size };
-        let dimension_id = project.dimensions.register(dimension);
-
         let hdr_texture = Texture::new(
             &TextureCreationContext {
                 dimensions: &project.dimensions,
@@ -298,6 +333,7 @@ impl Scene {
             "HDR Buffer",
             hdr_texture_view_id,
             dimension_id,
+            camera_id,
         );
         let hdr_viewport_id = project.viewports.register(hdr_viewport);
         let hdr_texture_id = project
@@ -496,6 +532,7 @@ impl Scene {
             "Viewport Texture",
             viewport_texture_view_id,
             dimension_id,
+            camera_id,
         );
         let viewport_id = project.viewports.register(viewport);
 

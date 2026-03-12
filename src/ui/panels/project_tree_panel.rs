@@ -3,7 +3,7 @@ use egui_ltreeview::{Action, NodeBuilder, NodeConfig, TreeView};
 use std::hash::Hash;
 
 use crate::{
-    project::{BindGroupId, ShaderId, UniformId, ViewportId},
+    project::{BindGroupId, CameraId, ShaderId, UniformId, ViewportId},
     state::StateEvent,
     ui::{
         components::project_leaf_node::ProjectLeafNode, pane::StateSnapshot, rename::RenameTarget,
@@ -20,6 +20,8 @@ pub enum TreeNodeId {
     Viewport(ViewportId),
     ShaderFolder,
     Shader(ShaderId),
+    CameraFolder,
+    Camera(CameraId),
 }
 
 impl TreeNodeId {
@@ -101,6 +103,17 @@ pub fn ui(state: &mut StateSnapshot, ui: &mut egui::Ui) -> Response {
                 builder.node(node);
             }
             builder.close_dir();
+
+            builder.dir(TreeNodeId::CameraFolder, "Cameras");
+            for (id, camera) in state.project.cameras.list() {
+                let node = ProjectLeafNode::new(TreeNodeId::Camera(id), &camera.label)
+                    .with_rename_target(RenameTarget::Camera(id))
+                    .with_inspect_event(StateEvent::InspectCamera(id))
+                    .build(state.pending_events, state.rename_state);
+
+                builder.node(node);
+            }
+            builder.close_dir();
         });
 
     for action in actions {
@@ -120,10 +133,16 @@ pub fn ui(state: &mut StateSnapshot, ui: &mut egui::Ui) -> Response {
                         TreeNodeId::Shader(id) => {
                             state.pending_events.push(StateEvent::InspectShader(id));
                         }
+                        TreeNodeId::Camera(camera_id) => {
+                            state
+                                .pending_events
+                                .push(StateEvent::InspectCamera(camera_id));
+                        }
                         TreeNodeId::UniformFolder
                         | TreeNodeId::BindGroupFolder
                         | TreeNodeId::ViewportFolder
-                        | TreeNodeId::ShaderFolder => {}
+                        | TreeNodeId::ShaderFolder
+                        | TreeNodeId::CameraFolder => {}
                     }
                 }
             }

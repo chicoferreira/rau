@@ -1,15 +1,13 @@
 use slotmap::new_key_type;
 
-use crate::{
-    camera::Camera,
-    project::{
-        bindgroup::BindGroup, dimension::Dimension, sampler::Sampler, shader::Shader,
-        storage::Storage, texture::Texture, texture_view::TextureView, uniform::Uniform,
-        viewport::Viewport,
-    },
+use crate::project::{
+    bindgroup::BindGroup, camera::Camera, dimension::Dimension, sampler::Sampler, shader::Shader,
+    storage::Storage, texture::Texture, texture_view::TextureView, uniform::Uniform,
+    viewport::Viewport,
 };
 
 pub mod bindgroup;
+pub mod camera;
 pub mod dimension;
 pub mod recreate;
 pub mod sampler;
@@ -29,6 +27,7 @@ new_key_type! {
     pub struct TextureViewId;
     pub struct SamplerId;
     pub struct DimensionId;
+    pub struct CameraId;
 }
 
 pub struct Project {
@@ -40,11 +39,11 @@ pub struct Project {
     pub texture_views: Storage<TextureViewId, TextureView>,
     pub samplers: Storage<SamplerId, Sampler>,
     pub dimensions: Storage<DimensionId, Dimension>,
-    pub camera: Camera,
+    pub cameras: Storage<CameraId, Camera>,
 }
 
 impl Project {
-    pub fn new(camera: Camera) -> Self {
+    pub fn new() -> Self {
         Self {
             shaders: Storage::new(),
             viewports: Storage::new(),
@@ -54,7 +53,7 @@ impl Project {
             texture_views: Storage::new(),
             samplers: Storage::new(),
             dimensions: Storage::new(),
-            camera,
+            cameras: Storage::new(),
         }
     }
 }

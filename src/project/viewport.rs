@@ -1,7 +1,7 @@
 use crate::{
     project::{
-        DimensionId, TextureViewId,
-        recreate::{Recreatable, RecreateResult, RecreateTracker},
+        CameraId, DimensionId, TextureViewId, ViewportId,
+        recreate::{ProjectEvent, Recreatable, RecreateTracker},
         storage::Storage,
         texture_view::TextureView,
     },
@@ -19,6 +19,7 @@ pub struct Viewport {
     pub texture_view_id: TextureViewId,
     pub dimension_id: DimensionId,
     pub requested_ui_size: Option<Size2d>,
+    pub controls_camera_id: CameraId,
     egui_id: egui::TextureId,
     dirty: bool,
 }
@@ -30,6 +31,7 @@ impl Viewport {
         label: impl Into<String>,
         texture_view_id: TextureViewId,
         dimension_id: DimensionId,
+        controls_camera_id: CameraId,
     ) -> Viewport {
         let name = label.into();
 
@@ -48,6 +50,7 @@ impl Viewport {
             label: name,
             texture_view_id,
             dimension_id,
+            controls_camera_id,
             egui_id,
             requested_ui_size: None,
             dirty: false,
@@ -61,17 +64,21 @@ impl Viewport {
 
 impl Recreatable for Viewport {
     type Context<'a> = ViewportCreationContext<'a>;
+    type Id = ViewportId;
 
     fn recreate<'a>(
         &mut self,
+        _id: Self::Id,
         ctx: &mut Self::Context<'a>,
         tracker: &RecreateTracker,
-    ) -> RecreateResult {
-        if !self.dirty && !tracker.was_recreated(self.texture_view_id) {
-            return RecreateResult::Unchanged;
+    ) -> Option<ProjectEvent> {
+        if !self.dirty
+            && !tracker.happened(ProjectEvent::TextureViewRecreated(self.texture_view_id))
+        {
+            return None;
         }
         let Some(texture_view) = ctx.texture_views.get(self.texture_view_id) else {
-            return RecreateResult::Unchanged;
+            return None;
         };
 
         ctx.egui_renderer.update_egui_texture(
@@ -80,7 +87,6 @@ impl Recreatable for Viewport {
             wgpu::FilterMode::Linear,
             self.egui_id,
         );
-
-        RecreateResult::Recreated
+        None
     }
 }

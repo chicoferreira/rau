@@ -1,88 +1,62 @@
 use crate::project::{
-    BindGroupId, SamplerId, TextureId, TextureViewId, UniformId, ViewportId, storage::Storage,
+    BindGroupId, CameraId, SamplerId, TextureId, TextureViewId, storage::Storage,
 };
 
 pub struct RecreateTracker {
-    recreated_ids: Vec<ProjectResourceId>,
+    events: Vec<ProjectEvent>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub enum ProjectResourceId {
-    BindGroup(BindGroupId),
-    Uniform(UniformId),
-    Texture(TextureId),
-    TextureView(TextureViewId),
-    Viewport(ViewportId),
-    Sampler(SamplerId),
-}
-
-macro_rules! impl_project_resource_from_id {
-    ($($id_ty:ty => $variant:ident),+ $(,)?) => {
-        $(
-            impl From<$id_ty> for ProjectResourceId {
-                fn from(value: $id_ty) -> Self {
-                    Self::$variant(value)
-                }
-            }
-        )+
-    };
-}
-
-impl_project_resource_from_id!(
-    BindGroupId => BindGroup,
-    UniformId => Uniform,
-    TextureId => Texture,
-    TextureViewId => TextureView,
-    ViewportId => Viewport,
-    SamplerId => Sampler,
-);
-
-pub enum RecreateResult {
-    Recreated,
-    Unchanged,
+pub enum ProjectEvent {
+    BindGroupRecreated(BindGroupId),
+    TextureRecreated(TextureId),
+    TextureViewRecreated(TextureViewId),
+    SamplerRecreated(SamplerId),
+    CameraUpdated(CameraId),
 }
 
 pub trait Recreatable {
     type Context<'a>;
+    type Id;
 
     fn recreate<'a>(
         &mut self,
+        id: Self::Id,
         ctx: &mut Self::Context<'a>,
         tracker: &RecreateTracker,
-    ) -> RecreateResult;
+    ) -> Option<ProjectEvent>;
 }
 
 impl RecreateTracker {
     pub fn new() -> Self {
-        Self {
-            recreated_ids: Vec::new(),
-        }
+        Self { events: Vec::new() }
     }
 
     pub fn recreate_if_needed<'ctx, R: Recreatable>(
         &mut self,
-        object_id: ProjectResourceId,
+        id: R::Id,
         object: &mut R,
         mut project: &mut R::Context<'ctx>,
     ) {
-        let recreate_result = object.recreate(&mut project, self);
-        if let RecreateResult::Recreated = recreate_result {
-            log::debug!("Recreated {object_id:?}");
-            self.recreated_ids.push(object_id);
+        let recreate_result = object.recreate(id, &mut project, self);
+        if let Some(event) = recreate_result {
+            self.events.push(event);
         }
     }
 
-    pub fn recreate_storage<'ctx, R: Recreatable, Id: slotmap::Key + Into<ProjectResourceId>>(
+    pub fn recreate_storage<'ctx, R: Recreatable>(
         &mut self,
-        storage: &mut Storage<Id, R>,
+        storage: &mut Storage<R::Id, R>,
         project: &mut R::Context<'ctx>,
-    ) {
+    ) where
+        R::Id: slotmap::Key,
+    {
         for (id, object) in storage.list_mut() {
-            self.recreate_if_needed(id.into(), object, project);
+            self.recreate_if_needed(id, object, project);
         }
     }
 
-    pub fn was_recreated(&self, object_id: impl Into<ProjectResourceId>) -> bool {
-        self.recreated_ids.contains(&object_id.into())
+    pub fn happened(&self, object_id: impl Into<ProjectEvent>) -> bool {
+        self.events.contains(&object_id.into())
     }
 }

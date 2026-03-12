@@ -72,7 +72,7 @@ pub fn ui(
         }
     }
 
-    if response.hovered() {
+    if response.contains_pointer() {
         let scroll_points = ui.input(|i| i.smooth_scroll_delta.y);
         if scroll_points != 0.0 {
             events.push(StateEvent::ViewportEvent(

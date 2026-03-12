@@ -1,6 +1,6 @@
 use crate::project::{
-    TextureId,
-    recreate::{Recreatable, RecreateResult, RecreateTracker},
+    TextureId, TextureViewId,
+    recreate::{ProjectEvent, Recreatable, RecreateTracker},
     storage::Storage,
     texture::Texture,
 };
@@ -95,14 +95,16 @@ impl TextureView {
 
 impl Recreatable for TextureView {
     type Context<'a> = TextureViewCreationContext<'a>;
+    type Id = TextureViewId;
 
     fn recreate<'a>(
         &mut self,
+        id: Self::Id,
         context: &mut Self::Context<'a>,
         tracker: &RecreateTracker,
-    ) -> RecreateResult {
-        if !self.dirty && !tracker.was_recreated(self.texture_id) {
-            return RecreateResult::Unchanged;
+    ) -> Option<ProjectEvent> {
+        if !self.dirty && !tracker.happened(ProjectEvent::TextureRecreated(self.texture_id)) {
+            return None;
         }
         self.inner = Self::create_view(
             context,
@@ -112,6 +114,6 @@ impl Recreatable for TextureView {
             self.dimension,
             self.array_layer_count,
         );
-        RecreateResult::Recreated
+        Some(ProjectEvent::TextureViewRecreated(id))
     }
 }

@@ -1,9 +1,9 @@
 use image::GenericImageView;
 
 use crate::project::{
-    DimensionId,
+    DimensionId, TextureId,
     dimension::Dimension,
-    recreate::{Recreatable, RecreateResult, RecreateTracker},
+    recreate::{ProjectEvent, Recreatable, RecreateTracker},
     storage::Storage,
 };
 
@@ -137,12 +137,14 @@ impl Texture {
 
 impl Recreatable for Texture {
     type Context<'a> = TextureCreationContext<'a>;
+    type Id = TextureId;
 
     fn recreate<'a>(
         &mut self,
+        id: Self::Id,
         ctx: &mut Self::Context<'a>,
         _tracker: &RecreateTracker,
-    ) -> RecreateResult {
+    ) -> Option<ProjectEvent> {
         let dirty_source = {
             let mut result = false;
             match &self.source {
@@ -159,10 +161,10 @@ impl Recreatable for Texture {
         };
 
         if self.dirty || !dirty_source {
-            return RecreateResult::Unchanged;
+            return None;
         }
 
         self.inner = Self::create_texture(&ctx, &self.label, self.format, self.usage, &self.source);
-        RecreateResult::Recreated
+        Some(ProjectEvent::TextureRecreated(id))
     }
 }

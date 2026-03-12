@@ -1,6 +1,6 @@
 use crate::project::{
-    Project, SamplerId, TextureViewId, UniformId,
-    recreate::{Recreatable, RecreateResult, RecreateTracker},
+    BindGroupId, Project, SamplerId, TextureViewId, UniformId,
+    recreate::{ProjectEvent, Recreatable, RecreateTracker},
     sampler::Sampler,
     storage::Storage,
     texture_view::TextureView,
@@ -186,9 +186,11 @@ impl BindGroupEntry {
         match self.resource {
             BindGroupResource::Texture {
                 texture_view_id, ..
-            } => tracker.was_recreated(texture_view_id),
-            BindGroupResource::Sampler { sampler_id, .. } => tracker.was_recreated(sampler_id),
-            BindGroupResource::Uniform(uniform_id) => tracker.was_recreated(uniform_id),
+            } => tracker.happened(ProjectEvent::TextureViewRecreated(texture_view_id)),
+            BindGroupResource::Sampler { sampler_id, .. } => {
+                tracker.happened(ProjectEvent::SamplerRecreated(sampler_id))
+            }
+            BindGroupResource::Uniform(_) => false,
         }
     }
 }
@@ -220,24 +222,26 @@ impl From<BindGroupResource> for wgpu::BindingType {
 
 impl Recreatable for BindGroup {
     type Context<'a> = BindGroupCreationContext<'a>;
+    type Id = BindGroupId;
 
     fn recreate<'a>(
         &mut self,
+        id: Self::Id,
         ctx: &mut Self::Context<'a>,
         tracker: &RecreateTracker,
-    ) -> RecreateResult {
+    ) -> Option<ProjectEvent> {
         let resources_recreated = self
             .entries
             .iter()
             .any(|entry| entry.resource_recreated(tracker));
         if !self.dirty && !resources_recreated {
-            return RecreateResult::Unchanged;
+            return None;
         }
 
         let (layout, inner) = Self::create_layout_and_bind_group(ctx, &self.label, &self.entries);
 
         self.layout = layout;
         self.inner = inner;
-        RecreateResult::Recreated
+        Some(ProjectEvent::BindGroupRecreated(id))
     }
 }

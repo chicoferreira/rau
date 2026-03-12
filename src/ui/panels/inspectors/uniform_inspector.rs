@@ -1,17 +1,21 @@
-use egui::{Label, RichText, Sense, Ui, Widget};
+use egui::{Label, Sense, Ui, Widget};
 use strum::IntoEnumIterator;
 
 use crate::{
     project::{
         UniformId,
         uniform::{
-            self, CameraFieldSource, UniformField, UniformFieldKind, UniformFieldSource,
+            self, CameraField, UniformField, UniformFieldKind, UniformFieldSource,
             UniformFieldSourceKind,
         },
     },
     state::StateEvent,
     ui::{
-        components::{color_edit::color_edit_rgba, renameable_label::renameable_label},
+        components::{
+            color_edit::color_edit_rgba,
+            data_display::{drag_value_widget, label_widget, ui_edit_array},
+            renameable_label::renameable_label,
+        },
         pane::StateSnapshot,
         rename::{RenameState, RenameTarget},
     },
@@ -126,7 +130,7 @@ fn ui_uniform_field_source(source: &mut UniformFieldSourceKind) -> impl Widget {
                 }
                 ui.separator();
                 ui.label("Camera");
-                for kind in CameraFieldSource::iter() {
+                for kind in CameraField::iter() {
                     ui.selectable_value(
                         source,
                         UniformFieldSourceKind::Camera(kind),
@@ -189,24 +193,6 @@ fn ui_uniform_field_data(
     }
 }
 
-fn ui_edit_array<const N: usize>(
-    ui: &mut egui::Ui,
-    array: &mut [f32; N],
-    widget: impl Fn(&mut egui::Ui, &mut f32),
-) {
-    for value in array.iter_mut() {
-        widget(ui, value);
-    }
-}
-
-fn drag_value_widget(ui: &mut egui::Ui, value: &mut f32) {
-    ui.add(egui::DragValue::new(value).speed(0.01).max_decimals(2));
-}
-
-fn label_widget(ui: &mut egui::Ui, value: &mut f32) {
-    ui.label(RichText::new(format!("{value:.2}")).weak());
-}
-
 fn ui_add_uniform(uniform_id: UniformId, pending_events: &mut Vec<StateEvent>) -> impl Widget {
     move |ui: &mut Ui| {
         ui.menu_button("Add Uniform", |ui| {
@@ -222,7 +208,7 @@ fn ui_add_uniform(uniform_id: UniformId, pending_events: &mut Vec<StateEvent>) -
             }
             ui.separator();
             ui.label("Camera");
-            for kind in CameraFieldSource::iter() {
+            for kind in CameraField::iter() {
                 if ui.button(kind.to_string()).clicked() {
                     let event = StateEvent::CreateUniformField(
                         uniform_id,
