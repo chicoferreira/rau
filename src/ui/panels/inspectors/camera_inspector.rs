@@ -3,7 +3,10 @@ use egui::{CollapsingHeader, Grid, RichText};
 
 use crate::{
     project::CameraId,
-    ui::{components::data_display::ui_mat4_grid, pane::StateSnapshot},
+    ui::{
+        components::{data_display::ui_mat4_grid, selector::selectable_value},
+        pane::StateSnapshot,
+    },
 };
 
 impl StateSnapshot<'_> {
@@ -106,7 +109,24 @@ impl StateSnapshot<'_> {
                         ui.end_row();
 
                         ui.label("Aspect");
-                        ui.label(RichText::new(format!("{:.4}", camera.aspect())).weak());
+
+                        ui.horizontal(|ui| {
+                            ui.label(RichText::new(format!("{:.4}", camera.aspect())).weak());
+                            ui.label("from");
+                            let mut current_dim_id = camera.dimension_id();
+                            let before = current_dim_id;
+                            selectable_value(
+                                ui,
+                                "camera_aspect_source",
+                                &mut current_dim_id,
+                                |_id, dim| dim.label.as_str(),
+                                &self.project.dimensions,
+                            );
+                            if before != current_dim_id {
+                                camera.set_dimension_id(current_dim_id);
+                            }
+                        });
+
                         ui.end_row();
                     });
             });
@@ -155,7 +175,7 @@ impl StateSnapshot<'_> {
                         let mut v = camera.drag_factor();
                         let widget = egui::DragValue::new(&mut v)
                             .speed(0.01)
-                            .max_decimals(3)
+                            .max_decimals(2)
                             .range(0.0_f32..=f32::MAX);
                         if ui.add(widget).changed() {
                             camera.set_drag_factor(v);
@@ -177,7 +197,7 @@ impl StateSnapshot<'_> {
                         let mut v = camera.scroll_speed();
                         let widget = egui::DragValue::new(&mut v)
                             .speed(0.01)
-                            .max_decimals(3)
+                            .max_decimals(4)
                             .range(0.0_f32..=f32::MAX);
                         if ui.add(widget).changed() {
                             camera.set_scroll_speed(v);

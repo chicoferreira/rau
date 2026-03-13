@@ -168,12 +168,12 @@ impl Camera {
         self.scroll_speed
     }
 
-    fn mark_dirty(&mut self) {
-        self.dirty = true;
+    pub fn dimension_id(&self) -> Option<DimensionId> {
+        self.dimension_id
     }
 
-    fn dimension_id(&self) -> Option<DimensionId> {
-        self.dimension_id
+    fn mark_dirty(&mut self) {
+        self.dirty = true;
     }
 
     pub fn set_position(&mut self, position: impl Into<Point3<f32>>) {

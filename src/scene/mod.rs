@@ -179,7 +179,10 @@ impl Scene {
                 label: Some("texture_bind_group_layout"),
             });
 
-        let dimension = Dimension { size };
+        let dimension = Dimension {
+            label: "Main Dimension".to_string(),
+            size,
+        };
         let dimension_id = project.dimensions.register(dimension);
 
         let mut camera = Camera::new("Main Camera".to_string());
