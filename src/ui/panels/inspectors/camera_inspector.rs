@@ -1,13 +1,9 @@
 use cgmath::{Deg, Point3};
-use egui::{CollapsingHeader, Grid, Label, RichText, Sense};
+use egui::{CollapsingHeader, Grid, RichText};
 
 use crate::{
     project::CameraId,
-    ui::{
-        components::{data_display::ui_mat4_grid, renameable_label::renameable_label},
-        pane::StateSnapshot,
-        rename::RenameTarget,
-    },
+    ui::{components::data_display::ui_mat4_grid, pane::StateSnapshot},
 };
 
 impl StateSnapshot<'_> {
@@ -16,18 +12,6 @@ impl StateSnapshot<'_> {
             ui.label("Camera couldn't be found.");
             return;
         };
-
-        let rename_target = RenameTarget::Camera(camera_id);
-        ui.add(renameable_label(
-            Label::new(RichText::new(&camera.label).strong())
-                .selectable(false)
-                .sense(Sense::click()),
-            self.pending_events,
-            self.rename_state,
-            rename_target,
-        ));
-
-        ui.add_space(6.0);
 
         CollapsingHeader::new("Transform")
             .default_open(true)
