@@ -72,29 +72,16 @@ pub struct CameraFrameInput {
 }
 
 impl Camera {
-    pub fn new(
-        label: String,
-        project: &Project,
-        dimension_id: DimensionId,
-        position: impl Into<Point3<f32>>,
-        yaw: impl Into<Rad<f32>>,
-        pitch: impl Into<Rad<f32>>,
-        fovy: impl Into<Rad<f32>>,
-        znear: f32,
-        zfar: f32,
-        acceleration: f32,
-        drag: f32,
-        max_speed: f32,
-        scroll_speed: f32,
-        sensitivity: f32,
-    ) -> Self {
+    pub fn new(label: String, project: &Project, dimension_id: DimensionId) -> Self {
         let dimension = project.dimensions.get(dimension_id).unwrap();
         let aspect = dimension.size.width() as f32 / dimension.size.height() as f32;
 
-        let position = position.into();
-        let pitch = pitch.into();
-        let yaw = yaw.into();
-        let fovy = fovy.into();
+        let position = (0.0, 0.0, -1.0).into();
+        let pitch = Deg(0.0).into();
+        let yaw = Deg(0.0).into();
+        let fovy = Deg(60.0).into();
+        let znear = 0.1;
+        let zfar = 100.0;
 
         let matrix = CameraMatrix::new(position, yaw, pitch, fovy, aspect, znear, zfar);
         let input = CameraFrameInput::default();
@@ -107,14 +94,14 @@ impl Camera {
             dimension_id,
             aspect,
             fovy,
-            max_speed,
+            max_speed: 20.0,
             znear,
             zfar,
-            acceleration,
-            drag,
+            acceleration: 150.0,
+            drag: 12.0,
             current_speed: Vector3::zero(),
-            sensitivity,
-            scroll_speed,
+            sensitivity: 0.1,
+            scroll_speed: 0.05,
             matrix,
             input,
             dirty: false,
