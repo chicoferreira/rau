@@ -9,6 +9,7 @@ use crate::{
         self, BindGroupId, CameraId, DimensionId, ShaderId, UniformId, ViewportId,
         bindgroup::{BindGroupCreationContext, BindGroupEntry, BindGroupResource},
         camera::{Camera, CameraCreationContext},
+        dimension::Dimension,
         recreate::RecreateTracker,
         texture::TextureCreationContext,
         texture_view::TextureViewCreationContext,
@@ -17,7 +18,7 @@ use crate::{
     },
     resources, scene,
     ui::{
-        self,
+        self, Size2d,
         panels::{
             inspector_pane::{InspectorPane, InspectorTreePane},
             viewport_pane::ViewportTreePane,
@@ -58,6 +59,9 @@ pub enum StateEvent {
     CreateCamera,
     InspectCamera(CameraId),
     DeleteCamera(CameraId),
+    CreateDimension,
+    InspectDimension(DimensionId),
+    DeleteDimension(DimensionId),
 }
 
 pub struct State {
@@ -439,6 +443,11 @@ impl State {
                         RenameTarget::Camera(camera_id) => {
                             self.project.cameras.get(camera_id).map(|c| c.label.clone())
                         }
+                        RenameTarget::Dimension(dimension_id) => self
+                            .project
+                            .dimensions
+                            .get(dimension_id)
+                            .map(|d| d.label.clone()),
                     };
 
                     if let Some(current_name) = current_name {
@@ -484,6 +493,11 @@ impl State {
                         RenameTarget::Camera(id) => {
                             if let Some(camera) = self.project.cameras.get_mut(id) {
                                 camera.label = new_name;
+                            }
+                        }
+                        RenameTarget::Dimension(id) => {
+                            if let Some(dimension) = self.project.dimensions.get_mut(id) {
+                                dimension.label = new_name;
                             }
                         }
                     }
@@ -644,6 +658,27 @@ impl State {
                 }
                 StateEvent::DeleteCamera(camera_id) => {
                     self.project.cameras.unregister(camera_id);
+                }
+                StateEvent::CreateDimension => {
+                    const DEFAULT_NAME: &str = "Dimension";
+
+                    let dimension = Dimension {
+                        label: DEFAULT_NAME.to_string(),
+                        size: Size2d::new(1920, 1080),
+                    };
+                    let dimension_id = self.project.dimensions.register(dimension);
+
+                    self.rename_state = Some(RenameState {
+                        target: RenameTarget::Dimension(dimension_id),
+                        current_label: DEFAULT_NAME.to_string(),
+                    });
+                }
+                StateEvent::InspectDimension(dimension_id) => {
+                    self.inspector_tree_pane
+                        .add_inspector_pane(InspectorPane::Dimension(dimension_id));
+                }
+                StateEvent::DeleteDimension(dimension_id) => {
+                    self.project.dimensions.unregister(dimension_id);
                 }
             }
         }

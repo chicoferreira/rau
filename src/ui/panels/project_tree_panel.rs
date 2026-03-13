@@ -3,7 +3,7 @@ use egui_ltreeview::{Action, NodeBuilder, NodeConfig, TreeView};
 use std::hash::Hash;
 
 use crate::{
-    project::{BindGroupId, CameraId, ShaderId, UniformId, ViewportId},
+    project::{BindGroupId, CameraId, DimensionId, ShaderId, UniformId, ViewportId},
     state::StateEvent,
     ui::{
         components::project_leaf_node::ProjectLeafNode, pane::StateSnapshot, rename::RenameTarget,
@@ -22,6 +22,8 @@ pub enum TreeNodeId {
     Shader(ShaderId),
     CameraFolder,
     Camera(CameraId),
+    DimensionFolder,
+    Dimension(DimensionId),
 }
 
 impl TreeNodeId {
@@ -122,6 +124,25 @@ pub fn ui(state: &mut StateSnapshot, ui: &mut egui::Ui) -> Response {
                 builder.node(node);
             }
             builder.close_dir();
+
+            builder.node(TreeNodeId::new_folder_node(
+                TreeNodeId::DimensionFolder,
+                "Dimensions",
+                "Create New Dimension",
+                StateEvent::CreateDimension,
+                state.pending_events,
+            ));
+            for (id, dimension) in state.project.dimensions.list() {
+                let node = ProjectLeafNode::new(TreeNodeId::Dimension(id), &dimension.label)
+                    .with_rename_target(RenameTarget::Dimension(id))
+                    .with_inspect_event(StateEvent::InspectDimension(id))
+                    .with_create_event(StateEvent::CreateDimension, "Create New Dimension")
+                    .with_delete_event(StateEvent::DeleteDimension(id))
+                    .build(state.pending_events, state.rename_state);
+
+                builder.node(node);
+            }
+            builder.close_dir();
         });
 
     for action in actions {
@@ -146,11 +167,17 @@ pub fn ui(state: &mut StateSnapshot, ui: &mut egui::Ui) -> Response {
                                 .pending_events
                                 .push(StateEvent::InspectCamera(camera_id));
                         }
+                        TreeNodeId::Dimension(id) => {
+                            state
+                                .pending_events
+                                .push(StateEvent::InspectDimension(id));
+                        }
                         TreeNodeId::UniformFolder
                         | TreeNodeId::BindGroupFolder
                         | TreeNodeId::ViewportFolder
                         | TreeNodeId::ShaderFolder
-                        | TreeNodeId::CameraFolder => {}
+                        | TreeNodeId::CameraFolder
+                        | TreeNodeId::DimensionFolder => {}
                     }
                 }
             }
