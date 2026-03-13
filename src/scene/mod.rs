@@ -182,7 +182,8 @@ impl Scene {
         let dimension = Dimension { size };
         let dimension_id = project.dimensions.register(dimension);
 
-        let mut camera = Camera::new("Main Camera".to_string(), project, dimension_id);
+        let mut camera = Camera::new("Main Camera".to_string());
+        camera.set_dimension_id(Some(dimension_id));
         camera.set_position((0.0, 5.0, 10.0));
         camera.set_pitch(cgmath::Deg(-20.0));
         camera.set_yaw(cgmath::Deg(-90.0));

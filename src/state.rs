@@ -8,7 +8,7 @@ use crate::{
     project::{
         self, BindGroupId, CameraId, DimensionId, ShaderId, UniformId, ViewportId,
         bindgroup::{BindGroupCreationContext, BindGroupEntry, BindGroupResource},
-        camera::CameraCreationContext,
+        camera::{Camera, CameraCreationContext},
         recreate::RecreateTracker,
         texture::TextureCreationContext,
         texture_view::TextureViewCreationContext,
@@ -55,7 +55,9 @@ pub enum StateEvent {
     CreateBindGroupEntry(BindGroupId, BindGroupResource),
     DeleteBindGroupEntry(BindGroupId, usize),
     UpdateBindGroupEntry(BindGroupId, usize, BindGroupResource),
+    CreateCamera,
     InspectCamera(CameraId),
+    DeleteCamera(CameraId),
 }
 
 pub struct State {
@@ -628,6 +630,20 @@ impl State {
                 StateEvent::InspectCamera(camera_id) => {
                     self.inspector_tree_pane
                         .add_inspector_pane(InspectorPane::Camera(camera_id));
+                }
+                StateEvent::CreateCamera => {
+                    const DEFAULT_NAME: &str = "Camera";
+
+                    let camera = Camera::new(DEFAULT_NAME.to_string());
+                    let camera_id = self.project.cameras.register(camera);
+
+                    self.rename_state = Some(RenameState {
+                        target: RenameTarget::Camera(camera_id),
+                        current_label: DEFAULT_NAME.to_string(),
+                    });
+                }
+                StateEvent::DeleteCamera(camera_id) => {
+                    self.project.cameras.unregister(camera_id);
                 }
             }
         }

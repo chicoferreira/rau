@@ -104,11 +104,19 @@ pub fn ui(state: &mut StateSnapshot, ui: &mut egui::Ui) -> Response {
             }
             builder.close_dir();
 
-            builder.dir(TreeNodeId::CameraFolder, "Cameras");
+            builder.node(TreeNodeId::new_folder_node(
+                TreeNodeId::CameraFolder,
+                "Cameras",
+                "Create New Camera",
+                StateEvent::CreateCamera,
+                state.pending_events,
+            ));
             for (id, camera) in state.project.cameras.list() {
                 let node = ProjectLeafNode::new(TreeNodeId::Camera(id), &camera.label)
                     .with_rename_target(RenameTarget::Camera(id))
                     .with_inspect_event(StateEvent::InspectCamera(id))
+                    .with_create_event(StateEvent::CreateCamera, "Create New Camera")
+                    .with_delete_event(StateEvent::DeleteCamera(id))
                     .build(state.pending_events, state.rename_state);
 
                 builder.node(node);

@@ -5,7 +5,7 @@ use cgmath::{Deg, InnerSpace, Matrix4, Point3, Rad, SquareMatrix, Vector3, Zero}
 use crate::{
     key::{Key, KeyboardState},
     project::{
-        CameraId, DimensionId, Project,
+        CameraId, DimensionId,
         dimension::Dimension,
         recreate::{ProjectEvent, Recreatable, RecreateTracker},
         storage::Storage,
@@ -33,7 +33,7 @@ pub struct Camera {
     position: Point3<f32>,
     yaw: Rad<f32>,
     pitch: Rad<f32>,
-    dimension_id: DimensionId,
+    dimension_id: Option<DimensionId>,
     aspect: f32,
     fovy: Rad<f32>,
     znear: f32,
@@ -72,16 +72,16 @@ pub struct CameraFrameInput {
 }
 
 impl Camera {
-    pub fn new(label: String, project: &Project, dimension_id: DimensionId) -> Self {
-        let dimension = project.dimensions.get(dimension_id).unwrap();
-        let aspect = dimension.size.width() as f32 / dimension.size.height() as f32;
-
+    pub fn new(label: String) -> Self {
         let position = (0.0, 0.0, -1.0).into();
         let pitch = Deg(0.0).into();
         let yaw = Deg(0.0).into();
         let fovy = Deg(60.0).into();
         let znear = 0.1;
         let zfar = 100.0;
+
+        // this will be updated when the camera is attached to a dimension
+        let aspect = 1.0;
 
         let matrix = CameraMatrix::new(position, yaw, pitch, fovy, aspect, znear, zfar);
         let input = CameraFrameInput::default();
@@ -91,7 +91,7 @@ impl Camera {
             position,
             pitch,
             yaw,
-            dimension_id,
+            dimension_id: None,
             aspect,
             fovy,
             max_speed: 20.0,
@@ -172,6 +172,10 @@ impl Camera {
         self.dirty = true;
     }
 
+    fn dimension_id(&self) -> Option<DimensionId> {
+        self.dimension_id
+    }
+
     pub fn set_position(&mut self, position: impl Into<Point3<f32>>) {
         self.position = position.into();
         self.mark_dirty();
@@ -230,6 +234,11 @@ impl Camera {
 
     pub fn set_scroll_speed(&mut self, scroll_speed: f32) {
         self.scroll_speed = scroll_speed.max(0.0);
+        self.mark_dirty();
+    }
+
+    pub fn set_dimension_id(&mut self, dimension_id: Option<DimensionId>) {
+        self.dimension_id = dimension_id;
         self.mark_dirty();
     }
 
@@ -308,8 +317,13 @@ impl Recreatable for Camera {
             event = Some(ProjectEvent::CameraUpdated(id));
         }
 
-        let dimension = ctx.dimensions.get(self.dimension_id).unwrap();
-        let new_aspect = dimension.size.width() as f32 / dimension.size.height() as f32;
+        let new_aspect = if let Some(dimension_id) = self.dimension_id
+            && let Some(dimension) = ctx.dimensions.get(dimension_id)
+        {
+            dimension.size.width() as f32 / dimension.size.height() as f32
+        } else {
+            1.0
+        };
 
         if self.aspect != new_aspect {
             self.aspect = new_aspect;
