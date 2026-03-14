@@ -1,4 +1,4 @@
-use crate::project::{BindGroupId, CameraId, DimensionId, ShaderId, UniformId, ViewportId};
+use crate::project::{BindGroupId, CameraId, DimensionId, SamplerId, ShaderId, UniformId, ViewportId};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct RenameState {
@@ -15,4 +15,5 @@ pub enum RenameTarget {
     Shader(ShaderId),
     Camera(CameraId),
     Dimension(DimensionId),
+    Sampler(SamplerId),
 }

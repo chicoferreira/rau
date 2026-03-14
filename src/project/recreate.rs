@@ -40,6 +40,7 @@ impl RecreateTracker {
     ) {
         let recreate_result = object.recreate(id, &mut project, self);
         if let Some(event) = recreate_result {
+            log::debug!("Recreated: {:?}", event);
             self.events.push(event);
         }
     }

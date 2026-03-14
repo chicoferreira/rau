@@ -3,7 +3,7 @@ use egui_ltreeview::{Action, NodeBuilder, NodeConfig, TreeView};
 use std::hash::Hash;
 
 use crate::{
-    project::{BindGroupId, CameraId, DimensionId, ShaderId, UniformId, ViewportId},
+    project::{BindGroupId, CameraId, DimensionId, SamplerId, ShaderId, UniformId, ViewportId},
     state::StateEvent,
     ui::{
         components::project_leaf_node::ProjectLeafNode, pane::StateSnapshot, rename::RenameTarget,
@@ -24,6 +24,8 @@ pub enum TreeNodeId {
     Camera(CameraId),
     DimensionFolder,
     Dimension(DimensionId),
+    SamplerFolder,
+    Sampler(SamplerId),
 }
 
 impl TreeNodeId {
@@ -143,6 +145,25 @@ pub fn ui(state: &mut StateSnapshot, ui: &mut egui::Ui) -> Response {
                 builder.node(node);
             }
             builder.close_dir();
+
+            builder.node(TreeNodeId::new_folder_node(
+                TreeNodeId::SamplerFolder,
+                "Samplers",
+                "Create New Sampler",
+                StateEvent::CreateSampler,
+                state.pending_events,
+            ));
+            for (id, sampler) in state.project.samplers.list() {
+                let node = ProjectLeafNode::new(TreeNodeId::Sampler(id), &sampler.label)
+                    .with_rename_target(RenameTarget::Sampler(id))
+                    .with_inspect_event(StateEvent::InspectSampler(id))
+                    .with_create_event(StateEvent::CreateSampler, "Create New Sampler")
+                    .with_delete_event(StateEvent::DeleteSampler(id))
+                    .build(state.pending_events, state.rename_state);
+
+                builder.node(node);
+            }
+            builder.close_dir();
         });
 
     for action in actions {
@@ -168,16 +189,18 @@ pub fn ui(state: &mut StateSnapshot, ui: &mut egui::Ui) -> Response {
                                 .push(StateEvent::InspectCamera(camera_id));
                         }
                         TreeNodeId::Dimension(id) => {
-                            state
-                                .pending_events
-                                .push(StateEvent::InspectDimension(id));
+                            state.pending_events.push(StateEvent::InspectDimension(id));
+                        }
+                        TreeNodeId::Sampler(id) => {
+                            state.pending_events.push(StateEvent::InspectSampler(id));
                         }
                         TreeNodeId::UniformFolder
                         | TreeNodeId::BindGroupFolder
                         | TreeNodeId::ViewportFolder
                         | TreeNodeId::ShaderFolder
                         | TreeNodeId::CameraFolder
-                        | TreeNodeId::DimensionFolder => {}
+                        | TreeNodeId::DimensionFolder
+                        | TreeNodeId::SamplerFolder => {}
                     }
                 }
             }

@@ -3,6 +3,7 @@ use crate::project::{
     recreate::{ProjectEvent, Recreatable, RecreateTracker},
 };
 
+#[derive(Debug, Clone, PartialEq)]
 pub struct SamplerSpec {
     pub address_mode: wgpu::AddressMode,
     pub mag_filter: wgpu::FilterMode,
@@ -29,7 +30,7 @@ impl Default for SamplerSpec {
 
 pub struct Sampler {
     pub label: String,
-    pub spec: SamplerSpec,
+    spec: SamplerSpec,
     dirty: bool,
     inner: wgpu::Sampler,
 }
@@ -48,6 +49,21 @@ impl Sampler {
 
     pub fn inner(&self) -> &wgpu::Sampler {
         &self.inner
+    }
+
+    pub fn set_label(&mut self, label: String) {
+        self.label = label;
+        self.dirty = true;
+    }
+
+    pub fn spec(&self) -> &SamplerSpec {
+        &self.spec
+    }
+
+    pub fn set_spec(&mut self, spec: SamplerSpec) {
+        self.spec = spec;
+        self.spec.lod_max_clamp = self.spec.lod_max_clamp.max(self.spec.lod_min_clamp);
+        self.dirty = true;
     }
 
     fn create_sampler(device: &wgpu::Device, label: &str, spec: &SamplerSpec) -> wgpu::Sampler {
@@ -81,6 +97,7 @@ impl Recreatable for Sampler {
             return None;
         }
 
+        self.dirty = false;
         self.inner = Self::create_sampler(device, &self.label, &self.spec);
         Some(ProjectEvent::SamplerRecreated(id))
     }

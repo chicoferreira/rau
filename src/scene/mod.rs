@@ -275,11 +275,26 @@ impl Scene {
         );
         let light_bind_group_id = project.bind_groups.register(light_bind_group);
 
-        // TODO: Change this to some kind of default (use the same as when creating from the interface)
         let image_texture_sampler_id = project.samplers.register(Sampler::new(
             device,
             "Image Texture Sampler".to_string(),
-            SamplerSpec::default(),
+            SamplerSpec {
+                mag_filter: wgpu::FilterMode::Linear,
+                min_filter: wgpu::FilterMode::Linear,
+                mipmap_filter: wgpu::MipmapFilterMode::Linear,
+                ..SamplerSpec::default()
+            },
+        ));
+
+        let sky_sampler_id = project.samplers.register(Sampler::new(
+            device,
+            "Sky Sampler".to_string(),
+            SamplerSpec {
+                mag_filter: wgpu::FilterMode::Nearest,
+                min_filter: wgpu::FilterMode::Nearest,
+                mipmap_filter: wgpu::MipmapFilterMode::Nearest,
+                ..SamplerSpec::default()
+            },
         ));
 
         let obj_model = resources::load_model(
@@ -376,7 +391,7 @@ impl Scene {
                 },
                 project::bindgroup::BindGroupEntry {
                     resource: project::bindgroup::BindGroupResource::Sampler {
-                        sampler_id: image_texture_sampler_id,
+                        sampler_id: sky_sampler_id,
                         sampler_binding_type: wgpu::SamplerBindingType::NonFiltering,
                     },
                 },

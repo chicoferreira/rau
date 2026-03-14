@@ -6,11 +6,12 @@ use winit::{event::WindowEvent, window::Window};
 use crate::{
     key::KeyboardState,
     project::{
-        self, BindGroupId, CameraId, DimensionId, ShaderId, UniformId, ViewportId,
+        self, BindGroupId, CameraId, DimensionId, SamplerId, ShaderId, UniformId, ViewportId,
         bindgroup::{BindGroupCreationContext, BindGroupEntry, BindGroupResource},
         camera::{Camera, CameraCreationContext},
         dimension::Dimension,
         recreate::RecreateTracker,
+        sampler::{Sampler, SamplerSpec},
         texture::TextureCreationContext,
         texture_view::TextureViewCreationContext,
         uniform::{UniformData, UniformField, UniformFieldSourceKind, UniformProjectContext},
@@ -62,6 +63,9 @@ pub enum StateEvent {
     CreateDimension,
     InspectDimension(DimensionId),
     DeleteDimension(DimensionId),
+    CreateSampler,
+    InspectSampler(SamplerId),
+    DeleteSampler(SamplerId),
 }
 
 pub struct State {
@@ -371,6 +375,8 @@ impl State {
         };
         tracker.recreate_storage(&mut self.project.cameras, view);
 
+        tracker.recreate_storage(&mut self.project.samplers, &mut &self.device);
+
         let view = &mut BindGroupCreationContext {
             uniforms: &self.project.uniforms,
             texture_views: &self.project.texture_views,
@@ -448,6 +454,11 @@ impl State {
                             .dimensions
                             .get(dimension_id)
                             .map(|d| d.label.clone()),
+                        RenameTarget::Sampler(sampler_id) => self
+                            .project
+                            .samplers
+                            .get(sampler_id)
+                            .map(|s| s.label.clone()),
                     };
 
                     if let Some(current_name) = current_name {
@@ -498,6 +509,11 @@ impl State {
                         RenameTarget::Dimension(id) => {
                             if let Some(dimension) = self.project.dimensions.get_mut(id) {
                                 dimension.label = new_name;
+                            }
+                        }
+                        RenameTarget::Sampler(id) => {
+                            if let Some(sampler) = self.project.samplers.get_mut(id) {
+                                sampler.set_label(new_name);
                             }
                         }
                     }
@@ -679,6 +695,28 @@ impl State {
                 }
                 StateEvent::DeleteDimension(dimension_id) => {
                     self.project.dimensions.unregister(dimension_id);
+                }
+                StateEvent::CreateSampler => {
+                    const DEFAULT_NAME: &str = "Sampler";
+
+                    let sampler = Sampler::new(
+                        &self.device,
+                        DEFAULT_NAME.to_string(),
+                        SamplerSpec::default(),
+                    );
+                    let sampler_id = self.project.samplers.register(sampler);
+
+                    self.rename_state = Some(RenameState {
+                        target: RenameTarget::Sampler(sampler_id),
+                        current_label: DEFAULT_NAME.to_string(),
+                    });
+                }
+                StateEvent::InspectSampler(sampler_id) => {
+                    self.inspector_tree_pane
+                        .add_inspector_pane(InspectorPane::Sampler(sampler_id));
+                }
+                StateEvent::DeleteSampler(sampler_id) => {
+                    self.project.samplers.unregister(sampler_id);
                 }
             }
         }

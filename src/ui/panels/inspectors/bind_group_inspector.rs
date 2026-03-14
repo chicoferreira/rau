@@ -4,8 +4,37 @@ use crate::{
         bindgroup::{BindGroupEntry, BindGroupResource},
     },
     state::StateEvent,
-    ui::pane::StateSnapshot,
+    ui::{components::selector::combo_grid_row, pane::StateSnapshot},
 };
+
+const TEXTURE_VIEW_DIMENSIONS: &[(wgpu::TextureViewDimension, &str)] = &[
+    (wgpu::TextureViewDimension::D1, "1D"),
+    (wgpu::TextureViewDimension::D2, "2D"),
+    (wgpu::TextureViewDimension::D2Array, "2D Array"),
+    (wgpu::TextureViewDimension::Cube, "Cube"),
+    (wgpu::TextureViewDimension::CubeArray, "Cube Array"),
+    (wgpu::TextureViewDimension::D3, "3D"),
+];
+
+const TEXTURE_SAMPLE_TYPES: &[(wgpu::TextureSampleType, &str)] = &[
+    (
+        wgpu::TextureSampleType::Float { filterable: true },
+        "Float (Filterable)",
+    ),
+    (
+        wgpu::TextureSampleType::Float { filterable: false },
+        "Float (Non-Filterable)",
+    ),
+    (wgpu::TextureSampleType::Depth, "Depth"),
+    (wgpu::TextureSampleType::Sint, "Sint"),
+    (wgpu::TextureSampleType::Uint, "Uint"),
+];
+
+const SAMPLER_BINDING_TYPES: &[(wgpu::SamplerBindingType, &str)] = &[
+    (wgpu::SamplerBindingType::Filtering, "Filtering"),
+    (wgpu::SamplerBindingType::NonFiltering, "Non-Filtering"),
+    (wgpu::SamplerBindingType::Comparison, "Comparison"),
+];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum ResourceKind {
@@ -204,49 +233,21 @@ fn ui_entry_grid(
     resource.map(|r| StateEvent::UpdateBindGroupEntry(bind_group_id, index, r))
 }
 
-fn ui_combo<T>(
-    ui: &mut egui::Ui,
-    row_label: &str,
-    combo_id: impl std::hash::Hash,
-    current: &mut T,
-    options: &[(T, &str)],
-    empty_msg: &str,
-) where
-    T: PartialEq + Copy,
-{
-    ui.label(row_label);
-    let selected_text = options
-        .iter()
-        .find(|(v, _)| v == current)
-        .map(|(_, l)| *l)
-        .unwrap_or("Unknown");
-    egui::ComboBox::from_id_salt(combo_id)
-        .selected_text(selected_text)
-        .show_ui(ui, |ui| {
-            for (value, label) in options {
-                ui.selectable_value(current, *value, *label);
-            }
-            if options.is_empty() {
-                ui.label(egui::RichText::new(empty_msg).weak());
-            }
-        });
-    ui.end_row();
-}
-
 fn ui_uniform_rows(
     ui: &mut egui::Ui,
     mut uniform_id: UniformId,
     uniforms: &[(UniformId, &str)],
 ) -> Option<BindGroupResource> {
     let before = uniform_id;
-    ui_combo(
+    ui.label("Uniform");
+    combo_grid_row(
         ui,
-        "Uniform",
         "resource",
         &mut uniform_id,
         uniforms,
         "No uniforms available",
     );
+    ui.end_row();
     (uniform_id != before).then_some(BindGroupResource::Uniform(uniform_id))
 }
 
@@ -259,49 +260,35 @@ fn ui_texture_rows(
 ) -> Option<BindGroupResource> {
     let (tvid_before, vd_before, st_before) = (texture_view_id, view_dimension, sample_type);
 
-    ui_combo(
+    ui.label("Texture View");
+    combo_grid_row(
         ui,
-        "Texture View",
         "resource",
         &mut texture_view_id,
         texture_views,
         "No texture views available",
     );
-    ui_combo(
+    ui.end_row();
+
+    ui.label("Dimension");
+    combo_grid_row(
         ui,
-        "Dimension",
         "view_dimension",
         &mut view_dimension,
-        &[
-            (wgpu::TextureViewDimension::D1, "1D"),
-            (wgpu::TextureViewDimension::D2, "2D"),
-            (wgpu::TextureViewDimension::D2Array, "2D Array"),
-            (wgpu::TextureViewDimension::Cube, "Cube"),
-            (wgpu::TextureViewDimension::CubeArray, "Cube Array"),
-            (wgpu::TextureViewDimension::D3, "3D"),
-        ],
+        TEXTURE_VIEW_DIMENSIONS,
         "",
     );
-    ui_combo(
+    ui.end_row();
+
+    ui.label("Sample Type");
+    combo_grid_row(
         ui,
-        "Sample Type",
         "sample_type",
         &mut sample_type,
-        &[
-            (
-                wgpu::TextureSampleType::Float { filterable: true },
-                "Float (Filterable)",
-            ),
-            (
-                wgpu::TextureSampleType::Float { filterable: false },
-                "Float (Non-Filterable)",
-            ),
-            (wgpu::TextureSampleType::Depth, "Depth"),
-            (wgpu::TextureSampleType::Sint, "Sint"),
-            (wgpu::TextureSampleType::Uint, "Uint"),
-        ],
+        TEXTURE_SAMPLE_TYPES,
         "",
     );
+    ui.end_row();
 
     (texture_view_id != tvid_before || view_dimension != vd_before || sample_type != st_before)
         .then_some(BindGroupResource::Texture {
@@ -319,26 +306,25 @@ fn ui_sampler_rows(
 ) -> Option<BindGroupResource> {
     let (sid_before, sbt_before) = (sampler_id, sampler_binding_type);
 
-    ui_combo(
+    ui.label("Sampler");
+    combo_grid_row(
         ui,
-        "Sampler",
         "resource",
         &mut sampler_id,
         samplers,
         "No samplers available",
     );
-    ui_combo(
+    ui.end_row();
+
+    ui.label("Binding Type");
+    combo_grid_row(
         ui,
-        "Binding Type",
         "sampler_binding_type",
         &mut sampler_binding_type,
-        &[
-            (wgpu::SamplerBindingType::Filtering, "Filtering"),
-            (wgpu::SamplerBindingType::NonFiltering, "Non-Filtering"),
-            (wgpu::SamplerBindingType::Comparison, "Comparison"),
-        ],
+        SAMPLER_BINDING_TYPES,
         "",
     );
+    ui.end_row();
 
     (sampler_id != sid_before || sampler_binding_type != sbt_before).then_some(
         BindGroupResource::Sampler {
