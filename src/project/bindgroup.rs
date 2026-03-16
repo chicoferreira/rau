@@ -1,3 +1,5 @@
+use egui_dnd::utils::shift_vec;
+
 use crate::project::{
     BindGroupId, Project, SamplerId, TextureViewId, UniformId,
     recreate::{ProjectEvent, Recreatable, RecreateTracker},
@@ -22,9 +24,22 @@ pub struct BindGroup {
     dirty: bool,
 }
 
+pub type BindGroupEntryId = usize;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct BindGroupEntry {
+    // Used for stability in bind group entry reordering
+    pub id: BindGroupEntryId,
     pub resource: BindGroupResource,
+}
+
+impl BindGroupEntry {
+    pub fn new(resource: BindGroupResource) -> Self {
+        Self {
+            id: fastrand::usize(..),
+            resource,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -130,6 +145,14 @@ impl BindGroup {
         });
 
         (layout, bind_group)
+    }
+
+    pub fn reorder_entries(&mut self, from: usize, to: usize) {
+        if from == to {
+            return;
+        }
+        shift_vec(from, to, &mut self.entries);
+        self.dirty = true;
     }
 }
 

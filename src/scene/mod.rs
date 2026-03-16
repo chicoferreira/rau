@@ -255,9 +255,9 @@ impl Scene {
             project,
             device,
             "camera bind group".to_string(),
-            vec![project::bindgroup::BindGroupEntry {
-                resource: project::bindgroup::BindGroupResource::Uniform(Some(camera_uniform_id)),
-            }],
+            vec![project::bindgroup::BindGroupEntry::new(
+                project::bindgroup::BindGroupResource::Uniform(Some(camera_uniform_id)),
+            )],
         );
         let camera_bind_group_id = project.bind_groups.register(camera_bind_group);
 
@@ -269,9 +269,9 @@ impl Scene {
             project,
             device,
             "light bind group".to_string(),
-            vec![project::bindgroup::BindGroupEntry {
-                resource: project::bindgroup::BindGroupResource::Uniform(Some(light_uniform_id)),
-            }],
+            vec![project::bindgroup::BindGroupEntry::new(
+                project::bindgroup::BindGroupResource::Uniform(Some(light_uniform_id)),
+            )],
         );
         let light_bind_group_id = project.bind_groups.register(light_bind_group);
 
@@ -382,19 +382,19 @@ impl Scene {
             device,
             "Environment Bind Group".to_string(),
             vec![
-                project::bindgroup::BindGroupEntry {
-                    resource: project::bindgroup::BindGroupResource::Texture {
+                project::bindgroup::BindGroupEntry::new(
+                    project::bindgroup::BindGroupResource::Texture {
                         texture_view_id: Some(sky_texture_view_id),
                         view_dimension: wgpu::TextureViewDimension::Cube,
                         sample_type: wgpu::TextureSampleType::Float { filterable: false },
                     },
-                },
-                project::bindgroup::BindGroupEntry {
-                    resource: project::bindgroup::BindGroupResource::Sampler {
+                ),
+                project::bindgroup::BindGroupEntry::new(
+                    project::bindgroup::BindGroupResource::Sampler {
                         sampler_id: Some(sky_sampler_id),
                         sampler_binding_type: wgpu::SamplerBindingType::NonFiltering,
                     },
-                },
+                ),
             ],
         );
 

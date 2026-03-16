@@ -19,10 +19,12 @@ cgmath = "0.18.0"
 egui = "0.33.3"
 egui-wgpu = "0.33.3"
 egui-winit = { version = "0.33.3", default-features = false }
+egui_dnd = "0.14.0"
 egui_ltreeview = "0.6.1"
 egui_tiles = "0.14.1"
 enumset = "1.1.10"
 env_logger = "0.11.8"
+fastrand = "2.3.0"
 image = { version = "0.24", default-features = false, features = ["png", "jpeg", "hdr"] }
 instant = "0.1"
 log = "0.4.29"

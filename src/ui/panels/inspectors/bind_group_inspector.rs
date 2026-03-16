@@ -1,3 +1,5 @@
+use egui::RichText;
+
 use crate::{
     project::{
         BindGroupId, SamplerId, TextureViewId, UniformId,
@@ -5,27 +7,40 @@ use crate::{
     },
     state::StateEvent,
     ui::{
-        components::selector::{selectable_value, selectable_value_storage},
+        components::{
+            hint::hint,
+            selector::{selectable_value, selectable_value_storage},
+        },
         pane::StateSnapshot,
     },
 };
 
 impl StateSnapshot<'_> {
     pub fn bind_group_inspector_ui(&mut self, bind_group_id: BindGroupId, ui: &mut egui::Ui) {
-        let entries = match self.project.bind_groups.get(bind_group_id) {
+        let entries = match self.project.bind_groups.get_mut(bind_group_id) {
             Some(bg) => bg.entries().to_vec(),
             None => {
-                ui.label("Bind group not found.");
+                ui.label("Bind group not found");
                 return;
             }
         };
 
-        for (index, entry) in entries.iter().enumerate() {
-            if index != 0 {
-                ui.separator();
-            }
+        if entries.is_empty() {
+            ui.label("No entries in bind group");
+        }
 
-            ui.push_id(index, |ui| self.ui_entry(ui, bind_group_id, index, entry));
+        let response =
+            egui_dnd::dnd(ui, "bind_group").show(entries.iter(), |ui, item, handle, state| {
+                handle.show_drag_cursor_on_hover(false).ui(ui, |ui| {
+                    ui.push_id(state.index, |ui| {
+                        self.ui_entry(ui, bind_group_id, state.index, item);
+                    });
+                });
+            });
+
+        if let Some(update) = response.final_update() {
+            self.pending_events
+                .push(StateEvent::ReorderBindGroupEntry(bind_group_id, update));
         }
 
         ui.add_space(6.0);
@@ -40,6 +55,15 @@ impl StateSnapshot<'_> {
                 }
             }
         });
+
+        if !entries.is_empty() {
+            ui.add_space(6.0);
+            ui.add(hint(|ui| {
+                ui.label("Drag bindings to reorder them. Right-click a");
+                ui.label(RichText::new("Binding").strong());
+                ui.label("to remove it.");
+            }));
+        }
     }
 
     fn ui_entry(
@@ -54,7 +78,7 @@ impl StateSnapshot<'_> {
 
         ui.horizontal(|ui| {
             ui.add(
-                egui::Label::new(egui::RichText::new(format!("Binding {index}")).strong())
+                egui::Label::new(format!("Binding {index}"))
                     .selectable(false)
                     .sense(egui::Sense::click()),
             )

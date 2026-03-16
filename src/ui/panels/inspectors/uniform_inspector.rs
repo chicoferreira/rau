@@ -38,46 +38,25 @@ impl StateSnapshot<'_> {
 
         ui.add_space(6.0);
 
-        for (index, field) in data.fields.iter_mut().enumerate() {
-            if index != 0 {
-                ui.add_space(5.0);
-            }
-            ui.push_id(index, |ui| {
-                ui.vertical(|ui| {
-                    ui.horizontal(|ui| {
-                        ui_uniform_field_label(
+        let response =
+            egui_dnd::dnd(ui, "uniform").show(data.fields.iter_mut(), |ui, item, handle, state| {
+                handle.show_drag_cursor_on_hover(false).ui(ui, |ui| {
+                    ui.push_id(state.index, |ui| {
+                        ui_uniform_field(
                             ui,
                             uniform_id,
-                            field,
-                            index,
+                            state.index,
+                            item,
                             self.pending_events,
                             self.rename_state,
                         );
-
-                        let mut source = field.source.kind();
-                        let source_before = source;
-                        ui.add(ui_uniform_field_source(&mut source));
-                        if source != source_before {
-                            let event =
-                                StateEvent::UpdateUniformFieldSource(uniform_id, index, source);
-                            self.pending_events.push(event);
-                        }
-
-                        ui_uniform_type_label(ui, field.kind());
-                    });
-
-                    ui.horizontal(|ui| match &mut field.source {
-                        UniformFieldSource::UserDefined(data) => {
-                            ui_uniform_field_data(ui, data, drag_value_widget);
-                        }
-                        _ => {
-                            ui.horizontal(|ui| {
-                                ui_uniform_field_data(ui, &mut field.last_data, label_widget);
-                            });
-                        }
                     });
                 });
             });
+
+        if let Some(update) = response.final_update() {
+            self.pending_events
+                .push(StateEvent::ReorderUniformField(uniform_id, update));
         }
 
         ui.add_space(6.0);
@@ -86,60 +65,80 @@ impl StateSnapshot<'_> {
     }
 }
 
-fn ui_uniform_field_label(
+fn ui_uniform_field(
     ui: &mut Ui,
     uniform_id: UniformId,
-    field: &UniformField,
-    field_index: usize,
+    index: usize,
+    field: &mut UniformField,
     pending_events: &mut Vec<StateEvent>,
     rename_state: &mut Option<RenameState>,
 ) {
-    let rename_target = RenameTarget::UniformField(uniform_id, field_index);
-    ui.add(renameable_label(
-        Label::new(&field.name)
-            .selectable(false)
-            .sense(Sense::click()),
-        pending_events,
-        rename_state,
-        rename_target.clone(),
-    ))
-    .context_menu(|ui| {
-        if ui.button("Delete Field").clicked() {
-            pending_events.push(StateEvent::DeleteUniformField(uniform_id, field_index));
-            ui.close();
-        }
-        if ui.button("Rename Field").clicked() {
-            pending_events.push(StateEvent::StartRename(rename_target));
-            ui.close();
-        }
-    });
-}
+    ui.vertical(|ui| {
+        ui.horizontal(|ui| {
+            let rename_target = RenameTarget::UniformField(uniform_id, index);
+            ui.add(renameable_label(
+                Label::new(&field.name)
+                    .selectable(false)
+                    .sense(Sense::click()),
+                pending_events,
+                rename_state,
+                rename_target.clone(),
+            ))
+            .context_menu(|ui| {
+                if ui.button("Delete Field").clicked() {
+                    pending_events.push(StateEvent::DeleteUniformField(uniform_id, index));
+                    ui.close();
+                }
+                if ui.button("Rename Field").clicked() {
+                    pending_events.push(StateEvent::StartRename(rename_target));
+                    ui.close();
+                }
+            });
 
-fn ui_uniform_field_source(source: &mut UniformFieldSourceKind) -> impl Widget {
-    move |ui: &mut Ui| {
-        egui::ComboBox::from_id_salt(ui.id().with("selection"))
-            .selected_text(source.to_string())
-            .show_ui(ui, |ui| {
-                ui.label("User Defined");
-                for kind in UniformFieldKind::iter() {
-                    ui.selectable_value(
-                        source,
-                        UniformFieldSourceKind::UserDefined(kind),
-                        kind.to_string(),
-                    );
-                }
-                ui.separator();
-                ui.label("Camera");
-                for kind in CameraField::iter() {
-                    ui.selectable_value(
-                        source,
-                        UniformFieldSourceKind::Camera(kind),
-                        kind.to_string(),
-                    );
-                }
-            })
-            .response
-    }
+            let mut source = field.source.kind();
+            let source_before = source;
+
+            egui::ComboBox::from_id_salt(ui.id().with("selection"))
+                .selected_text(source.to_string())
+                .show_ui(ui, |ui| {
+                    ui.label("User Defined");
+                    for kind in UniformFieldKind::iter() {
+                        ui.selectable_value(
+                            &mut source,
+                            UniformFieldSourceKind::UserDefined(kind),
+                            kind.to_string(),
+                        );
+                    }
+                    ui.separator();
+                    ui.label("Camera");
+                    for kind in CameraField::iter() {
+                        ui.selectable_value(
+                            &mut source,
+                            UniformFieldSourceKind::Camera(kind),
+                            kind.to_string(),
+                        );
+                    }
+                });
+
+            if source != source_before {
+                let event = StateEvent::UpdateUniformFieldSource(uniform_id, index, source);
+                pending_events.push(event);
+            }
+
+            ui_uniform_type_label(ui, field.kind());
+        });
+
+        ui.horizontal(|ui| match &mut field.source {
+            UniformFieldSource::UserDefined(data) => {
+                ui_uniform_field_data(ui, data, drag_value_widget);
+            }
+            _ => {
+                ui.horizontal(|ui| {
+                    ui_uniform_field_data(ui, &mut field.last_data, label_widget);
+                });
+            }
+        });
+    });
 }
 
 fn ui_uniform_type_label(ui: &mut Ui, kind: UniformFieldKind) {

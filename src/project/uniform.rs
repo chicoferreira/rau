@@ -1,3 +1,6 @@
+use std::hash::Hash;
+
+use egui_dnd::utils::shift_vec;
 use wgpu::util::DeviceExt;
 
 use crate::project::{CameraId, camera::Camera, storage::Storage};
@@ -20,11 +23,21 @@ pub struct UniformData {
     pub fields: Vec<UniformField>,
 }
 
+type UniformFieldId = usize;
+
 #[derive(Debug)]
 pub struct UniformField {
     pub name: String,
+    // Used for stability in reordering
+    pub id: UniformFieldId,
     pub source: UniformFieldSource,
     pub last_data: UniformFieldData,
+}
+
+impl Hash for UniformField {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.id.hash(state);
+    }
 }
 
 #[derive(Debug)]
@@ -124,6 +137,13 @@ impl Uniform {
     pub fn buffer(&self) -> &wgpu::Buffer {
         &self.buffer
     }
+
+    pub fn reorder_fields(&mut self, from: usize, to: usize) {
+        if from == to {
+            return;
+        }
+        shift_vec(from, to, &mut self.data.fields);
+    }
 }
 
 impl UniformData {
@@ -171,6 +191,7 @@ impl UniformField {
     ) -> Self {
         let data = field.default_data();
         Self {
+            id: fastrand::usize(..),
             name: name.into(),
             source: UniformFieldSource::Camera(camera_id, field),
             last_data: data,
@@ -179,6 +200,7 @@ impl UniformField {
 
     pub fn new_user_defined(name: impl Into<String>, value: UniformFieldData) -> Self {
         Self {
+            id: fastrand::usize(..),
             name: name.into(),
             source: UniformFieldSource::UserDefined(value.clone()),
             last_data: value,

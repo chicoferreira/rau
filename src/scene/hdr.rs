@@ -27,19 +27,15 @@ impl HdrPipeline {
             device,
             "HDR Bind Group".to_string(),
             vec![
-                BindGroupEntry {
-                    resource: BindGroupResource::Texture {
-                        texture_view_id: Some(output_texture_view_id),
-                        view_dimension: wgpu::TextureViewDimension::D2,
-                        sample_type: wgpu::TextureSampleType::Float { filterable: true },
-                    },
-                },
-                BindGroupEntry {
-                    resource: BindGroupResource::Sampler {
-                        sampler_id: Some(sampler_id),
-                        sampler_binding_type: wgpu::SamplerBindingType::Filtering,
-                    },
-                },
+                BindGroupEntry::new(BindGroupResource::Texture {
+                    texture_view_id: Some(output_texture_view_id),
+                    view_dimension: wgpu::TextureViewDimension::D2,
+                    sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                }),
+                BindGroupEntry::new(BindGroupResource::Sampler {
+                    sampler_id: Some(sampler_id),
+                    sampler_binding_type: wgpu::SamplerBindingType::Filtering,
+                }),
             ],
         );
 

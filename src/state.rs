@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use egui_dnd::DragUpdate;
 use slotmap::SecondaryMap;
 use winit::{event::WindowEvent, window::Window};
 
@@ -48,6 +49,7 @@ pub enum StateEvent {
     CreateUniformField(UniformId, UniformFieldSourceKind),
     UpdateUniformFieldSource(UniformId, usize, UniformFieldSourceKind),
     DeleteUniformField(UniformId, usize),
+    ReorderUniformField(UniformId, DragUpdate),
     StartRename(RenameTarget),
     CancelRename,
     ApplyRename(RenameTarget, String),
@@ -57,6 +59,7 @@ pub enum StateEvent {
     CreateBindGroupEntry(BindGroupId, BindGroupResource),
     DeleteBindGroupEntry(BindGroupId, usize),
     UpdateBindGroupEntry(BindGroupId, usize, BindGroupResource),
+    ReorderBindGroupEntry(BindGroupId, DragUpdate),
     CreateCamera,
     InspectCamera(CameraId),
     DeleteCamera(CameraId),
@@ -553,6 +556,11 @@ impl State {
                         }
                     }
                 }
+                StateEvent::ReorderUniformField(uniform_id, drag_update) => {
+                    if let Some(uniform) = self.project.uniforms.get_mut(uniform_id) {
+                        uniform.reorder_fields(drag_update.from, drag_update.to);
+                    }
+                },
                 StateEvent::InspectShader(shader_id) => {
                     self.inspector_tree_pane
                         .add_inspector_pane(InspectorPane::Shader(shader_id));
@@ -579,7 +587,7 @@ impl State {
                 }
                 StateEvent::CreateBindGroupEntry(id, resource) => {
                     if let Some(bind_group) = self.project.bind_groups.get_mut(id) {
-                        bind_group.add_entry(BindGroupEntry { resource });
+                        bind_group.add_entry(BindGroupEntry::new(resource));
                     }
                 }
                 StateEvent::DeleteBindGroupEntry(id, index) => {
@@ -589,7 +597,12 @@ impl State {
                 }
                 StateEvent::UpdateBindGroupEntry(id, index, resource) => {
                     if let Some(bind_group) = self.project.bind_groups.get_mut(id) {
-                        bind_group.update_entry(index, BindGroupEntry { resource });
+                        bind_group.update_entry(index, BindGroupEntry::new(resource));
+                    }
+                }
+                StateEvent::ReorderBindGroupEntry(bind_group_id, drag_update) => {
+                    if let Some(bind_group) = self.project.bind_groups.get_mut(bind_group_id) {
+                        bind_group.reorder_entries(drag_update.from, drag_update.to);
                     }
                 }
                 StateEvent::ViewportEvent(viewport_id, viewport_event) => {
