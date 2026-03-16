@@ -29,14 +29,14 @@ impl HdrPipeline {
             vec![
                 BindGroupEntry {
                     resource: BindGroupResource::Texture {
-                        texture_view_id: output_texture_view_id,
+                        texture_view_id: Some(output_texture_view_id),
                         view_dimension: wgpu::TextureViewDimension::D2,
                         sample_type: wgpu::TextureSampleType::Float { filterable: true },
                     },
                 },
                 BindGroupEntry {
                     resource: BindGroupResource::Sampler {
-                        sampler_id,
+                        sampler_id: Some(sampler_id),
                         sampler_binding_type: wgpu::SamplerBindingType::Filtering,
                     },
                 },

@@ -137,7 +137,7 @@ impl<'a> egui_tiles::Behavior<InspectorPane> for StateSnapshot<'a> {
                 .project
                 .samplers
                 .get(*sampler_id)
-                .map(|s| s.label.clone())
+                .map(|s| s.label().to_string())
                 .unwrap_or(format!("Unknown {sampler_id:?}"))
                 .into(),
         }

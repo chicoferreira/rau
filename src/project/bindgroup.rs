@@ -30,20 +30,19 @@ pub struct BindGroupEntry {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum BindGroupResource {
     Texture {
-        texture_view_id: TextureViewId,
+        texture_view_id: Option<TextureViewId>,
         // These two fields are used on the layout creation
         // TODO: Decide if we keep this here, or move it to the TextureViewId, or separate the layout from the BindGroup
         view_dimension: wgpu::TextureViewDimension,
-        // TODO: As when [`wgpu::wgt::TextureSampleType::Float::filterable`] is true it accepts both, maybe we can hardcode it to always be true
         sample_type: wgpu::TextureSampleType,
     },
     Sampler {
-        sampler_id: SamplerId,
+        sampler_id: Option<SamplerId>,
         // This field is used on the layout creation
         // TODO: Decide if we keep this here, or move it to the TextureViewId, or separate the layout from the BindGroup
         sampler_binding_type: wgpu::SamplerBindingType,
     },
-    Uniform(UniformId),
+    Uniform(Option<UniformId>),
 }
 
 impl BindGroup {
@@ -107,12 +106,16 @@ impl BindGroup {
         label: &str,
         entries: &[BindGroupEntry],
     ) -> (wgpu::BindGroupLayout, wgpu::BindGroup) {
-        let layout_entries = entries
+        let (layout_entries, group_entries): (Vec<_>, Vec<_>) = entries
             .iter()
             .copied()
             .enumerate()
-            .map(|(index, entry)| entry.into_bind_group_layout_entry(index as u32))
-            .collect::<Vec<_>>();
+            .filter_map(|(index, entry)| {
+                let group_entry = entry.into_bind_group_entry(index as u32, ctx)?;
+                let layout_entry = entry.into_bind_group_layout_entry(index as u32);
+                Some((layout_entry, group_entry))
+            })
+            .unzip();
 
         let device = ctx.device;
 
@@ -120,13 +123,6 @@ impl BindGroup {
             label: Some(&format!("{label} Layout")),
             entries: &layout_entries,
         });
-
-        let group_entries = entries
-            .iter()
-            .enumerate()
-            .map(|(index, entry)| entry.into_bind_group_entry(index as u32, ctx))
-            .collect::<Vec<_>>();
-
         let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some(label),
             layout: &layout,
@@ -142,35 +138,35 @@ impl BindGroupEntry {
         &self,
         binding: u32,
         project: &'a BindGroupCreationContext<'a>,
-    ) -> wgpu::BindGroupEntry<'a> {
+    ) -> Option<wgpu::BindGroupEntry<'a>> {
         let resource = match self.resource {
             BindGroupResource::Texture {
                 texture_view_id, ..
             } => {
                 let texture_view = project
                     .texture_views
-                    .get(texture_view_id)
+                    .get(texture_view_id?)
                     .expect("deal with this later");
                 wgpu::BindingResource::TextureView(texture_view.inner())
             }
             BindGroupResource::Sampler { sampler_id, .. } => {
                 let sampler = project
                     .samplers
-                    .get(sampler_id)
+                    .get(sampler_id?)
                     .expect("deal with this later");
                 wgpu::BindingResource::Sampler(sampler.inner())
             }
             BindGroupResource::Uniform(uniform_id) => {
                 let uniform = project
                     .uniforms
-                    .get(uniform_id)
+                    .get(uniform_id?)
                     .expect("deal with this later");
 
                 uniform.buffer().as_entire_binding()
             }
         };
 
-        wgpu::BindGroupEntry { binding, resource }
+        Some(wgpu::BindGroupEntry { binding, resource })
     }
 
     fn into_bind_group_layout_entry(&self, binding: u32) -> wgpu::BindGroupLayoutEntry {
@@ -185,12 +181,14 @@ impl BindGroupEntry {
     fn resource_recreated(&self, tracker: &RecreateTracker) -> bool {
         match self.resource {
             BindGroupResource::Texture {
-                texture_view_id, ..
+                texture_view_id: Some(texture_view_id),
+                ..
             } => tracker.happened(ProjectEvent::TextureViewRecreated(texture_view_id)),
-            BindGroupResource::Sampler { sampler_id, .. } => {
-                tracker.happened(ProjectEvent::SamplerRecreated(sampler_id))
-            }
-            BindGroupResource::Uniform(_) => false,
+            BindGroupResource::Sampler {
+                sampler_id: Some(sampler_id),
+                ..
+            } => tracker.happened(ProjectEvent::SamplerRecreated(sampler_id)),
+            _ => false,
         }
     }
 }

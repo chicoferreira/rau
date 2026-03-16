@@ -4,7 +4,7 @@ use egui::{CollapsingHeader, Grid, RichText};
 use crate::{
     project::CameraId,
     ui::{
-        components::{data_display::ui_mat4_grid, selector::selectable_value},
+        components::{data_display::ui_mat4_grid, selector::selectable_value_storage},
         pane::StateSnapshot,
     },
 };
@@ -115,7 +115,7 @@ impl StateSnapshot<'_> {
                             ui.label("from");
                             let mut current_dim_id = camera.dimension_id();
                             let before = current_dim_id;
-                            selectable_value(
+                            selectable_value_storage(
                                 ui,
                                 "camera_aspect_source",
                                 &mut current_dim_id,

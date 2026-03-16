@@ -94,27 +94,27 @@ fn create_material_bind_group(
         // TODO: Remove the duplicated sampler
         BindGroupEntry {
             resource: BindGroupResource::Texture {
-                texture_view_id: diffuse_texture_view_id,
+                texture_view_id: Some(diffuse_texture_view_id),
                 view_dimension: wgpu::TextureViewDimension::D2,
                 sample_type: wgpu::TextureSampleType::Float { filterable: true },
             },
         },
         BindGroupEntry {
             resource: BindGroupResource::Sampler {
-                sampler_id,
+                sampler_id: Some(sampler_id),
                 sampler_binding_type: wgpu::SamplerBindingType::Filtering,
             },
         },
         BindGroupEntry {
             resource: BindGroupResource::Texture {
-                texture_view_id: normal_texture_view_id,
+                texture_view_id: Some(normal_texture_view_id),
                 view_dimension: wgpu::TextureViewDimension::D2,
                 sample_type: wgpu::TextureSampleType::Float { filterable: true },
             },
         },
         BindGroupEntry {
             resource: BindGroupResource::Sampler {
-                sampler_id,
+                sampler_id: Some(sampler_id),
                 sampler_binding_type: wgpu::SamplerBindingType::Filtering,
             },
         },

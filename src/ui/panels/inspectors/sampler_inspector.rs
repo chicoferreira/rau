@@ -2,37 +2,71 @@ use egui::{Grid, Widget};
 
 use crate::{
     project::SamplerId,
-    ui::{components::selector::combo_grid_row, pane::StateSnapshot},
+    ui::{components::selector::selectable_value, pane::StateSnapshot},
 };
 
-const ADDRESS_MODES: &[(wgpu::AddressMode, &str)] = &[
-    (wgpu::AddressMode::ClampToEdge, "Clamp To Edge"),
-    (wgpu::AddressMode::Repeat, "Repeat"),
-    (wgpu::AddressMode::MirrorRepeat, "Mirror Repeat"),
-    (wgpu::AddressMode::ClampToBorder, "Clamp To Border"),
+const ADDRESS_MODES: [wgpu::AddressMode; 4] = [
+    wgpu::AddressMode::ClampToEdge,
+    wgpu::AddressMode::Repeat,
+    wgpu::AddressMode::MirrorRepeat,
+    wgpu::AddressMode::ClampToBorder,
 ];
 
-const FILTER_MODES: &[(wgpu::FilterMode, &str)] = &[
-    (wgpu::FilterMode::Nearest, "Nearest"),
-    (wgpu::FilterMode::Linear, "Linear"),
+fn address_mode_label(mode: wgpu::AddressMode) -> &'static str {
+    match mode {
+        wgpu::AddressMode::ClampToEdge => "Clamp To Edge",
+        wgpu::AddressMode::Repeat => "Repeat",
+        wgpu::AddressMode::MirrorRepeat => "Mirror Repeat",
+        wgpu::AddressMode::ClampToBorder => "Clamp To Border",
+    }
+}
+
+const FILTER_MODES: [wgpu::FilterMode; 2] = [wgpu::FilterMode::Nearest, wgpu::FilterMode::Linear];
+
+fn filter_mode_label(mode: wgpu::FilterMode) -> &'static str {
+    match mode {
+        wgpu::FilterMode::Nearest => "Nearest",
+        wgpu::FilterMode::Linear => "Linear",
+    }
+}
+
+const MIPMAP_FILTER_MODES: [wgpu::MipmapFilterMode; 2] = [
+    wgpu::MipmapFilterMode::Nearest,
+    wgpu::MipmapFilterMode::Linear,
 ];
 
-const MIPMAP_FILTER_MODES: &[(wgpu::MipmapFilterMode, &str)] = &[
-    (wgpu::MipmapFilterMode::Nearest, "Nearest"),
-    (wgpu::MipmapFilterMode::Linear, "Linear"),
+fn mipmap_filter_mode_label(mode: wgpu::MipmapFilterMode) -> &'static str {
+    match mode {
+        wgpu::MipmapFilterMode::Nearest => "Nearest",
+        wgpu::MipmapFilterMode::Linear => "Linear",
+    }
+}
+
+const COMPARE_FUNCTIONS: [Option<wgpu::CompareFunction>; 9] = [
+    None,
+    Some(wgpu::CompareFunction::Never),
+    Some(wgpu::CompareFunction::Less),
+    Some(wgpu::CompareFunction::Equal),
+    Some(wgpu::CompareFunction::LessEqual),
+    Some(wgpu::CompareFunction::Greater),
+    Some(wgpu::CompareFunction::NotEqual),
+    Some(wgpu::CompareFunction::GreaterEqual),
+    Some(wgpu::CompareFunction::Always),
 ];
 
-const COMPARE_FUNCTIONS: &[(Option<wgpu::CompareFunction>, &str)] = &[
-    (None, "None"),
-    (Some(wgpu::CompareFunction::Never), "Never"),
-    (Some(wgpu::CompareFunction::Less), "Less"),
-    (Some(wgpu::CompareFunction::Equal), "Equal"),
-    (Some(wgpu::CompareFunction::LessEqual), "Less Equal"),
-    (Some(wgpu::CompareFunction::Greater), "Greater"),
-    (Some(wgpu::CompareFunction::NotEqual), "Not Equal"),
-    (Some(wgpu::CompareFunction::GreaterEqual), "Greater Equal"),
-    (Some(wgpu::CompareFunction::Always), "Always"),
-];
+fn compare_function_label(compare: Option<wgpu::CompareFunction>) -> &'static str {
+    match compare {
+        None => "None",
+        Some(wgpu::CompareFunction::Never) => "Never",
+        Some(wgpu::CompareFunction::Less) => "Less",
+        Some(wgpu::CompareFunction::Equal) => "Equal",
+        Some(wgpu::CompareFunction::LessEqual) => "Less Equal",
+        Some(wgpu::CompareFunction::Greater) => "Greater",
+        Some(wgpu::CompareFunction::NotEqual) => "Not Equal",
+        Some(wgpu::CompareFunction::GreaterEqual) => "Greater Equal",
+        Some(wgpu::CompareFunction::Always) => "Always",
+    }
+}
 
 impl StateSnapshot<'_> {
     pub fn sampler_inspector_ui(&mut self, ui: &mut egui::Ui, sampler_id: SamplerId) {
@@ -49,30 +83,42 @@ impl StateSnapshot<'_> {
             .spacing([8.0, 4.0])
             .show(ui, |ui| {
                 ui.label("Address Mode");
-                combo_grid_row(
+                selectable_value(
                     ui,
                     "address_mode",
                     &mut spec.address_mode,
+                    address_mode_label,
                     ADDRESS_MODES,
-                    "",
                 );
                 ui.end_row();
 
                 ui.label("Mag Filter");
-                combo_grid_row(ui, "mag_filter", &mut spec.mag_filter, FILTER_MODES, "");
+                selectable_value(
+                    ui,
+                    "mag_filter",
+                    &mut spec.mag_filter,
+                    filter_mode_label,
+                    FILTER_MODES,
+                );
                 ui.end_row();
 
                 ui.label("Min Filter");
-                combo_grid_row(ui, "min_filter", &mut spec.min_filter, FILTER_MODES, "");
+                selectable_value(
+                    ui,
+                    "min_filter",
+                    &mut spec.min_filter,
+                    filter_mode_label,
+                    FILTER_MODES,
+                );
                 ui.end_row();
 
                 ui.label("Mipmap Filter");
-                combo_grid_row(
+                selectable_value(
                     ui,
                     "mipmap_filter",
                     &mut spec.mipmap_filter,
+                    mipmap_filter_mode_label,
                     MIPMAP_FILTER_MODES,
-                    "",
                 );
                 ui.end_row();
 
@@ -93,7 +139,13 @@ impl StateSnapshot<'_> {
                 ui.end_row();
 
                 ui.label("Compare");
-                combo_grid_row(ui, "compare", &mut spec.compare, COMPARE_FUNCTIONS, "");
+                selectable_value(
+                    ui,
+                    "compare",
+                    &mut spec.compare,
+                    compare_function_label,
+                    COMPARE_FUNCTIONS,
+                );
                 ui.end_row();
             });
 

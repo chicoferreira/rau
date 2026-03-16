@@ -154,7 +154,7 @@ pub fn ui(state: &mut StateSnapshot, ui: &mut egui::Ui) -> Response {
                 state.pending_events,
             ));
             for (id, sampler) in state.project.samplers.list() {
-                let node = ProjectLeafNode::new(TreeNodeId::Sampler(id), &sampler.label)
+                let node = ProjectLeafNode::new(TreeNodeId::Sampler(id), sampler.label())
                     .with_rename_target(RenameTarget::Sampler(id))
                     .with_inspect_event(StateEvent::InspectSampler(id))
                     .with_create_event(StateEvent::CreateSampler, "Create New Sampler")

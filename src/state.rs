@@ -458,7 +458,7 @@ impl State {
                             .project
                             .samplers
                             .get(sampler_id)
-                            .map(|s| s.label.clone()),
+                            .map(|s| s.label().to_string()),
                     };
 
                     if let Some(current_name) = current_name {

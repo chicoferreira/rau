@@ -29,7 +29,7 @@ impl Default for SamplerSpec {
 }
 
 pub struct Sampler {
-    pub label: String,
+    label: String,
     spec: SamplerSpec,
     dirty: bool,
     inner: wgpu::Sampler,
@@ -49,6 +49,10 @@ impl Sampler {
 
     pub fn inner(&self) -> &wgpu::Sampler {
         &self.inner
+    }
+
+    pub fn label(&self) -> &str {
+        &self.label
     }
 
     pub fn set_label(&mut self, label: String) {
