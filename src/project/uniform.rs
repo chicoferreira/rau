@@ -1,57 +1,49 @@
-use std::hash::Hash;
-
 use egui_dnd::utils::shift_vec;
 use wgpu::util::DeviceExt;
 
-use crate::project::{CameraId, camera::Camera, storage::Storage};
+pub mod camera;
+#[cfg(test)]
+mod tests;
 
-// We need this struct to avoid borrow checker being mad
-// when we are iterating over uniforms from a project
-// and then we need the project to update it
-pub struct UniformProjectContext<'a> {
+use crate::project::{
+    CameraId, UniformId,
+    camera::Camera,
+    recreate::{ProjectEvent, Recreatable, RecreateTracker},
+    storage::Storage,
+    uniform::camera::CameraField,
+};
+
+pub struct UniformCreationContext<'a> {
     pub cameras: &'a Storage<CameraId, Camera>,
+    pub device: &'a wgpu::Device,
+    pub queue: &'a wgpu::Queue,
 }
 
 pub struct Uniform {
     pub label: String,
-    pub data: UniformData,
+    fields: Vec<UniformField>,
     buffer: wgpu::Buffer,
-}
-
-#[derive(Debug, Default)]
-pub struct UniformData {
-    pub fields: Vec<UniformField>,
+    dirty: bool,
 }
 
 type UniformFieldId = usize;
 
 #[derive(Debug)]
 pub struct UniformField {
-    pub name: String,
-    // Used for stability in reordering
-    pub id: UniformFieldId,
-    pub source: UniformFieldSource,
-    pub last_data: UniformFieldData,
+    label: String,
+    id: UniformFieldId, // Used for stability in reordering
+    source: UniformFieldSource,
+    dirty: bool,
 }
 
-impl Hash for UniformField {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.id.hash(state);
-    }
-}
-
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum UniformFieldSource {
     UserDefined(UniformFieldData),
-    Camera(Option<CameraId>, CameraField),
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, strum::Display)]
-pub enum UniformFieldSourceKind {
-    #[strum(to_string = "{0}")]
-    UserDefined(UniformFieldKind),
-    #[strum(to_string = "Camera {0}")]
-    Camera(CameraField),
+    Camera {
+        camera_id: Option<CameraId>,
+        field: CameraField,
+        current_value: UniformFieldData,
+    },
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -65,7 +57,7 @@ pub enum UniformFieldData {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, strum::EnumIter, strum::Display)]
-pub enum UniformFieldKind {
+pub enum UniformFieldDataKind {
     Vec2f,
     Vec3f,
     Vec4f,
@@ -74,28 +66,20 @@ pub enum UniformFieldKind {
     Mat4x4f,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, strum::EnumIter, strum::Display)]
-pub enum CameraField {
-    Position,
-    Projection,
-    View,
-    #[strum(to_string = "Projection View")]
-    ProjectionView,
-    #[strum(to_string = "Inverse Projection")]
-    InverseProjection,
-    #[strum(to_string = "Inverse View")]
-    InverseView,
-}
-
 impl Uniform {
-    pub fn new(device: &wgpu::Device, label: impl Into<String>, data: UniformData) -> Uniform {
+    pub fn new(
+        device: &wgpu::Device,
+        label: impl Into<String>,
+        fields: Vec<UniformField>,
+    ) -> Uniform {
         let label = label.into();
-
-        let buffer = Uniform::create_buffer(device, &label, &data.cast());
+        let content = cast_fields(&fields);
+        let buffer = Self::create_buffer(device, &label, &content);
         Uniform {
             label,
-            data,
+            fields,
             buffer,
+            dirty: false,
         }
     }
 
@@ -107,65 +91,51 @@ impl Uniform {
         })
     }
 
-    pub fn update(
-        &mut self,
-        context: UniformProjectContext<'_>,
-        device: &wgpu::Device,
-        queue: &wgpu::Queue,
-    ) {
-        let mut updated = false;
-        for field in &mut self.data.fields {
-            updated |= field.update(&context);
-        }
-
-        if updated {
-            self.upload(device, queue);
-        }
-    }
-
-    fn upload(&mut self, device: &wgpu::Device, queue: &wgpu::Queue) {
-        let size = self.buffer.size();
-        let content = self.data.cast();
-
-        if size != content.len() as wgpu::BufferAddress {
-            self.buffer = Self::create_buffer(device, &self.label, &content);
-        } else {
-            queue.write_buffer(&self.buffer, 0, &content);
-        }
-    }
-
     pub fn buffer(&self) -> &wgpu::Buffer {
         &self.buffer
     }
 
-    pub fn reorder_fields(&mut self, from: usize, to: usize) {
+    pub fn fields(&self) -> &[UniformField] {
+        &self.fields
+    }
+
+    pub fn get_field(&self, index: usize) -> Option<&UniformField> {
+        self.fields.get(index)
+    }
+
+    pub fn add_field(&mut self, field: UniformField) {
+        self.fields.push(field);
+        self.dirty = true;
+    }
+
+    pub fn remove_field(&mut self, index: usize) {
+        if index < self.fields.len() {
+            self.fields.remove(index);
+            self.dirty = true;
+        }
+    }
+
+    pub fn set_field_label(&mut self, index: usize, new_name: String) {
+        if index < self.fields.len() {
+            self.fields[index].label = new_name;
+            // changing the label does not affect the buffer
+        }
+    }
+
+    pub fn set_field_source(&mut self, index: usize, source: UniformFieldSource) {
+        if let Some(field) = self.fields.get_mut(index) {
+            field.source = source;
+            field.dirty = true;
+            self.dirty = true;
+        }
+    }
+
+    pub fn reorder_field(&mut self, from: usize, to: usize) {
         if from == to {
             return;
         }
-        shift_vec(from, to, &mut self.data.fields);
-    }
-}
-
-impl UniformData {
-    fn cast(&self) -> Vec<u8> {
-        let mut buf = vec![];
-        let mut struct_align = 1;
-
-        for field in &self.fields {
-            let (align, _) = field.kind().layout();
-
-            struct_align = std::cmp::max(struct_align, align);
-
-            let new_len = buf.len().next_multiple_of(align);
-            buf.resize(new_len, 0);
-
-            field.last_data.write_to(&mut buf);
-        }
-
-        let final_len = buf.len().next_multiple_of(struct_align);
-        buf.resize(final_len, 0);
-
-        buf
+        shift_vec(from, to, &mut self.fields);
+        self.dirty = true;
     }
 
     pub fn layout(&self) -> (usize, usize) {
@@ -173,7 +143,7 @@ impl UniformData {
         let mut struct_align = 1usize;
 
         for field in &self.fields {
-            let (align, field_size) = field.kind().layout();
+            let (align, field_size) = field.source.get_value().kind().layout();
             struct_align = struct_align.max(align);
             size = size.next_multiple_of(align);
             size += field_size;
@@ -183,121 +153,156 @@ impl UniformData {
     }
 }
 
+impl Recreatable for Uniform {
+    type Context<'a> = UniformCreationContext<'a>;
+    type Id = UniformId;
+
+    fn recreate<'a>(
+        &mut self,
+        id: Self::Id,
+        ctx: &mut Self::Context<'a>,
+        tracker: &RecreateTracker,
+    ) -> Option<ProjectEvent> {
+        let mut content_changed = false;
+        for field in &mut self.fields {
+            content_changed |= field.refresh(&tracker, ctx);
+        }
+
+        if !self.dirty && !content_changed {
+            return None;
+        }
+
+        let content = cast_fields(&self.fields);
+
+        self.dirty = false;
+
+        if self.buffer.size() != content.len() as wgpu::BufferAddress {
+            self.buffer = Self::create_buffer(ctx.device, &self.label, &content);
+            Some(ProjectEvent::UniformRecreated(id))
+        } else {
+            ctx.queue.write_buffer(&self.buffer, 0, &content);
+            None
+        }
+    }
+}
+
+/// Casts all field data to a packed byte buffer respecting std140 alignment rules.
+fn cast_fields(fields: &[UniformField]) -> Vec<u8> {
+    let mut buf = vec![];
+    let mut struct_align = 1;
+
+    for field in fields {
+        let value = field.source().get_value();
+
+        let (align, _) = value.kind().layout();
+
+        struct_align = std::cmp::max(struct_align, align);
+
+        let new_len = buf.len().next_multiple_of(align);
+        buf.resize(new_len, 0);
+
+        value.write_to(&mut buf);
+    }
+
+    let final_len = buf.len().next_multiple_of(struct_align);
+    buf.resize(final_len, 0);
+
+    buf
+}
+
 impl UniformField {
-    pub fn new_camera_sourced(
-        name: impl Into<String>,
-        camera_id: Option<CameraId>,
-        field: CameraField,
-    ) -> Self {
-        let data = field.default_data();
+    pub fn new(label: impl Into<String>, source: UniformFieldSource) -> Self {
         Self {
             id: fastrand::usize(..),
-            name: name.into(),
-            source: UniformFieldSource::Camera(camera_id, field),
-            last_data: data,
+            label: label.into(),
+            source,
+            dirty: false,
         }
     }
 
-    pub fn new_user_defined(name: impl Into<String>, value: UniformFieldData) -> Self {
-        Self {
-            id: fastrand::usize(..),
-            name: name.into(),
-            source: UniformFieldSource::UserDefined(value.clone()),
-            last_data: value,
-        }
+    pub fn label(&self) -> &str {
+        &self.label
     }
 
-    // TODO: Remove this constructors
-    #[allow(unused)]
-    pub fn new_user_defined_vec2f(name: impl Into<String>, value: [f32; 2]) -> Self {
-        Self::new_user_defined(name, UniformFieldData::Vec2f(value))
+    pub fn source(&self) -> &UniformFieldSource {
+        &self.source
     }
 
-    pub fn new_user_defined_vec3f(name: impl Into<String>, value: [f32; 3]) -> Self {
-        Self::new_user_defined(name, UniformFieldData::Vec3f(value))
-    }
+    fn refresh(
+        &mut self,
+        recreate_tracker: &RecreateTracker,
+        context: &mut UniformCreationContext<'_>,
+    ) -> bool {
+        match &mut self.source {
+            UniformFieldSource::UserDefined(_) => false, // Nothing to refresh
+            UniformFieldSource::Camera {
+                camera_id,
+                field,
+                current_value,
+            } => {
+                let Some(camera_id) = *camera_id else {
+                    return false;
+                };
 
-    #[allow(unused)]
-    pub fn new_user_defined_vec4f(name: impl Into<String>, value: [f32; 4]) -> Self {
-        Self::new_user_defined(name, UniformFieldData::Vec4f(value))
-    }
+                if !self.dirty && !recreate_tracker.happened(ProjectEvent::CameraUpdated(camera_id))
+                {
+                    return false;
+                }
 
-    pub fn new_user_defined_rgb(name: impl Into<String>, value: [f32; 3]) -> Self {
-        Self::new_user_defined(name, UniformFieldData::Rgb(value))
-    }
+                let Some(camera) = context.cameras.get(camera_id) else {
+                    return false;
+                };
 
-    #[allow(unused)]
-    pub fn new_user_defined_rgba(name: impl Into<String>, value: [f32; 4]) -> Self {
-        Self::new_user_defined(name, UniformFieldData::Rgba(value))
-    }
+                self.dirty = false;
 
-    pub fn new_from_kind(name: impl Into<String>, kind: UniformFieldSourceKind) -> Self {
-        match kind {
-            UniformFieldSourceKind::UserDefined(kind) => {
-                Self::new_user_defined(name, UniformFieldData::from_kind(kind))
+                *current_value = field.compute(camera);
+                true
             }
-            UniformFieldSourceKind::Camera(kind) => Self::new_camera_sourced(name, None, kind),
         }
-    }
-
-    pub fn kind(&self) -> UniformFieldKind {
-        self.last_data.kind()
-    }
-
-    fn update(&mut self, context: &UniformProjectContext<'_>) -> bool {
-        let new_data = self.source.compute(context);
-        let updated = self.last_data != new_data;
-        self.last_data = new_data;
-        updated
     }
 }
 
 impl UniformFieldSource {
-    fn compute(&self, context: &UniformProjectContext<'_>) -> UniformFieldData {
-        match self {
-            UniformFieldSource::UserDefined(data) => data.clone(),
-            UniformFieldSource::Camera(camera_id, source) => {
-                if let Some(camera_id) = camera_id
-                    && let Some(camera) = context.cameras.get(*camera_id)
-                {
-                    source.compute(camera)
-                } else {
-                    source.default_data()
-                }
-            }
+    pub fn new_user_defined(data: UniformFieldData) -> Self {
+        Self::UserDefined(data)
+    }
+
+    pub fn new_camera_sourced(camera_id: Option<CameraId>, field: CameraField) -> Self {
+        Self::Camera {
+            camera_id,
+            field,
+            current_value: field.default_data(),
         }
     }
 
-    pub fn kind(&self) -> UniformFieldSourceKind {
+    pub fn get_value(&self) -> &UniformFieldData {
         match self {
-            UniformFieldSource::UserDefined(data) => {
-                UniformFieldSourceKind::UserDefined(data.kind())
-            }
-            UniformFieldSource::Camera(_, source) => UniformFieldSourceKind::Camera(source.clone()),
+            UniformFieldSource::UserDefined(data) => data,
+            UniformFieldSource::Camera { current_value, .. } => current_value,
         }
     }
 }
 
 impl UniformFieldData {
-    fn from_kind(kind: UniformFieldKind) -> Self {
+    pub fn from_kind(kind: UniformFieldDataKind) -> Self {
         match kind {
-            UniformFieldKind::Vec2f => UniformFieldData::Vec2f([0.0; 2]),
-            UniformFieldKind::Vec3f => UniformFieldData::Vec3f([0.0; 3]),
-            UniformFieldKind::Vec4f => UniformFieldData::Vec4f([0.0; 4]),
-            UniformFieldKind::Rgb => UniformFieldData::Rgb([1.0; 3]),
-            UniformFieldKind::Rgba => UniformFieldData::Rgba([1.0; 4]),
-            UniformFieldKind::Mat4x4f => UniformFieldData::Mat4x4f([[0.0; 4]; 4]),
+            UniformFieldDataKind::Vec2f => UniformFieldData::Vec2f([0.0; 2]),
+            UniformFieldDataKind::Vec3f => UniformFieldData::Vec3f([0.0; 3]),
+            UniformFieldDataKind::Vec4f => UniformFieldData::Vec4f([0.0; 4]),
+            UniformFieldDataKind::Rgb => UniformFieldData::Rgb([1.0; 3]),
+            UniformFieldDataKind::Rgba => UniformFieldData::Rgba([1.0; 4]),
+            UniformFieldDataKind::Mat4x4f => UniformFieldData::Mat4x4f([[0.0; 4]; 4]),
         }
     }
 
-    fn kind(&self) -> UniformFieldKind {
+    pub fn kind(&self) -> UniformFieldDataKind {
         match self {
-            UniformFieldData::Vec2f(_) => UniformFieldKind::Vec2f,
-            UniformFieldData::Vec3f(_) => UniformFieldKind::Vec3f,
-            UniformFieldData::Vec4f(_) => UniformFieldKind::Vec4f,
-            UniformFieldData::Rgb(_) => UniformFieldKind::Rgb,
-            UniformFieldData::Rgba(_) => UniformFieldKind::Rgba,
-            UniformFieldData::Mat4x4f(_) => UniformFieldKind::Mat4x4f,
+            UniformFieldData::Vec2f(_) => UniformFieldDataKind::Vec2f,
+            UniformFieldData::Vec3f(_) => UniformFieldDataKind::Vec3f,
+            UniformFieldData::Vec4f(_) => UniformFieldDataKind::Vec4f,
+            UniformFieldData::Rgb(_) => UniformFieldDataKind::Rgb,
+            UniformFieldData::Rgba(_) => UniformFieldDataKind::Rgba,
+            UniformFieldData::Mat4x4f(_) => UniformFieldDataKind::Mat4x4f,
         }
     }
 
@@ -325,105 +330,32 @@ impl UniformFieldData {
     }
 }
 
-impl UniformFieldKind {
+impl UniformFieldDataKind {
     pub fn layout(&self) -> (usize, usize) {
         match self {
-            UniformFieldKind::Vec2f => (8, 8),
-            UniformFieldKind::Vec3f
-            | UniformFieldKind::Rgb
-            | UniformFieldKind::Vec4f
-            | UniformFieldKind::Rgba => (16, 16),
-            UniformFieldKind::Mat4x4f => (16, 64),
+            UniformFieldDataKind::Vec2f => (8, 8),
+            UniformFieldDataKind::Vec3f
+            | UniformFieldDataKind::Rgb
+            | UniformFieldDataKind::Vec4f
+            | UniformFieldDataKind::Rgba => (16, 16),
+            UniformFieldDataKind::Mat4x4f => (16, 64),
         }
     }
 
     pub fn wgsl_type_label(&self) -> &'static str {
         match self {
-            UniformFieldKind::Vec2f => "vec2<f32>",
-            UniformFieldKind::Vec3f => "vec3<f32>",
-            UniformFieldKind::Vec4f => "vec4<f32>",
-            UniformFieldKind::Rgb => "vec3<f32>",
-            UniformFieldKind::Rgba => "vec4<f32>",
-            UniformFieldKind::Mat4x4f => "mat4x4<f32>",
+            UniformFieldDataKind::Vec2f => "vec2<f32>",
+            UniformFieldDataKind::Vec3f => "vec3<f32>",
+            UniformFieldDataKind::Vec4f => "vec4<f32>",
+            UniformFieldDataKind::Rgb => "vec3<f32>",
+            UniformFieldDataKind::Rgba => "vec4<f32>",
+            UniformFieldDataKind::Mat4x4f => "mat4x4<f32>",
         }
     }
 }
 
-impl CameraField {
-    fn default_data(&self) -> UniformFieldData {
-        match self {
-            CameraField::Projection => UniformFieldData::Mat4x4f([[1.0; 4]; 4]),
-            CameraField::Position => UniformFieldData::Vec4f([0.0; 4]),
-            CameraField::View => UniformFieldData::Mat4x4f([[1.0; 4]; 4]),
-            CameraField::ProjectionView => UniformFieldData::Mat4x4f([[1.0; 4]; 4]),
-            CameraField::InverseProjection => UniformFieldData::Mat4x4f([[1.0; 4]; 4]),
-            CameraField::InverseView => UniformFieldData::Mat4x4f([[1.0; 4]; 4]),
-        }
-    }
-
-    fn compute(&self, camera: &Camera) -> UniformFieldData {
-        match self {
-            CameraField::Position => {
-                UniformFieldData::Vec4f(camera.position().to_homogeneous().into())
-            }
-            CameraField::Projection => UniformFieldData::Mat4x4f(camera.matrix().projection.into()),
-            CameraField::View => UniformFieldData::Mat4x4f(camera.matrix().view.into()),
-            CameraField::ProjectionView => {
-                UniformFieldData::Mat4x4f(camera.matrix().projection_view.into())
-            }
-            CameraField::InverseProjection => {
-                UniformFieldData::Mat4x4f(camera.matrix().inverse_projection.into())
-            }
-            CameraField::InverseView => {
-                UniformFieldData::Mat4x4f(camera.matrix().inverse_view.into())
-            }
-        }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn cast_pads_vec2_to_vec4_alignment() {
-        let result = UniformData {
-            fields: vec![
-                UniformField::new_user_defined_vec2f("uv", [1.0, 2.0]),
-                UniformField::new_user_defined_vec4f("tint", [3.0, 4.0, 5.0, 6.0]),
-            ],
-        }
-        .cast();
-
-        let result: &[f32] = bytemuck::cast_slice(&result);
-        assert_eq!(result, &[1.0, 2.0, 0.0, 0.0, 3.0, 4.0, 5.0, 6.0]);
-    }
-
-    #[test]
-    fn cast_pads_vec2_to_rgb_alignment() {
-        let result = UniformData {
-            fields: vec![
-                UniformField::new_user_defined_vec2f("uv", [1.5, 2.5]),
-                UniformField::new_user_defined_rgb("color", [0.1, 0.2, 0.3]),
-            ],
-        }
-        .cast();
-
-        let result: &[f32] = bytemuck::cast_slice(&result);
-        assert_eq!(result, &[1.5, 2.5, 0.0, 0.0, 0.1, 0.2, 0.3, 0.0]);
-    }
-
-    #[test]
-    fn cast_no_padding_between_vec3_and_vec2() {
-        let result = UniformData {
-            fields: vec![
-                UniformField::new_user_defined_vec3f("position", [9.0, 8.0, 7.0]),
-                UniformField::new_user_defined_vec2f("scale", [0.25, 0.5]),
-            ],
-        }
-        .cast();
-
-        let result: &[f32] = bytemuck::cast_slice(&result);
-        assert_eq!(result, &[9.0, 8.0, 7.0, 0.0, 0.25, 0.5, 0.0, 0.0]);
+impl std::hash::Hash for UniformField {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.id.hash(state);
     }
 }

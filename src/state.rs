@@ -15,7 +15,7 @@ use crate::{
         sampler::{Sampler, SamplerSpec},
         texture::TextureCreationContext,
         texture_view::TextureViewCreationContext,
-        uniform::{UniformData, UniformField, UniformFieldSourceKind, UniformProjectContext},
+        uniform::{UniformCreationContext, UniformField, UniformFieldSource},
         viewport::ViewportCreationContext,
     },
     resources, scene,
@@ -46,8 +46,8 @@ pub enum StateEvent {
     OpenViewport(ViewportId),
     CreateUniform,
     DeleteUniform(UniformId),
-    CreateUniformField(UniformId, UniformFieldSourceKind),
-    UpdateUniformFieldSource(UniformId, usize, UniformFieldSourceKind),
+    CreateUniformField(UniformId, UniformFieldSource),
+    UpdateUniformFieldSource(UniformId, usize, UniformFieldSource),
     DeleteUniformField(UniformId, usize),
     ReorderUniformField(UniformId, DragUpdate),
     StartRename(RenameTarget),
@@ -289,18 +289,6 @@ impl State {
 
         self.tick_objects(dt);
 
-        for (_, uniform) in self.project.uniforms.list_mut() {
-            uniform.update(
-                UniformProjectContext {
-                    cameras: &self.project.cameras,
-                },
-                &self.device,
-                &self.queue,
-            );
-        }
-
-        self.scene.update(&mut self.project, dt);
-
         self.scene.render(&mut encoder, &self.project);
 
         self.egui_renderer.render_egui_frame(
@@ -380,6 +368,13 @@ impl State {
 
         tracker.recreate_storage(&mut self.project.samplers, &mut &self.device);
 
+        let view = &mut UniformCreationContext {
+            cameras: &self.project.cameras,
+            device: &self.device,
+            queue: &self.queue,
+        };
+        tracker.recreate_storage(&mut self.project.uniforms, view);
+
         let view = &mut BindGroupCreationContext {
             uniforms: &self.project.uniforms,
             texture_views: &self.project.texture_views,
@@ -403,11 +398,8 @@ impl State {
                 StateEvent::CreateUniform => {
                     const DEFAULT_NAME: &str = "Uniform";
 
-                    let uniform = project::uniform::Uniform::new(
-                        &self.device,
-                        DEFAULT_NAME,
-                        UniformData::default(),
-                    );
+                    let uniform =
+                        project::uniform::Uniform::new(&self.device, DEFAULT_NAME, vec![]);
 
                     let uniform_id = self.project.uniforms.register(uniform);
 
@@ -433,9 +425,8 @@ impl State {
                             .project
                             .uniforms
                             .get(uniform_id)
-                            .map(|uniform| uniform.data.fields.get(index))
-                            .flatten()
-                            .map(|field| field.name.clone()),
+                            .and_then(|uniform| uniform.get_field(index))
+                            .map(|field| field.label().to_string()),
                         RenameTarget::BindGroup(bind_group_id) => self
                             .project
                             .bind_groups
@@ -484,9 +475,7 @@ impl State {
                         }
                         RenameTarget::UniformField(id, index) => {
                             if let Some(uniform) = self.project.uniforms.get_mut(id) {
-                                if let Some(field) = uniform.data.fields.get_mut(index) {
-                                    field.name = new_name;
-                                }
+                                uniform.set_field_label(index, new_name);
                             }
                         }
                         RenameTarget::BindGroup(id) => {
@@ -521,15 +510,13 @@ impl State {
                         }
                     }
                 }
-                StateEvent::CreateUniformField(id, uniform_field_kind) => {
+                StateEvent::CreateUniformField(id, source) => {
                     if let Some(uniform) = self.project.uniforms.get_mut(id) {
                         const DEFAULT_NAME: &str = "Field";
 
-                        let index = uniform.data.fields.len();
-                        uniform.data.fields.push(UniformField::new_from_kind(
-                            DEFAULT_NAME,
-                            uniform_field_kind,
-                        ));
+                        let index = uniform.fields().len();
+
+                        uniform.add_field(UniformField::new(DEFAULT_NAME, source));
 
                         self.rename_state = Some(RenameState {
                             target: RenameTarget::UniformField(id, index),
@@ -537,30 +524,21 @@ impl State {
                         });
                     }
                 }
-                StateEvent::UpdateUniformFieldSource(
-                    uniform_id,
-                    index,
-                    uniform_field_source_kind,
-                ) => {
+                StateEvent::UpdateUniformFieldSource(uniform_id, index, source) => {
                     if let Some(uniform) = self.project.uniforms.get_mut(uniform_id) {
-                        let field = &mut uniform.data.fields[index];
-                        let name = field.name.clone();
-                        *field = UniformField::new_from_kind(name, uniform_field_source_kind);
+                        uniform.set_field_source(index, source);
                     }
                 }
                 StateEvent::DeleteUniformField(id, index) => {
                     if let Some(uniform) = self.project.uniforms.get_mut(id) {
-                        let fields = &mut uniform.data.fields;
-                        if index < fields.len() {
-                            fields.remove(index);
-                        }
+                        uniform.remove_field(index);
                     }
                 }
                 StateEvent::ReorderUniformField(uniform_id, drag_update) => {
                     if let Some(uniform) = self.project.uniforms.get_mut(uniform_id) {
-                        uniform.reorder_fields(drag_update.from, drag_update.to);
+                        uniform.reorder_field(drag_update.from, drag_update.to);
                     }
-                },
+                }
                 StateEvent::InspectShader(shader_id) => {
                     self.inspector_tree_pane
                         .add_inspector_pane(InspectorPane::Shader(shader_id));

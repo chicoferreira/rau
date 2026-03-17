@@ -1,5 +1,5 @@
 use crate::project::{
-    BindGroupId, CameraId, SamplerId, TextureId, TextureViewId, storage::Storage,
+    BindGroupId, CameraId, SamplerId, TextureId, TextureViewId, UniformId, storage::Storage,
 };
 
 pub struct RecreateTracker {
@@ -13,6 +13,7 @@ pub enum ProjectEvent {
     TextureViewRecreated(TextureViewId),
     SamplerRecreated(SamplerId),
     CameraUpdated(CameraId),
+    UniformRecreated(UniformId),
 }
 
 pub trait Recreatable {

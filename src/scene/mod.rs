@@ -3,14 +3,14 @@ use wgpu::util::DeviceExt;
 use crate::{
     model::{self, Vertex},
     project::{
-        self, BindGroupId, TextureViewId, UniformId, ViewportId,
+        self, BindGroupId, TextureViewId, ViewportId,
         camera::Camera,
         dimension::Dimension,
         sampler::{Sampler, SamplerSpec},
         texture::{Texture, TextureCreationContext, TextureSource},
         texture_view::{TextureView, TextureViewCreationContext, TextureViewFormat},
         uniform::{
-            CameraField, Uniform, UniformData, UniformField, UniformFieldData, UniformFieldSource,
+            Uniform, UniformField, UniformFieldData, UniformFieldSource, camera::CameraField,
         },
         viewport::ViewportCreationContext,
     },
@@ -19,19 +19,10 @@ use crate::{
     state,
     ui::{self},
 };
-use cgmath::{InnerSpace, Rotation3, Vector3, Zero};
+use cgmath::{InnerSpace, Rotation3, Zero};
 
 mod hdr;
 mod loader;
-
-fn light_to_uniform_data(position: [f32; 3], color: [f32; 3]) -> project::uniform::UniformData {
-    project::uniform::UniformData {
-        fields: vec![
-            project::uniform::UniformField::new_user_defined_vec3f("position", position),
-            project::uniform::UniformField::new_user_defined_rgb("color", color),
-        ],
-    }
-}
 
 struct Instance {
     position: cgmath::Vector3<f32>,
@@ -113,7 +104,6 @@ pub struct Scene {
     instances: Vec<Instance>,
     depth_texture_view_id: TextureViewId,
     camera_bind_group_id: BindGroupId,
-    light_uniform_id: UniformId,
     light_bind_group_id: BindGroupId,
     light_render_pipeline: wgpu::RenderPipeline,
     hdr: hdr::HdrPipeline,
@@ -193,32 +183,41 @@ impl Scene {
 
         let camera_id = project.cameras.register(camera);
 
-        let camera_uniform_data = UniformData {
-            fields: vec![
-                UniformField::new_camera_sourced(
+        let camera_uniform = Uniform::new(
+            device,
+            "Camera Buffer",
+            vec![
+                UniformField::new(
                     "view_position",
-                    Some(camera_id),
-                    CameraField::Position,
+                    UniformFieldSource::new_camera_sourced(Some(camera_id), CameraField::Position),
                 ),
-                UniformField::new_camera_sourced("view", Some(camera_id), CameraField::View),
-                UniformField::new_camera_sourced(
+                UniformField::new(
+                    "view",
+                    UniformFieldSource::new_camera_sourced(Some(camera_id), CameraField::View),
+                ),
+                UniformField::new(
                     "proj_view",
-                    Some(camera_id),
-                    CameraField::ProjectionView,
+                    UniformFieldSource::new_camera_sourced(
+                        Some(camera_id),
+                        CameraField::ProjectionView,
+                    ),
                 ),
-                UniformField::new_camera_sourced(
+                UniformField::new(
                     "inv_proj",
-                    Some(camera_id),
-                    CameraField::InverseProjection,
+                    UniformFieldSource::new_camera_sourced(
+                        Some(camera_id),
+                        CameraField::InverseProjection,
+                    ),
                 ),
-                UniformField::new_camera_sourced(
+                UniformField::new(
                     "inv_view",
-                    Some(camera_id),
-                    CameraField::InverseView,
+                    UniformFieldSource::new_camera_sourced(
+                        Some(camera_id),
+                        CameraField::InverseView,
+                    ),
                 ),
             ],
-        };
-        let camera_uniform = Uniform::new(device, "Camera Buffer", camera_uniform_data);
+        );
         let camera_uniform_id = project.uniforms.register(camera_uniform);
 
         const SPACE_BETWEEN: f32 = 3.0;
@@ -261,8 +260,20 @@ impl Scene {
         );
         let camera_bind_group_id = project.bind_groups.register(camera_bind_group);
 
-        let light_data = light_to_uniform_data([2.0, 2.0, 2.0], [1.0, 1.0, 1.0]);
-        let light_uniform = Uniform::new(device, "light", light_data);
+        let light_uniform = Uniform::new(
+            device,
+            "light",
+            vec![
+                UniformField::new(
+                    "position",
+                    UniformFieldSource::new_user_defined(UniformFieldData::Vec3f([2.0, 2.0, 2.0])),
+                ),
+                UniformField::new(
+                    "color",
+                    UniformFieldSource::new_user_defined(UniformFieldData::Rgb([1.0, 1.0, 1.0])),
+                ),
+            ],
+        );
         let light_uniform_id = project.uniforms.register(light_uniform);
 
         let light_bind_group = project::bindgroup::BindGroup::new(
@@ -550,7 +561,6 @@ impl Scene {
             instances,
             depth_texture_view_id,
             camera_bind_group_id,
-            light_uniform_id,
             light_bind_group_id,
             light_render_pipeline,
             hdr,
@@ -560,25 +570,6 @@ impl Scene {
             hdr_texture_view_id,
             output_viewport_view_id,
         })
-    }
-
-    pub fn update(&mut self, project: &mut project::Project, dt: instant::Duration) {
-        let light_uniform = project.uniforms.get_mut(self.light_uniform_id).unwrap();
-
-        // this is fine for now
-        let position = match &mut light_uniform.data.fields[0].source {
-            UniformFieldSource::UserDefined(UniformFieldData::Vec3f(position)) => position,
-            _ => unreachable!("deal with this later"),
-        };
-
-        let position_vec: Vector3<_> = position.clone().into();
-
-        let new_position = cgmath::Quaternion::from_axis_angle(
-            (0.0, 1.0, 0.0).into(),
-            cgmath::Deg(60.0 * dt.as_secs_f32()),
-        ) * position_vec;
-
-        *position = new_position.into();
     }
 
     pub fn render(&self, encoder: &mut wgpu::CommandEncoder, project: &project::Project) {

@@ -34,12 +34,12 @@ pub fn selectable_value<V: PartialEq + Clone, W: Into<WidgetText>>(
     id_salt: impl std::hash::Hash,
     current_value: &mut V,
     format_value: impl Fn(V) -> W,
-    options: impl AsRef<[V]>,
+    options: impl IntoIterator<Item = V>,
 ) {
     egui::ComboBox::from_id_salt(id_salt)
         .selected_text(format_value(current_value.clone()))
         .show_ui(ui, |ui| {
-            for value in options.as_ref() {
+            for value in options {
                 ui.selectable_value(current_value, value.clone(), format_value(value.clone()));
             }
         });

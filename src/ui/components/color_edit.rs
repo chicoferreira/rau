@@ -1,4 +1,6 @@
-pub fn color_edit_rgba(ui: &mut egui::Ui, color: &mut [f32; 4]) -> bool {
+use egui::Response;
+
+pub fn color_edit_rgba(ui: &mut egui::Ui, color: &mut [f32; 4]) -> Response {
     let mut egui_color =
         egui::Rgba::from_rgba_premultiplied(color[0], color[1], color[2], color[3]);
 
@@ -9,5 +11,6 @@ pub fn color_edit_rgba(ui: &mut egui::Ui, color: &mut [f32; 4]) -> bool {
     );
 
     *color = egui_color.to_array();
-    color_picker.changed()
+
+    color_picker
 }

@@ -211,6 +211,9 @@ impl BindGroupEntry {
                 sampler_id: Some(sampler_id),
                 ..
             } => tracker.happened(ProjectEvent::SamplerRecreated(sampler_id)),
+            BindGroupResource::Uniform(Some(uniform_id)) => {
+                tracker.happened(ProjectEvent::UniformRecreated(uniform_id))
+            }
             _ => false,
         }
     }
