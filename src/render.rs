@@ -90,7 +90,7 @@ impl RenderPipelineSpec<'_> {
                     }
 
                     for bind_group in &self.bind_groups {
-                        bind_group.set(render_pass, Some((mesh, model)), project);
+                        bind_group.set(render_pass, Some(mesh), project);
                     }
 
                     render_pass
@@ -167,7 +167,7 @@ impl RenderBindGroupSpec {
     pub fn set(
         &self,
         render_pass: &mut wgpu::RenderPass,
-        current: Option<(&model::Mesh, &model::Model)>,
+        current: Option<&model::Mesh>,
         project: &project::Project,
     ) {
         match self.target {
@@ -179,8 +179,8 @@ impl RenderBindGroupSpec {
                 render_pass.set_bind_group(self.slot, bind_group.inner(), &[]);
             }
             RenderBindGroupTargetSpec::ModelMaterial => {
-                let (current_mesh, model) = current.expect("deal with this later");
-                let material = model.materials[current_mesh.material];
+                let current_mesh = current.expect("deal with this later");
+                let material = current_mesh.material_bind_group_id;
                 let bind_group = project
                     .bind_groups
                     .get(material)

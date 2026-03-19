@@ -269,10 +269,10 @@ pub async fn load_model(
                 vertex_buffer,
                 index_buffer,
                 num_elements: m.mesh.indices.len() as u32,
-                material: m.mesh.material_id.unwrap_or(0),
+                material_bind_group_id: materials[m.mesh.material_id.unwrap_or(0)],
             }
         })
         .collect::<Vec<_>>();
 
-    Ok(model::Model { meshes, materials })
+    Ok(model::Model { meshes })
 }
