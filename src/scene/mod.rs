@@ -311,6 +311,7 @@ impl Scene {
         let obj_model = resources::load_model(
             project,
             "cube.obj",
+            egui_renderer,
             &device,
             &queue,
             image_texture_sampler_id,
@@ -331,12 +332,13 @@ impl Scene {
         );
         let hdr_texture_id = project.textures.register(hdr_texture);
         let hdr_texture_view = TextureView::new(
-            &TextureViewCreationContext {
+            TextureViewCreationContext {
                 textures: &project.textures,
+                egui_renderer,
+                device,
             },
             "HDR Texture View".to_string(),
             hdr_texture_id,
-            None,
             None,
             None,
         );
@@ -377,14 +379,15 @@ impl Scene {
             hdr_loader.from_equirectangular_bytes(project, &device, &queue, &sky_bytes, 1080)?;
 
         let sky_texture_view = TextureView::new(
-            &TextureViewCreationContext {
+            TextureViewCreationContext {
                 textures: &project.textures,
+                egui_renderer,
+                device,
             },
             "Sky Texture View".to_string(),
             sky_texture_id,
             None,
             Some(wgpu::TextureViewDimension::Cube),
-            Some(6),
         );
         let sky_texture_view_id = project.texture_views.register(sky_texture_view);
 
@@ -497,12 +500,13 @@ impl Scene {
         );
         let depth_texture_id = project.textures.register(depth_texture);
         let depth_texture_view = TextureView::new(
-            &TextureViewCreationContext {
+            TextureViewCreationContext {
                 textures: &project.textures,
+                egui_renderer,
+                device,
             },
             "Depth Texture View".to_string(),
             depth_texture_id,
-            None,
             None,
             None,
         );
@@ -521,23 +525,25 @@ impl Scene {
         );
         let viewport_texture_id = project.textures.register(viewport_texture);
         let output_viewport_view_id = project.texture_views.register(TextureView::new(
-            &TextureViewCreationContext {
+            TextureViewCreationContext {
                 textures: &project.textures,
+                egui_renderer,
+                device,
             },
             "Viewport Texture View".to_string(),
             viewport_texture_id,
             Some(TextureViewFormat::Srgb),
             None,
-            None,
         ));
         let viewport_texture_view = TextureView::new(
-            &TextureViewCreationContext {
+            TextureViewCreationContext {
                 textures: &project.textures,
+                egui_renderer,
+                device,
             },
             "Viewport Texture View Egui".to_string(),
             viewport_texture_id,
             Some(TextureViewFormat::Linear),
-            None,
             None,
         );
         let viewport_texture_view_id = project.texture_views.register(viewport_texture_view);

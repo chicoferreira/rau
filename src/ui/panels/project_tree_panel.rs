@@ -3,7 +3,10 @@ use egui_ltreeview::{Action, NodeBuilder, NodeConfig, TreeView};
 use std::hash::Hash;
 
 use crate::{
-    project::{BindGroupId, CameraId, DimensionId, SamplerId, ShaderId, UniformId, ViewportId},
+    project::{
+        BindGroupId, CameraId, DimensionId, SamplerId, ShaderId, TextureViewId, UniformId,
+        ViewportId,
+    },
     state::StateEvent,
     ui::{
         components::project_leaf_node::ProjectLeafNode, pane::StateSnapshot, rename::RenameTarget,
@@ -26,6 +29,8 @@ pub enum TreeNodeId {
     Dimension(DimensionId),
     SamplerFolder,
     Sampler(SamplerId),
+    TextureViewFolder,
+    TextureView(TextureViewId),
 }
 
 impl TreeNodeId {
@@ -164,6 +169,19 @@ pub fn ui(state: &mut StateSnapshot, ui: &mut egui::Ui) -> Response {
                 builder.node(node);
             }
             builder.close_dir();
+
+            builder.dir(TreeNodeId::TextureViewFolder, "Texture Views");
+            for (id, texture_view) in state.project.texture_views.list() {
+                let node = ProjectLeafNode::new(TreeNodeId::TextureView(id), texture_view.label())
+                    .with_rename_target(RenameTarget::TextureView(id))
+                    .with_inspect_event(StateEvent::InspectTextureView(id))
+                    // .with_create_event(StateEvent::CreateViewport, "Create New Viewport")
+                    // .with_delete_event(StateEvent::DeleteViewport(id))
+                    .build(state.pending_events, state.rename_state);
+
+                builder.node(node);
+            }
+            builder.close_dir();
         });
 
     for action in actions {
@@ -194,13 +212,19 @@ pub fn ui(state: &mut StateSnapshot, ui: &mut egui::Ui) -> Response {
                         TreeNodeId::Sampler(id) => {
                             state.pending_events.push(StateEvent::InspectSampler(id));
                         }
+                        TreeNodeId::TextureView(texture_view_id) => {
+                            state
+                                .pending_events
+                                .push(StateEvent::InspectTextureView(texture_view_id));
+                        }
                         TreeNodeId::UniformFolder
                         | TreeNodeId::BindGroupFolder
                         | TreeNodeId::ViewportFolder
                         | TreeNodeId::ShaderFolder
                         | TreeNodeId::CameraFolder
                         | TreeNodeId::DimensionFolder
-                        | TreeNodeId::SamplerFolder => {}
+                        | TreeNodeId::SamplerFolder
+                        | TreeNodeId::TextureViewFolder => {}
                     }
                 }
             }

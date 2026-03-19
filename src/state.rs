@@ -7,7 +7,8 @@ use winit::{event::WindowEvent, window::Window};
 use crate::{
     key::KeyboardState,
     project::{
-        self, BindGroupId, CameraId, DimensionId, SamplerId, ShaderId, UniformId, ViewportId,
+        self, BindGroupId, CameraId, DimensionId, SamplerId, ShaderId, TextureViewId, UniformId,
+        ViewportId,
         bindgroup::{BindGroupCreationContext, BindGroupEntry, BindGroupResource},
         camera::{Camera, CameraCreationContext},
         dimension::Dimension,
@@ -69,6 +70,7 @@ pub enum StateEvent {
     CreateSampler,
     InspectSampler(SamplerId),
     DeleteSampler(SamplerId),
+    InspectTextureView(TextureViewId),
 }
 
 pub struct State {
@@ -350,6 +352,8 @@ impl State {
 
         let view = &mut TextureViewCreationContext {
             textures: &self.project.textures,
+            egui_renderer: &mut self.egui_renderer,
+            device: &self.device,
         };
         tracker.recreate_storage(&mut self.project.texture_views, view);
 
@@ -453,6 +457,11 @@ impl State {
                             .samplers
                             .get(sampler_id)
                             .map(|s| s.label().to_string()),
+                        RenameTarget::TextureView(texture_view_id) => self
+                            .project
+                            .texture_views
+                            .get(texture_view_id)
+                            .map(|t| t.label().to_string()),
                     };
 
                     if let Some(current_name) = current_name {
@@ -506,6 +515,13 @@ impl State {
                         RenameTarget::Sampler(id) => {
                             if let Some(sampler) = self.project.samplers.get_mut(id) {
                                 sampler.set_label(new_name);
+                            }
+                        }
+                        RenameTarget::TextureView(texture_view_id) => {
+                            if let Some(texture_view) =
+                                self.project.texture_views.get_mut(texture_view_id)
+                            {
+                                texture_view.set_label(new_name);
                             }
                         }
                     }
@@ -708,6 +724,10 @@ impl State {
                 }
                 StateEvent::DeleteSampler(sampler_id) => {
                     self.project.samplers.unregister(sampler_id);
+                }
+                StateEvent::InspectTextureView(texture_view_id) => {
+                    self.inspector_tree_pane
+                        .add_inspector_pane(InspectorPane::TextureView(texture_view_id));
                 }
             }
         }

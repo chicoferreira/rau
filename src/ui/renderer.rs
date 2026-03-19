@@ -140,6 +140,10 @@ impl EguiRenderer {
             .update_egui_texture_from_wgpu_texture(device, texture, texture_filter, id);
     }
 
+    pub fn remove_egui_texture(&mut self, id: egui::TextureId) {
+        self.renderer.free_texture(&id);
+    }
+
     pub fn handle_input(
         &mut self,
         window: &winit::window::Window,

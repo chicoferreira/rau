@@ -1,5 +1,5 @@
 use crate::{
-    project::{BindGroupId, CameraId, DimensionId, SamplerId, ShaderId, UniformId},
+    project::{BindGroupId, CameraId, DimensionId, SamplerId, ShaderId, TextureViewId, UniformId},
     ui::pane::StateSnapshot,
 };
 
@@ -59,6 +59,7 @@ pub enum InspectorPane {
     Camera(CameraId),
     Dimension(DimensionId),
     Sampler(SamplerId),
+    TextureView(TextureViewId),
 }
 
 impl<'a> egui_tiles::Behavior<InspectorPane> for StateSnapshot<'a> {
@@ -88,6 +89,9 @@ impl<'a> egui_tiles::Behavior<InspectorPane> for StateSnapshot<'a> {
                     }
                     InspectorPane::Sampler(sampler_id) => {
                         self.sampler_inspector_ui(ui, *sampler_id);
+                    }
+                    InspectorPane::TextureView(texture_view_id) => {
+                        self.texture_view_inspector_ui(ui, *texture_view_id)
                     }
                 };
             });
@@ -139,6 +143,13 @@ impl<'a> egui_tiles::Behavior<InspectorPane> for StateSnapshot<'a> {
                 .get(*sampler_id)
                 .map(|s| s.label().to_string())
                 .unwrap_or(format!("Unknown {sampler_id:?}"))
+                .into(),
+            InspectorPane::TextureView(texture_view_id) => self
+                .project
+                .texture_views
+                .get(*texture_view_id)
+                .map(|s| s.label().to_string())
+                .unwrap_or(format!("Unknown {texture_view_id:?}"))
                 .into(),
         }
     }

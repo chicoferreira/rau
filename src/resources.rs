@@ -1,5 +1,6 @@
 use std::io::{BufReader, Cursor};
 
+use anyhow::Context;
 use wgpu::util::DeviceExt;
 
 use crate::{
@@ -10,41 +11,27 @@ use crate::{
         texture::{Texture, TextureCreationContext, TextureSource},
         texture_view::{TextureView, TextureViewCreationContext},
     },
+    ui::renderer::EguiRenderer,
 };
 
-#[cfg(target_arch = "wasm32")]
-fn format_url(file_name: &str) -> reqwest::Url {
-    let window = web_sys::window().unwrap();
-    let location = window.location();
-    let mut origin = location.origin().unwrap();
-    if !origin.ends_with("res") {
-        origin = format!("{}/res", origin);
-    }
-    let base = reqwest::Url::parse(&format!("{}/", origin)).unwrap();
-    base.join(file_name).unwrap()
-}
-
 pub async fn load_string(file_name: &str) -> anyhow::Result<String> {
-    #[cfg(target_arch = "wasm32")]
-    let txt = {
-        let url = format_url(file_name);
-        reqwest::get(url).await?.text().await?
-    };
-    #[cfg(not(target_arch = "wasm32"))]
-    let txt = {
-        let path = std::path::Path::new(env!("OUT_DIR"))
-            .join("res")
-            .join(file_name);
-        std::fs::read_to_string(path)?
-    };
-
-    Ok(txt)
+    load_binary(file_name)
+        .await?
+        .try_into()
+        .context("Failed to parse UTF-8 string")
 }
 
 pub async fn load_binary(file_name: &str) -> anyhow::Result<Vec<u8>> {
     #[cfg(target_arch = "wasm32")]
     let data = {
-        let url = format_url(file_name);
+        let window = web_sys::window().unwrap();
+        let location = window.location();
+        let mut origin = location.origin().unwrap();
+        if !origin.ends_with("res") {
+            origin = format!("{}/res", origin);
+        }
+        let base = reqwest::Url::parse(&format!("{}/", origin)).unwrap();
+        let url = base.join(file_name).unwrap();
         reqwest::get(url).await?.bytes().await?.to_vec()
     };
     #[cfg(not(target_arch = "wasm32"))]
@@ -118,6 +105,7 @@ fn create_material_bind_group(
 pub async fn load_model(
     project: &mut project::Project,
     file_name: &str,
+    egui_renderer: &mut EguiRenderer,
     device: &wgpu::Device,
     queue: &wgpu::Queue,
     sampler_id: SamplerId,
@@ -153,12 +141,13 @@ pub async fn load_model(
 
         let diffuse_texture_id = project.textures.register(diffuse_texture);
         let diffuse_texture_view_id = project.texture_views.register(TextureView::new(
-            &TextureViewCreationContext {
+            TextureViewCreationContext {
                 textures: &project.textures,
+                egui_renderer,
+                device,
             },
             file_name.clone(),
             diffuse_texture_id,
-            None,
             None,
             None,
         ));
@@ -167,12 +156,13 @@ pub async fn load_model(
 
         let normal_texture_id = project.textures.register(normal_texture);
         let normal_texture_view_id = project.texture_views.register(TextureView::new(
-            &TextureViewCreationContext {
+            TextureViewCreationContext {
                 textures: &project.textures,
+                egui_renderer,
+                device,
             },
             file_name.clone(),
             normal_texture_id,
-            None,
             None,
             None,
         ));
