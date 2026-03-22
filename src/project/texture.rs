@@ -1,8 +1,7 @@
 use image::GenericImageView;
-use pollster::FutureExt;
 
 use crate::{
-    error::AppResult,
+    error::{AppResult, WgpuErrorScope},
     project::{
         DimensionId, TextureId,
         dimension::Dimension,
@@ -74,7 +73,7 @@ impl Texture {
         usage: wgpu::TextureUsages,
         source: &TextureSource,
     ) -> AppResult<wgpu::Texture> {
-        let scope = ctx.device.push_error_scope(wgpu::ErrorFilter::Validation);
+        let scope = WgpuErrorScope::push(ctx.device);
         let non_srgb_format = format.remove_srgb_suffix();
         let srgb_format = format.add_srgb_suffix();
         let view_formats = if srgb_format != non_srgb_format {
@@ -136,7 +135,7 @@ impl Texture {
             );
         }
 
-        scope.pop().block_on().map_or(Ok(()), |e| Err(e))?;
+        scope.pop()?;
 
         Ok(texture)
     }

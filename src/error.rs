@@ -1,5 +1,3 @@
-use pollster::FutureExt;
-
 use crate::project::ProjectResourceId;
 
 pub type AppResult<T> = std::result::Result<T, AppError>;
@@ -55,9 +53,18 @@ impl WgpuErrorScope {
     }
 
     pub fn pop(self) -> AppResult<()> {
-        self.inner
-            .pop()
-            .block_on()
-            .map_or(Ok(()), |e| Err(e.into()))
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            pollster::block_on(self.inner.pop()).map_or(Ok(()), |e| Err(e.into()))
+        }
+        #[cfg(target_arch = "wasm32")]
+        {
+            wasm_bindgen_futures::spawn_local(async move {
+                if let Some(e) = scope.pop().await {
+                    log::error!("wgpu validation error: {:?}", e);
+                }
+            });
+            Ok(())
+        }
     }
 }

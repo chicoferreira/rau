@@ -1,8 +1,10 @@
 use crate::{
-    error::AppResult, project::{
+    error::AppResult,
+    project::{
         self, BindGroupId, SamplerId, TextureViewId,
         bindgroup::{BindGroup, BindGroupEntry, BindGroupResource},
-    }, state
+    },
+    state,
 };
 
 pub struct HdrPipeline {
