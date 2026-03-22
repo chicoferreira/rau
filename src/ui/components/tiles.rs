@@ -25,10 +25,6 @@ impl<P: Pane> TreePane<P> {
         let child = self.tree.tiles.insert_pane(inspector_pane);
         utils::add_pane_to_tile_tree(&mut self.tree, child);
     }
-
-    pub fn remove_pane(&mut self, tile_id: egui_tiles::TileId) {
-        self.tree.tiles.remove(tile_id);
-    }
 }
 
 pub trait Pane {
