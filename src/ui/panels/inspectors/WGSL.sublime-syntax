@@ -1,0 +1,168 @@
+%YAML 1.2
+---
+name: WGSL
+file_extensions: [wgsl]
+scope: source.wgsl
+contexts:
+  main:
+    - include: line_comments
+    - include: block_comments
+    - include: constants
+    - include: keywords
+    - include: attributes
+    - include: functions
+    - include: function_calls
+    - include: types
+    - include: variables
+    - include: punctuation
+
+  attributes:
+    - match: '(@)([A-Za-z_][A-Za-z0-9_]*)'
+      scope: meta.attribute.wgsl
+      captures:
+        1: keyword.operator.attribute.at.wgsl
+        2: entity.name.attribute.wgsl
+
+  block_comments:
+    - match: /\*\*/
+      scope: comment.block.wgsl
+    - match: /\*\*
+      push:
+        - meta_scope: comment.block.documentation.wgsl
+        - match: \*/
+          pop: true
+        - include: block_comments
+    - match: /\*(?!\*)
+      push:
+        - meta_scope: comment.block.wgsl
+        - match: \*/
+          pop: true
+        - include: block_comments
+
+  constants:
+    - match: \b(true|false)\b
+      scope: constant.language.boolean.wgsl
+    - match: '(\b(0|[1-9][0-9]*)[fh]\b|([0-9]*\.[0-9]+|[0-9]+\.[0-9]*)([eE][+-]?[0-9]+)?[fh]?|[0-9]+[eE][+-]?[0-9]+[fh]?)'
+      scope: constant.numeric.float.wgsl
+    - match: '\b0[xX][0-9a-fA-F]+[iu]?\b'
+      scope: constant.numeric.hex.wgsl
+    - match: '\b(0|[1-9][0-9]*)[iu]?\b'
+      scope: constant.numeric.decimal.wgsl
+
+  function_calls:
+    - match: '([A-Za-z_][A-Za-z0-9_]*)(\()'
+      captures:
+        1: entity.name.function.wgsl
+        2: punctuation.brackets.round.wgsl
+      push:
+        - meta_scope: meta.function.call.wgsl
+        - match: \)
+          captures:
+            0: punctuation.brackets.round.wgsl
+          pop: true
+        - include: line_comments
+        - include: block_comments
+        - include: constants
+        - include: keywords
+        - include: attributes
+        - include: function_calls
+        - include: types
+        - include: variables
+        - include: punctuation
+
+  functions:
+    - match: '\b(fn)\s+([A-Za-z_][A-Za-z0-9_]*)'
+      captures:
+        1: keyword.other.fn.wgsl
+        2: entity.name.function.wgsl
+      push:
+        - meta_scope: meta.function.definition.wgsl
+        - match: '\{'
+          captures:
+            0: punctuation.brackets.curly.wgsl
+          pop: true
+        - include: line_comments
+        - include: block_comments
+        - include: constants
+        - include: keywords
+        - include: attributes
+        - include: function_calls
+        - include: types
+        - include: variables
+        - include: punctuation
+
+  keywords:
+    - match: \b(break|case|const|continue|continuing|default|diagnostic|discard|else|enable|fallthrough|for|if|loop|override|requires|return|switch|while)\b
+      scope: keyword.control.wgsl
+    - match: \b(alias|const_assert|struct|fn)\b
+      scope: keyword.declaration.wgsl
+    - match: \b(var|let|const)\b
+      scope: keyword.other.wgsl storage.type.wgsl
+    - match: \b(function|private|read|read_write|storage|uniform|workgroup|write|handle)\b
+      scope: keyword.other.storage.wgsl
+    - match: (\^|\||\|\||&&|<<|>>|!)(?!=)
+      scope: keyword.operator.logical.wgsl
+    - match: '&(?![&=])'
+      scope: keyword.operator.borrow.and.wgsl
+    - match: '(\+=|-=|\*=|/=|%=|\^=|&=|\|=|<<=|>>=)'
+      scope: keyword.operator.assignment.compound.wgsl
+    - match: '(?<![<>])=(?!=|>)'
+      scope: keyword.operator.assignment.wgsl
+    - match: '(==|!=|<=|>=|<(?![<=])|>(?![>=]))'
+      scope: keyword.operator.comparison.wgsl
+    - match: '([+%]|(\*(?!\w))|(-(?!>))|(/(?!/)))'
+      scope: keyword.operator.math.wgsl
+    - match: '->'
+      scope: keyword.operator.arrow.wgsl
+    - match: '~'
+      scope: keyword.operator.bitwise.wgsl
+
+  line_comments:
+    - match: \s*//.*
+      scope: comment.line.double-slash.wgsl
+
+  punctuation:
+    - match: ','
+      scope: punctuation.comma.wgsl
+    - match: '[{}]'
+      scope: punctuation.brackets.curly.wgsl
+    - match: '[()]'
+      scope: punctuation.brackets.round.wgsl
+    - match: ';'
+      scope: punctuation.semi.wgsl
+    - match: '[\[\]]'
+      scope: punctuation.brackets.square.wgsl
+    - match: ':'
+      scope: punctuation.colon.wgsl
+    - match: '\.'
+      scope: punctuation.accessor.dot.wgsl
+
+  types:
+    - match: \b(bool|i32|u32|f16|f32|i64|u64|f64)\b
+      scope: storage.type.scalar.wgsl
+    - match: \b(vec2i|vec3i|vec4i|vec2u|vec3u|vec4u|vec2f|vec3f|vec4f|vec2h|vec3h|vec4h)\b
+      scope: storage.type.vector.alias.wgsl
+    - match: \b(mat2x2f|mat2x3f|mat2x4f|mat3x2f|mat3x3f|mat3x4f|mat4x2f|mat4x3f|mat4x4f|mat2x2h|mat2x3h|mat2x4h|mat3x2h|mat3x3h|mat3x4h|mat4x2h|mat4x3h|mat4x4h)\b
+      scope: storage.type.matrix.alias.wgsl
+    - match: '\b(vec[2-4]|mat[2-4]x[2-4])\b'
+      scope: storage.type.vector.wgsl
+    - match: \b(atomic|array|ptr)\b
+      scope: storage.type.composite.wgsl
+    - match: \b(texture_1d|texture_2d|texture_2d_array|texture_3d|texture_cube|texture_cube_array)\b
+      scope: storage.type.texture.wgsl
+    - match: \b(texture_multisampled_2d|texture_depth_multisampled_2d)\b
+      scope: storage.type.texture.wgsl
+    - match: \b(texture_external)\b
+      scope: storage.type.texture.wgsl
+    - match: \b(texture_storage_1d|texture_storage_2d|texture_storage_2d_array|texture_storage_3d)\b
+      scope: storage.type.texture.wgsl
+    - match: \b(texture_depth_2d|texture_depth_2d_array|texture_depth_cube|texture_depth_cube_array)\b
+      scope: storage.type.texture.wgsl
+    - match: \b(sampler|sampler_comparison)\b
+      scope: storage.type.sampler.wgsl
+    - match: '\b([A-Z][A-Za-z0-9_]*)\b'
+      scope: entity.name.type.wgsl
+
+  variables:
+    - match: '\b[a-z_][a-z0-9_]*\b'
+      scope: variable.other.wgsl
