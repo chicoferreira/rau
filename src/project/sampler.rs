@@ -1,6 +1,9 @@
-use crate::project::{
-    SamplerId,
-    recreate::{ProjectEvent, Recreatable, RecreateTracker},
+use crate::{
+    error::{AppResult, WgpuErrorScope},
+    project::{
+        SamplerId,
+        recreate::{ProjectEvent, Recreatable, RecreateTracker},
+    },
 };
 
 #[derive(Debug, Clone, PartialEq)]
@@ -32,19 +35,21 @@ pub struct Sampler {
     label: String,
     spec: SamplerSpec,
     dirty: bool,
+    has_error: bool,
     inner: wgpu::Sampler,
 }
 
 impl Sampler {
-    pub fn new(device: &wgpu::Device, label: String, spec: SamplerSpec) -> Sampler {
-        let sampler = Self::create_sampler(device, &label, &spec);
+    pub fn new(device: &wgpu::Device, label: String, spec: SamplerSpec) -> AppResult<Sampler> {
+        let sampler = Self::create_sampler(device, &label, &spec)?;
 
-        Sampler {
+        Ok(Sampler {
             label,
             spec,
             dirty: false,
+            has_error: false,
             inner: sampler,
-        }
+        })
     }
 
     pub fn inner(&self) -> &wgpu::Sampler {
@@ -70,8 +75,13 @@ impl Sampler {
         self.dirty = true;
     }
 
-    fn create_sampler(device: &wgpu::Device, label: &str, spec: &SamplerSpec) -> wgpu::Sampler {
-        device.create_sampler(&wgpu::SamplerDescriptor {
+    fn create_sampler(
+        device: &wgpu::Device,
+        label: &str,
+        spec: &SamplerSpec,
+    ) -> AppResult<wgpu::Sampler> {
+        let scope = WgpuErrorScope::push(device);
+        let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
             label: Some(label),
             address_mode_u: spec.address_mode,
             address_mode_v: spec.address_mode,
@@ -83,7 +93,9 @@ impl Sampler {
             lod_max_clamp: spec.lod_max_clamp,
             compare: spec.compare,
             ..Default::default()
-        })
+        });
+        scope.pop()?;
+        Ok(sampler)
     }
 }
 
@@ -96,13 +108,17 @@ impl Recreatable for Sampler {
         id: Self::Id,
         device: &mut Self::Context<'a>,
         _tracker: &RecreateTracker,
-    ) -> Option<ProjectEvent> {
-        if !self.dirty {
-            return None;
+    ) -> AppResult<Option<ProjectEvent>> {
+        if !self.dirty && !self.has_error {
+            return Ok(None);
         }
 
+        self.inner = Self::create_sampler(device, &self.label, &self.spec)
+            .inspect_err(|_| self.has_error = true)?;
+
+        self.has_error = false;
         self.dirty = false;
-        self.inner = Self::create_sampler(device, &self.label, &self.spec);
-        Some(ProjectEvent::SamplerRecreated(id))
+
+        Ok(Some(ProjectEvent::SamplerRecreated(id)))
     }
 }

@@ -10,7 +10,7 @@ use crate::{
 
 impl StateSnapshot<'_> {
     pub fn texture_view_inspector_ui(&mut self, ui: &mut egui::Ui, texture_view_id: TextureViewId) {
-        let Some(texture_view) = self.project.texture_views.get_mut(texture_view_id) else {
+        let Ok(texture_view) = self.project.texture_views.get_mut(texture_view_id) else {
             ui.label("Texture View couldn't be found.");
             return;
         };

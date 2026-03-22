@@ -1,4 +1,4 @@
-use anyhow::Context;
+use crate::error::AppResult;
 
 pub struct Shader {
     pub label: String,
@@ -16,9 +16,8 @@ impl Shader {
     pub fn create_wgpu_shader_module(
         &self,
         device: &wgpu::Device,
-    ) -> anyhow::Result<wgpu::ShaderModule> {
-        let module =
-            naga::front::wgsl::parse_str(&self.source).context("Failed to parse shader")?;
+    ) -> AppResult<wgpu::ShaderModule> {
+        let module = naga::front::wgsl::parse_str(&self.source)?;
 
         let _module_info: naga::valid::ModuleInfo = naga::valid::Validator::new(
             naga::valid::ValidationFlags::all(),
@@ -26,8 +25,7 @@ impl Shader {
         )
         .subgroup_stages(naga::valid::ShaderStages::all())
         .subgroup_operations(naga::valid::SubgroupOperationSet::all())
-        .validate(&module)
-        .context("Failed to validate shader")?;
+        .validate(&module)?;
 
         Ok(device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some(&self.label),

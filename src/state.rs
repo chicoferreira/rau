@@ -5,9 +5,10 @@ use slotmap::SecondaryMap;
 use winit::{event::WindowEvent, window::Window};
 
 use crate::{
+    error::{AppResult, SourcedError},
     key::KeyboardState,
     project::{
-        self, BindGroupId, CameraId, DimensionId, SamplerId, ShaderId, TextureViewId, UniformId,
+        self, BindGroupId, CameraId, DimensionId, ProjectResourceId, SamplerId, UniformId,
         ViewportId,
         bindgroup::{BindGroupCreationContext, BindGroupEntry, BindGroupResource},
         camera::{Camera, CameraCreationContext},
@@ -42,8 +43,7 @@ pub enum ViewportEvent {
 #[derive(Debug, Clone)]
 pub enum StateEvent {
     ViewportEvent(ViewportId, ViewportEvent),
-    InspectUniform(UniformId),
-    InspectBindGroup(BindGroupId),
+    InspectResource(ProjectResourceId),
     OpenViewport(ViewportId),
     CreateUniform,
     DeleteUniform(UniformId),
@@ -54,7 +54,6 @@ pub enum StateEvent {
     StartRename(RenameTarget),
     CancelRename,
     ApplyRename(RenameTarget, String),
-    InspectShader(ShaderId),
     CreateBindGroup,
     DeleteBindGroup(BindGroupId),
     CreateBindGroupEntry(BindGroupId, BindGroupResource),
@@ -62,15 +61,11 @@ pub enum StateEvent {
     UpdateBindGroupEntry(BindGroupId, usize, BindGroupResource),
     ReorderBindGroupEntry(BindGroupId, DragUpdate),
     CreateCamera,
-    InspectCamera(CameraId),
     DeleteCamera(CameraId),
     CreateDimension,
-    InspectDimension(DimensionId),
     DeleteDimension(DimensionId),
     CreateSampler,
-    InspectSampler(SamplerId),
     DeleteSampler(SamplerId),
-    InspectTextureView(TextureViewId),
 }
 
 pub struct State {
@@ -88,6 +83,7 @@ pub struct State {
     inspector_tree_pane: InspectorTreePane,
     viewport_tree_pane: ViewportTreePane,
     dimension_owners: SecondaryMap<DimensionId, ViewportId>,
+    errors: Vec<SourcedError>,
     project: project::Project,
 }
 
@@ -229,6 +225,7 @@ impl State {
             inspector_tree_pane,
             viewport_tree_pane,
             project,
+            errors: vec![],
         })
     }
 
@@ -277,6 +274,7 @@ impl State {
                             pending_events: &mut self.pending_events,
                             project: &mut self.project,
                             rename_state: &mut self.rename_state,
+                            errors: &self.errors,
                         };
 
                         snapshot.ui(
@@ -287,11 +285,17 @@ impl State {
                     });
             });
 
-        self.handle_events();
+        self.errors.clear();
+
+        if let Err(error) = self.handle_events() {
+            self.errors.push(SourcedError::new_unknown(error));
+        }
 
         self.tick_objects(dt);
 
-        self.scene.render(&mut encoder, &self.project);
+        if let Err(error) = self.scene.render(&self.device, &mut encoder, &self.project) {
+            self.errors.push(SourcedError::new_unknown(error));
+        }
 
         self.egui_renderer.render_egui_frame(
             &frame,
@@ -348,27 +352,31 @@ impl State {
             device: &self.device,
             queue: &self.queue,
         };
-        tracker.recreate_storage(&mut self.project.textures, view);
+        self.errors
+            .extend(tracker.recreate_storage(&mut self.project.textures, view));
 
         let view = &mut TextureViewCreationContext {
             textures: &self.project.textures,
             egui_renderer: &mut self.egui_renderer,
             device: &self.device,
         };
-        tracker.recreate_storage(&mut self.project.texture_views, view);
+        self.errors
+            .extend(tracker.recreate_storage(&mut self.project.texture_views, view));
 
         let view = &mut ViewportCreationContext {
             texture_views: &self.project.texture_views,
             egui_renderer: &mut self.egui_renderer,
             device: &self.device,
         };
-        tracker.recreate_storage(&mut self.project.viewports, view);
+        self.errors
+            .extend(tracker.recreate_storage(&mut self.project.viewports, view));
 
         let view = &mut CameraCreationContext {
             dimensions: &self.project.dimensions,
             dt,
         };
-        tracker.recreate_storage(&mut self.project.cameras, view);
+        self.errors
+            .extend(tracker.recreate_storage(&mut self.project.cameras, view));
 
         tracker.recreate_storage(&mut self.project.samplers, &mut &self.device);
 
@@ -377,7 +385,8 @@ impl State {
             device: &self.device,
             queue: &self.queue,
         };
-        tracker.recreate_storage(&mut self.project.uniforms, view);
+        self.errors
+            .extend(tracker.recreate_storage(&mut self.project.uniforms, view));
 
         let view = &mut BindGroupCreationContext {
             uniforms: &self.project.uniforms,
@@ -385,16 +394,28 @@ impl State {
             samplers: &self.project.samplers,
             device: &self.device,
         };
-        tracker.recreate_storage(&mut self.project.bind_groups, view);
+        self.errors
+            .extend(tracker.recreate_storage(&mut self.project.bind_groups, view));
     }
 
-    fn handle_events(&mut self) {
+    fn handle_events(&mut self) -> AppResult<()> {
         for event in self.pending_events.drain(..) {
             log::debug!("Handling event {event:?}");
             match event {
-                StateEvent::InspectUniform(id) => {
-                    self.inspector_tree_pane
-                        .add_inspector_pane(InspectorPane::Uniform(id));
+                StateEvent::InspectResource(resource_id) => {
+                    let pane = match resource_id {
+                        ProjectResourceId::Uniform(id) => InspectorPane::Uniform(id),
+                        ProjectResourceId::BindGroup(id) => InspectorPane::BindGroup(id),
+                        ProjectResourceId::Shader(id) => InspectorPane::Shader(id),
+                        ProjectResourceId::Camera(id) => InspectorPane::Camera(id),
+                        ProjectResourceId::Dimension(id) => InspectorPane::Dimension(id),
+                        ProjectResourceId::Sampler(id) => InspectorPane::Sampler(id),
+                        ProjectResourceId::TextureView(id) => InspectorPane::TextureView(id),
+                        ProjectResourceId::Viewport(_id) => todo!(),
+                        ProjectResourceId::Texture(_id) => todo!(),
+                    };
+
+                    self.inspector_tree_pane.add_inspector_pane(pane);
                 }
                 StateEvent::OpenViewport(viewport_id) => {
                     self.viewport_tree_pane.add_viewport(viewport_id);
@@ -403,7 +424,7 @@ impl State {
                     const DEFAULT_NAME: &str = "Uniform";
 
                     let uniform =
-                        project::uniform::Uniform::new(&self.device, DEFAULT_NAME, vec![]);
+                        project::uniform::Uniform::new(&self.device, DEFAULT_NAME, vec![])?;
 
                     let uniform_id = self.project.uniforms.register(uniform);
 
@@ -415,59 +436,29 @@ impl State {
                 StateEvent::DeleteUniform(id) => {
                     self.project.uniforms.unregister(id);
                 }
-                StateEvent::InspectBindGroup(bind_group_id) => self
-                    .inspector_tree_pane
-                    .add_inspector_pane(InspectorPane::BindGroup(bind_group_id)),
                 StateEvent::StartRename(rename_target) => {
                     let current_name = match rename_target {
-                        RenameTarget::Uniform(uniform_id) => self
+                        RenameTarget::BindGroup(id) => self.project.label(id),
+                        RenameTarget::Viewport(id) => self.project.label(id),
+                        RenameTarget::Shader(id) => self.project.label(id),
+                        RenameTarget::Camera(id) => self.project.label(id),
+                        RenameTarget::Dimension(id) => self.project.label(id),
+                        RenameTarget::Sampler(id) => self.project.label(id),
+                        RenameTarget::TextureView(id) => self.project.label(id),
+                        RenameTarget::Uniform(id) => self.project.label(id),
+                        RenameTarget::UniformField(id, index) => self
                             .project
                             .uniforms
-                            .get(uniform_id)
-                            .map(|u| u.label.clone()),
-                        RenameTarget::UniformField(uniform_id, index) => self
-                            .project
-                            .uniforms
-                            .get(uniform_id)
+                            .get(id)
+                            .ok()
                             .and_then(|uniform| uniform.get_field(index))
-                            .map(|field| field.label().to_string()),
-                        RenameTarget::BindGroup(bind_group_id) => self
-                            .project
-                            .bind_groups
-                            .get(bind_group_id)
-                            .map(|b| b.label.clone()),
-                        RenameTarget::Viewport(viewport_id) => self
-                            .project
-                            .viewports
-                            .get(viewport_id)
-                            .map(|t| t.label.clone()),
-                        RenameTarget::Shader(shader_id) => {
-                            self.project.shaders.get(shader_id).map(|s| s.label.clone())
-                        }
-                        RenameTarget::Camera(camera_id) => {
-                            self.project.cameras.get(camera_id).map(|c| c.label.clone())
-                        }
-                        RenameTarget::Dimension(dimension_id) => self
-                            .project
-                            .dimensions
-                            .get(dimension_id)
-                            .map(|d| d.label.clone()),
-                        RenameTarget::Sampler(sampler_id) => self
-                            .project
-                            .samplers
-                            .get(sampler_id)
-                            .map(|s| s.label().to_string()),
-                        RenameTarget::TextureView(texture_view_id) => self
-                            .project
-                            .texture_views
-                            .get(texture_view_id)
-                            .map(|t| t.label().to_string()),
+                            .map(|field| field.label()),
                     };
 
                     if let Some(current_name) = current_name {
                         self.rename_state = Some(RenameState {
                             target: rename_target,
-                            current_label: current_name,
+                            current_label: current_name.to_string(),
                         });
                     }
                 }
@@ -478,47 +469,47 @@ impl State {
                     self.rename_state = None;
                     match rename_target {
                         RenameTarget::Uniform(id) => {
-                            if let Some(uniform) = self.project.uniforms.get_mut(id) {
+                            if let Ok(uniform) = self.project.uniforms.get_mut(id) {
                                 uniform.label = new_name;
                             }
                         }
                         RenameTarget::UniformField(id, index) => {
-                            if let Some(uniform) = self.project.uniforms.get_mut(id) {
+                            if let Ok(uniform) = self.project.uniforms.get_mut(id) {
                                 uniform.set_field_label(index, new_name);
                             }
                         }
                         RenameTarget::BindGroup(id) => {
-                            if let Some(bind_group) = self.project.bind_groups.get_mut(id) {
+                            if let Ok(bind_group) = self.project.bind_groups.get_mut(id) {
                                 bind_group.label = new_name;
                             }
                         }
                         RenameTarget::Viewport(id) => {
-                            if let Some(viewport) = self.project.viewports.get_mut(id) {
+                            if let Ok(viewport) = self.project.viewports.get_mut(id) {
                                 viewport.label = new_name;
                             }
                         }
                         RenameTarget::Shader(id) => {
-                            if let Some(shader) = self.project.shaders.get_mut(id) {
+                            if let Ok(shader) = self.project.shaders.get_mut(id) {
                                 shader.label = new_name;
                             }
                         }
                         RenameTarget::Camera(id) => {
-                            if let Some(camera) = self.project.cameras.get_mut(id) {
+                            if let Ok(camera) = self.project.cameras.get_mut(id) {
                                 camera.label = new_name;
                             }
                         }
                         RenameTarget::Dimension(id) => {
-                            if let Some(dimension) = self.project.dimensions.get_mut(id) {
+                            if let Ok(dimension) = self.project.dimensions.get_mut(id) {
                                 dimension.label = new_name;
                             }
                         }
                         RenameTarget::Sampler(id) => {
-                            if let Some(sampler) = self.project.samplers.get_mut(id) {
+                            if let Ok(sampler) = self.project.samplers.get_mut(id) {
                                 sampler.set_label(new_name);
                             }
                         }
                         RenameTarget::TextureView(texture_view_id) => {
-                            if let Some(texture_view) =
+                            if let Ok(texture_view) =
                                 self.project.texture_views.get_mut(texture_view_id)
                             {
                                 texture_view.set_label(new_name);
@@ -527,7 +518,7 @@ impl State {
                     }
                 }
                 StateEvent::CreateUniformField(id, source) => {
-                    if let Some(uniform) = self.project.uniforms.get_mut(id) {
+                    if let Ok(uniform) = self.project.uniforms.get_mut(id) {
                         const DEFAULT_NAME: &str = "Field";
 
                         let index = uniform.fields().len();
@@ -541,23 +532,19 @@ impl State {
                     }
                 }
                 StateEvent::UpdateUniformFieldSource(uniform_id, index, source) => {
-                    if let Some(uniform) = self.project.uniforms.get_mut(uniform_id) {
+                    if let Ok(uniform) = self.project.uniforms.get_mut(uniform_id) {
                         uniform.set_field_source(index, source);
                     }
                 }
                 StateEvent::DeleteUniformField(id, index) => {
-                    if let Some(uniform) = self.project.uniforms.get_mut(id) {
+                    if let Ok(uniform) = self.project.uniforms.get_mut(id) {
                         uniform.remove_field(index);
                     }
                 }
                 StateEvent::ReorderUniformField(uniform_id, drag_update) => {
-                    if let Some(uniform) = self.project.uniforms.get_mut(uniform_id) {
+                    if let Ok(uniform) = self.project.uniforms.get_mut(uniform_id) {
                         uniform.reorder_field(drag_update.from, drag_update.to);
                     }
-                }
-                StateEvent::InspectShader(shader_id) => {
-                    self.inspector_tree_pane
-                        .add_inspector_pane(InspectorPane::Shader(shader_id));
                 }
                 StateEvent::CreateBindGroup => {
                     const DEFAULT_NAME: &str = "Bind Group";
@@ -567,7 +554,7 @@ impl State {
                         &self.device,
                         DEFAULT_NAME.to_string(),
                         vec![],
-                    );
+                    )?;
 
                     let bind_group_id = self.project.bind_groups.register(bind_group);
 
@@ -580,27 +567,27 @@ impl State {
                     self.project.bind_groups.unregister(bind_group_id);
                 }
                 StateEvent::CreateBindGroupEntry(id, resource) => {
-                    if let Some(bind_group) = self.project.bind_groups.get_mut(id) {
+                    if let Ok(bind_group) = self.project.bind_groups.get_mut(id) {
                         bind_group.add_entry(BindGroupEntry::new(resource));
                     }
                 }
                 StateEvent::DeleteBindGroupEntry(id, index) => {
-                    if let Some(bind_group) = self.project.bind_groups.get_mut(id) {
+                    if let Ok(bind_group) = self.project.bind_groups.get_mut(id) {
                         bind_group.remove_entry(index);
                     }
                 }
                 StateEvent::UpdateBindGroupEntry(id, index, resource) => {
-                    if let Some(bind_group) = self.project.bind_groups.get_mut(id) {
+                    if let Ok(bind_group) = self.project.bind_groups.get_mut(id) {
                         bind_group.update_entry(index, BindGroupEntry::new(resource));
                     }
                 }
                 StateEvent::ReorderBindGroupEntry(bind_group_id, drag_update) => {
-                    if let Some(bind_group) = self.project.bind_groups.get_mut(bind_group_id) {
+                    if let Ok(bind_group) = self.project.bind_groups.get_mut(bind_group_id) {
                         bind_group.reorder_entries(drag_update.from, drag_update.to);
                     }
                 }
                 StateEvent::ViewportEvent(viewport_id, viewport_event) => {
-                    if let Some(viewport) = self.project.viewports.get_mut(viewport_id) {
+                    if let Ok(viewport) = self.project.viewports.get_mut(viewport_id) {
                         match viewport_event {
                             ViewportEvent::Resize { size } => {
                                 // set the requested_ui_size so:
@@ -621,7 +608,7 @@ impl State {
                                 // problem of fighting when there are two viewports with different sizes for the same dimension.
                                 // this way, only one of them (the owner) will control the dimension size.
                                 if is_owner {
-                                    if let Some(dimension) =
+                                    if let Ok(dimension) =
                                         self.project.dimensions.get_mut(viewport.dimension_id)
                                     {
                                         dimension.size = size;
@@ -633,7 +620,7 @@ impl State {
                                 self.dimension_owners
                                     .insert(viewport.dimension_id, viewport_id);
                                 if let Some(ui_size) = viewport.requested_ui_size {
-                                    if let Some(dimension) =
+                                    if let Ok(dimension) =
                                         self.project.dimensions.get_mut(viewport.dimension_id)
                                     {
                                         dimension.size = ui_size;
@@ -641,21 +628,21 @@ impl State {
                                 }
                             }
                             ViewportEvent::Scroll { delta_y_px } => {
-                                if let Some(camera) =
+                                if let Ok(camera) =
                                     self.project.cameras.get_mut(viewport.controls_camera_id)
                                 {
                                     camera.input_mut().handle_scroll_pixels(delta_y_px);
                                 }
                             }
                             ViewportEvent::Drag { mouse_dx, mouse_dy } => {
-                                if let Some(camera) =
+                                if let Ok(camera) =
                                     self.project.cameras.get_mut(viewport.controls_camera_id)
                                 {
                                     camera.input_mut().handle_mouse(mouse_dx, mouse_dy);
                                 }
                             }
                             ViewportEvent::KeyboardKeys { keyboard_state } => {
-                                if let Some(camera) =
+                                if let Ok(camera) =
                                     self.project.cameras.get_mut(viewport.controls_camera_id)
                                 {
                                     camera.input_mut().handle_keyboard(keyboard_state);
@@ -663,10 +650,6 @@ impl State {
                             }
                         }
                     }
-                }
-                StateEvent::InspectCamera(camera_id) => {
-                    self.inspector_tree_pane
-                        .add_inspector_pane(InspectorPane::Camera(camera_id));
                 }
                 StateEvent::CreateCamera => {
                     const DEFAULT_NAME: &str = "Camera";
@@ -696,10 +679,6 @@ impl State {
                         current_label: DEFAULT_NAME.to_string(),
                     });
                 }
-                StateEvent::InspectDimension(dimension_id) => {
-                    self.inspector_tree_pane
-                        .add_inspector_pane(InspectorPane::Dimension(dimension_id));
-                }
                 StateEvent::DeleteDimension(dimension_id) => {
                     self.project.dimensions.unregister(dimension_id);
                 }
@@ -710,7 +689,7 @@ impl State {
                         &self.device,
                         DEFAULT_NAME.to_string(),
                         SamplerSpec::default(),
-                    );
+                    )?;
                     let sampler_id = self.project.samplers.register(sampler);
 
                     self.rename_state = Some(RenameState {
@@ -718,19 +697,12 @@ impl State {
                         current_label: DEFAULT_NAME.to_string(),
                     });
                 }
-                StateEvent::InspectSampler(sampler_id) => {
-                    self.inspector_tree_pane
-                        .add_inspector_pane(InspectorPane::Sampler(sampler_id));
-                }
                 StateEvent::DeleteSampler(sampler_id) => {
                     self.project.samplers.unregister(sampler_id);
                 }
-                StateEvent::InspectTextureView(texture_view_id) => {
-                    self.inspector_tree_pane
-                        .add_inspector_pane(InspectorPane::TextureView(texture_view_id));
-                }
             }
         }
+        Ok(())
     }
 }
 

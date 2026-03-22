@@ -7,7 +7,7 @@ use crate::{
 
 impl StateSnapshot<'_> {
     pub fn dimension_inspector_ui(&mut self, ui: &mut egui::Ui, dimension_id: DimensionId) {
-        let Some(dimension) = self.project.dimensions.get_mut(dimension_id) else {
+        let Ok(dimension) = self.project.dimensions.get_mut(dimension_id) else {
             ui.label("Dimension couldn't be found.");
             return;
         };

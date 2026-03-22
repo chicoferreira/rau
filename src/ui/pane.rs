@@ -1,9 +1,11 @@
 use crate::{
+    error::SourcedError,
     project::{self},
     state,
     ui::{
         panels::{
-            inspector_pane::InspectorTreePane, project_tree_panel, viewport_pane::ViewportTreePane,
+            error_panel, inspector_pane::InspectorTreePane, project_tree_panel,
+            viewport_pane::ViewportTreePane,
         },
         rename::RenameState,
     },
@@ -13,6 +15,7 @@ pub struct StateSnapshot<'a> {
     pub pending_events: &'a mut Vec<state::StateEvent>,
     pub project: &'a mut project::Project,
     pub rename_state: &'a mut Option<RenameState>,
+    pub errors: &'a Vec<SourcedError>,
 }
 
 impl StateSnapshot<'_> {
@@ -22,6 +25,19 @@ impl StateSnapshot<'_> {
         inspector_tree_pane: &mut InspectorTreePane,
         viewport_tree_pane: &mut ViewportTreePane,
     ) {
+        egui::Panel::top("top_panel").show_inside(ui, |ui| {
+            egui::MenuBar::new().ui(ui, |ui| {
+                ui.menu_button("Rau", |ui| {
+                    if ui.button("Settings").clicked() {}
+                    if ui.button("Quit").clicked() {}
+                });
+
+                ui.menu_button("Project", |ui| if ui.button("New").clicked() {});
+            });
+        });
+
+        error_panel::ui(self, ui);
+
         egui::Panel::left("project_tree_panel")
             .frame(egui::Frame::new().inner_margin(0))
             .resizable(true)

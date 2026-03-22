@@ -16,10 +16,12 @@ path = "src/main.rs"
 anyhow = "1.0.100"
 bytemuck = { version = "1.24.0", features = ["derive"] }
 cgmath = "0.18.0"
+derive_more = { version = "2.1.1", features = ["from"] }
 egui = "0.33.3"
 egui-wgpu = "0.33.3"
 egui-winit = { version = "0.33.3", default-features = false }
 egui_dnd = "0.14.0"
+egui_table = "0.7.0"
 egui_ltreeview = "0.6.1"
 egui_tiles = "0.14.1"
 enumset = "1.1.10"

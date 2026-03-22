@@ -4,6 +4,7 @@ use anyhow::Context;
 use wgpu::util::DeviceExt;
 
 use crate::{
+    error::{AppError, AppResult},
     model,
     project::{
         self, Project, SamplerId, TextureViewId,
@@ -49,8 +50,10 @@ pub async fn load_texture(
     ctx: &TextureCreationContext<'_>,
     file_name: &str,
     is_normal_map: bool,
-) -> anyhow::Result<Texture> {
-    let data = load_binary(file_name).await?;
+) -> AppResult<Texture> {
+    let data = load_binary(file_name)
+        .await
+        .map_err(AppError::FileLoadError)?;
     let img = image::load_from_memory(&data)?;
 
     let format = match is_normal_map {
@@ -66,7 +69,7 @@ pub async fn load_texture(
         format,
         wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
         source,
-    ))
+    )?)
 }
 
 fn create_material_bind_group(
@@ -76,7 +79,7 @@ fn create_material_bind_group(
     diffuse_texture_view_id: TextureViewId,
     normal_texture_view_id: TextureViewId,
     sampler_id: SamplerId,
-) -> BindGroup {
+) -> AppResult<BindGroup> {
     let entries = vec![
         // TODO: Remove the duplicated sampler
         BindGroupEntry::new(BindGroupResource::Texture {
@@ -109,8 +112,10 @@ pub async fn load_model(
     device: &wgpu::Device,
     queue: &wgpu::Queue,
     sampler_id: SamplerId,
-) -> anyhow::Result<model::Model> {
-    let obj_text = load_string(file_name).await?;
+) -> AppResult<model::Model> {
+    let obj_text = load_string(file_name)
+        .await
+        .map_err(AppError::FileLoadError)?;
     let obj_bytes = obj_text.as_bytes();
 
     let (models, obj_materials) = tobj::futures::load_obj_buf(
@@ -150,7 +155,7 @@ pub async fn load_model(
             diffuse_texture_id,
             None,
             None,
-        ));
+        )?);
 
         let normal_texture = load_texture(&ctx, &m.normal_texture.unwrap(), true).await?;
 
@@ -165,7 +170,7 @@ pub async fn load_model(
             normal_texture_id,
             None,
             None,
-        ));
+        )?);
 
         let material_bind_group = create_material_bind_group(
             project,
@@ -174,7 +179,7 @@ pub async fn load_model(
             diffuse_texture_view_id,
             normal_texture_view_id,
             sampler_id,
-        );
+        )?;
 
         let material_bind_group_id = project.bind_groups.register(material_bind_group);
 

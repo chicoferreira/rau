@@ -1,4 +1,5 @@
 use crate::{
+    error::AppResult,
     model,
     project::{self, BindGroupId},
 };
@@ -8,10 +9,15 @@ pub struct RenderPassSpecSet<'a> {
 }
 
 impl RenderPassSpecSet<'_> {
-    pub fn submit(&self, encoder: &mut wgpu::CommandEncoder, project: &project::Project) {
+    pub fn submit(
+        &self,
+        encoder: &mut wgpu::CommandEncoder,
+        project: &project::Project,
+    ) -> AppResult<()> {
         for pass in &self.render_passes {
-            pass.submit(encoder, project);
+            pass.submit(encoder, project)?;
         }
+        Ok(())
     }
 }
 
@@ -23,11 +29,14 @@ pub struct RenderPassSpec<'a> {
 }
 
 impl RenderPassSpec<'_> {
-    pub fn submit(&self, encoder: &mut wgpu::CommandEncoder, project: &project::Project) {
+    pub fn submit(
+        &self,
+        encoder: &mut wgpu::CommandEncoder,
+        project: &project::Project,
+    ) -> AppResult<()> {
         let viewport_texture_view = project
             .texture_views
-            .get(self.target_spec.texture_view_id)
-            .expect("deal with this later");
+            .get(self.target_spec.texture_view_id)?;
 
         let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: self.label,
@@ -58,6 +67,7 @@ impl RenderPassSpec<'_> {
         for pipeline in &self.pipelines {
             pipeline.draw(&mut render_pass, project);
         }
+        Ok(())
     }
 }
 

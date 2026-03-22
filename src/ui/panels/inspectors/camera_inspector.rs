@@ -11,7 +11,7 @@ use crate::{
 
 impl StateSnapshot<'_> {
     pub fn camera_inspector_ui(&mut self, ui: &mut egui::Ui, camera_id: CameraId) {
-        let Some(camera) = self.project.cameras.get_mut(camera_id) else {
+        let Ok(camera) = self.project.cameras.get_mut(camera_id) else {
             ui.label("Camera couldn't be found.");
             return;
         };

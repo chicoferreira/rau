@@ -5,12 +5,15 @@ pub mod camera;
 #[cfg(test)]
 mod tests;
 
-use crate::project::{
-    CameraId, UniformId,
-    camera::Camera,
-    recreate::{ProjectEvent, Recreatable, RecreateTracker},
-    storage::Storage,
-    uniform::camera::CameraField,
+use crate::{
+    error::{AppResult, WgpuErrorScope},
+    project::{
+        CameraId, UniformId,
+        camera::Camera,
+        recreate::{ProjectEvent, Recreatable, RecreateTracker},
+        storage::Storage,
+        uniform::camera::CameraField,
+    },
 };
 
 pub struct UniformCreationContext<'a> {
@@ -71,24 +74,31 @@ impl Uniform {
         device: &wgpu::Device,
         label: impl Into<String>,
         fields: Vec<UniformField>,
-    ) -> Uniform {
+    ) -> AppResult<Uniform> {
         let label = label.into();
         let content = cast_fields(&fields);
-        let buffer = Self::create_buffer(device, &label, &content);
-        Uniform {
+        let buffer = Self::create_buffer(device, &label, &content)?;
+        Ok(Uniform {
             label,
             fields,
             buffer,
             dirty: false,
-        }
+        })
     }
 
-    fn create_buffer(device: &wgpu::Device, label: &str, contents: &[u8]) -> wgpu::Buffer {
-        device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+    fn create_buffer(
+        device: &wgpu::Device,
+        label: &str,
+        contents: &[u8],
+    ) -> AppResult<wgpu::Buffer> {
+        let scope = WgpuErrorScope::push(device);
+        let buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some(label),
             contents,
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-        })
+        });
+        scope.pop()?;
+        Ok(buffer)
     }
 
     pub fn buffer(&self) -> &wgpu::Buffer {
@@ -162,14 +172,14 @@ impl Recreatable for Uniform {
         id: Self::Id,
         ctx: &mut Self::Context<'a>,
         tracker: &RecreateTracker,
-    ) -> Option<ProjectEvent> {
+    ) -> AppResult<Option<ProjectEvent>> {
         let mut content_changed = false;
         for field in &mut self.fields {
-            content_changed |= field.refresh(&tracker, ctx);
+            content_changed |= field.refresh(&tracker, ctx)?;
         }
 
         if !self.dirty && !content_changed {
-            return None;
+            return Ok(None);
         }
 
         let content = cast_fields(&self.fields);
@@ -177,11 +187,11 @@ impl Recreatable for Uniform {
         self.dirty = false;
 
         if self.buffer.size() != content.len() as wgpu::BufferAddress {
-            self.buffer = Self::create_buffer(ctx.device, &self.label, &content);
-            Some(ProjectEvent::UniformRecreated(id))
+            self.buffer = Self::create_buffer(ctx.device, &self.label, &content)?;
+            Ok(Some(ProjectEvent::UniformRecreated(id)))
         } else {
             ctx.queue.write_buffer(&self.buffer, 0, &content);
-            None
+            Ok(None)
         }
     }
 }
@@ -232,31 +242,29 @@ impl UniformField {
         &mut self,
         recreate_tracker: &RecreateTracker,
         context: &mut UniformCreationContext<'_>,
-    ) -> bool {
+    ) -> AppResult<bool> {
         match &mut self.source {
-            UniformFieldSource::UserDefined(_) => false, // Nothing to refresh
+            UniformFieldSource::UserDefined(_) => Ok(false), // Nothing to refresh
             UniformFieldSource::Camera {
                 camera_id,
                 field,
                 current_value,
             } => {
                 let Some(camera_id) = *camera_id else {
-                    return false;
+                    return Ok(false);
                 };
 
                 if !self.dirty && !recreate_tracker.happened(ProjectEvent::CameraUpdated(camera_id))
                 {
-                    return false;
+                    return Ok(false);
                 }
 
-                let Some(camera) = context.cameras.get(camera_id) else {
-                    return false;
-                };
+                let camera = context.cameras.get(camera_id)?;
 
                 self.dirty = false;
 
                 *current_value = field.compute(camera);
-                true
+                Ok(true)
             }
         }
     }

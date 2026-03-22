@@ -1,9 +1,8 @@
 use crate::{
-    project::{
+    error::AppResult, project::{
         self, BindGroupId, SamplerId, TextureViewId,
         bindgroup::{BindGroup, BindGroupEntry, BindGroupResource},
-    },
-    state,
+    }, state
 };
 
 pub struct HdrPipeline {
@@ -21,7 +20,7 @@ impl HdrPipeline {
         output_format: wgpu::TextureFormat,
         sampler_id: SamplerId,
         hdr_shader_id: project::ShaderId,
-    ) -> anyhow::Result<Self> {
+    ) -> AppResult<Self> {
         let bind_group = BindGroup::new(
             project,
             device,
@@ -37,7 +36,7 @@ impl HdrPipeline {
                     sampler_binding_type: wgpu::SamplerBindingType::Filtering,
                 }),
             ],
-        );
+        )?;
 
         let shader = project.shaders.get(hdr_shader_id).unwrap();
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {

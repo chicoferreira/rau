@@ -1,5 +1,9 @@
-use crate::project::{
-    BindGroupId, CameraId, SamplerId, TextureId, TextureViewId, UniformId, storage::Storage,
+use crate::{
+    error::{AppResult, SourcedError},
+    project::{
+        BindGroupId, CameraId, ProjectResourceId, SamplerId, TextureId, TextureViewId, UniformId,
+        storage::Storage,
+    },
 };
 
 pub struct RecreateTracker {
@@ -25,7 +29,7 @@ pub trait Recreatable {
         id: Self::Id,
         ctx: &mut Self::Context<'a>,
         tracker: &RecreateTracker,
-    ) -> Option<ProjectEvent>;
+    ) -> AppResult<Option<ProjectEvent>>;
 }
 
 impl RecreateTracker {
@@ -38,24 +42,31 @@ impl RecreateTracker {
         id: R::Id,
         object: &mut R,
         mut project: &mut R::Context<'ctx>,
-    ) {
-        let recreate_result = object.recreate(id, &mut project, self);
+    ) -> AppResult<()> {
+        let recreate_result = object.recreate(id, &mut project, self)?;
         if let Some(event) = recreate_result {
             log::debug!("Recreated: {:?}", event);
             self.events.push(event);
         }
+        Ok(())
     }
 
     pub fn recreate_storage<'ctx, R: Recreatable>(
         &mut self,
         storage: &mut Storage<R::Id, R>,
         project: &mut R::Context<'ctx>,
-    ) where
-        R::Id: slotmap::Key,
+    ) -> Vec<SourcedError>
+    where
+        R::Id: slotmap::Key + Into<ProjectResourceId>,
     {
+        let mut errors = Vec::new();
         for (id, object) in storage.list_mut() {
-            self.recreate_if_needed(id, object, project);
+            if let Err(err) = self.recreate_if_needed(id, object, project) {
+                let err = SourcedError::new(id.into(), err);
+                errors.push(err);
+            }
         }
+        errors
     }
 
     pub fn happened(&self, object_id: impl Into<ProjectEvent>) -> bool {

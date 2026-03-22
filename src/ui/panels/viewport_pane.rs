@@ -59,11 +59,10 @@ impl<'a> egui_tiles::Behavior<ViewportPane> for StateSnapshot<'a> {
         _tile_id: egui_tiles::TileId,
         pane: &mut ViewportPane,
     ) -> egui_tiles::UiResponse {
-        let viewport = self
-            .project
-            .viewports
-            .get(pane.viewport_id)
-            .expect("texture must exist");
+        let Ok(viewport) = self.project.viewports.get(pane.viewport_id) else {
+            ui.label("Viewport couldn't be found.");
+            return egui_tiles::UiResponse::None;
+        };
 
         let events = crate::ui::components::viewport::ui(
             ui,

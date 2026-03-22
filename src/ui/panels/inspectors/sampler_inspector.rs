@@ -70,7 +70,7 @@ fn compare_function_label(compare: Option<wgpu::CompareFunction>) -> &'static st
 
 impl StateSnapshot<'_> {
     pub fn sampler_inspector_ui(&mut self, ui: &mut egui::Ui, sampler_id: SamplerId) {
-        let Some(sampler) = self.project.samplers.get_mut(sampler_id) else {
+        let Ok(sampler) = self.project.samplers.get_mut(sampler_id) else {
             ui.label("Sampler couldn't be found.");
             return;
         };

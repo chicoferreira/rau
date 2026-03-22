@@ -3,6 +3,7 @@ use std::f32::consts::FRAC_PI_2;
 use cgmath::{Deg, InnerSpace, Matrix4, Point3, Rad, SquareMatrix, Vector3, Zero};
 
 use crate::{
+    error::AppResult,
     key::{Key, KeyboardState},
     project::{
         CameraId, DimensionId,
@@ -303,7 +304,7 @@ impl Recreatable for Camera {
         id: Self::Id,
         ctx: &mut Self::Context<'a>,
         _tracker: &RecreateTracker,
-    ) -> Option<ProjectEvent> {
+    ) -> AppResult<Option<ProjectEvent>> {
         let mut event = None;
 
         let (position, yaw, pitch) = (self.position, self.yaw, self.pitch);
@@ -318,7 +319,7 @@ impl Recreatable for Camera {
         }
 
         let new_aspect = if let Some(dimension_id) = self.dimension_id
-            && let Some(dimension) = ctx.dimensions.get(dimension_id)
+            && let Ok(dimension) = ctx.dimensions.get(dimension_id)
         {
             dimension.size.width() as f32 / dimension.size.height() as f32
         } else {
@@ -342,7 +343,7 @@ impl Recreatable for Camera {
             );
         }
 
-        event
+        Ok(event)
     }
 }
 

@@ -1,8 +1,11 @@
 use std::io::Cursor;
 
-use crate::project::{
-    Project, ShaderId, TextureId,
-    texture::{Texture, TextureCreationContext, TextureSource},
+use crate::{
+    error::AppResult,
+    project::{
+        Project, ShaderId, TextureId,
+        texture::{Texture, TextureCreationContext, TextureSource},
+    },
 };
 
 pub struct HdrLoader {
@@ -16,7 +19,7 @@ impl HdrLoader {
         device: &wgpu::Device,
         project: &Project,
         equirectangular_shader_id: ShaderId,
-    ) -> anyhow::Result<Self> {
+    ) -> AppResult<Self> {
         let shader = project.shaders.get(equirectangular_shader_id).unwrap();
         let module = shader.create_wgpu_shader_module(device)?;
         let texture_format = wgpu::TextureFormat::Rgba32Float;
@@ -76,7 +79,7 @@ impl HdrLoader {
         queue: &wgpu::Queue,
         data: &[u8],
         dst_size: u32,
-    ) -> anyhow::Result<TextureId> {
+    ) -> AppResult<TextureId> {
         let hdr_decoder = image::codecs::hdr::HdrDecoder::new(Cursor::new(data))?;
         let meta = hdr_decoder.metadata();
 
@@ -154,7 +157,7 @@ impl HdrLoader {
                     depth_or_array_layers: 6,
                 },
             },
-        );
+        )?;
 
         // we can create without adding to the project because this D2Array will be only used by the shader
         let dst_texture_view = dst_texture

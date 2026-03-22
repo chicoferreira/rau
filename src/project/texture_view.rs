@@ -1,4 +1,5 @@
 use crate::{
+    error::{AppResult, WgpuErrorScope},
     project::{
         TextureId, TextureViewId,
         recreate::{ProjectEvent, Recreatable, RecreateTracker},
@@ -22,6 +23,7 @@ pub struct TextureView {
     inner: wgpu::TextureView,
     egui_id: Option<egui::TextureId>,
     dirty: bool,
+    has_error: bool,
 }
 
 /// As currently the texture view format is only allowed to change by srgb-ness
@@ -47,16 +49,16 @@ impl TextureView {
         texture_id: TextureId,
         format: Option<TextureViewFormat>,
         dimension: Option<wgpu::TextureViewDimension>,
-    ) -> TextureView {
-        let texture = ctx.textures.get(texture_id).expect("deal with this later");
-        let inner = Self::create_view(&label, texture, format, dimension);
+    ) -> AppResult<TextureView> {
+        let texture = ctx.textures.get(texture_id)?;
+        let inner = Self::create_view(&label, ctx.device, texture, format, dimension)?;
 
         let egui_id = (ALLOWED_EGUI_FORMATS.contains(&texture.format())).then(|| {
             ctx.egui_renderer
                 .register_egui_texture(ctx.device, &inner, wgpu::FilterMode::Linear)
         });
 
-        TextureView {
+        Ok(TextureView {
             label,
             format,
             dimension,
@@ -64,7 +66,8 @@ impl TextureView {
             inner,
             egui_id,
             dirty: false,
-        }
+            has_error: false,
+        })
     }
 
     pub fn inner(&self) -> &wgpu::TextureView {
@@ -115,21 +118,26 @@ impl TextureView {
 
     fn create_view(
         label: &str,
+        device: &wgpu::Device,
         texture: &Texture,
         format: Option<TextureViewFormat>,
         dimension: Option<wgpu::TextureViewDimension>,
-    ) -> wgpu::TextureView {
+    ) -> AppResult<wgpu::TextureView> {
+        let scope = WgpuErrorScope::push(device);
         let wgpu_format = format.as_ref().map(|format| match format {
             TextureViewFormat::Srgb => texture.format().add_srgb_suffix(),
             TextureViewFormat::Linear => texture.format().remove_srgb_suffix(),
         });
 
-        texture.inner().create_view(&wgpu::TextureViewDescriptor {
+        let view = texture.inner().create_view(&wgpu::TextureViewDescriptor {
             label: Some(&label),
             format: wgpu_format,
             dimension,
             ..Default::default()
-        })
+        });
+        scope.pop()?;
+
+        Ok(view)
     }
 }
 
@@ -142,17 +150,24 @@ impl Recreatable for TextureView {
         id: Self::Id,
         context: &mut Self::Context<'a>,
         tracker: &RecreateTracker,
-    ) -> Option<ProjectEvent> {
-        if !self.dirty && !tracker.happened(ProjectEvent::TextureRecreated(self.texture_id)) {
-            return None;
+    ) -> AppResult<Option<ProjectEvent>> {
+        if !self.dirty
+            && !self.has_error
+            && !tracker.happened(ProjectEvent::TextureRecreated(self.texture_id))
+        {
+            return Ok(None);
         }
 
-        let texture = context
-            .textures
-            .get(self.texture_id)
-            .expect("deal with this later");
+        let texture = context.textures.get(self.texture_id)?;
 
-        self.inner = Self::create_view(&self.label, texture, self.format, self.dimension);
+        self.inner = Self::create_view(
+            &self.label,
+            context.device,
+            texture,
+            self.format,
+            self.dimension,
+        )
+        .inspect_err(|_| self.has_error = true)?;
 
         let has_correct_format = ALLOWED_EGUI_FORMATS.contains(&texture.format());
 
@@ -178,8 +193,9 @@ impl Recreatable for TextureView {
             (None, false) => None,
         };
 
+        self.has_error = false;
         self.dirty = false;
 
-        Some(ProjectEvent::TextureViewRecreated(id))
+        Ok(Some(ProjectEvent::TextureViewRecreated(id)))
     }
 }

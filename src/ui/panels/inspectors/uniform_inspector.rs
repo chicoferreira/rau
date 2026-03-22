@@ -53,7 +53,7 @@ impl UniformFieldSourceKind {
 
 impl StateSnapshot<'_> {
     pub fn uniform_inspector_ui(&mut self, uniform_id: UniformId, ui: &mut egui::Ui) {
-        let Some(uniform) = self.project.uniforms.get(uniform_id) else {
+        let Ok(uniform) = self.project.uniforms.get(uniform_id) else {
             ui.label("Uniform couldn't be found.");
             return;
         };

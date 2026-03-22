@@ -1,4 +1,5 @@
 use crate::{
+    error::AppResult,
     project::{
         CameraId, DimensionId, TextureViewId, ViewportId,
         recreate::{ProjectEvent, Recreatable, RecreateTracker},
@@ -32,13 +33,10 @@ impl Viewport {
         texture_view_id: TextureViewId,
         dimension_id: DimensionId,
         controls_camera_id: CameraId,
-    ) -> Viewport {
+    ) -> AppResult<Viewport> {
         let name = label.into();
 
-        let texture_view = context
-            .texture_views
-            .get(texture_view_id)
-            .expect("deal with this later");
+        let texture_view = context.texture_views.get(texture_view_id)?;
 
         let egui_id = context.egui_renderer.register_egui_texture(
             context.device,
@@ -46,7 +44,7 @@ impl Viewport {
             wgpu::FilterMode::Linear,
         );
 
-        Viewport {
+        Ok(Viewport {
             label: name,
             texture_view_id,
             dimension_id,
@@ -54,7 +52,7 @@ impl Viewport {
             egui_id,
             requested_ui_size: None,
             dirty: false,
-        }
+        })
     }
 
     pub fn egui_id(&self) -> egui::TextureId {
@@ -71,15 +69,15 @@ impl Recreatable for Viewport {
         _id: Self::Id,
         ctx: &mut Self::Context<'a>,
         tracker: &RecreateTracker,
-    ) -> Option<ProjectEvent> {
+    ) -> AppResult<Option<ProjectEvent>> {
         if !self.dirty
             && !tracker.happened(ProjectEvent::TextureViewRecreated(self.texture_view_id))
         {
-            return None;
+            return Ok(None);
         }
-        let Some(texture_view) = ctx.texture_views.get(self.texture_view_id) else {
-            return None;
-        };
+
+        let texture_view = ctx.texture_views.get(self.texture_view_id)?;
+        self.dirty = false;
 
         ctx.egui_renderer.update_egui_texture(
             ctx.device,
@@ -87,6 +85,6 @@ impl Recreatable for Viewport {
             wgpu::FilterMode::Linear,
             self.egui_id,
         );
-        None
+        Ok(None)
     }
 }

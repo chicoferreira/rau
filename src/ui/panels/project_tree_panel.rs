@@ -65,7 +65,7 @@ pub fn ui(state: &mut StateSnapshot, ui: &mut egui::Ui) -> Response {
             for (id, uniform) in state.project.uniforms.list() {
                 let node = ProjectLeafNode::new(TreeNodeId::Uniform(id), &uniform.label)
                     .with_rename_target(RenameTarget::Uniform(id))
-                    .with_inspect_event(StateEvent::InspectUniform(id))
+                    .with_inspect_event(StateEvent::InspectResource(id.into()))
                     .with_create_event(StateEvent::CreateUniform, "Create New Uniform")
                     .with_delete_event(StateEvent::DeleteUniform(id))
                     .build(state.pending_events, state.rename_state);
@@ -83,7 +83,7 @@ pub fn ui(state: &mut StateSnapshot, ui: &mut egui::Ui) -> Response {
             for (id, bind_group) in state.project.bind_groups.list() {
                 let node = ProjectLeafNode::new(TreeNodeId::BindGroup(id), &bind_group.label)
                     .with_rename_target(RenameTarget::BindGroup(id))
-                    .with_inspect_event(StateEvent::InspectBindGroup(id))
+                    .with_inspect_event(StateEvent::InspectResource(id.into()))
                     .with_create_event(StateEvent::CreateBindGroup, "Create New Bind Group")
                     .with_delete_event(StateEvent::DeleteBindGroup(id))
                     .build(state.pending_events, state.rename_state);
@@ -106,7 +106,7 @@ pub fn ui(state: &mut StateSnapshot, ui: &mut egui::Ui) -> Response {
             for (id, shader) in state.project.shaders.list() {
                 let node = ProjectLeafNode::new(TreeNodeId::Shader(id), &shader.label)
                     .with_rename_target(RenameTarget::Shader(id))
-                    .with_inspect_event(StateEvent::InspectShader(id))
+                    .with_inspect_event(StateEvent::InspectResource(id.into()))
                     .build(state.pending_events, state.rename_state);
 
                 builder.node(node);
@@ -123,7 +123,7 @@ pub fn ui(state: &mut StateSnapshot, ui: &mut egui::Ui) -> Response {
             for (id, camera) in state.project.cameras.list() {
                 let node = ProjectLeafNode::new(TreeNodeId::Camera(id), &camera.label)
                     .with_rename_target(RenameTarget::Camera(id))
-                    .with_inspect_event(StateEvent::InspectCamera(id))
+                    .with_inspect_event(StateEvent::InspectResource(id.into()))
                     .with_create_event(StateEvent::CreateCamera, "Create New Camera")
                     .with_delete_event(StateEvent::DeleteCamera(id))
                     .build(state.pending_events, state.rename_state);
@@ -142,7 +142,7 @@ pub fn ui(state: &mut StateSnapshot, ui: &mut egui::Ui) -> Response {
             for (id, dimension) in state.project.dimensions.list() {
                 let node = ProjectLeafNode::new(TreeNodeId::Dimension(id), &dimension.label)
                     .with_rename_target(RenameTarget::Dimension(id))
-                    .with_inspect_event(StateEvent::InspectDimension(id))
+                    .with_inspect_event(StateEvent::InspectResource(id.into()))
                     .with_create_event(StateEvent::CreateDimension, "Create New Dimension")
                     .with_delete_event(StateEvent::DeleteDimension(id))
                     .build(state.pending_events, state.rename_state);
@@ -161,7 +161,7 @@ pub fn ui(state: &mut StateSnapshot, ui: &mut egui::Ui) -> Response {
             for (id, sampler) in state.project.samplers.list() {
                 let node = ProjectLeafNode::new(TreeNodeId::Sampler(id), sampler.label())
                     .with_rename_target(RenameTarget::Sampler(id))
-                    .with_inspect_event(StateEvent::InspectSampler(id))
+                    .with_inspect_event(StateEvent::InspectResource(id.into()))
                     .with_create_event(StateEvent::CreateSampler, "Create New Sampler")
                     .with_delete_event(StateEvent::DeleteSampler(id))
                     .build(state.pending_events, state.rename_state);
@@ -174,7 +174,7 @@ pub fn ui(state: &mut StateSnapshot, ui: &mut egui::Ui) -> Response {
             for (id, texture_view) in state.project.texture_views.list() {
                 let node = ProjectLeafNode::new(TreeNodeId::TextureView(id), texture_view.label())
                     .with_rename_target(RenameTarget::TextureView(id))
-                    .with_inspect_event(StateEvent::InspectTextureView(id))
+                    .with_inspect_event(StateEvent::InspectResource(id.into()))
                     // .with_create_event(StateEvent::CreateViewport, "Create New Viewport")
                     // .with_delete_event(StateEvent::DeleteViewport(id))
                     .build(state.pending_events, state.rename_state);
@@ -188,35 +188,15 @@ pub fn ui(state: &mut StateSnapshot, ui: &mut egui::Ui) -> Response {
         match action {
             Action::Activate(activate) => {
                 for node in activate.selected {
-                    match node {
-                        TreeNodeId::Uniform(id) => {
-                            state.pending_events.push(StateEvent::InspectUniform(id));
-                        }
-                        TreeNodeId::BindGroup(id) => {
-                            state.pending_events.push(StateEvent::InspectBindGroup(id));
-                        }
-                        TreeNodeId::Viewport(id) => {
-                            state.pending_events.push(StateEvent::OpenViewport(id));
-                        }
-                        TreeNodeId::Shader(id) => {
-                            state.pending_events.push(StateEvent::InspectShader(id));
-                        }
-                        TreeNodeId::Camera(camera_id) => {
-                            state
-                                .pending_events
-                                .push(StateEvent::InspectCamera(camera_id));
-                        }
-                        TreeNodeId::Dimension(id) => {
-                            state.pending_events.push(StateEvent::InspectDimension(id));
-                        }
-                        TreeNodeId::Sampler(id) => {
-                            state.pending_events.push(StateEvent::InspectSampler(id));
-                        }
-                        TreeNodeId::TextureView(texture_view_id) => {
-                            state
-                                .pending_events
-                                .push(StateEvent::InspectTextureView(texture_view_id));
-                        }
+                    let event = match node {
+                        TreeNodeId::Viewport(id) => Some(StateEvent::OpenViewport(id)),
+                        TreeNodeId::Uniform(id) => Some(StateEvent::InspectResource(id.into())),
+                        TreeNodeId::BindGroup(id) => Some(StateEvent::InspectResource(id.into())),
+                        TreeNodeId::Shader(id) => Some(StateEvent::InspectResource(id.into())),
+                        TreeNodeId::Camera(id) => Some(StateEvent::InspectResource(id.into())),
+                        TreeNodeId::Dimension(id) => Some(StateEvent::InspectResource(id.into())),
+                        TreeNodeId::Sampler(id) => Some(StateEvent::InspectResource(id.into())),
+                        TreeNodeId::TextureView(id) => Some(StateEvent::InspectResource(id.into())),
                         TreeNodeId::UniformFolder
                         | TreeNodeId::BindGroupFolder
                         | TreeNodeId::ViewportFolder
@@ -224,7 +204,11 @@ pub fn ui(state: &mut StateSnapshot, ui: &mut egui::Ui) -> Response {
                         | TreeNodeId::CameraFolder
                         | TreeNodeId::DimensionFolder
                         | TreeNodeId::SamplerFolder
-                        | TreeNodeId::TextureViewFolder => {}
+                        | TreeNodeId::TextureViewFolder => None,
+                    };
+
+                    if let Some(event) = event {
+                        state.pending_events.push(event);
                     }
                 }
             }

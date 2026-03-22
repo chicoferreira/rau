@@ -23,7 +23,7 @@ use crate::{
 
 impl StateSnapshot<'_> {
     pub fn bind_group_inspector_ui(&mut self, bind_group_id: BindGroupId, ui: &mut egui::Ui) {
-        let Some(bind_group) = self.project.bind_groups.get(bind_group_id) else {
+        let Ok(bind_group) = self.project.bind_groups.get(bind_group_id) else {
             ui.label("Bind group not found");
             return;
         };

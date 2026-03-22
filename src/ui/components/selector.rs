@@ -1,9 +1,14 @@
 use egui::WidgetText;
 use slotmap::Key;
 
-use crate::project::storage::Storage;
+use crate::project::{ProjectResourceId, storage::Storage};
 
-pub fn selectable_value_storage<'a, Id: Key + 'a, V: 'a, W: Into<WidgetText> + 'a>(
+pub fn selectable_value_storage<
+    'a,
+    Id: Key + 'a + Into<ProjectResourceId>,
+    V: 'a,
+    W: Into<WidgetText> + 'a,
+>(
     ui: &mut egui::Ui,
     id_salt: impl std::hash::Hash,
     current_value: &mut Option<Id>,
@@ -13,8 +18,8 @@ pub fn selectable_value_storage<'a, Id: Key + 'a, V: 'a, W: Into<WidgetText> + '
     let selected_text: WidgetText = match current_value {
         None => "Empty".into(),
         Some(id) => match options.get(*id) {
-            Some(value) => format_value(*id, value).into(),
-            None => format!("Unknown {id:?}").into(),
+            Ok(value) => format_value(*id, value).into(),
+            Err(_) => format!("Unknown {id:?}").into(),
         },
     };
 

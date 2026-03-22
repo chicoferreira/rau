@@ -1,10 +1,14 @@
 use image::GenericImageView;
+use pollster::FutureExt;
 
-use crate::project::{
-    DimensionId, TextureId,
-    dimension::Dimension,
-    recreate::{ProjectEvent, Recreatable, RecreateTracker},
-    storage::Storage,
+use crate::{
+    error::AppResult,
+    project::{
+        DimensionId, TextureId,
+        dimension::Dimension,
+        recreate::{ProjectEvent, Recreatable, RecreateTracker},
+        storage::Storage,
+    },
 };
 
 #[derive(Clone, Copy)]
@@ -23,6 +27,7 @@ pub struct Texture {
     source: TextureSource,
     inner: wgpu::Texture,
     dirty: bool,
+    has_error: bool,
 }
 
 pub enum TextureSource {
@@ -39,16 +44,19 @@ impl Texture {
         format: wgpu::TextureFormat,
         usage: wgpu::TextureUsages,
         source: TextureSource,
-    ) -> Texture {
-        let inner = Self::create_texture(project, &label, format, usage, &source);
-        Texture {
+    ) -> AppResult<Texture> {
+        // TODO: this shoulnd't error on texture creation
+        let inner = Self::create_texture(project, &label, format, usage, &source)?;
+
+        Ok(Texture {
             label,
             format,
             usage,
             source,
             inner,
+            has_error: false,
             dirty: false,
-        }
+        })
     }
 
     pub fn inner(&self) -> &wgpu::Texture {
@@ -65,7 +73,8 @@ impl Texture {
         format: wgpu::TextureFormat,
         usage: wgpu::TextureUsages,
         source: &TextureSource,
-    ) -> wgpu::Texture {
+    ) -> AppResult<wgpu::Texture> {
+        let scope = ctx.device.push_error_scope(wgpu::ErrorFilter::Validation);
         let non_srgb_format = format.remove_srgb_suffix();
         let srgb_format = format.add_srgb_suffix();
         let view_formats = if srgb_format != non_srgb_format {
@@ -77,11 +86,7 @@ impl Texture {
 
         let size = match source {
             TextureSource::Dimension(dimension_id) => {
-                let size = ctx
-                    .dimensions
-                    .get(*dimension_id)
-                    .expect("deal with this later")
-                    .size;
+                let size = ctx.dimensions.get(*dimension_id)?.size;
 
                 wgpu::Extent3d {
                     width: size.width(),
@@ -131,7 +136,9 @@ impl Texture {
             );
         }
 
-        texture
+        scope.pop().block_on().map_or(Ok(()), |e| Err(e))?;
+
+        Ok(texture)
     }
 }
 
@@ -144,12 +151,12 @@ impl Recreatable for Texture {
         id: Self::Id,
         ctx: &mut Self::Context<'a>,
         _tracker: &RecreateTracker,
-    ) -> Option<ProjectEvent> {
+    ) -> AppResult<Option<ProjectEvent>> {
         let dirty_source = {
             let mut result = false;
             match &self.source {
                 TextureSource::Dimension(dimension_id) => {
-                    if let Some(dimension) = ctx.dimensions.get(*dimension_id) {
+                    if let Ok(dimension) = ctx.dimensions.get(*dimension_id) {
                         let current_size = self.inner.size();
                         result = dimension.size.width() != current_size.width
                             || dimension.size.height() != current_size.height;
@@ -160,11 +167,16 @@ impl Recreatable for Texture {
             result
         };
 
-        if self.dirty || !dirty_source {
-            return None;
+        if !self.dirty && !self.has_error && !dirty_source {
+            return Ok(None);
         }
 
-        self.inner = Self::create_texture(&ctx, &self.label, self.format, self.usage, &self.source);
-        Some(ProjectEvent::TextureRecreated(id))
+        self.inner = Self::create_texture(&ctx, &self.label, self.format, self.usage, &self.source)
+            .inspect_err(|_| self.has_error = true)?;
+
+        self.has_error = false;
+        self.dirty = false;
+
+        Ok(Some(ProjectEvent::TextureRecreated(id)))
     }
 }
