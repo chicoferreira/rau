@@ -1,83 +1,41 @@
 use crate::{
     project::ViewportId,
-    ui::{pane::StateSnapshot, panels::pane_utils},
+    ui::{components::tiles::Pane, pane::StateSnapshot},
 };
 
-pub struct ViewportTreePane {
-    tree: egui_tiles::Tree<ViewportPane>,
-}
-
-impl Default for ViewportTreePane {
-    fn default() -> Self {
-        let tree = egui_tiles::Tree::empty("viewport_tree");
-
-        Self { tree }
-    }
-}
-
-impl ViewportTreePane {
-    pub fn ui(&mut self, behavior: &mut StateSnapshot, ui: &mut egui::Ui) {
-        self.tree.ui(behavior, ui);
-    }
-
-    pub fn add_viewport(&mut self, viewport_id: ViewportId) {
-        let pane = ViewportPane { viewport_id };
-        if pane_utils::focus_pane_if_present(&mut self.tree, &pane) {
-            return;
-        }
-        let child = self.tree.tiles.insert_pane(pane);
-        pane_utils::add_pane_to_tile_tree(&mut self.tree, child);
-    }
-}
-
 #[derive(Clone, Copy, PartialEq, Eq)]
-struct ViewportPane {
-    viewport_id: ViewportId,
+pub struct ViewportPane {
+    pub viewport_id: ViewportId,
 }
 
-impl<'a> egui_tiles::Behavior<ViewportPane> for StateSnapshot<'a> {
+impl Pane for ViewportPane {
     fn pane_ui(
         &mut self,
+        state: &mut StateSnapshot<'_>,
         ui: &mut egui::Ui,
-        _tile_id: egui_tiles::TileId,
-        pane: &mut ViewportPane,
     ) -> egui_tiles::UiResponse {
-        let Ok(viewport) = self.project.viewports.get(pane.viewport_id) else {
+        let Ok(viewport) = state.project.viewports.get(self.viewport_id) else {
             ui.label("Viewport couldn't be found.");
             return egui_tiles::UiResponse::None;
         };
 
         let events = crate::ui::components::viewport::ui(
             ui,
-            pane.viewport_id,
+            self.viewport_id,
             viewport.egui_id(),
             viewport.requested_ui_size,
         );
-        self.pending_events.extend(events);
+        state.pending_events.extend(events);
 
         egui_tiles::UiResponse::None
     }
 
-    fn tab_title_for_pane(&mut self, pane: &ViewportPane) -> egui::WidgetText {
-        self.project
+    fn tab_title(&self, state: &StateSnapshot<'_>) -> egui::WidgetText {
+        state
+            .project
             .viewports
-            .get(pane.viewport_id)
+            .get(self.viewport_id)
             .map(|texture| texture.label.as_str().into())
-            .unwrap_or("Empty Viewport".into())
-    }
-
-    fn is_tab_closable(
-        &self,
-        _tiles: &egui_tiles::Tiles<ViewportPane>,
-        _tile_id: egui_tiles::TileId,
-    ) -> bool {
-        true
-    }
-
-    fn simplification_options(&self) -> egui_tiles::SimplificationOptions {
-        egui_tiles::SimplificationOptions {
-            all_panes_must_have_tabs: true,
-            ..Default::default()
-        }
+            .unwrap_or("Unknown Viewport".into())
     }
 }

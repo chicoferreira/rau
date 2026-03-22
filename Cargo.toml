@@ -23,7 +23,7 @@ egui-winit = { version = "0.33.3", default-features = false }
 egui_dnd = "0.14.0"
 egui_table = "0.7.0"
 egui_ltreeview = "0.6.1"
-egui_tiles = "0.14.1"
+egui_tiles = { git = "https://github.com/chicoferreira/egui_tiles", branch = "mut_tiles" }
 enumset = "1.1.10"
 env_logger = "0.11.8"
 fastrand = "2.3.0"

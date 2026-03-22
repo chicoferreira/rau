@@ -23,10 +23,8 @@ use crate::{
     resources, scene,
     ui::{
         self, Size2d,
-        panels::{
-            inspector_pane::{InspectorPane, InspectorTreePane},
-            viewport_pane::ViewportTreePane,
-        },
+        components::tiles::TreePane,
+        panels::{inspector_pane::InspectorPane, viewport_pane::ViewportPane},
         rename::{RenameState, RenameTarget},
     },
 };
@@ -80,8 +78,8 @@ pub struct State {
     scene: scene::Scene,
     rename_state: Option<ui::rename::RenameState>,
     pending_events: Vec<StateEvent>,
-    inspector_tree_pane: InspectorTreePane,
-    viewport_tree_pane: ViewportTreePane,
+    inspector_tree_pane: TreePane<InspectorPane>,
+    viewport_tree_pane: TreePane<ViewportPane>,
     dimension_owners: SecondaryMap<DimensionId, ViewportId>,
     errors: Vec<SourcedError>,
     project: project::Project,
@@ -204,10 +202,12 @@ impl State {
         )
         .await?;
 
-        let inspector_tree_pane = InspectorTreePane::default();
-        let mut viewport_tree_pane = ViewportTreePane::default();
+        let inspector_tree_pane = TreePane::new("inspector");
+        let mut viewport_tree_pane = TreePane::new("viewport");
 
-        viewport_tree_pane.add_viewport(scene.output_viewport_id);
+        viewport_tree_pane.add_pane(ViewportPane {
+            viewport_id: scene.output_viewport_id,
+        });
 
         Ok(Self {
             surface,
@@ -415,10 +415,11 @@ impl State {
                         ProjectResourceId::Texture(_id) => todo!(),
                     };
 
-                    self.inspector_tree_pane.add_inspector_pane(pane);
+                    self.inspector_tree_pane.add_pane(pane);
                 }
                 StateEvent::OpenViewport(viewport_id) => {
-                    self.viewport_tree_pane.add_viewport(viewport_id);
+                    self.viewport_tree_pane
+                        .add_pane(ViewportPane { viewport_id });
                 }
                 StateEvent::CreateUniform => {
                     const DEFAULT_NAME: &str = "Uniform";

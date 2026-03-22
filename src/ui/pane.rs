@@ -3,9 +3,10 @@ use crate::{
     project::{self},
     state,
     ui::{
+        components::tiles::TreePane,
         panels::{
-            error_panel, inspector_pane::InspectorTreePane, project_tree_panel,
-            viewport_pane::ViewportTreePane,
+            error_panel, inspector_pane::InspectorPane, project_tree_panel,
+            viewport_pane::ViewportPane,
         },
         rename::RenameState,
     },
@@ -22,8 +23,8 @@ impl StateSnapshot<'_> {
     pub fn ui(
         &mut self,
         ui: &mut egui::Ui,
-        inspector_tree_pane: &mut InspectorTreePane,
-        viewport_tree_pane: &mut ViewportTreePane,
+        inspector_tree_pane: &mut TreePane<InspectorPane>,
+        viewport_tree_pane: &mut TreePane<ViewportPane>,
     ) {
         egui::Panel::top("top_panel").show_inside(ui, |ui| {
             egui::MenuBar::new().ui(ui, |ui| {
