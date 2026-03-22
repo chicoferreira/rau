@@ -1,6 +1,6 @@
 use crate::{
     project::{BindGroupId, CameraId, DimensionId, SamplerId, ShaderId, TextureViewId, UniformId},
-    ui::pane::StateSnapshot,
+    ui::{pane::StateSnapshot, panels::pane_utils},
 };
 
 pub struct InspectorTreePane {
@@ -21,37 +21,15 @@ impl InspectorTreePane {
     }
 
     pub fn add_inspector_pane(&mut self, inspector_pane: InspectorPane) {
-        let child = self.tree.tiles.insert_pane(inspector_pane);
-
-        if let Some(root) = self.tree.root {
-            match self.tree.tiles.get_mut(root) {
-                Some(egui_tiles::Tile::Container(egui_tiles::Container::Tabs(tabs))) => {
-                    tabs.add_child(child);
-                    tabs.set_active(child);
-                }
-                Some(egui_tiles::Tile::Container(container)) => {
-                    container.add_child(child);
-                }
-                Some(egui_tiles::Tile::Pane(_)) => {
-                    let new_root = self.tree.tiles.insert_tab_tile(vec![root, child]);
-                    if let Some(egui_tiles::Tile::Container(egui_tiles::Container::Tabs(tabs))) =
-                        self.tree.tiles.get_mut(new_root)
-                    {
-                        tabs.set_active(child);
-                    }
-                    self.tree.root = Some(new_root);
-                }
-                None => {
-                    log::warn!("Tree root points to a missing tile; cannot add viewport");
-                }
-            }
-        } else {
-            self.tree.root = Some(child);
+        if pane_utils::focus_pane_if_present(&mut self.tree, &inspector_pane) {
+            return;
         }
+        let child = self.tree.tiles.insert_pane(inspector_pane);
+        pane_utils::add_pane_to_tile_tree(&mut self.tree, child);
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum InspectorPane {
     Uniform(UniformId),
     BindGroup(BindGroupId),

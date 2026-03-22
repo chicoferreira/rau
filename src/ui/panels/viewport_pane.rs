@@ -1,4 +1,7 @@
-use crate::{project::ViewportId, ui::pane::StateSnapshot};
+use crate::{
+    project::ViewportId,
+    ui::{pane::StateSnapshot, panels::pane_utils},
+};
 
 pub struct ViewportTreePane {
     tree: egui_tiles::Tree<ViewportPane>,
@@ -18,36 +21,16 @@ impl ViewportTreePane {
     }
 
     pub fn add_viewport(&mut self, viewport_id: ViewportId) {
-        let child = self.tree.tiles.insert_pane(ViewportPane { viewport_id });
-
-        if let Some(root) = self.tree.root {
-            match self.tree.tiles.get_mut(root) {
-                Some(egui_tiles::Tile::Container(egui_tiles::Container::Tabs(tabs))) => {
-                    tabs.add_child(child);
-                    tabs.set_active(child);
-                }
-                Some(egui_tiles::Tile::Container(container)) => {
-                    container.add_child(child);
-                }
-                Some(egui_tiles::Tile::Pane(_)) => {
-                    let new_root = self.tree.tiles.insert_tab_tile(vec![root, child]);
-                    if let Some(egui_tiles::Tile::Container(egui_tiles::Container::Tabs(tabs))) =
-                        self.tree.tiles.get_mut(new_root)
-                    {
-                        tabs.set_active(child);
-                    }
-                    self.tree.root = Some(new_root);
-                }
-                None => {
-                    log::warn!("Tree root points to a missing tile; cannot add viewport");
-                }
-            }
-        } else {
-            self.tree.root = Some(child);
+        let pane = ViewportPane { viewport_id };
+        if pane_utils::focus_pane_if_present(&mut self.tree, &pane) {
+            return;
         }
+        let child = self.tree.tiles.insert_pane(pane);
+        pane_utils::add_pane_to_tile_tree(&mut self.tree, child);
     }
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
 struct ViewportPane {
     viewport_id: ViewportId,
 }
