@@ -53,15 +53,18 @@ impl WgpuErrorScope {
     }
 
     pub fn pop(self) -> AppResult<()> {
+        let error = self.inner.pop();
+
         #[cfg(not(target_arch = "wasm32"))]
         {
-            pollster::block_on(self.inner.pop()).map_or(Ok(()), |e| Err(e.into()))
+            pollster::block_on(error).map_or(Ok(()), |e| Err(e.into()))
         }
         #[cfg(target_arch = "wasm32")]
         {
             wasm_bindgen_futures::spawn_local(async move {
-                if let Some(e) = scope.pop().await {
-                    log::error!("wgpu validation error: {:?}", e);
+                if let Some(error) = error.await {
+                    // TODO: send to main thread
+                    log::error!("Unhandled WGPU error: {:?}", error);
                 }
             });
             Ok(())

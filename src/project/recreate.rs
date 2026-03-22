@@ -63,6 +63,7 @@ impl RecreateTracker {
         for (id, object) in storage.list_mut() {
             if let Err(err) = self.recreate_if_needed(id, object, project) {
                 let err = SourcedError::new(id.into(), err);
+                log::error!("Error while recreating {id:?}: {:?}", err.error);
                 errors.push(err);
             }
         }

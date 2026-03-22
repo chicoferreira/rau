@@ -18,19 +18,23 @@ pub fn run() -> anyhow::Result<()> {
             .parse_default_env()
             .filter_level(log::LevelFilter::Info)
             .init();
+
+        let event_loop = EventLoop::with_user_event().build()?;
+        let mut app = app::App::new();
+
+        event_loop.run_app(&mut app)?;
     }
     #[cfg(target_arch = "wasm32")]
     {
-        use wasm_bindgen::UnwrapThrowExt;
-        console_log::init_with_level(log::Level::Info).unwrap_throw();
-    }
+        use winit::platform::web::EventLoopExtWebSys;
 
-    let event_loop = EventLoop::with_user_event().build()?;
-    let mut app = app::App::new(
-        #[cfg(target_arch = "wasm32")]
-        &event_loop,
-    );
-    event_loop.run_app(&mut app)?;
+        console_log::init_with_level(log::Level::Info)?;
+
+        let event_loop = EventLoop::with_user_event().build()?;
+        let app = app::App::new(&event_loop);
+
+        event_loop.spawn_app(app)
+    }
 
     Ok(())
 }
