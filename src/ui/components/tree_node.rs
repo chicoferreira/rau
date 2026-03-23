@@ -76,9 +76,23 @@ impl<'a> TreeNode<'a> {
             NodeBuilder::leaf(self.tree_id)
         };
 
-        node.label(self.label)
-            .context_menu(move |ui| {
-                ui.set_min_width(130.0);
+        let mut node = node.label(self.label).label_ui(move |ui| {
+            let default_label = Label::new(self.label).selectable(false);
+
+            if let Some(rename_target) = self.rename_target.clone() {
+                ui.add(renameable_label(
+                    default_label,
+                    label_pending_events.borrow_mut().as_mut(),
+                    rename_state,
+                    rename_target,
+                ));
+            } else {
+                ui.add(default_label);
+            }
+        });
+
+        if !self.events.is_empty() {
+            node = node.context_menu(move |ui| {
                 let mut pending_events = context_pending_events.borrow_mut();
 
                 for event in self.events.iter() {
@@ -93,21 +107,10 @@ impl<'a> TreeNode<'a> {
                         }
                     }
                 }
-            })
-            .label_ui(move |ui| {
-                let default_label = Label::new(self.label).selectable(false);
+            });
+        }
 
-                if let Some(rename_target) = self.rename_target.clone() {
-                    ui.add(renameable_label(
-                        default_label,
-                        label_pending_events.borrow_mut().as_mut(),
-                        rename_state,
-                        rename_target,
-                    ));
-                } else {
-                    ui.add(default_label);
-                }
-            })
+        node
     }
 
     pub fn build_to(
