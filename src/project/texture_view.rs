@@ -19,8 +19,8 @@ pub struct TextureView {
     label: String,
     format: Option<TextureViewFormat>,
     dimension: Option<wgpu::TextureViewDimension>,
-    texture_id: TextureId,
-    inner: wgpu::TextureView,
+    texture_id: Option<TextureId>,
+    inner: Option<wgpu::TextureView>,
     egui_id: Option<egui::TextureId>,
     dirty: bool,
     has_error: bool,
@@ -46,17 +46,27 @@ impl TextureView {
     pub fn new(
         ctx: TextureViewCreationContext,
         label: String,
-        texture_id: TextureId,
+        texture_id: Option<TextureId>,
         format: Option<TextureViewFormat>,
         dimension: Option<wgpu::TextureViewDimension>,
     ) -> AppResult<TextureView> {
-        let texture = ctx.textures.get(texture_id)?;
-        let inner = Self::create_view(&label, ctx.device, texture, format, dimension)?;
+        let (inner, egui_id) = match texture_id {
+            Some(texture_id) => {
+                let texture = ctx.textures.get(texture_id)?;
+                let inner = Self::create_view(&label, ctx.device, texture, format, dimension)?;
 
-        let egui_id = (ALLOWED_EGUI_FORMATS.contains(&texture.format())).then(|| {
-            ctx.egui_renderer
-                .register_egui_texture(ctx.device, &inner, wgpu::FilterMode::Linear)
-        });
+                let egui_id = (ALLOWED_EGUI_FORMATS.contains(&texture.format())).then(|| {
+                    ctx.egui_renderer.register_egui_texture(
+                        ctx.device,
+                        &inner,
+                        wgpu::FilterMode::Linear,
+                    )
+                });
+
+                (Some(inner), egui_id)
+            }
+            None => (None, None),
+        };
 
         Ok(TextureView {
             label,
@@ -70,7 +80,7 @@ impl TextureView {
         })
     }
 
-    pub fn inner(&self) -> &wgpu::TextureView {
+    pub fn inner(&self) -> &Option<wgpu::TextureView> {
         &self.inner
     }
 
@@ -78,7 +88,7 @@ impl TextureView {
         &self.label
     }
 
-    pub fn texture_id(&self) -> TextureId {
+    pub fn texture_id(&self) -> Option<TextureId> {
         self.texture_id
     }
 
@@ -101,7 +111,7 @@ impl TextureView {
         self.dirty = true;
     }
 
-    pub fn set_texture_id(&mut self, texture_id: TextureId) {
+    pub fn set_texture_id(&mut self, texture_id: Option<TextureId>) {
         self.texture_id = texture_id;
         self.dirty = true;
     }
@@ -153,46 +163,58 @@ impl Recreatable for TextureView {
     ) -> AppResult<Option<ProjectEvent>> {
         if !self.dirty
             && !self.has_error
-            && !tracker.happened(ProjectEvent::TextureRecreated(self.texture_id))
+            && !self.texture_id.is_some_and(|texture_id| {
+                tracker.happened(ProjectEvent::TextureRecreated(texture_id))
+            })
         {
             return Ok(None);
         }
 
-        let texture = context.textures.get(self.texture_id)?;
-
-        self.inner = Self::create_view(
-            &self.label,
-            context.device,
-            texture,
-            self.format,
-            self.dimension,
-        )
-        .inspect_err(|_| self.has_error = true)?;
-
-        let has_correct_format = ALLOWED_EGUI_FORMATS.contains(&texture.format());
-
         let scope = WgpuErrorScope::push(context.device);
-        self.egui_id = match (self.egui_id, has_correct_format) {
-            (Some(egui_id), true) => {
-                context.egui_renderer.update_egui_texture(
+        match self.texture_id {
+            Some(texture_id) => {
+                let texture = context.textures.get(texture_id)?;
+                let inner = Self::create_view(
+                    &self.label,
                     context.device,
-                    &self.inner,
-                    wgpu::FilterMode::Linear,
-                    egui_id,
-                );
-                Some(egui_id)
+                    texture,
+                    self.format,
+                    self.dimension,
+                )
+                .inspect_err(|_| self.has_error = true)?;
+
+                let has_correct_format = ALLOWED_EGUI_FORMATS.contains(&texture.format());
+
+                self.egui_id = match (self.egui_id, has_correct_format) {
+                    (Some(egui_id), true) => {
+                        context.egui_renderer.update_egui_texture(
+                            context.device,
+                            &inner,
+                            wgpu::FilterMode::Linear,
+                            egui_id,
+                        );
+                        Some(egui_id)
+                    }
+                    (Some(egui_id), false) => {
+                        context.egui_renderer.remove_egui_texture(egui_id);
+                        None
+                    }
+                    (None, true) => Some(context.egui_renderer.register_egui_texture(
+                        context.device,
+                        &inner,
+                        wgpu::FilterMode::Linear,
+                    )),
+                    (None, false) => None,
+                };
+                self.inner = Some(inner);
             }
-            (Some(egui_id), false) => {
-                context.egui_renderer.remove_egui_texture(egui_id);
-                None
+            None => {
+                if let Some(egui_id) = self.egui_id.take() {
+                    context.egui_renderer.remove_egui_texture(egui_id);
+                }
+                self.inner = None;
             }
-            (None, true) => Some(context.egui_renderer.register_egui_texture(
-                context.device,
-                &self.inner,
-                wgpu::FilterMode::Linear,
-            )),
-            (None, false) => None,
-        };
+        }
         scope.pop().inspect_err(|_| self.has_error = true)?;
 
         self.has_error = false;

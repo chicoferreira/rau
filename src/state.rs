@@ -15,10 +15,11 @@ use crate::{
         dimension::Dimension,
         recreate::RecreateTracker,
         sampler::{Sampler, SamplerSpec},
+        shader::Shader,
         texture::TextureCreationContext,
-        texture_view::TextureViewCreationContext,
+        texture_view::{TextureView, TextureViewCreationContext},
         uniform::{UniformCreationContext, UniformField, UniformFieldSource},
-        viewport::ViewportCreationContext,
+        viewport::Viewport,
     },
     resources, scene,
     ui::{
@@ -58,7 +59,9 @@ pub enum StateEvent {
     DeleteBindGroupEntry(BindGroupId, usize),
     UpdateBindGroupEntry(BindGroupId, usize, BindGroupResource),
     ReorderBindGroupEntry(BindGroupId, DragUpdate),
+    CreateViewport,
     DeleteViewport(ViewportId),
+    CreateShader,
     DeleteShader(ShaderId),
     CreateCamera,
     DeleteCamera(CameraId),
@@ -67,6 +70,7 @@ pub enum StateEvent {
     CreateSampler,
     DeleteSampler(SamplerId),
     DeleteTexture(TextureId),
+    CreateTextureView,
     DeleteTextureView(TextureViewId),
 }
 
@@ -367,14 +371,6 @@ impl State {
         self.errors
             .extend(tracker.recreate_storage(&mut self.project.texture_views, view));
 
-        let view = &mut ViewportCreationContext {
-            texture_views: &self.project.texture_views,
-            egui_renderer: &mut self.egui_renderer,
-            device: &self.device,
-        };
-        self.errors
-            .extend(tracker.recreate_storage(&mut self.project.viewports, view));
-
         let view = &mut CameraCreationContext {
             dimensions: &self.project.dimensions,
             dt,
@@ -518,55 +514,58 @@ impl State {
                                 // 2. we know to which size to resize the camera when the viewport gets focused (handled in the event below)
                                 viewport.requested_ui_size = Some(size);
 
-                                let is_owner = self
-                                    .dimension_owners
-                                    .get(viewport.dimension_id)
-                                    .map_or(true, |&owner| owner == viewport_id);
+                                if let Some(dimension_id) = viewport.dimension_id {
+                                    let is_owner = self
+                                        .dimension_owners
+                                        .get(dimension_id)
+                                        .map_or(true, |&owner| owner == viewport_id);
 
-                                // relevant issue: https://github.com/chicoferreira/rau/issues/8
-                                //
-                                // this is a bit hacky, but we want the camera to resize immediately if this
-                                // viewport is the owner of the dimension or the viewport has no owners, otherwise
-                                // we'll wait until it gets focused (handled in the event below). this avoids the
-                                // problem of fighting when there are two viewports with different sizes for the same dimension.
-                                // this way, only one of them (the owner) will control the dimension size.
-                                if is_owner {
-                                    if let Ok(dimension) =
-                                        self.project.dimensions.get_mut(viewport.dimension_id)
-                                    {
-                                        dimension.size = size;
+                                    // relevant issue: https://github.com/chicoferreira/rau/issues/8
+                                    //
+                                    // this is a bit hacky, but we want the camera to resize immediately if this
+                                    // viewport is the owner of the dimension or the viewport has no owners, otherwise
+                                    // we'll wait until it gets focused (handled in the event below). this avoids the
+                                    // problem of fighting when there are two viewports with different sizes for the same dimension.
+                                    // this way, only one of them (the owner) will control the dimension size.
+                                    if is_owner {
+                                        if let Ok(dimension) =
+                                            self.project.dimensions.get_mut(dimension_id)
+                                        {
+                                            dimension.size = size;
+                                        }
                                     }
                                 }
                             }
                             ViewportEvent::Focus => {
                                 // read the comment in the event above for more context
-                                self.dimension_owners
-                                    .insert(viewport.dimension_id, viewport_id);
-                                if let Some(ui_size) = viewport.requested_ui_size {
-                                    if let Ok(dimension) =
-                                        self.project.dimensions.get_mut(viewport.dimension_id)
-                                    {
-                                        dimension.size = ui_size;
+                                if let Some(dimension_id) = viewport.dimension_id {
+                                    self.dimension_owners.insert(dimension_id, viewport_id);
+                                    if let Some(ui_size) = viewport.requested_ui_size {
+                                        if let Ok(dimension) =
+                                            self.project.dimensions.get_mut(dimension_id)
+                                        {
+                                            dimension.size = ui_size;
+                                        }
                                     }
                                 }
                             }
                             ViewportEvent::Scroll { delta_y_px } => {
-                                if let Ok(camera) =
-                                    self.project.cameras.get_mut(viewport.controls_camera_id)
+                                if let Some(camera_id) = viewport.controls_camera_id
+                                    && let Ok(camera) = self.project.cameras.get_mut(camera_id)
                                 {
                                     camera.input_mut().handle_scroll_pixels(delta_y_px);
                                 }
                             }
                             ViewportEvent::Drag { mouse_dx, mouse_dy } => {
-                                if let Ok(camera) =
-                                    self.project.cameras.get_mut(viewport.controls_camera_id)
+                                if let Some(camera_id) = viewport.controls_camera_id
+                                    && let Ok(camera) = self.project.cameras.get_mut(camera_id)
                                 {
                                     camera.input_mut().handle_mouse(mouse_dx, mouse_dy);
                                 }
                             }
                             ViewportEvent::KeyboardKeys { keyboard_state } => {
-                                if let Ok(camera) =
-                                    self.project.cameras.get_mut(viewport.controls_camera_id)
+                                if let Some(camera_id) = viewport.controls_camera_id
+                                    && let Ok(camera) = self.project.cameras.get_mut(camera_id)
                                 {
                                     camera.input_mut().handle_keyboard(keyboard_state);
                                 }
@@ -611,6 +610,59 @@ impl State {
 
                     self.rename_state = Some(RenameState {
                         target: RenameTarget::Sampler(sampler_id),
+                        current_label: DEFAULT_NAME.to_string(),
+                    });
+                }
+                StateEvent::CreateViewport => {
+                    const DEFAULT_NAME: &str = "Viewport";
+
+                    let viewport = Viewport::new(DEFAULT_NAME, None, None, None)?;
+                    let viewport_id = self.project.viewports.register(viewport);
+
+                    self.rename_state = Some(RenameState {
+                        target: RenameTarget::Viewport(viewport_id),
+                        current_label: DEFAULT_NAME.to_string(),
+                    });
+                }
+                StateEvent::CreateShader => {
+                    const DEFAULT_NAME: &str = "Shader";
+                    const DEFAULT_SOURCE: &str = r#"@vertex
+fn vs_main() -> @builtin(position) vec4<f32> {
+    return vec4<f32>(0.0, 0.0, 0.0, 1.0);
+}
+
+@fragment
+fn fs_main() -> @location(0) vec4<f32> {
+    return vec4<f32>(1.0, 1.0, 1.0, 1.0);
+}
+"#;
+
+                    let shader = Shader::new(DEFAULT_NAME, DEFAULT_SOURCE);
+                    let shader_id = self.project.shaders.register(shader);
+
+                    self.rename_state = Some(RenameState {
+                        target: RenameTarget::Shader(shader_id),
+                        current_label: DEFAULT_NAME.to_string(),
+                    });
+                }
+                StateEvent::CreateTextureView => {
+                    const DEFAULT_NAME: &str = "Texture View";
+
+                    let texture_view = TextureView::new(
+                        TextureViewCreationContext {
+                            textures: &self.project.textures,
+                            egui_renderer: &mut self.egui_renderer,
+                            device: &self.device,
+                        },
+                        DEFAULT_NAME.to_string(),
+                        None,
+                        None,
+                        None,
+                    )?;
+                    let texture_view_id = self.project.texture_views.register(texture_view);
+
+                    self.rename_state = Some(RenameState {
+                        target: RenameTarget::TextureView(texture_view_id),
                         current_label: DEFAULT_NAME.to_string(),
                     });
                 }

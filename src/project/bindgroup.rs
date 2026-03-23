@@ -20,7 +20,7 @@ pub struct BindGroupCreationContext<'a> {
 }
 
 pub struct BindGroup {
-    pub label: String,
+    label: String,
     layout: wgpu::BindGroupLayout,
     inner: wgpu::BindGroup,
     entries: Vec<BindGroupEntry>,
@@ -90,6 +90,10 @@ impl BindGroup {
         })
     }
 
+    pub fn label(&self) -> &str {
+        &self.label
+    }
+
     pub fn inner_layout(&self) -> &wgpu::BindGroupLayout {
         &self.layout
     }
@@ -100,6 +104,11 @@ impl BindGroup {
 
     pub fn entries(&self) -> &[BindGroupEntry] {
         &self.entries
+    }
+
+    pub fn set_label(&mut self, label: String) {
+        self.label = label;
+        self.dirty = true;
     }
 
     pub fn add_entry(&mut self, entry: BindGroupEntry) {
@@ -180,7 +189,10 @@ impl BindGroupEntry {
                     return Ok(None);
                 };
                 let texture_view = project.texture_views.get(texture_view_id)?;
-                wgpu::BindingResource::TextureView(texture_view.inner())
+                let Some(inner) = texture_view.inner() else {
+                    return Ok(None);
+                };
+                wgpu::BindingResource::TextureView(inner)
             }
             BindGroupResource::Sampler { sampler_id, .. } => {
                 let Some(sampler_id) = sampler_id else {

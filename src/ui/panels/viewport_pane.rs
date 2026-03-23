@@ -19,10 +19,23 @@ impl Pane for ViewportPane {
             return egui_tiles::UiResponse::None;
         };
 
+        let Some(texture_view) = viewport
+            .texture_view_id
+            .and_then(|texture_view_id| state.project.texture_views.get(texture_view_id).ok())
+        else {
+            ui.label("Viewport points to a non-existent texture view.");
+            return egui_tiles::UiResponse::None;
+        };
+
+        let Some(egui_id) = texture_view.egui_id() else {
+            ui.label("Viewport points to a texture view format other than Rgba8UnormSrgb.");
+            return egui_tiles::UiResponse::None;
+        };
+
         let events = crate::ui::components::viewport::ui(
             ui,
             self.viewport_id,
-            viewport.egui_id(),
+            egui_id,
             viewport.requested_ui_size,
         );
         state.pending_events.extend(events);

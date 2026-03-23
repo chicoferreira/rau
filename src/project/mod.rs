@@ -59,16 +59,15 @@ impl Project {
 
     pub fn label<'a>(&'a self, id: impl Into<ProjectResourceId>) -> Option<&'a str> {
         let id = id.into();
+
         match id {
             ProjectResourceId::Shader(id) => self.shaders.get(id).ok().map(|s| s.label.as_str()),
             ProjectResourceId::Viewport(id) => {
                 self.viewports.get(id).ok().map(|v| v.label.as_str())
             }
             ProjectResourceId::Uniform(id) => self.uniforms.get(id).ok().map(|u| u.label.as_str()),
-            ProjectResourceId::BindGroup(id) => {
-                self.bind_groups.get(id).ok().map(|b| b.label.as_str())
-            }
-            ProjectResourceId::Texture(id) => self.textures.get(id).ok().map(|t| t.label.as_str()),
+            ProjectResourceId::BindGroup(id) => self.bind_groups.get(id).ok().map(|b| b.label()),
+            ProjectResourceId::Texture(id) => self.textures.get(id).ok().map(|t| t.label()),
             ProjectResourceId::TextureView(id) => {
                 self.texture_views.get(id).ok().map(|v| v.label())
             }

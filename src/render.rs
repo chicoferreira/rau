@@ -36,12 +36,15 @@ impl RenderPassSpec<'_> {
     ) -> AppResult<()> {
         let viewport_texture_view = project
             .texture_views
-            .get(self.target_spec.texture_view_id)?;
+            .get(self.target_spec.texture_view_id)?
+            .inner()
+            .as_ref()
+            .unwrap(); // TODO: FIX ME
 
         let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: self.label,
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                view: viewport_texture_view.inner(),
+                view: viewport_texture_view,
                 resolve_target: None,
                 ops: wgpu::Operations {
                     load: self.target_spec.load_operation,

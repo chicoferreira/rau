@@ -54,7 +54,7 @@ pub fn ui(state: &mut StateSnapshot, ui: &mut egui::Ui) -> Response {
                 .with_event("Create New Bind Group", StateEvent::CreateBindGroup)
                 .build_to(builder, state.pending_events, state.rename_state);
             for (id, bind_group) in state.project.bind_groups.list() {
-                TreeNode::new(TreeNodeId::BindGroup(id), &bind_group.label)
+                TreeNode::new(TreeNodeId::BindGroup(id), bind_group.label())
                     .with_event("Inspect", StateEvent::InspectResource(id.into()))
                     .with_rename_event("Rename", RenameTarget::BindGroup(id))
                     .with_event("Delete", StateEvent::DeleteBindGroup(id))
@@ -64,31 +64,31 @@ pub fn ui(state: &mut StateSnapshot, ui: &mut egui::Ui) -> Response {
             }
             builder.close_dir();
 
-            TreeNode::folder(TreeNodeId::ViewportFolder, "Viewports").build_to(
-                builder,
-                state.pending_events,
-                state.rename_state,
-            );
+            TreeNode::folder(TreeNodeId::ViewportFolder, "Viewports")
+                .with_event("Create New Viewport", StateEvent::CreateViewport)
+                .build_to(builder, state.pending_events, state.rename_state);
             for (id, viewport) in state.project.viewports.list() {
                 TreeNode::new(TreeNodeId::Viewport(id), &viewport.label)
                     .with_event("View", StateEvent::OpenViewport(id))
                     .with_event("Inspect", StateEvent::InspectResource(id.into()))
                     .with_rename_event("Rename", RenameTarget::Viewport(id))
                     .with_event("Delete", StateEvent::DeleteViewport(id))
+                    .with_separator()
+                    .with_event("Create New Viewport", StateEvent::CreateViewport)
                     .build_to(builder, state.pending_events, state.rename_state);
             }
             builder.close_dir();
 
-            TreeNode::folder(TreeNodeId::ShaderFolder, "Shaders").build_to(
-                builder,
-                state.pending_events,
-                state.rename_state,
-            );
+            TreeNode::folder(TreeNodeId::ShaderFolder, "Shaders")
+                .with_event("Create New Shader", StateEvent::CreateShader)
+                .build_to(builder, state.pending_events, state.rename_state);
             for (id, shader) in state.project.shaders.list() {
                 TreeNode::new(TreeNodeId::Shader(id), &shader.label)
                     .with_event("Inspect", StateEvent::InspectResource(id.into()))
                     .with_rename_event("Rename", RenameTarget::Shader(id))
                     .with_event("Delete", StateEvent::DeleteShader(id))
+                    .with_separator()
+                    .with_event("Create New Shader", StateEvent::CreateShader)
                     .build_to(builder, state.pending_events, state.rename_state);
             }
             builder.close_dir();
@@ -141,7 +141,7 @@ pub fn ui(state: &mut StateSnapshot, ui: &mut egui::Ui) -> Response {
                 state.rename_state,
             );
             for (id, texture) in state.project.textures.list() {
-                TreeNode::new(TreeNodeId::Texture(id), &texture.label)
+                TreeNode::new(TreeNodeId::Texture(id), texture.label())
                     .with_event("Inspect", StateEvent::InspectResource(id.into()))
                     .with_rename_event("Rename", RenameTarget::Texture(id))
                     .with_event("Delete", StateEvent::DeleteTexture(id))
@@ -149,16 +149,16 @@ pub fn ui(state: &mut StateSnapshot, ui: &mut egui::Ui) -> Response {
             }
             builder.close_dir();
 
-            TreeNode::folder(TreeNodeId::TextureViewFolder, "Texture Views").build_to(
-                builder,
-                state.pending_events,
-                state.rename_state,
-            );
+            TreeNode::folder(TreeNodeId::TextureViewFolder, "Texture Views")
+                .with_event("Create New Texture View", StateEvent::CreateTextureView)
+                .build_to(builder, state.pending_events, state.rename_state);
             for (id, texture_view) in state.project.texture_views.list() {
                 TreeNode::new(TreeNodeId::TextureView(id), texture_view.label())
                     .with_event("Inspect", StateEvent::InspectResource(id.into()))
                     .with_rename_event("Rename", RenameTarget::TextureView(id))
                     .with_event("Delete", StateEvent::DeleteTextureView(id))
+                    .with_separator()
+                    .with_event("Create New Texture View", StateEvent::CreateTextureView)
                     .build_to(builder, state.pending_events, state.rename_state);
             }
             builder.close_dir();

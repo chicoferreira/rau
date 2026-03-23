@@ -19,19 +19,19 @@ impl StateSnapshot<'_> {
             .num_columns(2)
             .show(ui, |ui| {
                 ui.label("Texture");
-                let mut texture_id = Some(texture_view.texture_id());
+                let mut texture_id = texture_view.texture_id();
                 let texture_before = texture_id;
                 selectable_value_storage(
                     ui,
                     "texture",
                     &mut texture_id,
-                    |_, texture| texture.label.to_string(),
+                    |_, texture| texture.label().to_string(),
                     &mut self.project.textures,
                 );
                 ui.end_row();
 
                 if texture_id != texture_before {
-                    texture_view.set_texture_id(texture_id.unwrap());
+                    texture_view.set_texture_id(texture_id);
                 }
 
                 ui.label("Format");

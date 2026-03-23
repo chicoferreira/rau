@@ -13,7 +13,6 @@ use crate::{
         uniform::{
             Uniform, UniformField, UniformFieldData, UniformFieldSource, camera::CameraField,
         },
-        viewport::ViewportCreationContext,
     },
     render, resources,
     scene::hdr::HdrPipeline,
@@ -339,36 +338,26 @@ impl Scene {
                 device,
             },
             "HDR Texture View".to_string(),
-            hdr_texture_id,
+            Some(hdr_texture_id),
             None,
             None,
         )?;
         let hdr_texture_view_id = project.texture_views.register(hdr_texture_view);
 
         let hdr_viewport = project::viewport::Viewport::new(
-            ViewportCreationContext {
-                texture_views: &project.texture_views,
-                egui_renderer,
-                device,
-            },
             "HDR Buffer",
-            hdr_texture_view_id,
-            dimension_id,
-            camera_id,
+            Some(hdr_texture_view_id),
+            Some(dimension_id),
+            Some(camera_id),
         )?;
-        let hdr_viewport_id = project.viewports.register(hdr_viewport);
-        let hdr_texture_id = project
-            .viewports
-            .get(hdr_viewport_id)
-            .unwrap()
-            .texture_view_id();
+        let _ = project.viewports.register(hdr_viewport);
 
         let viewport_texture_format = wgpu::TextureFormat::Rgba8UnormSrgb;
 
         let hdr = hdr::HdrPipeline::new(
             device,
             project,
-            hdr_texture_id,
+            hdr_texture_view_id,
             viewport_texture_format,
             image_texture_sampler_id,
             hdr_shader_id,
@@ -388,7 +377,7 @@ impl Scene {
                 device,
             },
             "Sky Texture View".to_string(),
-            sky_texture_id,
+            Some(sky_texture_id),
             None,
             Some(wgpu::TextureViewDimension::Cube),
         )?;
@@ -509,7 +498,7 @@ impl Scene {
                 device,
             },
             "Depth Texture View".to_string(),
-            depth_texture_id,
+            Some(depth_texture_id),
             None,
             None,
         )?;
@@ -534,7 +523,7 @@ impl Scene {
                 device,
             },
             "Viewport Texture View".to_string(),
-            viewport_texture_id,
+            Some(viewport_texture_id),
             Some(TextureViewFormat::Srgb),
             None,
         )?);
@@ -545,21 +534,16 @@ impl Scene {
                 device,
             },
             "Viewport Texture View Egui".to_string(),
-            viewport_texture_id,
+            Some(viewport_texture_id),
             Some(TextureViewFormat::Linear),
             None,
         )?;
         let viewport_texture_view_id = project.texture_views.register(viewport_texture_view);
         let viewport = project::viewport::Viewport::new(
-            ViewportCreationContext {
-                texture_views: &project.texture_views,
-                egui_renderer,
-                device,
-            },
             "Viewport Texture",
-            viewport_texture_view_id,
-            dimension_id,
-            camera_id,
+            Some(viewport_texture_view_id),
+            Some(dimension_id),
+            Some(camera_id),
         )?;
         let viewport_id = project.viewports.register(viewport);
 
@@ -587,7 +571,12 @@ impl Scene {
         encoder: &mut wgpu::CommandEncoder,
         project: &project::Project,
     ) -> AppResult<()> {
-        let depth_texture_view = project.texture_views.get(self.depth_texture_view_id)?;
+        let depth_texture_view = project
+            .texture_views
+            .get(self.depth_texture_view_id)?
+            .inner()
+            .as_ref()
+            .unwrap(); // TODO: FIX ME
 
         let scope = WgpuErrorScope::push(device);
 
@@ -598,7 +587,7 @@ impl Scene {
                 load_operation: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
             },
             depth_spec: Some(render::RenderPassDepthSpec {
-                texture: depth_texture_view.inner(),
+                texture: depth_texture_view,
                 load_operation: wgpu::LoadOp::Clear(1.0),
             }),
             pipelines: vec![

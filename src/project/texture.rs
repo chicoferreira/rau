@@ -18,7 +18,7 @@ pub struct TextureCreationContext<'a> {
 }
 
 pub struct Texture {
-    pub label: String,
+    label: String,
     format: wgpu::TextureFormat,
     usage: wgpu::TextureUsages,
     // TODO: decide if we want that the texture decides which source to grab the size to,
@@ -59,6 +59,10 @@ impl Texture {
         })
     }
 
+    pub fn label(&self) -> &str {
+        &self.label
+    }
+
     pub fn inner(&self) -> &wgpu::Texture {
         &self.inner
     }
@@ -73,6 +77,11 @@ impl Texture {
 
     pub fn source(&self) -> &TextureSource {
         &self.source
+    }
+
+    pub fn set_label(&mut self, label: String) {
+        self.label = label;
+        self.dirty = true;
     }
 
     pub fn set_format(&mut self, format: wgpu::TextureFormat) {

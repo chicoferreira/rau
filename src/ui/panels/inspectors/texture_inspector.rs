@@ -232,8 +232,8 @@ fn ui_texture_source(
                 ui.label(format!("{width} x {height}"));
             }
         }
-        ui.label("Create a Texture View to see the Texture.");
     });
+    ui.label("Create a Texture View to see the Texture contents.");
 }
 
 fn first_dimension_id(

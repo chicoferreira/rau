@@ -58,7 +58,7 @@ impl RenameTarget {
             }
             RenameTarget::BindGroup(id) => {
                 if let Ok(bind_group) = project.bind_groups.get_mut(id) {
-                    bind_group.label = new_name;
+                    bind_group.set_label(new_name);
                 }
             }
             RenameTarget::Viewport(id) => {
@@ -88,7 +88,7 @@ impl RenameTarget {
             }
             RenameTarget::Texture(id) => {
                 if let Ok(texture) = project.textures.get_mut(id) {
-                    texture.label = new_name;
+                    texture.set_label(new_name);
                 }
             }
             RenameTarget::TextureView(texture_view_id) => {

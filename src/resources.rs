@@ -152,7 +152,7 @@ pub async fn load_model(
                 device,
             },
             diffuse_file_name.clone(),
-            diffuse_texture_id,
+            Some(diffuse_texture_id),
             None,
             None,
         )?);
@@ -168,7 +168,7 @@ pub async fn load_model(
                 device,
             },
             normal_file_name.clone(),
-            normal_texture_id,
+            Some(normal_texture_id),
             None,
             None,
         )?);
