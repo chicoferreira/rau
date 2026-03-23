@@ -8,8 +8,8 @@ use crate::{
     error::{AppResult, SourcedError},
     key::KeyboardState,
     project::{
-        self, BindGroupId, CameraId, DimensionId, ProjectResourceId, SamplerId, UniformId,
-        ViewportId,
+        self, BindGroupId, CameraId, DimensionId, ProjectResourceId, SamplerId, ShaderId,
+        TextureId, TextureViewId, UniformId, ViewportId,
         bindgroup::{BindGroupCreationContext, BindGroupEntry, BindGroupResource},
         camera::{Camera, CameraCreationContext},
         dimension::Dimension,
@@ -58,12 +58,16 @@ pub enum StateEvent {
     DeleteBindGroupEntry(BindGroupId, usize),
     UpdateBindGroupEntry(BindGroupId, usize, BindGroupResource),
     ReorderBindGroupEntry(BindGroupId, DragUpdate),
+    DeleteViewport(ViewportId),
+    DeleteShader(ShaderId),
     CreateCamera,
     DeleteCamera(CameraId),
     CreateDimension,
     DeleteDimension(DimensionId),
     CreateSampler,
     DeleteSampler(SamplerId),
+    DeleteTexture(TextureId),
+    DeleteTextureView(TextureViewId),
 }
 
 pub struct State {
@@ -411,8 +415,8 @@ impl State {
                         ProjectResourceId::Dimension(id) => InspectorPane::Dimension(id),
                         ProjectResourceId::Sampler(id) => InspectorPane::Sampler(id),
                         ProjectResourceId::TextureView(id) => InspectorPane::TextureView(id),
-                        ProjectResourceId::Viewport(_id) => todo!(),
-                        ProjectResourceId::Texture(_id) => todo!(),
+                        ProjectResourceId::Viewport(id) => InspectorPane::Viewport(id),
+                        ProjectResourceId::Texture(id) => InspectorPane::Texture(id),
                     };
 
                     self.inspector_tree_pane.add_pane(pane);
@@ -434,29 +438,8 @@ impl State {
                         current_label: DEFAULT_NAME.to_string(),
                     });
                 }
-                StateEvent::DeleteUniform(id) => {
-                    self.project.uniforms.unregister(id);
-                }
                 StateEvent::StartRename(rename_target) => {
-                    let current_name = match rename_target {
-                        RenameTarget::BindGroup(id) => self.project.label(id),
-                        RenameTarget::Viewport(id) => self.project.label(id),
-                        RenameTarget::Shader(id) => self.project.label(id),
-                        RenameTarget::Camera(id) => self.project.label(id),
-                        RenameTarget::Dimension(id) => self.project.label(id),
-                        RenameTarget::Sampler(id) => self.project.label(id),
-                        RenameTarget::TextureView(id) => self.project.label(id),
-                        RenameTarget::Uniform(id) => self.project.label(id),
-                        RenameTarget::UniformField(id, index) => self
-                            .project
-                            .uniforms
-                            .get(id)
-                            .ok()
-                            .and_then(|uniform| uniform.get_field(index))
-                            .map(|field| field.label()),
-                    };
-
-                    if let Some(current_name) = current_name {
+                    if let Some(current_name) = rename_target.get_label(&self.project) {
                         self.rename_state = Some(RenameState {
                             target: rename_target,
                             current_label: current_name.to_string(),
@@ -468,55 +451,7 @@ impl State {
                 }
                 StateEvent::ApplyRename(rename_target, new_name) => {
                     self.rename_state = None;
-                    match rename_target {
-                        RenameTarget::Uniform(id) => {
-                            if let Ok(uniform) = self.project.uniforms.get_mut(id) {
-                                uniform.label = new_name;
-                            }
-                        }
-                        RenameTarget::UniformField(id, index) => {
-                            if let Ok(uniform) = self.project.uniforms.get_mut(id) {
-                                uniform.set_field_label(index, new_name);
-                            }
-                        }
-                        RenameTarget::BindGroup(id) => {
-                            if let Ok(bind_group) = self.project.bind_groups.get_mut(id) {
-                                bind_group.label = new_name;
-                            }
-                        }
-                        RenameTarget::Viewport(id) => {
-                            if let Ok(viewport) = self.project.viewports.get_mut(id) {
-                                viewport.label = new_name;
-                            }
-                        }
-                        RenameTarget::Shader(id) => {
-                            if let Ok(shader) = self.project.shaders.get_mut(id) {
-                                shader.label = new_name;
-                            }
-                        }
-                        RenameTarget::Camera(id) => {
-                            if let Ok(camera) = self.project.cameras.get_mut(id) {
-                                camera.label = new_name;
-                            }
-                        }
-                        RenameTarget::Dimension(id) => {
-                            if let Ok(dimension) = self.project.dimensions.get_mut(id) {
-                                dimension.label = new_name;
-                            }
-                        }
-                        RenameTarget::Sampler(id) => {
-                            if let Ok(sampler) = self.project.samplers.get_mut(id) {
-                                sampler.set_label(new_name);
-                            }
-                        }
-                        RenameTarget::TextureView(texture_view_id) => {
-                            if let Ok(texture_view) =
-                                self.project.texture_views.get_mut(texture_view_id)
-                            {
-                                texture_view.set_label(new_name);
-                            }
-                        }
-                    }
+                    rename_target.apply(new_name, &mut self.project);
                 }
                 StateEvent::CreateUniformField(id, source) => {
                     if let Ok(uniform) = self.project.uniforms.get_mut(id) {
@@ -535,11 +470,6 @@ impl State {
                 StateEvent::UpdateUniformFieldSource(uniform_id, index, source) => {
                     if let Ok(uniform) = self.project.uniforms.get_mut(uniform_id) {
                         uniform.set_field_source(index, source);
-                    }
-                }
-                StateEvent::DeleteUniformField(id, index) => {
-                    if let Ok(uniform) = self.project.uniforms.get_mut(id) {
-                        uniform.remove_field(index);
                     }
                 }
                 StateEvent::ReorderUniformField(uniform_id, drag_update) => {
@@ -564,17 +494,9 @@ impl State {
                         current_label: DEFAULT_NAME.to_string(),
                     });
                 }
-                StateEvent::DeleteBindGroup(bind_group_id) => {
-                    self.project.bind_groups.unregister(bind_group_id);
-                }
                 StateEvent::CreateBindGroupEntry(id, resource) => {
                     if let Ok(bind_group) = self.project.bind_groups.get_mut(id) {
                         bind_group.add_entry(BindGroupEntry::new(resource));
-                    }
-                }
-                StateEvent::DeleteBindGroupEntry(id, index) => {
-                    if let Ok(bind_group) = self.project.bind_groups.get_mut(id) {
-                        bind_group.remove_entry(index);
                     }
                 }
                 StateEvent::UpdateBindGroupEntry(id, index, resource) => {
@@ -663,9 +585,6 @@ impl State {
                         current_label: DEFAULT_NAME.to_string(),
                     });
                 }
-                StateEvent::DeleteCamera(camera_id) => {
-                    self.project.cameras.unregister(camera_id);
-                }
                 StateEvent::CreateDimension => {
                     const DEFAULT_NAME: &str = "Dimension";
 
@@ -679,9 +598,6 @@ impl State {
                         target: RenameTarget::Dimension(dimension_id),
                         current_label: DEFAULT_NAME.to_string(),
                     });
-                }
-                StateEvent::DeleteDimension(dimension_id) => {
-                    self.project.dimensions.unregister(dimension_id);
                 }
                 StateEvent::CreateSampler => {
                     const DEFAULT_NAME: &str = "Sampler";
@@ -698,8 +614,42 @@ impl State {
                         current_label: DEFAULT_NAME.to_string(),
                     });
                 }
+                StateEvent::DeleteUniform(id) => {
+                    self.project.uniforms.unregister(id);
+                }
+                StateEvent::DeleteUniformField(id, index) => {
+                    if let Ok(uniform) = self.project.uniforms.get_mut(id) {
+                        uniform.remove_field(index);
+                    }
+                }
+                StateEvent::DeleteBindGroup(bind_group_id) => {
+                    self.project.bind_groups.unregister(bind_group_id);
+                }
+                StateEvent::DeleteBindGroupEntry(id, index) => {
+                    if let Ok(bind_group) = self.project.bind_groups.get_mut(id) {
+                        bind_group.remove_entry(index);
+                    }
+                }
+                StateEvent::DeleteViewport(viewport_id) => {
+                    self.project.viewports.unregister(viewport_id);
+                }
+                StateEvent::DeleteShader(shader_id) => {
+                    self.project.shaders.unregister(shader_id);
+                }
+                StateEvent::DeleteCamera(camera_id) => {
+                    self.project.cameras.unregister(camera_id);
+                }
+                StateEvent::DeleteDimension(dimension_id) => {
+                    self.project.dimensions.unregister(dimension_id);
+                }
                 StateEvent::DeleteSampler(sampler_id) => {
                     self.project.samplers.unregister(sampler_id);
+                }
+                StateEvent::DeleteTexture(texture_id) => {
+                    self.project.textures.unregister(texture_id);
+                }
+                StateEvent::DeleteTextureView(texture_view_id) => {
+                    self.project.texture_views.unregister(texture_view_id);
                 }
             }
         }

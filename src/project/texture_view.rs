@@ -171,6 +171,7 @@ impl Recreatable for TextureView {
 
         let has_correct_format = ALLOWED_EGUI_FORMATS.contains(&texture.format());
 
+        let scope = WgpuErrorScope::push(context.device);
         self.egui_id = match (self.egui_id, has_correct_format) {
             (Some(egui_id), true) => {
                 context.egui_renderer.update_egui_texture(
@@ -192,6 +193,7 @@ impl Recreatable for TextureView {
             )),
             (None, false) => None,
         };
+        scope.pop().inspect_err(|_| self.has_error = true)?;
 
         self.has_error = false;
         self.dirty = false;

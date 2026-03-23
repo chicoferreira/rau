@@ -361,7 +361,7 @@ impl Scene {
             .viewports
             .get(hdr_viewport_id)
             .unwrap()
-            .texture_view_id;
+            .texture_view_id();
 
         let viewport_texture_format = wgpu::TextureFormat::Rgba8UnormSrgb;
 

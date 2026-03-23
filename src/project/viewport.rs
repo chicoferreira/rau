@@ -17,7 +17,7 @@ pub struct ViewportCreationContext<'a> {
 
 pub struct Viewport {
     pub label: String,
-    pub texture_view_id: TextureViewId,
+    texture_view_id: TextureViewId,
     pub dimension_id: DimensionId,
     pub requested_ui_size: Option<Size2d>,
     pub controls_camera_id: CameraId,
@@ -53,6 +53,15 @@ impl Viewport {
             requested_ui_size: None,
             dirty: false,
         })
+    }
+
+    pub fn texture_view_id(&self) -> TextureViewId {
+        self.texture_view_id
+    }
+
+    pub fn set_texture_view_id(&mut self, texture_view_id: TextureViewId) {
+        self.texture_view_id = texture_view_id;
+        self.dirty = true;
     }
 
     pub fn egui_id(&self) -> egui::TextureId {

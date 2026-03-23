@@ -141,8 +141,8 @@ pub async fn load_model(
     };
 
     for m in obj_materials? {
-        let file_name = m.diffuse_texture.unwrap();
-        let diffuse_texture = load_texture(&ctx, &file_name, false).await?;
+        let diffuse_file_name = m.diffuse_texture.unwrap();
+        let diffuse_texture = load_texture(&ctx, &diffuse_file_name, false).await?;
 
         let diffuse_texture_id = project.textures.register(diffuse_texture);
         let diffuse_texture_view_id = project.texture_views.register(TextureView::new(
@@ -151,13 +151,14 @@ pub async fn load_model(
                 egui_renderer,
                 device,
             },
-            file_name.clone(),
+            diffuse_file_name.clone(),
             diffuse_texture_id,
             None,
             None,
         )?);
 
-        let normal_texture = load_texture(&ctx, &m.normal_texture.unwrap(), true).await?;
+        let normal_file_name = m.normal_texture.unwrap();
+        let normal_texture = load_texture(&ctx, &normal_file_name, true).await?;
 
         let normal_texture_id = project.textures.register(normal_texture);
         let normal_texture_view_id = project.texture_views.register(TextureView::new(
@@ -166,7 +167,7 @@ pub async fn load_model(
                 egui_renderer,
                 device,
             },
-            file_name.clone(),
+            normal_file_name.clone(),
             normal_texture_id,
             None,
             None,
@@ -175,7 +176,7 @@ pub async fn load_model(
         let material_bind_group = create_material_bind_group(
             project,
             device,
-            file_name.clone(),
+            diffuse_file_name.clone(),
             diffuse_texture_view_id,
             normal_texture_view_id,
             sampler_id,

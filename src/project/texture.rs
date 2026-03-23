@@ -29,6 +29,7 @@ pub struct Texture {
     has_error: bool,
 }
 
+#[derive(Clone, PartialEq)]
 pub enum TextureSource {
     // Grab size from dimension
     Dimension(DimensionId),
@@ -64,6 +65,29 @@ impl Texture {
 
     pub fn format(&self) -> wgpu::TextureFormat {
         self.format
+    }
+
+    pub fn usage(&self) -> wgpu::TextureUsages {
+        self.usage
+    }
+
+    pub fn source(&self) -> &TextureSource {
+        &self.source
+    }
+
+    pub fn set_format(&mut self, format: wgpu::TextureFormat) {
+        self.format = format;
+        self.dirty = true;
+    }
+
+    pub fn set_usage(&mut self, usage: wgpu::TextureUsages) {
+        self.usage = usage;
+        self.dirty = true;
+    }
+
+    pub fn set_source(&mut self, source: TextureSource) {
+        self.source = source;
+        self.dirty = true;
     }
 
     fn create_texture(
