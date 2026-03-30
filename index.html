@@ -18,22 +18,58 @@
                 width: 100%;
                 height: 100%;
                 overflow: hidden;
+                background-color: #1b1b1b;
+                color: white;
+                font-family: sans-serif;
             }
             canvas {
-                background-color: black;
                 width: 100% !important;
                 height: 100% !important;
+            }
+            #status {
+                position: fixed;
+                inset: 0;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                text-align: center;
+                padding: 24px;
             }
         </style>
     </head>
 
     <body id="wasm-example">
         <canvas id="canvas"></canvas>
+        <div id="status">Loading...</div>
         <script type="module">
             import init from "./pkg/rau.js";
-            init().then(() => {
-                console.log("WASM Loaded");
-            });
+
+            const canvas = document.getElementById("canvas");
+            const status = document.getElementById("status");
+
+            function onStart() {
+                status.style.display = "none";
+                canvas.focus();
+
+                window.addEventListener("error", (event) => {
+                    event.preventDefault();
+                    onCrash(event.error ?? event.message);
+                });
+
+                window.addEventListener("unhandledrejection", (event) => {
+                    event.preventDefault();
+                    onCrash(event.reason);
+                });
+            }
+
+            function onCrash(error) {
+                status.textContent =
+                    "Application crashed. Check the browser console for details.";
+                status.style.display = "flex";
+                canvas.style.display = "none";
+            }
+
+            init().then(onStart).catch(onCrash);
         </script>
     </body>
 </html>
