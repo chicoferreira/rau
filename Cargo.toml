@@ -17,38 +17,35 @@ anyhow = "1.0.100"
 bytemuck = { version = "1.24.0", features = ["derive"] }
 cgmath = "0.18.0"
 derive_more = { version = "2.1.1", features = ["from"] }
-egui = "0.33.3"
-egui-wgpu = "0.33.3"
-egui-winit = { version = "0.33.3", default-features = false }
-egui_dnd = "0.14.0"
-egui_table = "0.7.0"
-egui_ltreeview = "0.6.1"
-egui_tiles = { git = "https://github.com/chicoferreira/egui_tiles", branch = "mut_tiles" }
+egui = "0.34.1"
+egui-wgpu = "0.34.1"
+egui-winit = { version = "0.34.1", default-features = false }
+egui_dnd = "0.15.0"
+egui_extras = { version = "0.34.1", features = ["syntect"] }
+egui_ltreeview = "0.7.0"
+egui_tiles = "0.15.0"
 enumset = "1.1.10"
 env_logger = "0.11.8"
 fastrand = "2.3.0"
 image = { version = "0.24", default-features = false, features = ["png", "jpeg", "hdr"] }
 instant = "0.1"
 log = "0.4.29"
-naga = { version = "28.0.0", features = ["wgsl-in"] }
+naga = { version = "29.0.0", features = ["wgsl-in"] }
 serde_json = "1.0.149"
 slotmap = "1.0"
 strum = { version = "0.28.0", features = ["derive"] }
 thiserror = "2.0.18"
 tobj = { version = "4.0.3", default-features = false, features = ["futures"] }
-wgpu = { version = "28.0", features = ["naga-ir", "serde"] }
+wgpu = { version = "29.0", features = ["naga-ir", "serde"] }
 winit = { version = "0.30.12", features = ["android-native-activity"] }
 syntect = { version = "5.3.0", default-features = false, features = ["default-fancy"] }
-egui_extras = { version = "0.33.3", features = ["syntect"] }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 # Enable default features for egui-winit
-egui-winit = { version = "0.33.3", default-features = true }
+egui-winit = { version = "0.34.1", default-features = true }
 pollster = "0.4.0"
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
-# Disable default features as egui-winit arboard is not compatible with wasm32
-egui-winit = { version = "0.33.3", default-features = false }
 console_error_panic_hook = "0.1.6"
 console_log = "1.0"
 wasm-bindgen = "0.2"
@@ -61,13 +58,6 @@ web-sys = { version = "0.3", features = [
 ]}
 reqwest = "0.12"
 instant = { version = "0.1", features = [ "wasm-bindgen" ] }
-
-[patch.crates-io]
-# Using revisions until wgpu in egui gets updated to 28.0
-egui = { git = "https://github.com/emilk/egui.git", rev = "4a9fc7e6417b9ca838b880f2a89fd16468aece67" }
-egui-wgpu = { git = "https://github.com/emilk/egui.git", rev = "4a9fc7e6417b9ca838b880f2a89fd16468aece67" }
-egui-winit = { git = "https://github.com/emilk/egui.git", rev = "4a9fc7e6417b9ca838b880f2a89fd16468aece67" }
-egui_extras = { git = "https://github.com/emilk/egui.git", rev = "4a9fc7e6417b9ca838b880f2a89fd16468aece67" }
 
 [build-dependencies]
 anyhow = "1.0"

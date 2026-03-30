@@ -385,10 +385,10 @@ impl Scene {
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("Render Pipeline Layout"),
                 bind_group_layouts: &[
-                    &texture_bind_group_layout,
-                    &camera_bind_group.inner_layout(),
-                    &light_bind_group.inner_layout(),
-                    &environment_bind_group.inner_layout(),
+                    Some(&texture_bind_group_layout),
+                    Some(&camera_bind_group.inner_layout()),
+                    Some(&light_bind_group.inner_layout()),
+                    Some(&environment_bind_group.inner_layout()),
                 ],
                 immediate_size: 0,
             });
@@ -411,8 +411,8 @@ impl Scene {
             let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("Light Pipeline Layout"),
                 bind_group_layouts: &[
-                    &camera_bind_group.inner_layout(),
-                    &light_bind_group.inner_layout(),
+                    Some(&camera_bind_group.inner_layout()),
+                    Some(&light_bind_group.inner_layout()),
                 ],
                 immediate_size: 0,
             });
@@ -433,8 +433,8 @@ impl Scene {
             let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("Sky Pipeline Layout"),
                 bind_group_layouts: &[
-                    &camera_bind_group.inner_layout(),
-                    &environment_bind_group.inner_layout(),
+                    Some(&camera_bind_group.inner_layout()),
+                    Some(&environment_bind_group.inner_layout()),
                 ],
                 immediate_size: 0,
             });

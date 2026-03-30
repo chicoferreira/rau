@@ -43,7 +43,7 @@ impl HdrPipeline {
         let shader = project.shaders.get(hdr_shader_id).unwrap();
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: None,
-            bind_group_layouts: &[bind_group.inner_layout()],
+            bind_group_layouts: &[Some(bind_group.inner_layout())],
             immediate_size: 0,
         });
 
