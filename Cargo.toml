@@ -2,6 +2,9 @@
 name = "rau"
 version = "0.1.0"
 edition = "2024"
+description = "Graphics engine focused on real-time rendering and user authoring"
+repository = "https://github.com/chicoferreira/rau"
+license-file = "LICENSE.md"
 
 [lib]
 crate-type = ["cdylib", "rlib"]
