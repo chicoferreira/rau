@@ -290,28 +290,20 @@ impl State {
             pixels_per_point: self.window.scale_factor() as f32,
         };
 
-        let frame = self
-            .egui_renderer
-            .handle(&self.window, &screen_descriptor, |context| {
-                // FIXME: until this new version is released with proper documentation
-                #[allow(deprecated)]
-                egui::CentralPanel::default()
-                    .frame(egui::Frame::none().inner_margin(0))
-                    .show(context, |ui| {
-                        let mut snapshot = ui::pane::StateSnapshot {
-                            pending_events: &mut self.pending_events,
-                            project: &mut self.project,
-                            rename_state: &mut self.rename_state,
-                            errors: &self.errors,
-                        };
+        let frame = self.egui_renderer.handle(&self.window, |ui| {
+            let mut snapshot = ui::pane::StateSnapshot {
+                pending_events: &mut self.pending_events,
+                project: &mut self.project,
+                rename_state: &mut self.rename_state,
+                errors: &self.errors,
+            };
 
-                        snapshot.ui(
-                            ui,
-                            &mut self.inspector_tree_pane,
-                            &mut self.viewport_tree_pane,
-                        );
-                    });
-            });
+            snapshot.ui(
+                ui,
+                &mut self.inspector_tree_pane,
+                &mut self.viewport_tree_pane,
+            );
+        });
 
         self.errors.clear();
 

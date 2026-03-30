@@ -37,23 +37,12 @@ impl EguiRenderer {
         }
     }
 
-    pub fn handle<F>(
-        &mut self,
-        window: &winit::window::Window,
-        screen_descriptor: &egui_wgpu::ScreenDescriptor,
-        run_ui: F,
-    ) -> EguiFrame
+    pub fn handle<F>(&mut self, window: &winit::window::Window, run_ui: F) -> EguiFrame
     where
-        F: FnOnce(&egui::Context) -> (),
+        F: FnMut(&mut egui::Ui) -> (),
     {
         let raw_input = self.state.take_egui_input(window);
-        let full_output = {
-            let egui_context = self.state.egui_ctx();
-            egui_context.begin_pass(raw_input);
-            run_ui(egui_context);
-            egui_context.set_pixels_per_point(screen_descriptor.pixels_per_point);
-            egui_context.end_pass()
-        };
+        let full_output = self.state.egui_ctx().run_ui(raw_input, run_ui);
 
         self.state
             .handle_platform_output(window, full_output.platform_output);
