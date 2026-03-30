@@ -1,5 +1,3 @@
-use wgpu::util::DeviceExt;
-
 use crate::{
     error::{AppError, AppResult, WgpuErrorScope},
     model::{self, Vertex},
@@ -19,61 +17,13 @@ use crate::{
     state,
     ui::{self},
 };
-use cgmath::{InnerSpace, Rotation3, Zero};
 
 mod hdr;
 mod loader;
 
-struct Instance {
-    position: cgmath::Vector3<f32>,
-    rotation: cgmath::Quaternion<f32>,
-}
-
-impl Instance {
-    fn to_raw(&self) -> InstanceRaw {
-        let model =
-            cgmath::Matrix4::from_translation(self.position) * cgmath::Matrix4::from(self.rotation);
-        InstanceRaw {
-            model: model.into(),
-            normal: cgmath::Matrix3::from(self.rotation).into(),
-        }
-    }
-}
-
-#[repr(C)]
-#[derive(Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
-#[allow(dead_code)]
-struct InstanceRaw {
-    model: [[f32; 4]; 4],
-    normal: [[f32; 3]; 3],
-}
-
-impl model::Vertex for InstanceRaw {
-    fn desc() -> wgpu::VertexBufferLayout<'static> {
-        const ATTRIBUTES: &[wgpu::VertexAttribute] = &wgpu::vertex_attr_array![
-            5 => Float32x4,
-            6 => Float32x4,
-            7 => Float32x4,
-            8 => Float32x4,
-            9 => Float32x3,
-            10 => Float32x3,
-            11 => Float32x3
-        ];
-        wgpu::VertexBufferLayout {
-            array_stride: std::mem::size_of::<InstanceRaw>() as wgpu::BufferAddress,
-            step_mode: wgpu::VertexStepMode::Instance,
-            attributes: ATTRIBUTES,
-        }
-    }
-}
-
-const NUM_INSTANCES_PER_ROW: u32 = 10;
-
 pub struct Scene {
     render_pipeline: wgpu::RenderPipeline,
     obj_model: model::Model,
-    instance_buffer: wgpu::Buffer,
-    instances: Vec<Instance>,
     depth_texture_view_id: TextureViewId,
     camera_bind_group_id: BindGroupId,
     light_bind_group_id: BindGroupId,
@@ -191,36 +141,6 @@ impl Scene {
             ],
         )?;
         let camera_uniform_id = project.uniforms.register(camera_uniform);
-
-        const SPACE_BETWEEN: f32 = 3.0;
-        let instances = (0..NUM_INSTANCES_PER_ROW)
-            .flat_map(|z| {
-                (0..NUM_INSTANCES_PER_ROW).map(move |x| {
-                    let x = SPACE_BETWEEN * (x as f32 - NUM_INSTANCES_PER_ROW as f32 / 2.0);
-                    let z = SPACE_BETWEEN * (z as f32 - NUM_INSTANCES_PER_ROW as f32 / 2.0);
-
-                    let position = cgmath::Vector3 { x, y: 0.0, z };
-
-                    let rotation = if position.is_zero() {
-                        cgmath::Quaternion::from_axis_angle(
-                            cgmath::Vector3::unit_z(),
-                            cgmath::Deg(0.0),
-                        )
-                    } else {
-                        cgmath::Quaternion::from_axis_angle(position.normalize(), cgmath::Deg(45.0))
-                    };
-
-                    Instance { position, rotation }
-                })
-            })
-            .collect::<Vec<_>>();
-
-        let instance_data = instances.iter().map(Instance::to_raw).collect::<Vec<_>>();
-        let instance_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Instance Buffer"),
-            contents: bytemuck::cast_slice(&instance_data),
-            usage: wgpu::BufferUsages::VERTEX,
-        });
 
         let camera_bind_group = project::bindgroup::BindGroup::new(
             project,
@@ -401,7 +321,7 @@ impl Scene {
                 &render_pipeline_layout,
                 HdrPipeline::RENDER_FORMAT,
                 Some(wgpu::TextureFormat::Depth32Float),
-                &[model::ModelVertex::desc(), InstanceRaw::desc()],
+                &[model::ModelVertex::desc()],
                 wgpu::PrimitiveTopology::TriangleList,
                 shader.create_wgpu_shader_module(device)?,
             )
@@ -522,8 +442,6 @@ impl Scene {
         Ok(Scene {
             render_pipeline,
             obj_model,
-            instance_buffer,
-            instances,
             depth_texture_view_id,
             camera_bind_group_id,
             light_bind_group_id,
@@ -569,10 +487,7 @@ impl Scene {
                         render::RenderBindGroupSpec::new_fixed(0, self.camera_bind_group_id),
                         render::RenderBindGroupSpec::new_fixed(1, self.light_bind_group_id),
                     ],
-                    vertex_buffers: vec![
-                        render::RenderVertexBufferSpec::new_model_mesh(0),
-                        render::RenderVertexBufferSpec::new_fixed(1, &self.instance_buffer),
-                    ],
+                    vertex_buffers: vec![render::RenderVertexBufferSpec::new_model_mesh(0)],
                     draw: render::RenderDrawSpec::Model {
                         model: &self.obj_model,
                         instances: 0..1,
@@ -586,13 +501,10 @@ impl Scene {
                         render::RenderBindGroupSpec::new_fixed(2, self.light_bind_group_id),
                         render::RenderBindGroupSpec::new_fixed(3, self.environment_bind_group_id),
                     ],
-                    vertex_buffers: vec![
-                        render::RenderVertexBufferSpec::new_model_mesh(0),
-                        render::RenderVertexBufferSpec::new_fixed(1, &self.instance_buffer),
-                    ],
+                    vertex_buffers: vec![render::RenderVertexBufferSpec::new_model_mesh(0)],
                     draw: render::RenderDrawSpec::Model {
                         model: &self.obj_model,
-                        instances: 0..self.instances.len() as u32,
+                        instances: 0..100 as u32,
                     },
                 },
                 render::RenderPipelineSpec {
