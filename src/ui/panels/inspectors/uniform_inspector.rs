@@ -348,13 +348,7 @@ fn ui_uniform_field_data(ui: &mut egui::Ui, data: &uniform::UniformFieldData) {
                 }
             });
         }
-        uniform::UniformFieldData::Rgba(color) => {
-            let mut color = color.clone();
-            color_edit_rgba(ui, &mut color);
-        }
-        uniform::UniformFieldData::Rgb(color) => {
-            let mut color = color.clone();
-            egui::color_picker::color_edit_button_rgb(ui, &mut color);
-        }
+        uniform::UniformFieldData::Rgba(color) => ui_array(ui, color, label),
+        uniform::UniformFieldData::Rgb(color) => ui_array(ui, color, label),
     }
 }
