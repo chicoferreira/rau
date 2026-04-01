@@ -44,7 +44,7 @@ const ALLOWED_EGUI_FORMATS: &[wgpu::TextureFormat] = &[
 impl TextureView {
     // Change this to descriptor to avoid huge constructors
     pub fn new(
-        ctx: TextureViewCreationContext,
+        ctx: &mut TextureViewCreationContext,
         label: String,
         texture_id: Option<TextureId>,
         format: Option<TextureViewFormat>,

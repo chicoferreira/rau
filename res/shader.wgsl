@@ -76,11 +76,9 @@ fn vs_main(
 @group(0) @binding(0)
 var t_diffuse: texture_2d<f32>;
 @group(0) @binding(1)
-var s_diffuse: sampler;
-@group(0) @binding(2)
 var t_normal: texture_2d<f32>;
-@group(0) @binding(3)
-var s_normal: sampler;
+@group(0) @binding(2)
+var s_material: sampler;
 
 @group(3)
 @binding(0)
@@ -91,8 +89,8 @@ var env_sampler: sampler;
 
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
-    let object_color: vec4<f32> = textureSample(t_diffuse, s_diffuse, in.tex_coords);
-    let object_normal: vec4<f32> = textureSample(t_normal, s_normal, in.tex_coords);
+    let object_color: vec4<f32> = textureSample(t_diffuse, s_material, in.tex_coords);
+    let object_normal: vec4<f32> = textureSample(t_normal, s_material, in.tex_coords);
 
     let world_tangent = normalize(in.world_tangent - dot(in.world_tangent, in.world_normal) * in.world_normal);
     let world_bitangent = cross(world_tangent, in.world_normal);

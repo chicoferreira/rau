@@ -2,7 +2,7 @@ use std::{io::BufReader, path::Path};
 
 use crate::{
     error::{AppError, AppResult},
-    project::model::vertex_buffer::VertexBufferSpec,
+    project::{BindGroupId, model::vertex_buffer::VertexBufferSpec},
     resources::load_binary,
 };
 
@@ -10,26 +10,27 @@ pub mod vertex_buffer;
 
 pub struct Model {
     pub label: String,
-    pub meshes: Vec<Mesh>,
-    pub materials: Vec<Material>,
-    pub vertex_buffer_spec: VertexBufferSpec,
+    meshes: Vec<Mesh>,
+    materials: Vec<Material>,
+    vertex_buffer_spec: VertexBufferSpec,
 }
 
 pub struct Mesh {
-    pub positions: Vec<[f32; 3]>,
-    pub normals: Vec<[f32; 3]>,
-    pub texture_coords: Vec<[f32; 2]>,
-    pub tangents: Vec<[f32; 3]>,
-    pub bitangents: Vec<[f32; 3]>,
-    pub indices: Vec<u32>,
-    pub material_id: Option<usize>,
-    pub vertex_buffer: wgpu::Buffer,
-    pub index_buffer: wgpu::Buffer,
+    positions: Vec<[f32; 3]>,
+    normals: Vec<[f32; 3]>,
+    texture_coords: Vec<[f32; 2]>,
+    tangents: Vec<[f32; 3]>,
+    bitangents: Vec<[f32; 3]>,
+    indices: Vec<u32>,
+    material_index: Option<usize>,
+    vertex_buffer: wgpu::Buffer,
+    index_buffer: wgpu::Buffer,
 }
 
 pub struct Material {
-    pub label: String,
-    pub texture_paths: Vec<String>,
+    label: String,
+    texture_paths: Vec<String>,
+    bind_group_id: Option<BindGroupId>,
 }
 
 impl Model {
@@ -71,6 +72,26 @@ impl Model {
             vertex_buffer_spec,
         })
     }
+
+    pub fn meshes(&self) -> &[Mesh] {
+        &self.meshes
+    }
+
+    pub fn materials(&self) -> &[Material] {
+        &self.materials
+    }
+
+    pub fn materials_mut(&mut self) -> &mut [Material] {
+        &mut self.materials
+    }
+
+    pub fn get_material(&self, material_id: usize) -> Option<&Material> {
+        self.materials.get(material_id)
+    }
+
+    pub fn vertex_buffer_spec(&self) -> &VertexBufferSpec {
+        &self.vertex_buffer_spec
+    }
 }
 
 impl From<tobj::Material> for Material {
@@ -91,6 +112,7 @@ impl From<tobj::Material> for Material {
         Material {
             label,
             texture_paths,
+            bind_group_id: None,
         }
     }
 }
@@ -128,7 +150,7 @@ impl Mesh {
             tangents,
             bitangents,
             indices,
-            material_id: model.mesh.material_id,
+            material_index: model.mesh.material_id,
             vertex_buffer,
             index_buffer,
         }
@@ -267,5 +289,59 @@ impl Mesh {
         });
 
         (vertex_buffer, index_buffer)
+    }
+
+    pub fn positions(&self) -> &[[f32; 3]] {
+        &self.positions
+    }
+
+    pub fn normals(&self) -> &[[f32; 3]] {
+        &self.normals
+    }
+
+    pub fn texture_coords(&self) -> &[[f32; 2]] {
+        &self.texture_coords
+    }
+
+    pub fn tangents(&self) -> &[[f32; 3]] {
+        &self.tangents
+    }
+
+    pub fn bitangents(&self) -> &[[f32; 3]] {
+        &self.bitangents
+    }
+
+    pub fn indices(&self) -> &[u32] {
+        &self.indices
+    }
+
+    pub fn material_index(&self) -> Option<usize> {
+        self.material_index
+    }
+
+    pub fn vertex_buffer(&self) -> &wgpu::Buffer {
+        &self.vertex_buffer
+    }
+
+    pub fn index_buffer(&self) -> &wgpu::Buffer {
+        &self.index_buffer
+    }
+}
+
+impl Material {
+    pub fn label(&self) -> &str {
+        &self.label
+    }
+
+    pub fn texture_paths(&self) -> &[String] {
+        &self.texture_paths
+    }
+
+    pub fn bind_group_id(&self) -> Option<BindGroupId> {
+        self.bind_group_id
+    }
+
+    pub fn set_bind_group_id(&mut self, bind_group_id: BindGroupId) {
+        self.bind_group_id = Some(bind_group_id);
     }
 }

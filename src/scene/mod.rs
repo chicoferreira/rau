@@ -1,8 +1,8 @@
 use crate::{
     error::{AppError, AppResult, WgpuErrorScope},
-    model::{self, Vertex},
     project::{
-        self, BindGroupId, TextureViewId, ViewportId,
+        self, BindGroupId, ModelId, TextureViewId, ViewportId,
+        bindgroup::{BindGroup, BindGroupEntry, BindGroupResource},
         camera::Camera,
         dimension::Dimension,
         model::Model,
@@ -13,7 +13,8 @@ use crate::{
             Uniform, UniformField, UniformFieldData, UniformFieldSource, camera::CameraField,
         },
     },
-    render, resources,
+    render,
+    resources::{self, load_texture},
     scene::hdr::HdrPipeline,
     state,
     ui::{self},
@@ -24,7 +25,7 @@ mod loader;
 
 pub struct Scene {
     render_pipeline: wgpu::RenderPipeline,
-    obj_model: model::Model,
+    cube_model_id: ModelId,
     depth_texture_view_id: TextureViewId,
     camera_bind_group_id: BindGroupId,
     light_bind_group_id: BindGroupId,
@@ -66,15 +67,7 @@ impl Scene {
                     wgpu::BindGroupLayoutEntry {
                         binding: 1,
                         visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
-                        // This should match the filterable field of the
-                        // corresponding Texture entry above.
-                        ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
-                        count: None,
-                    },
-                    // normal map
-                    wgpu::BindGroupLayoutEntry {
-                        binding: 2,
-                        visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
+                        // normal map
                         ty: wgpu::BindingType::Texture {
                             multisampled: false,
                             view_dimension: wgpu::TextureViewDimension::D2,
@@ -83,8 +76,10 @@ impl Scene {
                         count: None,
                     },
                     wgpu::BindGroupLayoutEntry {
-                        binding: 3,
+                        binding: 2,
                         visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
+                        // This should match the filterable field of the
+                        // corresponding Texture entry above.
                         ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
                         count: None,
                     },
@@ -201,19 +196,73 @@ impl Scene {
             },
         )?);
 
-        let obj_model = resources::load_model(
-            project,
-            "cube.obj",
-            egui_renderer,
-            &device,
-            &queue,
-            image_texture_sampler_id,
-        )
-        .await
-        .unwrap();
+        let mut cube_model =
+            Model::load_from_obj_file("cube".to_string(), "cube.obj", device).await?;
+        for material in cube_model.materials_mut() {
+            let texture_paths = material.texture_paths();
+            let diffuse_path = texture_paths.get(0).cloned().unwrap_or_default();
+            let normal_path = texture_paths.get(1).cloned().unwrap_or_default();
 
-        let cube_model = Model::load_from_obj_file("cube".to_string(), "cube.obj", device).await?;
-        let _ = project.models.register(cube_model);
+            let ctx = TextureCreationContext {
+                dimensions: &project.dimensions,
+                device,
+                queue,
+            };
+
+            let diffuse_format = wgpu::TextureFormat::Rgba8UnormSrgb;
+            let diffuse_texture = load_texture(&ctx, &diffuse_path, diffuse_format).await?;
+            let diffuse_id = project.textures.register(diffuse_texture);
+
+            let normal_format = wgpu::TextureFormat::Rgba8Unorm;
+            let normal_texture = load_texture(&ctx, &normal_path, normal_format).await?;
+            let normal_id = project.textures.register(normal_texture);
+
+            let ctx = &mut TextureViewCreationContext {
+                textures: &project.textures,
+                egui_renderer,
+                device,
+            };
+            let diffuse_view = TextureView::new(ctx, diffuse_path, Some(diffuse_id), None, None)?;
+            let normal_view = TextureView::new(ctx, normal_path, Some(normal_id), None, None)?;
+
+            let diffuse_texture_view_id = project.texture_views.register(diffuse_view);
+            let normal_texture_view_id = project.texture_views.register(normal_view);
+
+            let entries = vec![
+                BindGroupEntry::new(BindGroupResource::Texture {
+                    texture_view_id: Some(diffuse_texture_view_id),
+                    view_dimension: wgpu::TextureViewDimension::D2,
+                    sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                }),
+                BindGroupEntry::new(BindGroupResource::Texture {
+                    texture_view_id: Some(normal_texture_view_id),
+                    view_dimension: wgpu::TextureViewDimension::D2,
+                    sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                }),
+                BindGroupEntry::new(BindGroupResource::Sampler {
+                    sampler_id: Some(image_texture_sampler_id),
+                    sampler_binding_type: wgpu::SamplerBindingType::Filtering,
+                }),
+            ];
+
+            let bind_group =
+                BindGroup::new(project, device, "cube bind group".to_string(), entries)?;
+            let bind_group_id = project.bind_groups.register(bind_group);
+
+            material.set_bind_group_id(bind_group_id);
+        }
+
+        let (vertex_attributes, vertex_buffer_stride) = cube_model
+            .vertex_buffer_spec()
+            .to_wgpu_attributes_and_stride();
+
+        let vertex_buffer_layout = wgpu::VertexBufferLayout {
+            array_stride: vertex_buffer_stride,
+            step_mode: wgpu::VertexStepMode::Vertex,
+            attributes: &vertex_attributes,
+        };
+
+        let cube_model_id = project.models.register(cube_model);
 
         let hdr_texture = Texture::new(
             &TextureCreationContext {
@@ -228,7 +277,7 @@ impl Scene {
         )?;
         let hdr_texture_id = project.textures.register(hdr_texture);
         let hdr_texture_view = TextureView::new(
-            TextureViewCreationContext {
+            &mut TextureViewCreationContext {
                 textures: &project.textures,
                 egui_renderer,
                 device,
@@ -267,7 +316,7 @@ impl Scene {
             hdr_loader.from_equirectangular_bytes(project, &device, &queue, &sky_bytes, 1080)?;
 
         let sky_texture_view = TextureView::new(
-            TextureViewCreationContext {
+            &mut TextureViewCreationContext {
                 textures: &project.textures,
                 egui_renderer,
                 device,
@@ -325,7 +374,7 @@ impl Scene {
                 &render_pipeline_layout,
                 HdrPipeline::RENDER_FORMAT,
                 Some(wgpu::TextureFormat::Depth32Float),
-                &[model::ModelVertex::desc()],
+                &[vertex_buffer_layout.clone()],
                 wgpu::PrimitiveTopology::TriangleList,
                 shader.create_wgpu_shader_module(device)?,
             )
@@ -347,7 +396,7 @@ impl Scene {
                 &layout,
                 HdrPipeline::RENDER_FORMAT,
                 Some(wgpu::TextureFormat::Depth32Float),
-                &[model::ModelVertex::desc()],
+                &[vertex_buffer_layout],
                 wgpu::PrimitiveTopology::TriangleList,
                 shader.create_wgpu_shader_module(device)?,
             )
@@ -388,7 +437,7 @@ impl Scene {
         )?;
         let depth_texture_id = project.textures.register(depth_texture);
         let depth_texture_view = TextureView::new(
-            TextureViewCreationContext {
+            &mut TextureViewCreationContext {
                 textures: &project.textures,
                 egui_renderer,
                 device,
@@ -413,7 +462,7 @@ impl Scene {
         )?;
         let viewport_texture_id = project.textures.register(viewport_texture);
         let output_viewport_view_id = project.texture_views.register(TextureView::new(
-            TextureViewCreationContext {
+            &mut TextureViewCreationContext {
                 textures: &project.textures,
                 egui_renderer,
                 device,
@@ -424,7 +473,7 @@ impl Scene {
             None,
         )?);
         let viewport_texture_view = TextureView::new(
-            TextureViewCreationContext {
+            &mut TextureViewCreationContext {
                 textures: &project.textures,
                 egui_renderer,
                 device,
@@ -445,8 +494,8 @@ impl Scene {
 
         Ok(Scene {
             render_pipeline,
-            obj_model,
             depth_texture_view_id,
+            cube_model_id,
             camera_bind_group_id,
             light_bind_group_id,
             light_render_pipeline,
@@ -472,6 +521,8 @@ impl Scene {
             .as_ref()
             .unwrap(); // TODO: FIX ME
 
+        let cube_model = project.models.get(self.cube_model_id)?;
+
         let scope = WgpuErrorScope::push(device);
 
         let main_render_pass = render::RenderPassSpec {
@@ -493,7 +544,7 @@ impl Scene {
                     ],
                     vertex_buffers: vec![render::RenderVertexBufferSpec::new_model_mesh(0)],
                     draw: render::RenderDrawSpec::Model {
-                        model: &self.obj_model,
+                        model: &cube_model,
                         instances: 0..1,
                     },
                 },
@@ -507,7 +558,7 @@ impl Scene {
                     ],
                     vertex_buffers: vec![render::RenderVertexBufferSpec::new_model_mesh(0)],
                     draw: render::RenderDrawSpec::Model {
-                        model: &self.obj_model,
+                        model: &cube_model,
                         instances: 0..100 as u32,
                     },
                 },

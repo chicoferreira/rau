@@ -23,7 +23,7 @@ impl VertexBufferSpec {
         }
     }
 
-    fn to_wgpu_attributes_and_offset(&self) -> (Vec<wgpu::VertexAttribute>, u64) {
+    pub fn to_wgpu_attributes_and_stride(&self) -> (Vec<wgpu::VertexAttribute>, u64) {
         let mut attributes = vec![];
         let mut offset = 0;
 

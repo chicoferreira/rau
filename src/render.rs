@@ -1,7 +1,9 @@
 use crate::{
     error::AppResult,
-    model,
-    project::{self, BindGroupId},
+    project::{
+        self, BindGroupId,
+        model::{Mesh, Model},
+    },
 };
 
 pub struct RenderPassSpecSet<'a> {
@@ -97,19 +99,19 @@ impl RenderPipelineSpec<'_> {
 
         match &self.draw {
             RenderDrawSpec::Model { model, instances } => {
-                for mesh in &model.meshes {
+                for mesh in model.meshes() {
                     for vertex_buffer in &self.vertex_buffers {
                         vertex_buffer.set(render_pass, Some(mesh));
                     }
 
                     for bind_group in &self.bind_groups {
-                        bind_group.set(render_pass, Some(mesh), project);
+                        bind_group.set(render_pass, Some(mesh), Some(model), project);
                     }
 
                     render_pass
-                        .set_index_buffer(mesh.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
+                        .set_index_buffer(mesh.index_buffer().slice(..), wgpu::IndexFormat::Uint32);
 
-                    render_pass.draw_indexed(0..mesh.num_elements, 0, instances.clone());
+                    render_pass.draw_indexed(0..mesh.indices().len() as u32, 0, instances.clone());
                 }
             }
             RenderDrawSpec::Single {
@@ -121,7 +123,7 @@ impl RenderPipelineSpec<'_> {
                 }
 
                 for bind_group in &self.bind_groups {
-                    bind_group.set(render_pass, None, project);
+                    bind_group.set(render_pass, None, None, project);
                 }
 
                 render_pass.draw(vertices.clone(), instances.clone());
@@ -144,11 +146,11 @@ impl<'a> RenderVertexBufferSpec<'a> {
         Self::Fixed { slot, buffer }
     }
 
-    pub fn set(&self, render_pass: &mut wgpu::RenderPass, current_mesh: Option<&model::Mesh>) {
+    pub fn set(&self, render_pass: &mut wgpu::RenderPass, current_mesh: Option<&Mesh>) {
         match self {
             Self::ModelMesh { slot } => {
                 let current_mesh = current_mesh.expect("deal with this later");
-                render_pass.set_vertex_buffer(*slot, current_mesh.vertex_buffer.slice(..));
+                render_pass.set_vertex_buffer(*slot, current_mesh.vertex_buffer().slice(..));
             }
             Self::Fixed { slot, buffer } => {
                 render_pass.set_vertex_buffer(*slot, buffer.slice(..));
@@ -180,7 +182,8 @@ impl RenderBindGroupSpec {
     pub fn set(
         &self,
         render_pass: &mut wgpu::RenderPass,
-        current: Option<&model::Mesh>,
+        current_mesh: Option<&Mesh>,
+        current_model: Option<&Model>,
         project: &project::Project,
     ) {
         match self.target {
@@ -192,13 +195,20 @@ impl RenderBindGroupSpec {
                 render_pass.set_bind_group(self.slot, bind_group.inner(), &[]);
             }
             RenderBindGroupTargetSpec::ModelMaterial => {
-                let current_mesh = current.expect("deal with this later");
-                let material = current_mesh.material_bind_group_id;
-                let bind_group = project
-                    .bind_groups
-                    .get(material)
-                    .expect("deal with this later");
-                render_pass.set_bind_group(self.slot, bind_group.inner(), &[]);
+                let current_mesh = current_mesh.expect("deal with this later");
+                let current_model = current_model.expect("deal with this later");
+
+                if let Some(material_index) = current_mesh.material_index() {
+                    if let Some(material) = current_model.get_material(material_index) {
+                        if let Some(bind_group_id) = material.bind_group_id() {
+                            let bind_group = project
+                                .bind_groups
+                                .get(bind_group_id)
+                                .expect("deal with this later");
+                            render_pass.set_bind_group(self.slot, bind_group.inner(), &[]);
+                        }
+                    }
+                }
             }
         }
     }
@@ -211,7 +221,7 @@ pub enum RenderBindGroupTargetSpec {
 
 pub enum RenderDrawSpec<'a> {
     Model {
-        model: &'a model::Model,
+        model: &'a Model,
         instances: std::ops::Range<u32>,
     },
     Single {

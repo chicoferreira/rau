@@ -656,7 +656,7 @@ fn fs_main() -> @location(0) vec4<f32> {
                     const DEFAULT_NAME: &str = "Texture View";
 
                     let texture_view = TextureView::new(
-                        TextureViewCreationContext {
+                        &mut TextureViewCreationContext {
                             textures: &self.project.textures,
                             egui_renderer: &mut self.egui_renderer,
                             device: &self.device,

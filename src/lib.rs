@@ -3,7 +3,6 @@ use winit::event_loop::EventLoop;
 mod app;
 mod error;
 mod key;
-mod model;
 mod project;
 mod render;
 mod resources;
