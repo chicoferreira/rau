@@ -212,7 +212,7 @@ impl Scene {
         .await
         .unwrap();
 
-        let cube_model = Model::load_from_obj_file("cube".to_string(), "cube.obj").await?;
+        let cube_model = Model::load_from_obj_file("cube".to_string(), "cube.obj", device).await?;
         let _ = project.models.register(cube_model);
 
         let hdr_texture = Texture::new(

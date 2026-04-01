@@ -23,6 +23,8 @@ impl StateSnapshot<'_> {
                             let vertices = mesh.positions.len();
                             let normals = mesh.normals.len();
                             let uvs = mesh.texture_coords.len();
+                            let tangents = mesh.tangents.len();
+                            let bitangents = mesh.bitangents.len();
                             let indices = mesh.indices.len();
                             let triangles = indices / 3;
 
@@ -40,6 +42,14 @@ impl StateSnapshot<'_> {
 
                                     ui.label("UVs");
                                     ui.strong(uvs.to_string());
+                                    ui.end_row();
+
+                                    ui.label("Tangents");
+                                    ui.strong(tangents.to_string());
+                                    ui.end_row();
+
+                                    ui.label("Bitangents");
+                                    ui.strong(bitangents.to_string());
                                     ui.end_row();
 
                                     ui.label("Indices");
@@ -72,10 +82,12 @@ impl StateSnapshot<'_> {
                                 let mut delegate = TriangleTableDelegate { mesh };
 
                                 let columns = [
-                                    Column::new(70.0).resizable(true),
-                                    Column::new(220.0).resizable(true),
-                                    Column::new(220.0).resizable(true),
-                                    Column::new(140.0).resizable(true),
+                                    Column::new(100.0).resizable(true),
+                                    Column::new(250.0).resizable(true),
+                                    Column::new(250.0).resizable(true),
+                                    Column::new(250.0).resizable(true),
+                                    Column::new(250.0).resizable(true),
+                                    Column::new(250.0).resizable(true),
                                 ];
 
                                 ui.allocate_ui(egui::vec2(ui.available_width(), 320.0), |ui| {
@@ -86,7 +98,7 @@ impl StateSnapshot<'_> {
                                             .num_rows(row_count as u64)
                                             .headers([HeaderRow::new(18.0)])
                                             .columns(columns)
-                                            .auto_size_mode(AutoSizeMode::Always)
+                                            .auto_size_mode(AutoSizeMode::Never)
                                             .show(ui, &mut delegate);
                                     });
                                 });
@@ -137,6 +149,8 @@ impl TableDelegate for TriangleTableDelegate<'_> {
             1 => "Position",
             2 => "Normal",
             3 => "UV",
+            4 => "Tangent",
+            5 => "Bitangent",
             _ => "",
         };
         ui.strong(title);
@@ -161,6 +175,16 @@ impl TableDelegate for TriangleTableDelegate<'_> {
             3 => ui.label(
                 vi.and_then(|vi| self.mesh.texture_coords.get(vi))
                     .map(|&[u, v]| format!("{u:.3}, {v:.3}"))
+                    .unwrap_or("N/A".to_string()),
+            ),
+            4 => ui.label(
+                vi.and_then(|vi| self.mesh.tangents.get(vi))
+                    .map(|&[x, y, z]| format!("{x:.3}, {y:.3}, {z:.3}"))
+                    .unwrap_or("N/A".to_string()),
+            ),
+            5 => ui.label(
+                vi.and_then(|vi| self.mesh.bitangents.get(vi))
+                    .map(|&[x, y, z]| format!("{x:.3}, {y:.3}, {z:.3}"))
                     .unwrap_or("N/A".to_string()),
             ),
             _ => unreachable!(),
