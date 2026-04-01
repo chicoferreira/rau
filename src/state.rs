@@ -419,6 +419,7 @@ impl State {
                         ProjectResourceId::TextureView(id) => InspectorPane::TextureView(id),
                         ProjectResourceId::Viewport(id) => InspectorPane::Viewport(id),
                         ProjectResourceId::Texture(id) => InspectorPane::Texture(id),
+                        ProjectResourceId::Model(id) => InspectorPane::Model(id),
                     };
 
                     self.inspector_tree_pane.add_pane(pane);

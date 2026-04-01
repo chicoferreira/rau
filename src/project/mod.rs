@@ -1,14 +1,15 @@
 use slotmap::new_key_type;
 
 use crate::project::{
-    bindgroup::BindGroup, camera::Camera, dimension::Dimension, sampler::Sampler, shader::Shader,
-    storage::Storage, texture::Texture, texture_view::TextureView, uniform::Uniform,
-    viewport::Viewport,
+    bindgroup::BindGroup, camera::Camera, dimension::Dimension, model::Model, sampler::Sampler,
+    shader::Shader, storage::Storage, texture::Texture, texture_view::TextureView,
+    uniform::Uniform, viewport::Viewport,
 };
 
 pub mod bindgroup;
 pub mod camera;
 pub mod dimension;
+pub mod model;
 pub mod recreate;
 pub mod sampler;
 pub mod shader;
@@ -28,6 +29,7 @@ new_key_type! {
     pub struct SamplerId;
     pub struct DimensionId;
     pub struct CameraId;
+    pub struct ModelId;
 }
 
 pub struct Project {
@@ -40,6 +42,7 @@ pub struct Project {
     pub samplers: Storage<SamplerId, Sampler>,
     pub dimensions: Storage<DimensionId, Dimension>,
     pub cameras: Storage<CameraId, Camera>,
+    pub models: Storage<ModelId, Model>,
 }
 
 impl Project {
@@ -54,6 +57,7 @@ impl Project {
             samplers: Storage::new(),
             dimensions: Storage::new(),
             cameras: Storage::new(),
+            models: Storage::new(),
         }
     }
 
@@ -76,6 +80,7 @@ impl Project {
                 self.dimensions.get(id).ok().map(|d| d.label.as_str())
             }
             ProjectResourceId::Camera(id) => self.cameras.get(id).ok().map(|c| c.label.as_str()),
+            ProjectResourceId::Model(id) => self.models.get(id).ok().map(|m| m.label.as_str()),
         }
     }
 }
@@ -91,4 +96,5 @@ pub enum ProjectResourceId {
     Sampler(SamplerId),
     Dimension(DimensionId),
     Camera(CameraId),
+    Model(ModelId),
 }

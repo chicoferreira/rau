@@ -1,6 +1,6 @@
 use crate::{
     project::{
-        BindGroupId, CameraId, DimensionId, SamplerId, ShaderId, TextureId, TextureViewId,
+        BindGroupId, CameraId, DimensionId, ModelId, SamplerId, ShaderId, TextureId, TextureViewId,
         UniformId, ViewportId,
     },
     ui::{components::tiles::Pane, pane::StateSnapshot},
@@ -17,6 +17,7 @@ pub enum InspectorPane {
     Texture(TextureId),
     TextureView(TextureViewId),
     Viewport(ViewportId),
+    Model(ModelId),
 }
 
 impl Pane for InspectorPane {
@@ -30,6 +31,7 @@ impl Pane for InspectorPane {
             InspectorPane::Sampler(id) => state.project.label(*id),
             InspectorPane::Texture(id) => state.project.label(*id),
             InspectorPane::TextureView(id) => state.project.label(*id),
+            InspectorPane::Model(id) => state.project.label(*id),
             InspectorPane::Viewport(id) => state.project.label(*id),
         };
 
@@ -73,6 +75,9 @@ impl Pane for InspectorPane {
                     }
                     InspectorPane::Viewport(viewport_id) => {
                         state.viewport_inspector_ui(ui, *viewport_id);
+                    }
+                    InspectorPane::Model(model_id) => {
+                        state.model_inspector_ui(ui, *model_id);
                     }
                 };
             });

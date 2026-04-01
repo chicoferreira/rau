@@ -5,6 +5,7 @@ use crate::{
         self, BindGroupId, TextureViewId, ViewportId,
         camera::Camera,
         dimension::Dimension,
+        model::Model,
         sampler::{Sampler, SamplerSpec},
         texture::{Texture, TextureCreationContext, TextureSource},
         texture_view::{TextureView, TextureViewCreationContext, TextureViewFormat},
@@ -210,6 +211,9 @@ impl Scene {
         )
         .await
         .unwrap();
+
+        let cube_model = Model::load_from_obj_file("cube".to_string(), "cube.obj").await?;
+        let _ = project.models.register(cube_model);
 
         let hdr_texture = Texture::new(
             &TextureCreationContext {

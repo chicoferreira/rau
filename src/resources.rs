@@ -1,4 +1,7 @@
-use std::io::{BufReader, Cursor};
+use std::{
+    io::{BufReader, Cursor},
+    path::Path,
+};
 
 use anyhow::Context;
 use wgpu::util::DeviceExt;
@@ -15,14 +18,14 @@ use crate::{
     ui::renderer::EguiRenderer,
 };
 
-pub async fn load_string(file_name: &str) -> anyhow::Result<String> {
+pub async fn load_string(file_name: impl AsRef<Path>) -> anyhow::Result<String> {
     load_binary(file_name)
         .await?
         .try_into()
         .context("Failed to parse UTF-8 string")
 }
 
-pub async fn load_binary(file_name: &str) -> anyhow::Result<Vec<u8>> {
+pub async fn load_binary(file_name: impl AsRef<Path>) -> anyhow::Result<Vec<u8>> {
     #[cfg(target_arch = "wasm32")]
     let data = {
         let window = web_sys::window().unwrap();
@@ -32,7 +35,7 @@ pub async fn load_binary(file_name: &str) -> anyhow::Result<Vec<u8>> {
             origin = format!("{}/res", origin);
         }
         let base = reqwest::Url::parse(&format!("{}/", origin)).unwrap();
-        let url = base.join(file_name).unwrap();
+        let url = base.join(&file_name.as_ref().to_string_lossy()).unwrap();
         reqwest::get(url).await?.bytes().await?.to_vec()
     };
     #[cfg(not(target_arch = "wasm32"))]
@@ -126,7 +129,7 @@ pub async fn load_model(
             ..Default::default()
         },
         |p| async move {
-            let mat_text = load_string(&p.to_string_lossy()).await.unwrap();
+            let mat_text = load_string(&p).await.unwrap();
             tobj::load_mtl_buf(&mut BufReader::new(Cursor::new(mat_text)))
         },
     )
