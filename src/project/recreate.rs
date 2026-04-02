@@ -1,8 +1,8 @@
 use crate::{
     error::{AppResult, SourcedError},
     project::{
-        BindGroupId, CameraId, ProjectResourceId, SamplerId, TextureId, TextureViewId, UniformId,
-        storage::Storage,
+        BindGroupId, CameraId, ModelId, ProjectResourceId, SamplerId, TextureId, TextureViewId,
+        UniformId, storage::Storage,
     },
 };
 
@@ -18,6 +18,7 @@ pub enum ProjectEvent {
     SamplerRecreated(SamplerId),
     CameraUpdated(CameraId),
     UniformRecreated(UniformId),
+    ModelVertexBufferRecreated(ModelId),
 }
 
 pub trait Recreatable {

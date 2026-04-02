@@ -2939,6 +2939,7 @@ dependencies = [
  "glob",
  "image 0.24.9",
  "instant",
+ "itertools",
  "log",
  "naga",
  "pollster",

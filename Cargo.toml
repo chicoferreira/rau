@@ -43,6 +43,7 @@ tobj = { version = "4.0.3", default-features = false, features = ["futures"] }
 wgpu = { version = "29.0", features = ["naga-ir", "serde"] }
 winit = { version = "0.30.12", features = ["android-native-activity"] }
 syntect = { version = "5.3.0", default-features = false, features = ["default-fancy"] }
+itertools = "0.14.0"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 # Enable default features for egui-winit

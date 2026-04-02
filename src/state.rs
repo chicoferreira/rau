@@ -8,8 +8,9 @@ use crate::{
     error::{AppResult, SourcedError},
     key::KeyboardState,
     project::{
-        self, BindGroupId, CameraId, DimensionId, ProjectResourceId, SamplerId, ShaderId,
+        self, BindGroupId, CameraId, DimensionId, ModelId, ProjectResourceId, SamplerId, ShaderId,
         TextureId, TextureViewId, UniformId, ViewportId,
+        model::{ModelCreationContext, vertex_buffer::VertexBufferField},
         bindgroup::{BindGroupCreationContext, BindGroupEntry, BindGroupResource},
         camera::{Camera, CameraCreationContext},
         dimension::Dimension,
@@ -72,6 +73,10 @@ pub enum StateEvent {
     DeleteTexture(TextureId),
     CreateTextureView,
     DeleteTextureView(TextureViewId),
+    AddModelVertexBufferField(ModelId, VertexBufferField),
+    DeleteModelVertexBufferField(ModelId, usize),
+    UpdateModelVertexBufferField(ModelId, usize, VertexBufferField),
+    ReorderModelVertexBufferField(ModelId, DragUpdate),
 }
 
 pub struct State {
@@ -402,6 +407,13 @@ impl State {
         };
         self.errors
             .extend(tracker.recreate_storage(&mut self.project.bind_groups, view));
+
+        let view = &mut ModelCreationContext {
+            device: &self.device,
+            queue: &self.queue,
+        };
+        self.errors
+            .extend(tracker.recreate_storage(&mut self.project.models, view));
     }
 
     fn handle_events(&mut self) -> AppResult<()> {
@@ -709,6 +721,26 @@ fn fs_main() -> @location(0) vec4<f32> {
                 }
                 StateEvent::DeleteTextureView(texture_view_id) => {
                     self.project.texture_views.unregister(texture_view_id);
+                }
+                StateEvent::AddModelVertexBufferField(model_id, field) => {
+                    if let Ok(model) = self.project.models.get_mut(model_id) {
+                        model.add_vertex_buffer_field(field);
+                    }
+                }
+                StateEvent::DeleteModelVertexBufferField(model_id, index) => {
+                    if let Ok(model) = self.project.models.get_mut(model_id) {
+                        model.remove_vertex_buffer_field(index);
+                    }
+                }
+                StateEvent::UpdateModelVertexBufferField(model_id, index, field) => {
+                    if let Ok(model) = self.project.models.get_mut(model_id) {
+                        model.set_vertex_buffer_field(index, field);
+                    }
+                }
+                StateEvent::ReorderModelVertexBufferField(model_id, drag_update) => {
+                    if let Ok(model) = self.project.models.get_mut(model_id) {
+                        model.reorder_vertex_buffer_field(drag_update.from, drag_update.to);
+                    }
                 }
             }
         }

@@ -1,12 +1,11 @@
 use egui_dnd::utils::shift_vec;
-use wgpu::util::DeviceExt;
 
 pub mod camera;
 #[cfg(test)]
 mod tests;
 
 use crate::{
-    error::{AppResult, WgpuErrorScope},
+    error::AppResult,
     project::{
         CameraId, UniformId,
         camera::Camera,
@@ -14,6 +13,7 @@ use crate::{
         storage::Storage,
         uniform::camera::CameraField,
     },
+    utils::resizable_buffer::{ChangeResult, ResizableBuffer},
 };
 
 pub struct UniformCreationContext<'a> {
@@ -25,7 +25,7 @@ pub struct UniformCreationContext<'a> {
 pub struct Uniform {
     pub label: String,
     fields: Vec<UniformField>,
-    buffer: wgpu::Buffer,
+    buffer: ResizableBuffer,
     dirty: bool,
 }
 
@@ -77,7 +77,8 @@ impl Uniform {
     ) -> AppResult<Uniform> {
         let label = label.into();
         let content = cast_fields(&fields);
-        let buffer = Self::create_buffer(device, &label, &content)?;
+        let usage = wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST;
+        let buffer = ResizableBuffer::new(device, &label, usage, &content)?;
         Ok(Uniform {
             label,
             fields,
@@ -86,22 +87,7 @@ impl Uniform {
         })
     }
 
-    fn create_buffer(
-        device: &wgpu::Device,
-        label: &str,
-        contents: &[u8],
-    ) -> AppResult<wgpu::Buffer> {
-        let scope = WgpuErrorScope::push(device);
-        let buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some(label),
-            contents,
-            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-        });
-        scope.pop()?;
-        Ok(buffer)
-    }
-
-    pub fn buffer(&self) -> &wgpu::Buffer {
+    pub fn buffer(&self) -> &ResizableBuffer {
         &self.buffer
     }
 
@@ -186,12 +172,13 @@ impl Recreatable for Uniform {
 
         self.dirty = false;
 
-        if self.buffer.size() != content.len() as wgpu::BufferAddress {
-            self.buffer = Self::create_buffer(ctx.device, &self.label, &content)?;
-            Ok(Some(ProjectEvent::UniformRecreated(id)))
-        } else {
-            ctx.queue.write_buffer(&self.buffer, 0, &content);
-            Ok(None)
+        let usage = wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST;
+        match self
+            .buffer
+            .write(ctx.device, ctx.queue, &self.label, &content, usage)?
+        {
+            ChangeResult::Uploaded => Ok(None),
+            ChangeResult::Recreated => Ok(Some(ProjectEvent::UniformRecreated(id))),
         }
     }
 }

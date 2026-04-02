@@ -9,6 +9,7 @@ mod resources;
 mod scene;
 mod state;
 mod ui;
+mod utils;
 
 pub fn run() -> anyhow::Result<()> {
     #[cfg(not(target_arch = "wasm32"))]

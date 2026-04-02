@@ -206,7 +206,7 @@ impl BindGroupEntry {
                     return Ok(None);
                 };
                 let uniform = project.uniforms.get(uniform_id)?;
-                uniform.buffer().as_entire_binding()
+                uniform.buffer().inner().as_entire_binding()
             }
         };
 

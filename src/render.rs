@@ -108,8 +108,8 @@ impl RenderPipelineSpec<'_> {
                         bind_group.set(render_pass, Some(mesh), Some(model), project);
                     }
 
-                    render_pass
-                        .set_index_buffer(mesh.index_buffer().slice(..), wgpu::IndexFormat::Uint32);
+                    let index_buffer = mesh.index_buffer().inner();
+                    render_pass.set_index_buffer(index_buffer.slice(..), wgpu::IndexFormat::Uint32);
 
                     render_pass.draw_indexed(0..mesh.indices().len() as u32, 0, instances.clone());
                 }
@@ -150,7 +150,8 @@ impl<'a> RenderVertexBufferSpec<'a> {
         match self {
             Self::ModelMesh { slot } => {
                 let current_mesh = current_mesh.expect("deal with this later");
-                render_pass.set_vertex_buffer(*slot, current_mesh.vertex_buffer().slice(..));
+                let vertex_buffer = current_mesh.vertex_buffer().inner();
+                render_pass.set_vertex_buffer(*slot, vertex_buffer.slice(..));
             }
             Self::Fixed { slot, buffer } => {
                 render_pass.set_vertex_buffer(*slot, buffer.slice(..));

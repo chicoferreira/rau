@@ -1,12 +1,23 @@
+use egui_dnd::utils::shift_vec;
+
+#[derive(Clone)]
 pub struct VertexBufferSpec {
     pub fields: Vec<VertexBufferField>,
 }
 
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, Hash, strum::EnumIter, strum::Display,
+)]
 pub enum VertexBufferField {
+    #[strum(to_string = "Position")]
     Position,
+    #[strum(to_string = "Texture Coordinates")]
     TextureCoordinates,
+    #[strum(to_string = "Normal")]
     Normal,
+    #[strum(to_string = "Tangent")]
     Tangent,
+    #[strum(to_string = "Bitangent")]
     Bitangent,
 }
 
@@ -37,6 +48,13 @@ impl VertexBufferSpec {
         }
 
         (attributes, offset)
+    }
+
+    pub(super) fn reorder_field(&mut self, from: usize, to: usize) {
+        if from == to {
+            return;
+        }
+        shift_vec(from, to, &mut self.fields);
     }
 }
 

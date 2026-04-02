@@ -2,17 +2,28 @@ use std::{io::BufReader, path::Path};
 
 use crate::{
     error::{AppError, AppResult},
-    project::{BindGroupId, model::vertex_buffer::VertexBufferSpec},
+    project::{
+        BindGroupId,
+        model::vertex_buffer::{VertexBufferField, VertexBufferSpec},
+        recreate::{ProjectEvent, Recreatable, RecreateTracker},
+    },
     resources::load_binary,
+    utils::resizable_buffer::{ChangeResult, ResizableBuffer},
 };
 
 pub mod vertex_buffer;
+
+pub struct ModelCreationContext<'a> {
+    pub device: &'a wgpu::Device,
+    pub queue: &'a wgpu::Queue,
+}
 
 pub struct Model {
     pub label: String,
     meshes: Vec<Mesh>,
     materials: Vec<Material>,
     vertex_buffer_spec: VertexBufferSpec,
+    dirty: bool,
 }
 
 pub struct Mesh {
@@ -23,8 +34,8 @@ pub struct Mesh {
     bitangents: Vec<[f32; 3]>,
     indices: Vec<u32>,
     material_index: Option<usize>,
-    vertex_buffer: wgpu::Buffer,
-    index_buffer: wgpu::Buffer,
+    vertex_buffer: ResizableBuffer,
+    index_buffer: ResizableBuffer,
 }
 
 pub struct Material {
@@ -62,7 +73,8 @@ impl Model {
         let meshes = models
             .into_iter()
             .map(|m| Mesh::new_from_obj(m, &vertex_buffer_spec, device))
-            .collect();
+            .collect::<AppResult<Vec<_>>>()?;
+
         let materials = obj_materials?.into_iter().map(Into::into).collect();
 
         Ok(Model {
@@ -70,6 +82,7 @@ impl Model {
             meshes,
             materials,
             vertex_buffer_spec,
+            dirty: false,
         })
     }
 
@@ -91,6 +104,63 @@ impl Model {
 
     pub fn vertex_buffer_spec(&self) -> &VertexBufferSpec {
         &self.vertex_buffer_spec
+    }
+
+    pub fn add_vertex_buffer_field(&mut self, field: VertexBufferField) {
+        self.vertex_buffer_spec.fields.push(field);
+        self.dirty = true;
+    }
+
+    pub fn remove_vertex_buffer_field(&mut self, index: usize) {
+        let fields = &mut self.vertex_buffer_spec.fields;
+        if index < fields.len() {
+            fields.remove(index);
+            self.dirty = true;
+        }
+    }
+
+    pub fn set_vertex_buffer_field(&mut self, index: usize, field: VertexBufferField) {
+        if let Some(f) = self.vertex_buffer_spec.fields.get_mut(index) {
+            *f = field;
+            self.dirty = true;
+        }
+    }
+
+    pub fn reorder_vertex_buffer_field(&mut self, from: usize, to: usize) {
+        if from == to {
+            return;
+        }
+        self.vertex_buffer_spec.reorder_field(from, to);
+        self.dirty = true;
+    }
+}
+
+impl Recreatable for Model {
+    type Context<'a> = ModelCreationContext<'a>;
+    type Id = super::ModelId;
+
+    fn recreate<'a>(
+        &mut self,
+        id: Self::Id,
+        ctx: &mut Self::Context<'a>,
+        _tracker: &RecreateTracker,
+    ) -> AppResult<Option<ProjectEvent>> {
+        if !self.dirty {
+            return Ok(None);
+        }
+
+        let spec = &self.vertex_buffer_spec;
+        let mut any_recreated = false;
+        for mesh in &mut self.meshes {
+            match mesh.write_vertex_buffer_from_spec(spec, ctx.device, ctx.queue)? {
+                ChangeResult::Uploaded => {}
+                ChangeResult::Recreated => any_recreated = true,
+            }
+        }
+
+        self.dirty = false;
+
+        Ok(any_recreated.then_some(ProjectEvent::ModelVertexBufferRecreated(id)))
     }
 }
 
@@ -122,7 +192,7 @@ impl Mesh {
         model: tobj::Model,
         vertex_buffer_spec: &VertexBufferSpec,
         device: &wgpu::Device,
-    ) -> Self {
+    ) -> AppResult<Self> {
         let (positions, _) = model.mesh.positions.as_chunks();
         let (normals, _) = model.mesh.normals.as_chunks();
         let (texture_coords, _) = model.mesh.texcoords.as_chunks();
@@ -132,18 +202,30 @@ impl Mesh {
         let (tangents, bitangents) =
             Self::calculate_tangents_and_bitangents(positions, texture_coords, &indices);
 
-        let (vertex_buffer, index_buffer) = Self::create_vertex_and_index_buffers(
+        let vertex_buffer_contents = Self::calculate_compute_vertex_contents(
             positions,
             normals,
             texture_coords,
             &tangents,
             &bitangents,
-            &indices,
             vertex_buffer_spec,
-            device,
         );
 
-        Self {
+        let vertex_buffer = ResizableBuffer::new(
+            device,
+            "TODO: add vertex buffer name",
+            wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+            bytemuck::cast_slice(&vertex_buffer_contents),
+        )?;
+
+        let index_buffer = ResizableBuffer::new(
+            device,
+            "TODO: add index buffer name",
+            wgpu::BufferUsages::INDEX,
+            bytemuck::cast_slice(&indices),
+        )?;
+
+        Ok(Self {
             positions: positions.to_vec(),
             normals: normals.to_vec(),
             texture_coords: texture_coords.to_vec(),
@@ -153,7 +235,7 @@ impl Mesh {
             material_index: model.mesh.material_id,
             vertex_buffer,
             index_buffer,
-        }
+        })
     }
 
     fn calculate_tangents_and_bitangents(
@@ -235,18 +317,14 @@ impl Mesh {
         (tangents, bitangents)
     }
 
-    fn create_vertex_and_index_buffers(
+    fn calculate_compute_vertex_contents(
         positions: &[[f32; 3]],
         normals: &[[f32; 3]],
         texture_coords: &[[f32; 2]],
         tangents: &[[f32; 3]],
         bitangents: &[[f32; 3]],
-        indices: &[u32],
         vertex_buffer_spec: &VertexBufferSpec,
-        device: &wgpu::Device,
-    ) -> (wgpu::Buffer, wgpu::Buffer) {
-        use wgpu::util::DeviceExt;
-
+    ) -> Vec<f32> {
         let vertex_count = positions.len();
 
         let stride: usize = vertex_buffer_spec
@@ -255,7 +333,7 @@ impl Mesh {
             .map(|f| f.vertex_format().size() as usize / std::mem::size_of::<f32>())
             .sum();
 
-        let mut interleaved = Vec::with_capacity(vertex_count * stride);
+        let mut result = Vec::with_capacity(vertex_count * stride);
 
         for i in 0..vertex_count {
             let p = positions.get(i).unwrap_or(&[0.0, 0.0, 0.0]);
@@ -272,23 +350,11 @@ impl Mesh {
                     vertex_buffer::VertexBufferField::Tangent => t,
                     vertex_buffer::VertexBufferField::Bitangent => b,
                 };
-                interleaved.extend_from_slice(value);
+                result.extend_from_slice(value);
             }
         }
 
-        let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Project Model Vertex Buffer"),
-            contents: bytemuck::cast_slice(&interleaved),
-            usage: wgpu::BufferUsages::VERTEX,
-        });
-
-        let index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Project Model Index Buffer"),
-            contents: bytemuck::cast_slice(indices),
-            usage: wgpu::BufferUsages::INDEX,
-        });
-
-        (vertex_buffer, index_buffer)
+        result
     }
 
     pub fn positions(&self) -> &[[f32; 3]] {
@@ -319,12 +385,35 @@ impl Mesh {
         self.material_index
     }
 
-    pub fn vertex_buffer(&self) -> &wgpu::Buffer {
+    pub fn vertex_buffer(&self) -> &ResizableBuffer {
         &self.vertex_buffer
     }
 
-    pub fn index_buffer(&self) -> &wgpu::Buffer {
+    pub fn index_buffer(&self) -> &ResizableBuffer {
         &self.index_buffer
+    }
+
+    fn write_vertex_buffer_from_spec(
+        &mut self,
+        vertex_buffer_spec: &VertexBufferSpec,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+    ) -> AppResult<ChangeResult> {
+        let vertex_buffer_contents = Self::calculate_compute_vertex_contents(
+            &self.positions,
+            &self.normals,
+            &self.texture_coords,
+            &self.tangents,
+            &self.bitangents,
+            vertex_buffer_spec,
+        );
+        self.vertex_buffer.write(
+            device,
+            queue,
+            "TODO: add vertex buffer name",
+            bytemuck::cast_slice(&vertex_buffer_contents),
+            wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+        )
     }
 }
 
