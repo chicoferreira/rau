@@ -3,7 +3,7 @@ use image::GenericImageView;
 use crate::{
     error::{AppResult, WgpuErrorScope},
     project::{
-        DimensionId, TextureId,
+        DimensionId, ProjectResource, TextureId,
         dimension::Dimension,
         recreate::{ProjectEvent, Recreatable, RecreateTracker},
         storage::Storage,
@@ -57,10 +57,6 @@ impl Texture {
             has_error: false,
             dirty: false,
         })
-    }
-
-    pub fn label(&self) -> &str {
-        &self.label
     }
 
     pub fn inner(&self) -> &wgpu::Texture {
@@ -171,6 +167,12 @@ impl Texture {
         scope.pop()?;
 
         Ok(texture)
+    }
+}
+
+impl ProjectResource for Texture {
+    fn label(&self) -> &str {
+        &self.label
     }
 }
 

@@ -19,7 +19,7 @@ use crate::{
             data_display::{ui_array, ui_array_mut},
             hint::hint,
             renameable_label::renameable_label,
-            selector::{selectable_value, selectable_value_storage},
+            selector::{AsWidgetText, ComboBoxExt},
         },
         pane::StateSnapshot,
         rename::{RenameState, RenameTarget},
@@ -192,13 +192,9 @@ fn ui_field_entry(
     let mut source_kind = UniformFieldSourceKind::from_source(field.source());
     let source_kind_before = source_kind;
     ui.label("Source");
-    selectable_value(
-        ui,
-        "source",
-        &mut source_kind,
-        |field| field.to_string(),
-        UniformFieldSourceKind::iter(),
-    );
+    egui::ComboBox::from_id_salt("source")
+        .selected_text(source_kind.as_widget_text())
+        .show_ui_list(ui, UniformFieldSourceKind::iter(), &mut source_kind);
     ui.end_row();
 
     let source_specific_event = match &field.source() {
@@ -207,13 +203,9 @@ fn ui_field_entry(
             let mut kind = data.kind();
             let kind_before = kind;
             ui.label("Type");
-            selectable_value(
-                ui,
-                "type",
-                &mut kind,
-                |field| field.to_string(),
-                UniformFieldDataKind::iter(),
-            );
+            egui::ComboBox::from_id_salt("type")
+                .selected_text(kind.as_widget_text())
+                .show_ui_list(ui, UniformFieldDataKind::iter(), &mut kind);
             ui.end_row();
 
             let mut data = data.clone();
@@ -240,24 +232,16 @@ fn ui_field_entry(
             let mut camera_id = *camera_id;
             let camera_id_before = camera_id;
             ui.label("Camera");
-            selectable_value_storage(
-                ui,
-                "camera",
-                &mut camera_id,
-                |_, camera| &camera.label,
-                &ctx.cameras,
-            );
+            egui::ComboBox::from_id_salt("camera")
+                .selected_text_storage_opt(&ctx.cameras, camera_id)
+                .show_ui_storage_opt(ui, &ctx.cameras, &mut camera_id);
             ui.end_row();
             ui.label("Field");
             let mut field = field.clone();
             let field_before = field.clone();
-            selectable_value(
-                ui,
-                "camera_field",
-                &mut field,
-                |field| field.to_string(),
-                CameraField::iter(),
-            );
+            egui::ComboBox::from_id_salt("camera_field")
+                .selected_text(field.as_widget_text())
+                .show_ui_list(ui, CameraField::iter(), &mut field);
             ui.end_row();
 
             (camera_id != camera_id_before || field != field_before).then_some(
@@ -350,5 +334,23 @@ fn ui_uniform_field_data(ui: &mut egui::Ui, data: &uniform::UniformFieldData) {
         }
         uniform::UniformFieldData::Rgba(color) => ui_array(ui, color, label),
         uniform::UniformFieldData::Rgb(color) => ui_array(ui, color, label),
+    }
+}
+
+impl AsWidgetText for UniformFieldSourceKind {
+    fn as_widget_text(&self) -> egui::WidgetText {
+        self.to_string().into()
+    }
+}
+
+impl AsWidgetText for UniformFieldDataKind {
+    fn as_widget_text(&self) -> egui::WidgetText {
+        self.to_string().into()
+    }
+}
+
+impl AsWidgetText for CameraField {
+    fn as_widget_text(&self) -> egui::WidgetText {
+        self.to_string().into()
     }
 }

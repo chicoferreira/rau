@@ -3,8 +3,8 @@ use egui_ltreeview::{Action, TreeView};
 
 use crate::{
     project::{
-        BindGroupId, CameraId, DimensionId, ModelId, SamplerId, ShaderId, TextureId, TextureViewId,
-        UniformId, ViewportId,
+        BindGroupId, CameraId, DimensionId, ModelId, ProjectResource, SamplerId, ShaderId,
+        TextureId, TextureViewId, UniformId, ViewportId,
     },
     state::StateEvent,
     ui::{components::tree_node::TreeNode, pane::StateSnapshot, rename::RenameTarget},

@@ -4,7 +4,7 @@ use wgpu::TextureUsages;
 use crate::{
     project::{DimensionId, TextureId, texture::TextureSource},
     ui::{
-        components::selector::{selectable_value, selectable_value_storage},
+        components::selector::{AsWidgetText, ComboBoxExt},
         pane::StateSnapshot,
     },
 };
@@ -26,6 +26,17 @@ impl TextureSourceKind {
     }
 }
 
+impl AsWidgetText for TextureSourceKind {
+    fn as_widget_text(&self) -> egui::WidgetText {
+        let r = match self {
+            Self::Dimension => "Dimension",
+            Self::Manual => "Manual",
+            Self::Image => "Image",
+        };
+        r.into()
+    }
+}
+
 const TEXTURE_FORMATS: [wgpu::TextureFormat; 7] = [
     wgpu::TextureFormat::Rgba8UnormSrgb,
     wgpu::TextureFormat::Rgba8Unorm,
@@ -36,16 +47,18 @@ const TEXTURE_FORMATS: [wgpu::TextureFormat; 7] = [
     wgpu::TextureFormat::Depth24PlusStencil8,
 ];
 
-fn texture_format_label(format: wgpu::TextureFormat) -> &'static str {
-    match format {
-        wgpu::TextureFormat::Rgba8UnormSrgb => "RGBA8 Unorm sRGB",
-        wgpu::TextureFormat::Rgba8Unorm => "RGBA8 Unorm Linear",
-        wgpu::TextureFormat::Rgba16Float => "RGBA16 Float",
-        wgpu::TextureFormat::Rgba32Float => "RGBA32 Float",
-        wgpu::TextureFormat::Depth32Float => "Depth32 Float",
-        wgpu::TextureFormat::Depth24Plus => "Depth24 Plus",
-        wgpu::TextureFormat::Depth24PlusStencil8 => "Depth24 Plus Stencil8",
-        _ => "Unknown",
+impl AsWidgetText for wgpu::TextureFormat {
+    fn as_widget_text(&self) -> egui::WidgetText {
+        match self {
+            wgpu::TextureFormat::Rgba8UnormSrgb => "RGBA8 Unorm sRGB".into(),
+            wgpu::TextureFormat::Rgba8Unorm => "RGBA8 Unorm Linear".into(),
+            wgpu::TextureFormat::Rgba16Float => "RGBA16 Float".into(),
+            wgpu::TextureFormat::Rgba32Float => "RGBA32 Float".into(),
+            wgpu::TextureFormat::Depth32Float => "Depth32 Float".into(),
+            wgpu::TextureFormat::Depth24Plus => "Depth24 Plus".into(),
+            wgpu::TextureFormat::Depth24PlusStencil8 => "Depth24 Plus Stencil8".into(),
+            r => format!("{:?}", r).into(),
+        }
     }
 }
 
@@ -70,13 +83,10 @@ impl StateSnapshot<'_> {
             .spacing([8.0, 4.0])
             .show(ui, |ui| {
                 ui.label("Format");
-                selectable_value(
-                    ui,
-                    "texture_format",
-                    &mut format,
-                    texture_format_label,
-                    TEXTURE_FORMATS,
-                );
+                egui::ComboBox::from_id_salt("texture_format")
+                    .selected_text(format.as_widget_text())
+                    .show_ui_list(ui, TEXTURE_FORMATS, &mut format);
+
                 ui.end_row();
 
                 ui.label("Usage");
@@ -158,17 +168,9 @@ fn ui_texture_source(
     ];
 
     ui.horizontal(|ui| {
-        selectable_value(
-            ui,
-            "texture_source_kind",
-            &mut selected_kind,
-            |kind| match kind {
-                TextureSourceKind::Dimension => "Dimension",
-                TextureSourceKind::Manual => "Manual",
-                TextureSourceKind::Image => "Image",
-            },
-            SOURCE_KINDS,
-        );
+        egui::ComboBox::from_id_salt("texture_source_kind")
+            .selected_text(selected_kind.as_widget_text())
+            .show_ui_list(ui, SOURCE_KINDS, &mut selected_kind);
 
         if selected_kind != current_kind {
             *source = match selected_kind {
@@ -196,13 +198,10 @@ fn ui_texture_source(
         match source {
             TextureSource::Dimension(dimension_id) => {
                 let mut selected_dimension = Some(*dimension_id);
-                selectable_value_storage(
-                    ui,
-                    "texture_source_dimension",
-                    &mut selected_dimension,
-                    |_, dim| dim.label.as_str(),
-                    dimensions,
-                );
+                egui::ComboBox::from_id_salt("texture_source_dimension")
+                    .selected_text_storage_opt(dimensions, selected_dimension)
+                    .show_ui_storage_opt(ui, dimensions, &mut selected_dimension);
+
                 if let Some(new_dimension_id) = selected_dimension {
                     *dimension_id = new_dimension_id;
                 }

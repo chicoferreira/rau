@@ -62,26 +62,20 @@ impl Project {
     }
 
     pub fn label<'a>(&'a self, id: impl Into<ProjectResourceId>) -> Option<&'a str> {
-        let id = id.into();
+        let label_err = match id.into() {
+            ProjectResourceId::Shader(id) => self.shaders.get_label(id),
+            ProjectResourceId::Viewport(id) => self.viewports.get_label(id),
+            ProjectResourceId::Uniform(id) => self.uniforms.get_label(id),
+            ProjectResourceId::BindGroup(id) => self.bind_groups.get_label(id),
+            ProjectResourceId::Texture(id) => self.textures.get_label(id),
+            ProjectResourceId::TextureView(id) => self.texture_views.get_label(id),
+            ProjectResourceId::Sampler(id) => self.samplers.get_label(id),
+            ProjectResourceId::Dimension(id) => self.dimensions.get_label(id),
+            ProjectResourceId::Camera(id) => self.cameras.get_label(id),
+            ProjectResourceId::Model(id) => self.models.get_label(id),
+        };
 
-        match id {
-            ProjectResourceId::Shader(id) => self.shaders.get(id).ok().map(|s| s.label.as_str()),
-            ProjectResourceId::Viewport(id) => {
-                self.viewports.get(id).ok().map(|v| v.label.as_str())
-            }
-            ProjectResourceId::Uniform(id) => self.uniforms.get(id).ok().map(|u| u.label.as_str()),
-            ProjectResourceId::BindGroup(id) => self.bind_groups.get(id).ok().map(|b| b.label()),
-            ProjectResourceId::Texture(id) => self.textures.get(id).ok().map(|t| t.label()),
-            ProjectResourceId::TextureView(id) => {
-                self.texture_views.get(id).ok().map(|v| v.label())
-            }
-            ProjectResourceId::Sampler(id) => self.samplers.get(id).ok().map(|s| s.label()),
-            ProjectResourceId::Dimension(id) => {
-                self.dimensions.get(id).ok().map(|d| d.label.as_str())
-            }
-            ProjectResourceId::Camera(id) => self.cameras.get(id).ok().map(|c| c.label.as_str()),
-            ProjectResourceId::Model(id) => self.models.get(id).ok().map(|m| m.label.as_str()),
-        }
+        label_err.ok()
     }
 }
 
@@ -97,4 +91,8 @@ pub enum ProjectResourceId {
     Dimension(DimensionId),
     Camera(CameraId),
     Model(ModelId),
+}
+
+pub trait ProjectResource {
+    fn label(&self) -> &str;
 }

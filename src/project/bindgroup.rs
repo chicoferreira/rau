@@ -3,12 +3,7 @@ use egui_dnd::utils::shift_vec;
 use crate::{
     error::{AppResult, WgpuErrorScope},
     project::{
-        BindGroupId, Project, SamplerId, TextureViewId, UniformId,
-        recreate::{ProjectEvent, Recreatable, RecreateTracker},
-        sampler::Sampler,
-        storage::Storage,
-        texture_view::TextureView,
-        uniform::Uniform,
+        BindGroupId, Project, ProjectResource, SamplerId, TextureViewId, UniformId, recreate::{ProjectEvent, Recreatable, RecreateTracker}, sampler::Sampler, storage::Storage, texture_view::TextureView, uniform::Uniform
     },
 };
 
@@ -172,6 +167,12 @@ impl BindGroup {
         }
         shift_vec(from, to, &mut self.entries);
         self.dirty = true;
+    }
+}
+
+impl ProjectResource for BindGroup {
+    fn label(&self) -> &str {
+        &self.label
     }
 }
 

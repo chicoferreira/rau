@@ -1,7 +1,7 @@
 use crate::{
     error::{AppResult, WgpuErrorScope},
     project::{
-        SamplerId,
+        ProjectResource, SamplerId,
         recreate::{ProjectEvent, Recreatable, RecreateTracker},
     },
 };
@@ -56,10 +56,6 @@ impl Sampler {
         &self.inner
     }
 
-    pub fn label(&self) -> &str {
-        &self.label
-    }
-
     pub fn set_label(&mut self, label: String) {
         self.label = label;
         self.dirty = true;
@@ -96,6 +92,12 @@ impl Sampler {
         });
         scope.pop()?;
         Ok(sampler)
+    }
+}
+
+impl ProjectResource for Sampler {
+    fn label(&self) -> &str {
+        &self.label
     }
 }
 

@@ -1,7 +1,7 @@
 use crate::{
     error::{AppResult, WgpuErrorScope},
     project::{
-        TextureId, TextureViewId,
+        ProjectResource, TextureId, TextureViewId,
         recreate::{ProjectEvent, Recreatable, RecreateTracker},
         storage::Storage,
         texture::Texture,
@@ -84,10 +84,6 @@ impl TextureView {
         &self.inner
     }
 
-    pub fn label(&self) -> &str {
-        &self.label
-    }
-
     pub fn texture_id(&self) -> Option<TextureId> {
         self.texture_id
     }
@@ -148,6 +144,12 @@ impl TextureView {
         scope.pop()?;
 
         Ok(view)
+    }
+}
+
+impl ProjectResource for TextureView {
+    fn label(&self) -> &str {
+        &self.label
     }
 }
 

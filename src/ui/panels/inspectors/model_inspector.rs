@@ -3,12 +3,15 @@ use strum::IntoEnumIterator;
 
 use crate::{
     project::{
-        ModelId,
+        BindGroupId, ModelId,
         model::{Model, vertex_buffer::VertexBufferField},
     },
     state::StateEvent,
     ui::{
-        components::{hint::hint, selector::selectable_value},
+        components::{
+            hint::hint,
+            selector::{AsWidgetText, ComboBoxExt},
+        },
         pane::StateSnapshot,
     },
 };
@@ -126,17 +129,40 @@ impl StateSnapshot<'_> {
                     let id = format!("model_material_{model_id:?}_{mat_index}");
                     ui.push_id(id, |ui| {
                         ui.collapsing(format!("Material {mat_index}: {}", mat.label()), |ui| {
+                            ui.horizontal(|ui| {
+                                ui.label("Bind Group");
+                                let mut bind_group_id: Option<BindGroupId> = mat.bind_group_id();
+
+                                let storage = &self.project.bind_groups;
+                                egui::ComboBox::from_id_salt("model_material_bind_group")
+                                    .selected_text_storage_opt(storage, bind_group_id)
+                                    .show_ui_storage_opt_with_none(ui, storage, &mut bind_group_id);
+                                if bind_group_id != mat.bind_group_id() {
+                                    self.pending_events.push(
+                                        StateEvent::SetModelMaterialBindGroup(
+                                            model_id,
+                                            mat_index,
+                                            bind_group_id,
+                                        ),
+                                    );
+                                }
+                            });
+
                             if mat.texture_paths().is_empty() {
                                 ui.weak("No textures referenced.");
                                 return;
                             }
 
-                            for (tex_index, tex) in mat.texture_paths().iter().enumerate() {
-                                ui.horizontal(|ui| {
-                                    ui.weak(format!("{tex_index}"));
-                                    ui.label(tex);
+                            egui::CollapsingHeader::new("Textures")
+                                .default_open(true)
+                                .show(ui, |ui| {
+                                    for (tex_index, tex) in mat.texture_paths().iter().enumerate() {
+                                        ui.horizontal(|ui| {
+                                            ui.weak(format!("{tex_index}"));
+                                            ui.label(tex);
+                                        });
+                                    }
                                 });
-                            }
                         });
                     });
                 }
@@ -184,13 +210,11 @@ fn model_vertex_buffer_spec_inspector_ui(
                                         });
 
                                         let mut current = *field;
-                                        selectable_value(
-                                            ui,
-                                            ("vertex_buffer_field_kind", model_id, index),
-                                            &mut current,
-                                            |f| f.to_string(),
-                                            VertexBufferField::iter(),
-                                        );
+                                        let fields = VertexBufferField::iter();
+                                        egui::ComboBox::from_id_salt("vertex_buffer_field_kind")
+                                            .selected_text(current.to_string())
+                                            .show_ui_list(ui, fields, &mut current);
+
                                         if current != *field {
                                             pending_events.push(
                                                 StateEvent::UpdateModelVertexBufferField(
@@ -278,5 +302,11 @@ impl egui_table::TableDelegate for TriangleTableDelegate<'_> {
             5 => ui.label(format_cell(self.mesh.bitangents(), vi)),
             _ => unreachable!(),
         });
+    }
+}
+
+impl AsWidgetText for VertexBufferField {
+    fn as_widget_text(&self) -> egui::WidgetText {
+        self.to_string().into()
     }
 }

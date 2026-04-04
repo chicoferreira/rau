@@ -249,7 +249,7 @@ impl Scene {
                 BindGroup::new(project, device, "cube bind group".to_string(), entries)?;
             let bind_group_id = project.bind_groups.register(bind_group);
 
-            material.set_bind_group_id(bind_group_id);
+            material.set_bind_group_id(Some(bind_group_id));
         }
 
         let (vertex_attributes, vertex_buffer_stride) = cube_model

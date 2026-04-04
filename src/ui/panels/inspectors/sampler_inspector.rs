@@ -2,7 +2,10 @@ use egui::{Grid, Widget};
 
 use crate::{
     project::SamplerId,
-    ui::{components::selector::selectable_value, pane::StateSnapshot},
+    ui::{
+        components::selector::{AsWidgetText, ComboBoxExt},
+        pane::StateSnapshot,
+    },
 };
 
 const ADDRESS_MODES: [wgpu::AddressMode; 4] = [
@@ -12,21 +15,27 @@ const ADDRESS_MODES: [wgpu::AddressMode; 4] = [
     wgpu::AddressMode::ClampToBorder,
 ];
 
-fn address_mode_label(mode: wgpu::AddressMode) -> &'static str {
-    match mode {
-        wgpu::AddressMode::ClampToEdge => "Clamp To Edge",
-        wgpu::AddressMode::Repeat => "Repeat",
-        wgpu::AddressMode::MirrorRepeat => "Mirror Repeat",
-        wgpu::AddressMode::ClampToBorder => "Clamp To Border",
+impl AsWidgetText for wgpu::AddressMode {
+    fn as_widget_text(&self) -> egui::WidgetText {
+        let r = match self {
+            wgpu::AddressMode::ClampToEdge => "Clamp To Edge",
+            wgpu::AddressMode::Repeat => "Repeat",
+            wgpu::AddressMode::MirrorRepeat => "Mirror Repeat",
+            wgpu::AddressMode::ClampToBorder => "Clamp To Border",
+        };
+        r.into()
     }
 }
 
 const FILTER_MODES: [wgpu::FilterMode; 2] = [wgpu::FilterMode::Nearest, wgpu::FilterMode::Linear];
 
-fn filter_mode_label(mode: wgpu::FilterMode) -> &'static str {
-    match mode {
-        wgpu::FilterMode::Nearest => "Nearest",
-        wgpu::FilterMode::Linear => "Linear",
+impl AsWidgetText for wgpu::FilterMode {
+    fn as_widget_text(&self) -> egui::WidgetText {
+        let r = match self {
+            wgpu::FilterMode::Nearest => "Nearest",
+            wgpu::FilterMode::Linear => "Linear",
+        };
+        r.into()
     }
 }
 
@@ -35,10 +44,13 @@ const MIPMAP_FILTER_MODES: [wgpu::MipmapFilterMode; 2] = [
     wgpu::MipmapFilterMode::Linear,
 ];
 
-fn mipmap_filter_mode_label(mode: wgpu::MipmapFilterMode) -> &'static str {
-    match mode {
-        wgpu::MipmapFilterMode::Nearest => "Nearest",
-        wgpu::MipmapFilterMode::Linear => "Linear",
+impl AsWidgetText for wgpu::MipmapFilterMode {
+    fn as_widget_text(&self) -> egui::WidgetText {
+        let r = match self {
+            wgpu::MipmapFilterMode::Nearest => "Nearest",
+            wgpu::MipmapFilterMode::Linear => "Linear",
+        };
+        r.into()
     }
 }
 
@@ -54,17 +66,20 @@ const COMPARE_FUNCTIONS: [Option<wgpu::CompareFunction>; 9] = [
     Some(wgpu::CompareFunction::Always),
 ];
 
-fn compare_function_label(compare: Option<wgpu::CompareFunction>) -> &'static str {
-    match compare {
-        None => "None",
-        Some(wgpu::CompareFunction::Never) => "Never",
-        Some(wgpu::CompareFunction::Less) => "Less",
-        Some(wgpu::CompareFunction::Equal) => "Equal",
-        Some(wgpu::CompareFunction::LessEqual) => "Less Equal",
-        Some(wgpu::CompareFunction::Greater) => "Greater",
-        Some(wgpu::CompareFunction::NotEqual) => "Not Equal",
-        Some(wgpu::CompareFunction::GreaterEqual) => "Greater Equal",
-        Some(wgpu::CompareFunction::Always) => "Always",
+impl AsWidgetText for Option<wgpu::CompareFunction> {
+    fn as_widget_text(&self) -> egui::WidgetText {
+        let r = match self {
+            None => "None",
+            Some(wgpu::CompareFunction::Never) => "Never",
+            Some(wgpu::CompareFunction::Less) => "Less",
+            Some(wgpu::CompareFunction::Equal) => "Equal",
+            Some(wgpu::CompareFunction::LessEqual) => "Less Equal",
+            Some(wgpu::CompareFunction::Greater) => "Greater",
+            Some(wgpu::CompareFunction::NotEqual) => "Not Equal",
+            Some(wgpu::CompareFunction::GreaterEqual) => "Greater Equal",
+            Some(wgpu::CompareFunction::Always) => "Always",
+        };
+        r.into()
     }
 }
 
@@ -83,43 +98,29 @@ impl StateSnapshot<'_> {
             .spacing([8.0, 4.0])
             .show(ui, |ui| {
                 ui.label("Address Mode");
-                selectable_value(
-                    ui,
-                    "address_mode",
-                    &mut spec.address_mode,
-                    address_mode_label,
-                    ADDRESS_MODES,
-                );
+
+                egui::ComboBox::from_id_salt("address_mode")
+                    .selected_text(spec.address_mode.as_widget_text())
+                    .show_ui_list(ui, ADDRESS_MODES, &mut spec.address_mode);
+
                 ui.end_row();
 
                 ui.label("Mag Filter");
-                selectable_value(
-                    ui,
-                    "mag_filter",
-                    &mut spec.mag_filter,
-                    filter_mode_label,
-                    FILTER_MODES,
-                );
+                egui::ComboBox::from_id_salt("mag_filter")
+                    .selected_text(spec.mag_filter.as_widget_text())
+                    .show_ui_list(ui, FILTER_MODES, &mut spec.mag_filter);
                 ui.end_row();
 
                 ui.label("Min Filter");
-                selectable_value(
-                    ui,
-                    "min_filter",
-                    &mut spec.min_filter,
-                    filter_mode_label,
-                    FILTER_MODES,
-                );
+                egui::ComboBox::from_id_salt("min_filter")
+                    .selected_text(spec.min_filter.as_widget_text())
+                    .show_ui_list(ui, FILTER_MODES, &mut spec.min_filter);
                 ui.end_row();
 
                 ui.label("Mipmap Filter");
-                selectable_value(
-                    ui,
-                    "mipmap_filter",
-                    &mut spec.mipmap_filter,
-                    mipmap_filter_mode_label,
-                    MIPMAP_FILTER_MODES,
-                );
+                egui::ComboBox::from_id_salt("mipmap_filter")
+                    .selected_text(spec.mipmap_filter.as_widget_text())
+                    .show_ui_list(ui, MIPMAP_FILTER_MODES, &mut spec.mipmap_filter);
                 ui.end_row();
 
                 ui.label("LOD Min Clamp");
@@ -139,13 +140,9 @@ impl StateSnapshot<'_> {
                 ui.end_row();
 
                 ui.label("Compare");
-                selectable_value(
-                    ui,
-                    "compare",
-                    &mut spec.compare,
-                    compare_function_label,
-                    COMPARE_FUNCTIONS,
-                );
+                egui::ComboBox::from_id_salt("compare")
+                    .selected_text(spec.compare.as_widget_text())
+                    .show_ui_list(ui, COMPARE_FUNCTIONS, &mut spec.compare);
                 ui.end_row();
             });
 

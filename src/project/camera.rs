@@ -6,7 +6,7 @@ use crate::{
     error::AppResult,
     key::{Key, KeyboardState},
     project::{
-        CameraId, DimensionId,
+        CameraId, DimensionId, ProjectResource,
         dimension::Dimension,
         recreate::{ProjectEvent, Recreatable, RecreateTracker},
         storage::Storage,
@@ -292,6 +292,12 @@ impl Camera {
         self.input.scroll = 0.0;
         self.input.mouse_h = 0.0;
         self.input.mouse_v = 0.0;
+    }
+}
+
+impl ProjectResource for Camera {
+    fn label(&self) -> &str {
+        &self.label
     }
 }
 

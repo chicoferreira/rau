@@ -77,6 +77,7 @@ pub enum StateEvent {
     DeleteModelVertexBufferField(ModelId, usize),
     UpdateModelVertexBufferField(ModelId, usize, VertexBufferField),
     ReorderModelVertexBufferField(ModelId, DragUpdate),
+    SetModelMaterialBindGroup(ModelId, usize, Option<BindGroupId>),
 }
 
 pub struct State {
@@ -694,6 +695,13 @@ fn fs_main() -> @location(0) vec4<f32> {
                     }
                 }
                 StateEvent::DeleteBindGroup(bind_group_id) => {
+                    for (_, model) in self.project.models.list_mut() {
+                        for material in model.materials_mut() {
+                            if material.bind_group_id() == Some(bind_group_id) {
+                                material.set_bind_group_id(None);
+                            }
+                        }
+                    }
                     self.project.bind_groups.unregister(bind_group_id);
                 }
                 StateEvent::DeleteBindGroupEntry(id, index) => {
@@ -740,6 +748,13 @@ fn fs_main() -> @location(0) vec4<f32> {
                 StateEvent::ReorderModelVertexBufferField(model_id, drag_update) => {
                     if let Ok(model) = self.project.models.get_mut(model_id) {
                         model.reorder_vertex_buffer_field(drag_update.from, drag_update.to);
+                    }
+                }
+                StateEvent::SetModelMaterialBindGroup(model_id, material_index, bind_group_id) => {
+                    if let Ok(model) = self.project.models.get_mut(model_id) {
+                        if let Some(material) = model.materials_mut().get_mut(material_index) {
+                            material.set_bind_group_id(bind_group_id);
+                        }
                     }
                 }
             }

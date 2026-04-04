@@ -15,7 +15,7 @@ use crate::{
     ui::{
         components::{
             hint::hint,
-            selector::{selectable_value, selectable_value_storage},
+            selector::{AsWidgetText, ComboBoxExt},
         },
         pane::StateSnapshot,
     },
@@ -132,13 +132,9 @@ fn ui_entry_fields(
                     let mut current_kind: ResourceKind = entry.resource.into();
                     let kind_before = current_kind;
                     ui.label("Resource");
-                    selectable_value(
-                        ui,
-                        "resource",
-                        &mut current_kind,
-                        |k| k.to_string(),
-                        ResourceKind::iter(),
-                    );
+                    egui::ComboBox::from_id_salt("resource")
+                        .selected_text(current_kind.as_widget_text())
+                        .show_ui_list(ui, ResourceKind::iter(), &mut current_kind);
                     ui.end_row();
 
                     let resource_from_fields = match entry.resource {
@@ -179,13 +175,9 @@ fn ui_uniform_fields(
 ) -> Option<BindGroupResource> {
     let before = uniform_id;
     ui.label("Uniform");
-    selectable_value_storage(
-        ui,
-        "uniform",
-        &mut uniform_id,
-        |_, uniform| &uniform.label,
-        &ctx.uniforms,
-    );
+    egui::ComboBox::from_id_salt("uniform")
+        .selected_text_storage_opt(ctx.uniforms, uniform_id)
+        .show_ui_storage_opt(ui, ctx.uniforms, &mut uniform_id);
     ui.end_row();
     (uniform_id != before).then_some(BindGroupResource::Uniform(uniform_id))
 }
@@ -200,33 +192,23 @@ fn ui_texture_fields(
     let (tvid_before, vd_before, st_before) = (texture_view_id, view_dimension, sample_type);
 
     ui.label("Texture View");
-    selectable_value_storage(
-        ui,
-        "texture view",
-        &mut texture_view_id,
-        |_, texture_view| texture_view.label(),
-        &ctx.texture_views,
-    );
+    egui::ComboBox::from_id_salt("texture view")
+        .selected_text_storage_opt(ctx.texture_views, texture_view_id)
+        .show_ui_storage_opt(ui, ctx.texture_views, &mut texture_view_id);
+
     ui.end_row();
 
     ui.label("Dimension");
-    selectable_value(
-        ui,
-        "view_dimension",
-        &mut view_dimension,
-        texture_view_dimension_label,
-        TEXTURE_VIEW_DIMENSIONS,
-    );
+    egui::ComboBox::from_id_salt("view_dimension")
+        .selected_text(view_dimension.as_widget_text())
+        .show_ui_list(ui, TEXTURE_VIEW_DIMENSIONS, &mut view_dimension);
+
     ui.end_row();
 
     ui.label("Sample Type");
-    selectable_value(
-        ui,
-        "sample_type",
-        &mut sample_type,
-        texture_sample_type_label,
-        TEXTURE_SAMPLE_TYPES,
-    );
+    egui::ComboBox::from_id_salt("sample_type")
+        .selected_text(sample_type.as_widget_text())
+        .show_ui_list(ui, TEXTURE_SAMPLE_TYPES, &mut sample_type);
     ui.end_row();
 
     (texture_view_id != tvid_before || view_dimension != vd_before || sample_type != st_before)
@@ -246,23 +228,15 @@ fn ui_sampler_fields(
     let (sid_before, sbt_before) = (sampler_id, sampler_binding_type);
 
     ui.label("Sampler");
-    selectable_value_storage(
-        ui,
-        "sampler",
-        &mut sampler_id,
-        |_, sampler| sampler.label(),
-        &ctx.samplers,
-    );
+    egui::ComboBox::from_id_salt("sampler")
+        .selected_text_storage_opt(ctx.samplers, sampler_id)
+        .show_ui_storage_opt(ui, ctx.samplers, &mut sampler_id);
     ui.end_row();
 
     ui.label("Binding Type");
-    selectable_value(
-        ui,
-        "sampler_binding_type",
-        &mut sampler_binding_type,
-        sampler_binding_type_label,
-        SAMPLER_BINDING_TYPES,
-    );
+    egui::ComboBox::from_id_salt("sampler_binding_type")
+        .selected_text(sampler_binding_type.as_widget_text())
+        .show_ui_list(ui, SAMPLER_BINDING_TYPES, &mut sampler_binding_type);
     ui.end_row();
 
     (sampler_id != sid_before || sampler_binding_type != sbt_before).then_some(
@@ -282,14 +256,17 @@ const TEXTURE_VIEW_DIMENSIONS: [wgpu::TextureViewDimension; 6] = [
     wgpu::TextureViewDimension::D3,
 ];
 
-fn texture_view_dimension_label(dimension: wgpu::TextureViewDimension) -> &'static str {
-    match dimension {
-        wgpu::TextureViewDimension::D1 => "1D",
-        wgpu::TextureViewDimension::D2 => "2D",
-        wgpu::TextureViewDimension::D2Array => "2D Array",
-        wgpu::TextureViewDimension::Cube => "Cube",
-        wgpu::TextureViewDimension::CubeArray => "Cube Array",
-        wgpu::TextureViewDimension::D3 => "3D",
+impl AsWidgetText for wgpu::TextureViewDimension {
+    fn as_widget_text(&self) -> egui::WidgetText {
+        let s = match self {
+            wgpu::TextureViewDimension::D1 => "1D",
+            wgpu::TextureViewDimension::D2 => "2D",
+            wgpu::TextureViewDimension::D2Array => "2D Array",
+            wgpu::TextureViewDimension::Cube => "Cube",
+            wgpu::TextureViewDimension::CubeArray => "Cube Array",
+            wgpu::TextureViewDimension::D3 => "3D",
+        };
+        s.into()
     }
 }
 
@@ -301,13 +278,16 @@ const TEXTURE_SAMPLE_TYPES: [wgpu::TextureSampleType; 5] = [
     wgpu::TextureSampleType::Uint,
 ];
 
-fn texture_sample_type_label(sample_type: wgpu::TextureSampleType) -> &'static str {
-    match sample_type {
-        wgpu::TextureSampleType::Float { filterable: true } => "Float (Filterable)",
-        wgpu::TextureSampleType::Float { filterable: false } => "Float (Non-Filterable)",
-        wgpu::TextureSampleType::Depth => "Depth",
-        wgpu::TextureSampleType::Sint => "Sint",
-        wgpu::TextureSampleType::Uint => "Uint",
+impl AsWidgetText for wgpu::TextureSampleType {
+    fn as_widget_text(&self) -> egui::WidgetText {
+        let r = match self {
+            wgpu::TextureSampleType::Float { filterable: true } => "Float (Filterable)",
+            wgpu::TextureSampleType::Float { filterable: false } => "Float (Non-Filterable)",
+            wgpu::TextureSampleType::Depth => "Depth",
+            wgpu::TextureSampleType::Sint => "Sint",
+            wgpu::TextureSampleType::Uint => "Uint",
+        };
+        r.into()
     }
 }
 
@@ -317,11 +297,14 @@ const SAMPLER_BINDING_TYPES: [wgpu::SamplerBindingType; 3] = [
     wgpu::SamplerBindingType::Comparison,
 ];
 
-fn sampler_binding_type_label(binding_type: wgpu::SamplerBindingType) -> &'static str {
-    match binding_type {
-        wgpu::SamplerBindingType::Filtering => "Filtering",
-        wgpu::SamplerBindingType::NonFiltering => "Non-Filtering",
-        wgpu::SamplerBindingType::Comparison => "Comparison",
+impl AsWidgetText for wgpu::SamplerBindingType {
+    fn as_widget_text(&self) -> egui::WidgetText {
+        let r = match self {
+            wgpu::SamplerBindingType::Filtering => "Filtering",
+            wgpu::SamplerBindingType::NonFiltering => "Non-Filtering",
+            wgpu::SamplerBindingType::Comparison => "Comparison",
+        };
+        r.into()
     }
 }
 
@@ -347,6 +330,12 @@ impl ResourceKind {
                 sampler_binding_type: wgpu::SamplerBindingType::Filtering,
             },
         }
+    }
+}
+
+impl AsWidgetText for ResourceKind {
+    fn as_widget_text(&self) -> egui::WidgetText {
+        self.to_string().into()
     }
 }
 

@@ -2,7 +2,7 @@ use slotmap::SlotMap;
 
 use crate::{
     error::{AppError, AppResult},
-    project::ProjectResourceId,
+    project::{ProjectResource, ProjectResourceId},
 };
 
 pub struct Storage<Key: slotmap::Key, Value> {
@@ -44,5 +44,11 @@ impl<Key: slotmap::Key + Into<ProjectResourceId>, Value> Storage<Key, Value> {
         self.map
             .get_mut(key)
             .ok_or_else(|| AppError::InvalidResource(key.into()))
+    }
+}
+
+impl<Key: slotmap::Key + Into<ProjectResourceId>, Value: ProjectResource> Storage<Key, Value> {
+    pub fn get_label(&self, key: Key) -> AppResult<&str> {
+        Ok(self.get(key)?.label())
     }
 }

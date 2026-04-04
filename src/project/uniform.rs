@@ -7,11 +7,7 @@ mod tests;
 use crate::{
     error::AppResult,
     project::{
-        CameraId, UniformId,
-        camera::Camera,
-        recreate::{ProjectEvent, Recreatable, RecreateTracker},
-        storage::Storage,
-        uniform::camera::CameraField,
+        CameraId, ProjectResource, UniformId, camera::Camera, recreate::{ProjectEvent, Recreatable, RecreateTracker}, storage::Storage, uniform::camera::CameraField
     },
     utils::resizable_buffer::{ChangeResult, ResizableBuffer},
 };
@@ -146,6 +142,12 @@ impl Uniform {
         }
 
         (size.next_multiple_of(struct_align), struct_align)
+    }
+}
+
+impl ProjectResource for Uniform {
+    fn label(&self) -> &str {
+        &self.label
     }
 }
 

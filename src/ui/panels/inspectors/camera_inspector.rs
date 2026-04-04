@@ -4,7 +4,7 @@ use egui::{CollapsingHeader, Grid, RichText};
 use crate::{
     project::CameraId,
     ui::{
-        components::{data_display::ui_mat4_grid, selector::selectable_value_storage},
+        components::{data_display::ui_mat4_grid, selector::ComboBoxExt},
         pane::StateSnapshot,
     },
 };
@@ -74,7 +74,6 @@ impl StateSnapshot<'_> {
             .show(ui, |ui| {
                 Grid::new("camera_projection_grid")
                     .num_columns(2)
-                    .spacing([8.0, 4.0])
                     .show(ui, |ui| {
                         ui.label("FOV");
                         let Deg(mut fov) = camera.fovy().into();
@@ -115,13 +114,10 @@ impl StateSnapshot<'_> {
                             ui.label("from");
                             let mut current_dim_id = camera.dimension_id();
                             let before = current_dim_id;
-                            selectable_value_storage(
-                                ui,
-                                "camera_aspect_source",
-                                &mut current_dim_id,
-                                |_id, dim| dim.label.as_str(),
-                                &self.project.dimensions,
-                            );
+                            let dimensions = &self.project.dimensions;
+                            egui::ComboBox::from_id_salt("camera_aspect_source")
+                                .selected_text_storage_opt(dimensions, current_dim_id)
+                                .show_ui_storage_opt(ui, dimensions, &mut current_dim_id);
                             if before != current_dim_id {
                                 camera.set_dimension_id(current_dim_id);
                             }

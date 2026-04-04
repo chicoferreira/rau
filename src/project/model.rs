@@ -3,7 +3,7 @@ use std::{io::BufReader, path::Path};
 use crate::{
     error::{AppError, AppResult},
     project::{
-        BindGroupId,
+        BindGroupId, ProjectResource,
         model::vertex_buffer::{VertexBufferField, VertexBufferSpec},
         recreate::{ProjectEvent, Recreatable, RecreateTracker},
     },
@@ -132,6 +132,12 @@ impl Model {
         }
         self.vertex_buffer_spec.reorder_field(from, to);
         self.dirty = true;
+    }
+}
+
+impl ProjectResource for Model {
+    fn label(&self) -> &str {
+        &self.label
     }
 }
 
@@ -430,7 +436,7 @@ impl Material {
         self.bind_group_id
     }
 
-    pub fn set_bind_group_id(&mut self, bind_group_id: BindGroupId) {
-        self.bind_group_id = Some(bind_group_id);
+    pub fn set_bind_group_id(&mut self, bind_group_id: Option<BindGroupId>) {
+        self.bind_group_id = bind_group_id;
     }
 }

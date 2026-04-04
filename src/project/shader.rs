@@ -1,4 +1,4 @@
-use crate::error::AppResult;
+use crate::{error::AppResult, project::ProjectResource};
 
 pub struct Shader {
     pub label: String,
@@ -31,5 +31,11 @@ impl Shader {
             label: Some(&self.label),
             source: wgpu::ShaderSource::Naga(std::borrow::Cow::Owned(module)),
         }))
+    }
+}
+
+impl ProjectResource for Shader {
+    fn label(&self) -> &str {
+        &self.label
     }
 }
