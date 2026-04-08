@@ -35,6 +35,14 @@ pub trait ComboBoxExt {
         storage: &Storage<Id, impl ProjectResource>,
         current_value: &mut Option<Id>,
     ) -> egui::InnerResponse<Option<()>>;
+
+    fn show_ui_iter<V: PartialEq>(
+        self,
+        ui: &mut egui::Ui,
+        items: impl IntoIterator<Item = V>,
+        label_fn: impl Fn(&V) -> egui::WidgetText,
+        current_value: &mut V,
+    ) -> egui::InnerResponse<Option<()>>;
 }
 
 impl ComboBoxExt for egui::ComboBox {
@@ -86,6 +94,21 @@ impl ComboBoxExt for egui::ComboBox {
         self.show_ui(ui, |ui| {
             for (id, item) in storage.list() {
                 ui.selectable_value(current_value, Some(id.clone()), item.label());
+            }
+        })
+    }
+
+    fn show_ui_iter<V: PartialEq>(
+        self,
+        ui: &mut egui::Ui,
+        items: impl IntoIterator<Item = V>,
+        label_fn: impl Fn(&V) -> egui::WidgetText,
+        current_value: &mut V,
+    ) -> egui::InnerResponse<Option<()>> {
+        self.show_ui(ui, |ui| {
+            for value in items {
+                let label = label_fn(&value);
+                ui.selectable_value(current_value, value, label);
             }
         })
     }

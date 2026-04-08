@@ -4,7 +4,7 @@ use strum::IntoEnumIterator;
 use crate::{
     project::{
         BindGroupId, ModelId,
-        model::{Model, vertex_buffer::VertexBufferField},
+        model::{MeshMaterialSelection, Model, vertex_buffer::VertexBufferField},
     },
     state::StateEvent,
     ui::{
@@ -70,14 +70,49 @@ impl StateSnapshot<'_> {
                                     ui.end_row();
 
                                     ui.label("Material");
-                                    ui.label(match mesh.material_index() {
-                                        None => "None".to_string(),
-                                        Some(id) => model
-                                            .materials()
-                                            .get(id)
-                                            .map(|m| format!("{id}: {}", m.label()))
-                                            .unwrap_or_else(|| format!("{id}: <out of bounds>")),
-                                    });
+                                    let mut selection = mesh.material_selection().clone();
+                                    let materials = model.materials();
+                                    let source_index = mesh.material_index();
+
+                                    let options = [
+                                        MeshMaterialSelection::FromSource,
+                                        MeshMaterialSelection::Material(None),
+                                    ]
+                                    .into_iter()
+                                    .chain(
+                                        (0..materials.len())
+                                            .map(|i| MeshMaterialSelection::Material(Some(i))),
+                                    );
+
+                                    let selected = material_selection_label(
+                                        &selection,
+                                        source_index,
+                                        materials,
+                                    );
+
+                                    egui::ComboBox::from_id_salt((
+                                        "mesh_material_selection",
+                                        model_id,
+                                        mesh_index,
+                                    ))
+                                    .selected_text(selected)
+                                    .show_ui_iter(
+                                        ui,
+                                        options,
+                                        |sel| {
+                                            material_selection_label(sel, source_index, materials)
+                                                .into()
+                                        },
+                                        &mut selection,
+                                    );
+
+                                    if selection != *mesh.material_selection() {
+                                        self.pending_events.push(
+                                            StateEvent::SetMeshMaterialSelection(
+                                                model_id, mesh_index, selection,
+                                            ),
+                                        );
+                                    }
                                     ui.end_row();
                                 });
 
@@ -308,5 +343,26 @@ impl egui_table::TableDelegate for TriangleTableDelegate<'_> {
 impl AsWidgetText for VertexBufferField {
     fn as_widget_text(&self) -> egui::WidgetText {
         self.to_string().into()
+    }
+}
+
+fn material_selection_label(
+    selection: &MeshMaterialSelection,
+    source_index: Option<usize>,
+    materials: &[crate::project::model::Material],
+) -> String {
+    match selection {
+        MeshMaterialSelection::FromSource => match source_index {
+            None => "From Source (none)".to_string(),
+            Some(id) => materials
+                .get(id)
+                .map(|m| format!("From Source ({id}: {})", m.label()))
+                .unwrap_or_else(|| format!("From Source ({id}: <out of bounds>)")),
+        },
+        MeshMaterialSelection::Material(None) => "None".to_string(),
+        MeshMaterialSelection::Material(Some(i)) => materials
+            .get(*i)
+            .map(|m| format!("{i}: {}", m.label()))
+            .unwrap_or_else(|| format!("{i}: <out of bounds>")),
     }
 }

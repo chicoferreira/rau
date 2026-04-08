@@ -34,8 +34,15 @@ pub struct Mesh {
     bitangents: Vec<[f32; 3]>,
     indices: Vec<u32>,
     material_index: Option<usize>,
+    material_selection: MeshMaterialSelection,
     vertex_buffer: ResizableBuffer,
     index_buffer: ResizableBuffer,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum MeshMaterialSelection {
+    FromSource,
+    Material(Option<usize>),
 }
 
 pub struct Material {
@@ -96,6 +103,16 @@ impl Model {
 
     pub fn materials_mut(&mut self) -> &mut [Material] {
         &mut self.materials
+    }
+
+    pub fn set_mesh_material_selection(
+        &mut self,
+        mesh_index: usize,
+        selection: MeshMaterialSelection,
+    ) {
+        if let Some(mesh) = self.meshes.get_mut(mesh_index) {
+            mesh.set_material_selection(selection);
+        }
     }
 
     pub fn get_material(&self, material_id: usize) -> Option<&Material> {
@@ -239,6 +256,7 @@ impl Mesh {
             bitangents,
             indices,
             material_index: model.mesh.material_id,
+            material_selection: MeshMaterialSelection::FromSource,
             vertex_buffer,
             index_buffer,
         })
@@ -389,6 +407,21 @@ impl Mesh {
 
     pub fn material_index(&self) -> Option<usize> {
         self.material_index
+    }
+
+    pub fn material_selection(&self) -> &MeshMaterialSelection {
+        &self.material_selection
+    }
+
+    pub fn set_material_selection(&mut self, selection: MeshMaterialSelection) {
+        self.material_selection = selection;
+    }
+
+    pub fn resolved_material_index(&self) -> Option<usize> {
+        match &self.material_selection {
+            MeshMaterialSelection::FromSource => self.material_index,
+            MeshMaterialSelection::Material(i) => *i,
+        }
     }
 
     pub fn vertex_buffer(&self) -> &ResizableBuffer {

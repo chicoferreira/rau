@@ -10,7 +10,7 @@ use crate::{
     project::{
         self, BindGroupId, CameraId, DimensionId, ModelId, ProjectResourceId, SamplerId, ShaderId,
         TextureId, TextureViewId, UniformId, ViewportId,
-        model::{ModelCreationContext, vertex_buffer::VertexBufferField},
+        model::{MeshMaterialSelection, ModelCreationContext, vertex_buffer::VertexBufferField},
         bindgroup::{BindGroupCreationContext, BindGroupEntry, BindGroupResource},
         camera::{Camera, CameraCreationContext},
         dimension::Dimension,
@@ -78,6 +78,7 @@ pub enum StateEvent {
     UpdateModelVertexBufferField(ModelId, usize, VertexBufferField),
     ReorderModelVertexBufferField(ModelId, DragUpdate),
     SetModelMaterialBindGroup(ModelId, usize, Option<BindGroupId>),
+    SetMeshMaterialSelection(ModelId, usize, MeshMaterialSelection),
 }
 
 pub struct State {
@@ -143,7 +144,7 @@ impl State {
         log::info!("Available surface formats: {:?}", surface_caps.formats);
 
         pub const EGUI_PREFERRED_SURFACE_FORMAT: wgpu::TextureFormat =
-            wgpu::TextureFormat::Rgba8Unorm;
+            wgpu::TextureFormat::Bgra8Unorm;
 
         let surface_format = if surface_caps
             .formats
@@ -755,6 +756,11 @@ fn fs_main() -> @location(0) vec4<f32> {
                         if let Some(material) = model.materials_mut().get_mut(material_index) {
                             material.set_bind_group_id(bind_group_id);
                         }
+                    }
+                }
+                StateEvent::SetMeshMaterialSelection(model_id, mesh_index, selection) => {
+                    if let Ok(model) = self.project.models.get_mut(model_id) {
+                        model.set_mesh_material_selection(mesh_index, selection);
                     }
                 }
             }
