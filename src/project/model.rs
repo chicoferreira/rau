@@ -1,9 +1,11 @@
 use std::{io::BufReader, path::Path};
 
+use wgpu::BindGroupLayout;
+
 use crate::{
     error::{AppError, AppResult},
     project::{
-        BindGroupId, ProjectResource,
+        BindGroupId, Project, ProjectResource,
         model::vertex_buffer::{VertexBufferField, VertexBufferSpec},
         recreate::{ProjectEvent, Recreatable, RecreateTracker},
     },
@@ -149,6 +151,18 @@ impl Model {
         }
         self.vertex_buffer_spec.reorder_field(from, to);
         self.dirty = true;
+    }
+
+    /// Returns the bind group layout of the first mesh.
+    /// This assumes all the meshes have the same bind group layout;
+    /// Otherwise the render pipeline will throw an error during rendering.
+    pub fn get_bind_group_layout<'a>(&self, project: &'a Project) -> Option<&'a BindGroupLayout> {
+        let mesh = self.meshes().first()?;
+        let material_index = mesh.material_index()?;
+        let material = self.get_material(material_index)?;
+        let bind_group_id = material.bind_group_id()?;
+        let bind_group = project.bind_groups.get(bind_group_id).ok()?;
+        Some(bind_group.inner_layout())
     }
 }
 
@@ -415,13 +429,6 @@ impl Mesh {
 
     pub fn set_material_selection(&mut self, selection: MeshMaterialSelection) {
         self.material_selection = selection;
-    }
-
-    pub fn resolved_material_index(&self) -> Option<usize> {
-        match &self.material_selection {
-            MeshMaterialSelection::FromSource => self.material_index,
-            MeshMaterialSelection::Material(i) => *i,
-        }
     }
 
     pub fn vertex_buffer(&self) -> &ResizableBuffer {

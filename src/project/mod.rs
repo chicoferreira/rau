@@ -1,9 +1,9 @@
 use slotmap::new_key_type;
 
 use crate::project::{
-    bindgroup::BindGroup, camera::Camera, dimension::Dimension, model::Model, sampler::Sampler,
-    shader::Shader, storage::Storage, texture::Texture, texture_view::TextureView,
-    uniform::Uniform, viewport::Viewport,
+    bindgroup::BindGroup, camera::Camera, dimension::Dimension, model::Model,
+    renderpass::RenderPass, sampler::Sampler, shader::Shader, storage::Storage, texture::Texture,
+    texture_view::TextureView, uniform::Uniform, viewport::Viewport,
 };
 
 pub mod bindgroup;
@@ -11,6 +11,7 @@ pub mod camera;
 pub mod dimension;
 pub mod model;
 pub mod recreate;
+pub mod renderpass;
 pub mod sampler;
 pub mod shader;
 pub mod storage;
@@ -30,6 +31,7 @@ new_key_type! {
     pub struct DimensionId;
     pub struct CameraId;
     pub struct ModelId;
+    pub struct RenderPassId;
 }
 
 pub struct Project {
@@ -43,6 +45,7 @@ pub struct Project {
     pub dimensions: Storage<DimensionId, Dimension>,
     pub cameras: Storage<CameraId, Camera>,
     pub models: Storage<ModelId, Model>,
+    pub render_passes: Storage<RenderPassId, RenderPass>,
 }
 
 impl Project {
@@ -58,6 +61,7 @@ impl Project {
             dimensions: Storage::new(),
             cameras: Storage::new(),
             models: Storage::new(),
+            render_passes: Storage::new(),
         }
     }
 
@@ -69,6 +73,7 @@ impl Project {
             ProjectResourceId::BindGroup(id) => self.bind_groups.get_label(id),
             ProjectResourceId::Texture(id) => self.textures.get_label(id),
             ProjectResourceId::TextureView(id) => self.texture_views.get_label(id),
+            ProjectResourceId::RenderPass(id) => self.render_passes.get_label(id),
             ProjectResourceId::Sampler(id) => self.samplers.get_label(id),
             ProjectResourceId::Dimension(id) => self.dimensions.get_label(id),
             ProjectResourceId::Camera(id) => self.cameras.get_label(id),
@@ -91,6 +96,7 @@ pub enum ProjectResourceId {
     Dimension(DimensionId),
     Camera(CameraId),
     Model(ModelId),
+    RenderPass(RenderPassId),
 }
 
 pub trait ProjectResource {

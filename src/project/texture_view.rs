@@ -36,9 +36,11 @@ pub enum TextureViewFormat {
     Linear,
 }
 
+// TODO: change this to a better filter, i think it should work with every RGBA texture format
 const ALLOWED_EGUI_FORMATS: &[wgpu::TextureFormat] = &[
     wgpu::TextureFormat::Rgba8UnormSrgb,
     wgpu::TextureFormat::Rgba8Unorm,
+    wgpu::TextureFormat::Rgba16Float,
 ];
 
 impl TextureView {

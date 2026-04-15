@@ -4,7 +4,6 @@ mod app;
 mod error;
 mod key;
 mod project;
-mod render;
 mod resources;
 mod scene;
 mod state;

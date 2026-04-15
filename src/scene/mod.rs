@@ -1,11 +1,12 @@
 use crate::{
     error::{AppError, AppResult, WgpuErrorScope},
     project::{
-        self, BindGroupId, ModelId, TextureViewId, ViewportId,
+        self, RenderPassId, ViewportId,
         bindgroup::{BindGroup, BindGroupEntry, BindGroupResource},
         camera::Camera,
         dimension::Dimension,
         model::Model,
+        renderpass::{RenderDraw, RenderPass, RenderPassTarget},
         sampler::{Sampler, SamplerSpec},
         texture::{Texture, TextureCreationContext, TextureSource},
         texture_view::{TextureView, TextureViewCreationContext, TextureViewFormat},
@@ -13,29 +14,16 @@ use crate::{
             Uniform, UniformField, UniformFieldData, UniformFieldSource, camera::CameraField,
         },
     },
-    render,
     resources::{self, load_texture},
-    scene::hdr::HdrPipeline,
-    state,
     ui::{self},
 };
 
-mod hdr;
 mod loader;
 
 pub struct Scene {
-    render_pipeline: wgpu::RenderPipeline,
-    cube_model_id: ModelId,
-    depth_texture_view_id: TextureViewId,
-    camera_bind_group_id: BindGroupId,
-    light_bind_group_id: BindGroupId,
-    light_render_pipeline: wgpu::RenderPipeline,
-    hdr: hdr::HdrPipeline,
-    environment_bind_group_id: BindGroupId,
-    sky_pipeline: wgpu::RenderPipeline,
     pub output_viewport_id: ViewportId,
-    hdr_texture_view_id: TextureViewId,
-    output_viewport_view_id: TextureViewId,
+    main_render_pass_id: RenderPassId,
+    hdr_render_pass_id: RenderPassId,
 }
 
 impl Scene {
@@ -51,42 +39,6 @@ impl Scene {
         main_shader_id: project::ShaderId,
         sky_shader_id: project::ShaderId,
     ) -> AppResult<Scene> {
-        let texture_bind_group_layout =
-            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                entries: &[
-                    wgpu::BindGroupLayoutEntry {
-                        binding: 0,
-                        visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
-                        ty: wgpu::BindingType::Texture {
-                            multisampled: false,
-                            view_dimension: wgpu::TextureViewDimension::D2,
-                            sample_type: wgpu::TextureSampleType::Float { filterable: true },
-                        },
-                        count: None,
-                    },
-                    wgpu::BindGroupLayoutEntry {
-                        binding: 1,
-                        visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
-                        // normal map
-                        ty: wgpu::BindingType::Texture {
-                            multisampled: false,
-                            view_dimension: wgpu::TextureViewDimension::D2,
-                            sample_type: wgpu::TextureSampleType::Float { filterable: true },
-                        },
-                        count: None,
-                    },
-                    wgpu::BindGroupLayoutEntry {
-                        binding: 2,
-                        visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
-                        // This should match the filterable field of the
-                        // corresponding Texture entry above.
-                        ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
-                        count: None,
-                    },
-                ],
-                label: Some("texture_bind_group_layout"),
-            });
-
         let dimension = Dimension {
             label: "Main Dimension".to_string(),
             size,
@@ -252,16 +204,6 @@ impl Scene {
             material.set_bind_group_id(Some(bind_group_id));
         }
 
-        let (vertex_attributes, vertex_buffer_stride) = cube_model
-            .vertex_buffer_spec()
-            .to_wgpu_attributes_and_stride();
-
-        let vertex_buffer_layout = wgpu::VertexBufferLayout {
-            array_stride: vertex_buffer_stride,
-            step_mode: wgpu::VertexStepMode::Vertex,
-            attributes: &vertex_attributes,
-        };
-
         let cube_model_id = project.models.register(cube_model);
 
         let hdr_texture = Texture::new(
@@ -271,7 +213,7 @@ impl Scene {
                 queue,
             },
             "Hdr Texture".to_string(),
-            HdrPipeline::RENDER_FORMAT,
+            wgpu::TextureFormat::Rgba16Float,
             wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::RENDER_ATTACHMENT,
             TextureSource::Dimension(dimension_id),
         )?;
@@ -299,14 +241,24 @@ impl Scene {
 
         let viewport_texture_format = wgpu::TextureFormat::Rgba8UnormSrgb;
 
-        let hdr = hdr::HdrPipeline::new(
-            device,
+        let hdr_bind_group = BindGroup::new(
             project,
-            hdr_texture_view_id,
-            viewport_texture_format,
-            image_texture_sampler_id,
-            hdr_shader_id,
+            device,
+            "HDR Bind Group".to_string(),
+            vec![
+                BindGroupEntry::new(BindGroupResource::Texture {
+                    texture_view_id: Some(hdr_texture_view_id),
+                    view_dimension: wgpu::TextureViewDimension::D2,
+                    sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                }),
+                BindGroupEntry::new(BindGroupResource::Sampler {
+                    sampler_id: Some(image_texture_sampler_id),
+                    sampler_binding_type: wgpu::SamplerBindingType::Filtering,
+                }),
+            ],
         )?;
+
+        let hdr_bind_group_id = project.bind_groups.register(hdr_bind_group);
 
         let hdr_loader = loader::HdrLoader::new(&device, &project, equirectangular_shader_id)?;
         let sky_bytes = resources::load_binary("pure-sky.hdr")
@@ -350,79 +302,6 @@ impl Scene {
         )?;
 
         let environment_bind_group_id = project.bind_groups.register(environment_bind_group);
-
-        let camera_bind_group = project.bind_groups.get(camera_bind_group_id).unwrap();
-        let light_bind_group = project.bind_groups.get(light_bind_group_id).unwrap();
-        let environment_bind_group = project.bind_groups.get(environment_bind_group_id).unwrap();
-        let render_pipeline_layout =
-            device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-                label: Some("Render Pipeline Layout"),
-                bind_group_layouts: &[
-                    Some(&texture_bind_group_layout),
-                    Some(&camera_bind_group.inner_layout()),
-                    Some(&light_bind_group.inner_layout()),
-                    Some(&environment_bind_group.inner_layout()),
-                ],
-                immediate_size: 0,
-            });
-
-        let render_pipeline = {
-            let shader = project.shaders.get(main_shader_id).unwrap();
-            state::create_render_pipeline(
-                "normal shader pipeline",
-                &device,
-                &render_pipeline_layout,
-                HdrPipeline::RENDER_FORMAT,
-                Some(wgpu::TextureFormat::Depth32Float),
-                &[vertex_buffer_layout.clone()],
-                wgpu::PrimitiveTopology::TriangleList,
-                shader.create_wgpu_shader_module(device)?,
-            )
-        };
-
-        let light_render_pipeline = {
-            let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-                label: Some("Light Pipeline Layout"),
-                bind_group_layouts: &[
-                    Some(&camera_bind_group.inner_layout()),
-                    Some(&light_bind_group.inner_layout()),
-                ],
-                immediate_size: 0,
-            });
-            let shader = project.shaders.get(light_shader_id).unwrap();
-            state::create_render_pipeline(
-                "light pipeline",
-                &device,
-                &layout,
-                HdrPipeline::RENDER_FORMAT,
-                Some(wgpu::TextureFormat::Depth32Float),
-                &[vertex_buffer_layout],
-                wgpu::PrimitiveTopology::TriangleList,
-                shader.create_wgpu_shader_module(device)?,
-            )
-        };
-
-        let sky_pipeline = {
-            let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-                label: Some("Sky Pipeline Layout"),
-                bind_group_layouts: &[
-                    Some(&camera_bind_group.inner_layout()),
-                    Some(&environment_bind_group.inner_layout()),
-                ],
-                immediate_size: 0,
-            });
-            let shader = project.shaders.get(sky_shader_id).unwrap();
-            state::create_render_pipeline(
-                "sky pipeline",
-                &device,
-                &layout,
-                HdrPipeline::RENDER_FORMAT,
-                Some(wgpu::TextureFormat::Depth32Float),
-                &[],
-                wgpu::PrimitiveTopology::TriangleList,
-                shader.create_wgpu_shader_module(device)?,
-            )
-        };
 
         let depth_texture = Texture::new(
             &TextureCreationContext {
@@ -492,19 +371,109 @@ impl Scene {
         )?;
         let viewport_id = project.viewports.register(viewport);
 
+        let primitive_state = wgpu::PrimitiveState {
+            topology: wgpu::PrimitiveTopology::TriangleList,
+            strip_index_format: None,
+            front_face: wgpu::FrontFace::Ccw,
+            cull_mode: Some(wgpu::Face::Back),
+            unclipped_depth: false,
+            polygon_mode: wgpu::PolygonMode::Fill,
+            conservative: false,
+        };
+
+        let mut main_render_pass = RenderPass::new(
+            "Main Render Pass".to_string(),
+            RenderPassTarget {
+                texture_view_id: hdr_texture_view_id,
+                load_operation: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+            },
+            Some(RenderPassTarget {
+                texture_view_id: depth_texture_view_id,
+                load_operation: wgpu::LoadOp::Clear(1.0),
+            }),
+        );
+
+        main_render_pass.add_pipeline(
+            "light pipeline",
+            device,
+            project,
+            primitive_state.clone(),
+            light_shader_id,
+            light_shader_id,
+            vec![(0, camera_bind_group_id), (1, light_bind_group_id)],
+            RenderDraw::Model {
+                model_id: cube_model_id,
+                instances: 0..1,
+                mesh_vertex_slot: 0,
+                material_bind_group_slot: None,
+            },
+        )?;
+
+        main_render_pass.add_pipeline(
+            "models pipeline",
+            device,
+            project,
+            primitive_state.clone(),
+            main_shader_id,
+            main_shader_id,
+            vec![
+                (1, camera_bind_group_id),
+                (2, light_bind_group_id),
+                (3, environment_bind_group_id),
+            ],
+            RenderDraw::Model {
+                model_id: cube_model_id,
+                instances: 0..100,
+                mesh_vertex_slot: 0,
+                material_bind_group_slot: Some(0),
+            },
+        )?;
+
+        main_render_pass.add_pipeline(
+            "sky pipeline",
+            device,
+            project,
+            primitive_state,
+            sky_shader_id,
+            sky_shader_id,
+            vec![(0, camera_bind_group_id), (1, environment_bind_group_id)],
+            RenderDraw::Direct {
+                vertices: 0..3,
+                instances: 0..1,
+            },
+        )?;
+
+        let main_render_pass_id = project.render_passes.register(main_render_pass);
+
+        let mut hdr_render_pass = RenderPass::new(
+            "HDR render pass",
+            RenderPassTarget {
+                texture_view_id: output_viewport_view_id,
+                load_operation: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+            },
+            None,
+        );
+
+        hdr_render_pass.add_pipeline(
+            "HDR pipeline",
+            device,
+            project,
+            primitive_state,
+            hdr_shader_id,
+            hdr_shader_id,
+            vec![(0, hdr_bind_group_id)],
+            RenderDraw::Direct {
+                vertices: 0..3,
+                instances: 0..1,
+            },
+        )?;
+
+        let hdr_render_pass_id = project.render_passes.register(hdr_render_pass);
+
         Ok(Scene {
-            render_pipeline,
-            depth_texture_view_id,
-            cube_model_id,
-            camera_bind_group_id,
-            light_bind_group_id,
-            light_render_pipeline,
-            hdr,
-            environment_bind_group_id,
-            sky_pipeline,
             output_viewport_id: viewport_id,
-            hdr_texture_view_id,
-            output_viewport_view_id,
+            main_render_pass_id,
+            hdr_render_pass_id,
         })
     }
 
@@ -514,95 +483,14 @@ impl Scene {
         encoder: &mut wgpu::CommandEncoder,
         project: &project::Project,
     ) -> AppResult<()> {
-        let depth_texture_view = project
-            .texture_views
-            .get(self.depth_texture_view_id)?
-            .inner()
-            .as_ref()
-            .unwrap(); // TODO: FIX ME
-
-        let cube_model = project.models.get(self.cube_model_id)?;
+        let main_render_pass = project.render_passes.get(self.main_render_pass_id)?;
+        let hdr_render_pass = project.render_passes.get(self.hdr_render_pass_id)?;
 
         let scope = WgpuErrorScope::push(device);
 
-        let main_render_pass = render::RenderPassSpec {
-            label: Some("Main Render Pass"),
-            target_spec: render::RenderPassTargetSpec {
-                texture_view_id: self.hdr_texture_view_id,
-                load_operation: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
-            },
-            depth_spec: Some(render::RenderPassDepthSpec {
-                texture: depth_texture_view,
-                load_operation: wgpu::LoadOp::Clear(1.0),
-            }),
-            pipelines: vec![
-                render::RenderPipelineSpec {
-                    pipeline: &self.light_render_pipeline,
-                    bind_groups: vec![
-                        render::RenderBindGroupSpec::new_fixed(0, self.camera_bind_group_id),
-                        render::RenderBindGroupSpec::new_fixed(1, self.light_bind_group_id),
-                    ],
-                    vertex_buffers: vec![render::RenderVertexBufferSpec::new_model_mesh(0)],
-                    draw: render::RenderDrawSpec::Model {
-                        model: &cube_model,
-                        instances: 0..1,
-                    },
-                },
-                render::RenderPipelineSpec {
-                    pipeline: &self.render_pipeline,
-                    bind_groups: vec![
-                        render::RenderBindGroupSpec::new_model_material(0),
-                        render::RenderBindGroupSpec::new_fixed(1, self.camera_bind_group_id),
-                        render::RenderBindGroupSpec::new_fixed(2, self.light_bind_group_id),
-                        render::RenderBindGroupSpec::new_fixed(3, self.environment_bind_group_id),
-                    ],
-                    vertex_buffers: vec![render::RenderVertexBufferSpec::new_model_mesh(0)],
-                    draw: render::RenderDrawSpec::Model {
-                        model: &cube_model,
-                        instances: 0..100 as u32,
-                    },
-                },
-                render::RenderPipelineSpec {
-                    pipeline: &self.sky_pipeline,
-                    bind_groups: vec![
-                        render::RenderBindGroupSpec::new_fixed(0, self.camera_bind_group_id),
-                        render::RenderBindGroupSpec::new_fixed(1, self.environment_bind_group_id),
-                    ],
-                    vertex_buffers: vec![],
-                    draw: render::RenderDrawSpec::Single {
-                        vertices: 0..3,
-                        instances: 0..1,
-                    },
-                },
-            ],
-        };
+        main_render_pass.submit(encoder, project)?;
+        hdr_render_pass.submit(encoder, project)?;
 
-        let hdr_pass = render::RenderPassSpec {
-            label: Some("HDR Pass"),
-            target_spec: render::RenderPassTargetSpec {
-                texture_view_id: self.output_viewport_view_id,
-                load_operation: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
-            },
-            depth_spec: None,
-            pipelines: vec![render::RenderPipelineSpec {
-                pipeline: self.hdr.pipeline(),
-                vertex_buffers: vec![],
-                bind_groups: vec![render::RenderBindGroupSpec::new_fixed(
-                    0,
-                    self.hdr.bind_group_id,
-                )],
-                draw: render::RenderDrawSpec::Single {
-                    vertices: 0..3,
-                    instances: 0..1,
-                },
-            }],
-        };
-
-        let result = render::RenderPassSpecSet {
-            render_passes: vec![main_render_pass, hdr_pass],
-        };
-
-        result.submit(encoder, project)?;
         scope.pop()?;
 
         Ok(())

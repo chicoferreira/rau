@@ -6,6 +6,8 @@ pub type AppResult<T> = std::result::Result<T, AppError>;
 pub enum AppError {
     #[error("invalid resource: {0:?}")]
     InvalidResource(ProjectResourceId),
+    #[error("resource {0:?} is not yet initialized")]
+    UninitResource(ProjectResourceId),
     #[error(transparent)]
     WgpuError(#[from] wgpu::Error),
     #[error("shader parse error: {0}")]
