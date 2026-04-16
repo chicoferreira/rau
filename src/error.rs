@@ -4,20 +4,31 @@ pub type AppResult<T> = std::result::Result<T, AppError>;
 
 #[derive(Debug, thiserror::Error)]
 pub enum AppError {
+    /// The resource with the given ID is invalid.
     #[error("invalid resource: {0:?}")]
     InvalidResource(ProjectResourceId),
+    /// The resource where this error occurred is not yet initialized.
+    #[error("resource is not yet initialized")]
+    UninitResource,
+    /// The resource with the given ID is not yet initialized.
     #[error("resource {0:?} is not yet initialized")]
-    UninitResource(ProjectResourceId),
+    UninitResourceOther(ProjectResourceId),
+    /// A WGPU error occurred.
     #[error(transparent)]
     WgpuError(#[from] wgpu::Error),
+    /// A shader parse error occurred.
     #[error("shader parse error: {0}")]
     ShaderParseError(#[from] naga::front::wgsl::ParseError),
+    /// A shader compilation error occurred.
     #[error("shader compilation error: {0}")]
     ShaderCompilationError(#[from] naga::WithSpan<naga::valid::ValidationError>),
+    /// A file load error occurred.
     #[error("file load error: {0}")]
-    FileLoadError(anyhow::Error),
+    FileLoadError(anyhow::Error), // TODO: change this from anyhow to a more concrete file error
+    /// An image parse error occurred.
     #[error(transparent)]
     ImageParseError(#[from] image::ImageError),
+    /// An OBJ load error occurred.
     #[error(transparent)]
     ObjLoadError(#[from] tobj::LoadError),
 }

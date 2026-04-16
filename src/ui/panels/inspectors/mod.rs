@@ -2,6 +2,7 @@ pub mod bind_group_inspector;
 pub mod camera_inspector;
 pub mod dimension_inspector;
 pub mod model_inspector;
+pub mod render_pass;
 pub mod sampler_inspector;
 pub mod shader_inspector;
 pub mod texture_inspector;

@@ -8,8 +8,8 @@ use crate::{
     error::{AppResult, SourcedError},
     key::KeyboardState,
     project::{
-        self, BindGroupId, CameraId, DimensionId, ModelId, ProjectResourceId, SamplerId, ShaderId,
-        TextureId, TextureViewId, UniformId, ViewportId,
+        self, BindGroupId, CameraId, DimensionId, ModelId, ProjectResourceId, RenderPassId,
+        SamplerId, ShaderId, TextureId, TextureViewId, UniformId, ViewportId,
         bindgroup::{BindGroupCreationContext, BindGroupEntry, BindGroupResource},
         camera::{Camera, CameraCreationContext},
         dimension::Dimension,
@@ -80,6 +80,9 @@ pub enum StateEvent {
     ReorderModelVertexBufferField(ModelId, DragUpdate),
     SetModelMaterialBindGroup(ModelId, usize, Option<BindGroupId>),
     SetMeshMaterialSelection(ModelId, usize, MeshMaterialSelection),
+    CreateRenderPipeline(RenderPassId),
+    DeleteRenderPipeline(RenderPassId, usize),
+    ReorderRenderPipeline(RenderPassId, DragUpdate),
 }
 
 pub struct State {
@@ -451,7 +454,7 @@ impl State {
                         ProjectResourceId::Viewport(id) => InspectorPane::Viewport(id),
                         ProjectResourceId::Texture(id) => InspectorPane::Texture(id),
                         ProjectResourceId::Model(id) => InspectorPane::Model(id),
-                        ProjectResourceId::RenderPass(_) => todo!(),
+                        ProjectResourceId::RenderPass(id) => InspectorPane::RenderPass(id),
                     };
 
                     self.inspector_tree_pane.add_pane(pane);
@@ -779,6 +782,29 @@ fn fs_main() -> @location(0) vec4<f32> {
                 StateEvent::SetMeshMaterialSelection(model_id, mesh_index, selection) => {
                     if let Ok(model) = self.project.models.get_mut(model_id) {
                         model.set_mesh_material_selection(mesh_index, selection);
+                    }
+                }
+                StateEvent::CreateRenderPipeline(render_pass_id) => {
+                    if let Ok(render_pass) = self.project.render_passes.get_mut(render_pass_id) {
+                        const DEFAULT_NAME: &str = "Pipeline";
+
+                        let index = render_pass.pipelines.len();
+                        render_pass.add_empty_pipeline(DEFAULT_NAME);
+
+                        self.rename_state = Some(RenameState {
+                            target: RenameTarget::RenderPipeline(render_pass_id, index),
+                            current_label: DEFAULT_NAME.to_string(),
+                        });
+                    }
+                }
+                StateEvent::DeleteRenderPipeline(render_pass_id, index) => {
+                    if let Ok(render_pass) = self.project.render_passes.get_mut(render_pass_id) {
+                        render_pass.remove_pipeline(index);
+                    }
+                }
+                StateEvent::ReorderRenderPipeline(render_pass_id, drag_update) => {
+                    if let Ok(render_pass) = self.project.render_passes.get_mut(render_pass_id) {
+                        render_pass.reorder_pipelines(drag_update.from, drag_update.to);
                     }
                 }
             }
