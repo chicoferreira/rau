@@ -20,8 +20,8 @@ impl HdrLoader {
         project: &Project,
         equirectangular_shader_id: ShaderId,
     ) -> AppResult<Self> {
-        let shader = project.shaders.get(equirectangular_shader_id).unwrap();
-        let module = shader.create_wgpu_shader_module(device)?;
+        let shader = project.shaders.get(equirectangular_shader_id)?;
+        let module = shader.inner();
         let texture_format = wgpu::TextureFormat::Rgba32Float;
         let equirect_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("HdrLoader::equirect_layout"),

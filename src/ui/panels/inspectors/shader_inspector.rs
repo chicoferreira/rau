@@ -27,7 +27,9 @@ fn wgsl_settings() -> &'static SyntectSettings {
 impl StateSnapshot<'_> {
     pub fn shader_inspector_ui(&mut self, ui: &mut egui::Ui, shader_id: ShaderId) {
         ui.take_available_space();
-        let shader = self.project.shaders.get_mut(shader_id).unwrap();
+        let Ok(shader) = self.project.shaders.get_mut(shader_id) else {
+            return;
+        };
 
         let theme = egui_extras::syntax_highlighting::CodeTheme::from_memory(ui.ctx(), ui.style());
 
@@ -45,7 +47,9 @@ impl StateSnapshot<'_> {
             ui.fonts_mut(|f| f.layout_job(layout_job))
         };
 
-        TextEdit::multiline(&mut shader.source)
+        let mut shader_source = shader.source().to_string(); // TODO: fix this clone??
+
+        TextEdit::multiline(&mut shader_source)
             .font(egui::TextStyle::Monospace)
             .code_editor()
             .desired_rows(10)
@@ -53,5 +57,9 @@ impl StateSnapshot<'_> {
             .desired_width(f32::INFINITY)
             .layouter(&mut layouter)
             .show(ui);
+
+        if shader_source != shader.source() {
+            shader.set_source(shader_source);
+        }
     }
 }

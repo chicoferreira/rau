@@ -1,6 +1,14 @@
 use crate::{
     error::{AppError, AppResult},
-    project::{BindGroupId, ModelId, Project, ProjectResource, ShaderId, TextureViewId},
+    project::{
+        BindGroupId, ModelId, ProjectResource, RenderPassId, ShaderId, TextureViewId,
+        bindgroup::BindGroup,
+        model::Model,
+        recreate::{ProjectEvent, Recreatable, RecreateTracker},
+        shader::Shader,
+        storage::Storage,
+        texture_view::TextureView,
+    },
 };
 
 pub struct RenderPass {
@@ -8,6 +16,7 @@ pub struct RenderPass {
     pub target: RenderPassTarget<wgpu::Color>,
     pub depth_target: Option<RenderPassTarget<f32>>,
     pub pipelines: Vec<RenderPipeline>,
+    dirty: bool,
 }
 
 pub struct RenderPassTarget<T> {
@@ -33,6 +42,7 @@ pub struct RenderPipeline {
     pub static_bind_groups: Vec<(u32, BindGroupId)>,
     pub draw: RenderDraw,
     inner: wgpu::RenderPipeline,
+    dirty: bool,
 }
 
 pub enum RenderDraw {
@@ -46,6 +56,14 @@ pub enum RenderDraw {
         vertices: std::ops::Range<u32>,
         instances: std::ops::Range<u32>,
     },
+}
+
+pub struct Context<'a> {
+    pub device: &'a wgpu::Device,
+    pub models: &'a Storage<ModelId, Model>,
+    pub shaders: &'a Storage<ShaderId, Shader>,
+    pub texture_views: &'a Storage<TextureViewId, TextureView>,
+    pub bind_groups: &'a Storage<BindGroupId, BindGroup>,
 }
 
 impl ProjectResource for RenderPass {
@@ -66,33 +84,26 @@ impl RenderPass {
             target,
             depth_target,
             pipelines: vec![],
+            dirty: false,
         }
     }
 
     pub fn add_pipeline(
         &mut self,
         label: impl Into<String>,
-        device: &wgpu::Device,
-        project: &Project,
+        ctx: &Context,
         primitive_state: wgpu::PrimitiveState,
         vertex_shader: ShaderId,
         fragment_shader: ShaderId,
         static_bind_groups: Vec<(u32, BindGroupId)>,
         draw: RenderDraw,
     ) -> AppResult<()> {
-        let color_format = self.target.get_target_inner(project)?.texture().format();
-
-        let depth_format = self
-            .depth_target
-            .as_ref()
-            .map(|target| target.get_target_inner(project))
-            .transpose()?
-            .map(|view| view.texture().format());
+        let color_format = self.get_color_format(ctx)?;
+        let depth_format = self.get_depth_format(ctx)?;
 
         let pipeline = RenderPipeline::new(
             label.into(),
-            device,
-            project,
+            ctx,
             color_format,
             depth_format,
             primitive_state,
@@ -105,14 +116,30 @@ impl RenderPass {
         Ok(())
     }
 
-    pub fn submit(&self, encoder: &mut wgpu::CommandEncoder, project: &Project) -> AppResult<()> {
-        let color_view = self.target.get_target_inner(project)?;
+    pub fn get_color_format(&self, ctx: &Context) -> AppResult<wgpu::TextureFormat> {
+        let target_view = ctx.texture_views.get(self.target.texture_view_id)?;
+        let inner = target_view.inner().as_ref();
+        let inner = inner.ok_or(AppError::UninitResource(self.target.texture_view_id.into()))?;
+        Ok(inner.texture().format())
+    }
+
+    pub fn get_depth_format(&self, ctx: &Context) -> AppResult<Option<wgpu::TextureFormat>> {
+        Ok(self
+            .depth_target
+            .as_ref()
+            .map(|target| target.get_target_inner(ctx.texture_views))
+            .transpose()?
+            .map(|view| view.texture().format()))
+    }
+
+    pub fn submit(&self, encoder: &mut wgpu::CommandEncoder, ctx: &Context) -> AppResult<()> {
+        let color_view = self.target.get_target_inner(ctx.texture_views)?;
 
         let depth_stencil_attachment = self
             .depth_target
             .as_ref()
             .map(|depth_target| -> AppResult<_> {
-                let depth_view = depth_target.get_target_inner(project)?;
+                let depth_view = depth_target.get_target_inner(ctx.texture_views)?;
                 Ok(wgpu::RenderPassDepthStencilAttachment {
                     view: depth_view,
                     depth_ops: Some(wgpu::Operations {
@@ -142,7 +169,7 @@ impl RenderPass {
         });
 
         for pipeline in &self.pipelines {
-            pipeline.draw(&mut render_pass, project)?;
+            pipeline.draw(&mut render_pass, ctx)?;
         }
         Ok(())
     }
@@ -151,8 +178,7 @@ impl RenderPass {
 impl RenderPipeline {
     fn new(
         label: String,
-        device: &wgpu::Device,
-        project: &Project,
+        ctx: &Context,
         color_format: wgpu::TextureFormat,
         depth_format: Option<wgpu::TextureFormat>,
         primitive_state: wgpu::PrimitiveState,
@@ -162,8 +188,7 @@ impl RenderPipeline {
         draw: RenderDraw,
     ) -> AppResult<Self> {
         let inner = Self::create_wgpu_pipeline(
-            device,
-            project,
+            ctx,
             &label,
             &static_bind_groups,
             &draw,
@@ -182,14 +207,15 @@ impl RenderPipeline {
             static_bind_groups,
             draw,
             inner,
+            dirty: false,
         })
     }
 
-    pub fn draw(&self, render_pass: &mut wgpu::RenderPass, project: &Project) -> AppResult<()> {
+    pub fn draw(&self, render_pass: &mut wgpu::RenderPass, ctx: &Context) -> AppResult<()> {
         render_pass.set_pipeline(&self.inner);
 
         for &(slot, id) in &self.static_bind_groups {
-            let bind_group = project.bind_groups.get(id)?;
+            let bind_group = ctx.bind_groups.get(id)?;
             render_pass.set_bind_group(slot, bind_group.inner(), &[]);
         }
 
@@ -200,7 +226,7 @@ impl RenderPipeline {
                 mesh_vertex_slot,
                 material_bind_group_slot,
             } => {
-                let model = project.models.get(*model_id)?;
+                let model = ctx.models.get(*model_id)?;
 
                 for mesh in model.meshes() {
                     let vertex_buffer = mesh.vertex_buffer().inner();
@@ -210,7 +236,7 @@ impl RenderPipeline {
                         if let Some(material_index) = mesh.material_index() {
                             if let Some(material) = model.get_material(material_index) {
                                 if let Some(bind_group_id) = material.bind_group_id() {
-                                    let bind_group = project.bind_groups.get(bind_group_id)?;
+                                    let bind_group = ctx.bind_groups.get(bind_group_id)?;
                                     render_pass.set_bind_group(*mat_slot, bind_group.inner(), &[]);
                                 }
                             }
@@ -235,26 +261,25 @@ impl RenderPipeline {
     }
 
     fn create_wgpu_pipeline(
-        device: &wgpu::Device,
-        project: &Project,
+        ctx: &Context,
         label: &str,
         static_bind_groups: &[(u32, BindGroupId)],
         draw: &RenderDraw,
-        vertex_shader: ShaderId,
-        fragment_shader: ShaderId,
+        vertex_shader_id: ShaderId,
+        fragment_shader_id: ShaderId,
         primitive_state: wgpu::PrimitiveState,
         color_format: wgpu::TextureFormat,
         depth_format: Option<wgpu::TextureFormat>,
     ) -> AppResult<wgpu::RenderPipeline> {
-        let bind_group_layouts =
-            Self::resolved_bind_group_layout(project, &static_bind_groups, draw);
+        let bind_group_layouts = Self::resolved_bind_group_layout(ctx, &static_bind_groups, draw);
+        let device = ctx.device;
         let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some(label),
             bind_group_layouts: &bind_group_layouts,
             immediate_size: 0,
         });
 
-        let resolved_attributes_and_stride = Self::resolved_attributes_and_stride(project, draw)?;
+        let resolved_attributes_and_stride = Self::resolved_attributes_and_stride(ctx, draw)?;
         let vertex_buffers: &[wgpu::VertexBufferLayout] = match &resolved_attributes_and_stride {
             Some((attributes, array_stride)) => &[wgpu::VertexBufferLayout {
                 array_stride: *array_stride,
@@ -264,13 +289,11 @@ impl RenderPipeline {
             None => &[],
         };
 
-        let vertex_shader = project.shaders.get(vertex_shader)?;
-        // TODO: move this shader creation to inside the shader struct for reutilization
-        let vertex_shader = vertex_shader.create_wgpu_shader_module(device)?;
+        let vertex_shader = ctx.shaders.get(vertex_shader_id)?;
+        let vertex_shader = vertex_shader.inner();
 
-        let fragment_shader = project.shaders.get(fragment_shader)?;
-        // TODO: move this shader creation to inside the shader struct for reutilization
-        let fragment_shader = fragment_shader.create_wgpu_shader_module(device)?;
+        let fragment_shader = ctx.shaders.get(fragment_shader_id)?;
+        let fragment_shader = fragment_shader.inner();
 
         Ok(
             device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
@@ -315,7 +338,7 @@ impl RenderPipeline {
     }
 
     fn resolved_bind_group_layout<'a>(
-        project: &'a Project,
+        ctx: &'a Context,
         static_bind_groups: &[(u32, BindGroupId)],
         draw: &RenderDraw,
     ) -> Vec<Option<&'a wgpu::BindGroupLayout>> {
@@ -323,10 +346,10 @@ impl RenderPipeline {
             .iter()
             .copied()
             .filter_map(|(slot, bind_group_id)| {
-                let bind_group = project.bind_groups.get(bind_group_id).ok()?;
+                let bind_group = ctx.bind_groups.get(bind_group_id).ok()?;
                 Some((slot, bind_group.inner_layout()))
             })
-            .chain(draw.material_bind_group_slot_and_layout(project))
+            .chain(draw.material_bind_group_slot_and_layout(ctx))
             .collect();
 
         if layouts.is_empty() {
@@ -342,23 +365,57 @@ impl RenderPipeline {
     }
 
     fn resolved_attributes_and_stride(
-        project: &Project,
+        ctx: &Context,
         draw: &RenderDraw,
     ) -> AppResult<Option<(Vec<wgpu::VertexAttribute>, u64)>> {
         match &draw {
             RenderDraw::Model { model_id, .. } => {
-                let model = project.models.get(*model_id)?;
+                let model = ctx.models.get(*model_id)?;
                 let spec = model.vertex_buffer_spec();
                 Ok(Some(spec.to_wgpu_attributes_and_stride()))
             }
             RenderDraw::Direct { .. } => Ok(None),
         }
     }
+
+    fn recreate(
+        &mut self,
+        ctx: &Context,
+        tracker: &RecreateTracker,
+        color_format: wgpu::TextureFormat,
+        depth_format: Option<wgpu::TextureFormat>,
+        render_pass_dirty: bool,
+    ) -> AppResult<()> {
+        let recreate = render_pass_dirty
+            || self.dirty
+            || tracker.happened(ProjectEvent::ShaderRecreated(self.vertex_shader))
+            || tracker.happened(ProjectEvent::ShaderRecreated(self.fragment_shader));
+
+        if recreate {
+            self.inner = Self::create_wgpu_pipeline(
+                ctx,
+                &self.label,
+                &self.static_bind_groups,
+                &self.draw,
+                self.vertex_shader,
+                self.fragment_shader,
+                self.primitive_state,
+                color_format,
+                depth_format,
+            )?;
+            self.dirty = false;
+        }
+
+        Ok(())
+    }
 }
 
 impl<T> RenderPassTarget<T> {
-    pub fn get_target_inner<'a>(&self, project: &'a Project) -> AppResult<&'a wgpu::TextureView> {
-        let target_view = project.texture_views.get(self.texture_view_id)?;
+    pub fn get_target_inner<'a>(
+        &self,
+        texture_views: &'a Storage<TextureViewId, TextureView>,
+    ) -> AppResult<&'a wgpu::TextureView> {
+        let target_view = texture_views.get(self.texture_view_id)?;
         let inner = target_view.inner().as_ref();
         let inner = inner.ok_or(AppError::UninitResource(self.texture_view_id.into()))?;
 
@@ -369,7 +426,7 @@ impl<T> RenderPassTarget<T> {
 impl RenderDraw {
     pub fn material_bind_group_slot_and_layout<'a>(
         &self,
-        project: &'a Project,
+        ctx: &Context<'a>,
     ) -> Option<(u32, &'a wgpu::BindGroupLayout)> {
         let RenderDraw::Model {
             model_id,
@@ -379,8 +436,31 @@ impl RenderDraw {
         else {
             return None;
         };
-        let model = project.models.get(*model_id).ok()?;
-        let layout = model.get_bind_group_layout(project)?;
+        let model = ctx.models.get(*model_id).ok()?;
+        let layout = model.get_bind_group_layout(ctx.bind_groups)?;
         Some((*slot, layout))
+    }
+}
+
+impl Recreatable for RenderPass {
+    type Context<'a> = Context<'a>;
+    type Id = RenderPassId;
+
+    fn recreate<'a>(
+        &mut self,
+        _id: Self::Id,
+        ctx: &mut Self::Context<'a>,
+        tracker: &RecreateTracker,
+    ) -> AppResult<Option<ProjectEvent>> {
+        let color_format = self.get_color_format(ctx)?;
+        let depth_format = self.get_depth_format(ctx)?;
+
+        for ele in &mut self.pipelines {
+            ele.recreate(ctx, tracker, color_format, depth_format, self.dirty)?;
+        }
+
+        self.dirty = false;
+
+        Ok(None)
     }
 }

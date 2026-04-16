@@ -15,6 +15,7 @@ use crate::{
         dimension::Dimension,
         model::{MeshMaterialSelection, ModelCreationContext, vertex_buffer::VertexBufferField},
         recreate::RecreateTracker,
+        renderpass,
         sampler::{Sampler, SamplerSpec},
         shader::Shader,
         texture::TextureCreationContext,
@@ -175,35 +176,38 @@ impl State {
         let mut project = project::Project::new();
 
         let equirectangular_shader = project::shader::Shader::new(
+            &device,
             "Equirectengular Shader",
-            resources::load_string("equirectangular.wgsl")
-                .await
-                .unwrap(),
-        );
+            resources::load_string("equirectangular.wgsl").await?,
+        )?;
         let equirectengular_shader_id = project.shaders.register(equirectangular_shader);
 
         let hdr_shader = project::shader::Shader::new(
+            &device,
             "HDR Shader",
-            resources::load_string("hdr.wgsl").await.unwrap(),
-        );
+            resources::load_string("hdr.wgsl").await?,
+        )?;
         let hdr_shader_id = project.shaders.register(hdr_shader);
 
         let light_shader = project::shader::Shader::new(
+            &device,
             "Light Shader",
-            resources::load_string("light.wgsl").await.unwrap(),
-        );
+            resources::load_string("light.wgsl").await?,
+        )?;
         let light_shader_id = project.shaders.register(light_shader);
 
         let main_shader = project::shader::Shader::new(
+            &device,
             "Main Shader",
-            resources::load_string("shader.wgsl").await.unwrap(),
-        );
+            resources::load_string("shader.wgsl").await?,
+        )?;
         let main_shader_id = project.shaders.register(main_shader);
 
         let sky_shader = project::shader::Shader::new(
+            &device,
             "Sky Shader",
-            resources::load_string("sky.wgsl").await.unwrap(),
-        );
+            resources::load_string("sky.wgsl").await?,
+        )?;
         let sky_shader_id = project.shaders.register(sky_shader);
 
         let scene = scene::Scene::new(
@@ -416,6 +420,19 @@ impl State {
         };
         self.errors
             .extend(tracker.recreate_storage(&mut self.project.models, view));
+
+        self.errors
+            .extend(tracker.recreate_storage(&mut self.project.shaders, &mut &self.device));
+
+        let view = &mut renderpass::Context {
+            device: &self.device,
+            models: &self.project.models,
+            shaders: &self.project.shaders,
+            texture_views: &self.project.texture_views,
+            bind_groups: &self.project.bind_groups,
+        };
+        self.errors
+            .extend(tracker.recreate_storage(&mut self.project.render_passes, view));
     }
 
     fn handle_events(&mut self) -> AppResult<()> {
@@ -659,7 +676,7 @@ fn fs_main() -> @location(0) vec4<f32> {
 }
 "#;
 
-                    let shader = Shader::new(DEFAULT_NAME, DEFAULT_SOURCE);
+                    let shader = Shader::new(&self.device, DEFAULT_NAME, DEFAULT_SOURCE)?;
                     let shader_id = self.project.shaders.register(shader);
 
                     self.rename_state = Some(RenameState {

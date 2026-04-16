@@ -6,7 +6,7 @@ use crate::{
         camera::Camera,
         dimension::Dimension,
         model::Model,
-        renderpass::{RenderDraw, RenderPass, RenderPassTarget},
+        renderpass::{self, RenderDraw, RenderPass, RenderPassTarget},
         sampler::{Sampler, SamplerSpec},
         texture::{Texture, TextureCreationContext, TextureSource},
         texture_view::{TextureView, TextureViewCreationContext, TextureViewFormat},
@@ -393,10 +393,17 @@ impl Scene {
             }),
         );
 
+        let render_pass_ctx = renderpass::Context {
+            device,
+            models: &project.models,
+            shaders: &project.shaders,
+            texture_views: &project.texture_views,
+            bind_groups: &project.bind_groups,
+        };
+
         main_render_pass.add_pipeline(
             "light pipeline",
-            device,
-            project,
+            &render_pass_ctx,
             primitive_state.clone(),
             light_shader_id,
             light_shader_id,
@@ -411,8 +418,7 @@ impl Scene {
 
         main_render_pass.add_pipeline(
             "models pipeline",
-            device,
-            project,
+            &render_pass_ctx,
             primitive_state.clone(),
             main_shader_id,
             main_shader_id,
@@ -431,8 +437,7 @@ impl Scene {
 
         main_render_pass.add_pipeline(
             "sky pipeline",
-            device,
-            project,
+            &render_pass_ctx,
             primitive_state,
             sky_shader_id,
             sky_shader_id,
@@ -456,8 +461,7 @@ impl Scene {
 
         hdr_render_pass.add_pipeline(
             "HDR pipeline",
-            device,
-            project,
+            &render_pass_ctx,
             primitive_state,
             hdr_shader_id,
             hdr_shader_id,
@@ -486,10 +490,18 @@ impl Scene {
         let main_render_pass = project.render_passes.get(self.main_render_pass_id)?;
         let hdr_render_pass = project.render_passes.get(self.hdr_render_pass_id)?;
 
+        let render_pass_ctx = renderpass::Context {
+            device,
+            models: &project.models,
+            shaders: &project.shaders,
+            texture_views: &project.texture_views,
+            bind_groups: &project.bind_groups,
+        };
+
         let scope = WgpuErrorScope::push(device);
 
-        main_render_pass.submit(encoder, project)?;
-        hdr_render_pass.submit(encoder, project)?;
+        main_render_pass.submit(encoder, &render_pass_ctx)?;
+        hdr_render_pass.submit(encoder, &render_pass_ctx)?;
 
         scope.pop()?;
 
