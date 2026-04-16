@@ -1,6 +1,6 @@
 use crate::project::{
-    BindGroupId, CameraId, DimensionId, Project, SamplerId, ShaderId, TextureId, TextureViewId,
-    UniformId, ViewportId,
+    BindGroupId, CameraId, DimensionId, Project, RenderPassId, SamplerId, ShaderId, TextureId,
+    TextureViewId, UniformId, ViewportId,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -21,6 +21,7 @@ pub enum RenameTarget {
     Sampler(SamplerId),
     Texture(TextureId),
     TextureView(TextureViewId),
+    RenderPipeline(RenderPassId, usize),
 }
 
 impl RenameTarget {
@@ -41,6 +42,12 @@ impl RenameTarget {
                 .ok()
                 .and_then(|uniform| uniform.get_field(index))
                 .map(|field| field.label()),
+            RenameTarget::RenderPipeline(render_pass_id, index) => project
+                .render_passes
+                .get(render_pass_id)
+                .ok()
+                .and_then(|render_pass| render_pass.pipelines.get(index))
+                .map(|pipeline| pipeline.label.as_str()),
         }
     }
 
@@ -94,6 +101,13 @@ impl RenameTarget {
             RenameTarget::TextureView(texture_view_id) => {
                 if let Ok(texture_view) = project.texture_views.get_mut(texture_view_id) {
                     texture_view.set_label(new_name);
+                }
+            }
+            RenameTarget::RenderPipeline(render_pass_id, index) => {
+                if let Ok(render_pass) = project.render_passes.get_mut(render_pass_id) {
+                    if let Some(pipeline) = render_pass.pipelines.get_mut(index) {
+                        pipeline.set_label(new_name);
+                    }
                 }
             }
         }

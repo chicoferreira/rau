@@ -6,7 +6,7 @@ use crate::{
         camera::Camera,
         dimension::Dimension,
         model::Model,
-        renderpass::{self, RenderDraw, RenderPass, RenderPassTarget},
+        renderpass::{self, LoadOperation, RenderDraw, RenderPass, RenderPassTarget},
         sampler::{Sampler, SamplerSpec},
         texture::{Texture, TextureCreationContext, TextureSource},
         texture_view::{TextureView, TextureViewCreationContext, TextureViewFormat},
@@ -384,12 +384,12 @@ impl Scene {
         let mut main_render_pass = RenderPass::new(
             "Main Render Pass".to_string(),
             RenderPassTarget {
-                texture_view_id: hdr_texture_view_id,
-                load_operation: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+                texture_view_id: Some(hdr_texture_view_id),
+                load_operation: LoadOperation::default(),
             },
             Some(RenderPassTarget {
-                texture_view_id: depth_texture_view_id,
-                load_operation: wgpu::LoadOp::Clear(1.0),
+                texture_view_id: Some(depth_texture_view_id),
+                load_operation: LoadOperation::default(),
             }),
         );
 
@@ -405,11 +405,11 @@ impl Scene {
             "light pipeline",
             &render_pass_ctx,
             primitive_state.clone(),
-            light_shader_id,
-            light_shader_id,
+            Some(light_shader_id),
+            Some(light_shader_id),
             vec![(0, camera_bind_group_id), (1, light_bind_group_id)],
             RenderDraw::Model {
-                model_id: cube_model_id,
+                model_id: Some(cube_model_id),
                 instances: 0..1,
                 mesh_vertex_slot: 0,
                 material_bind_group_slot: None,
@@ -420,15 +420,15 @@ impl Scene {
             "models pipeline",
             &render_pass_ctx,
             primitive_state.clone(),
-            main_shader_id,
-            main_shader_id,
+            Some(main_shader_id),
+            Some(main_shader_id),
             vec![
                 (1, camera_bind_group_id),
                 (2, light_bind_group_id),
                 (3, environment_bind_group_id),
             ],
             RenderDraw::Model {
-                model_id: cube_model_id,
+                model_id: Some(cube_model_id),
                 instances: 0..100,
                 mesh_vertex_slot: 0,
                 material_bind_group_slot: Some(0),
@@ -439,8 +439,8 @@ impl Scene {
             "sky pipeline",
             &render_pass_ctx,
             primitive_state,
-            sky_shader_id,
-            sky_shader_id,
+            Some(sky_shader_id),
+            Some(sky_shader_id),
             vec![(0, camera_bind_group_id), (1, environment_bind_group_id)],
             RenderDraw::Direct {
                 vertices: 0..3,
@@ -453,8 +453,8 @@ impl Scene {
         let mut hdr_render_pass = RenderPass::new(
             "HDR render pass",
             RenderPassTarget {
-                texture_view_id: output_viewport_view_id,
-                load_operation: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+                texture_view_id: Some(output_viewport_view_id),
+                load_operation: LoadOperation::default(),
             },
             None,
         );
@@ -463,8 +463,8 @@ impl Scene {
             "HDR pipeline",
             &render_pass_ctx,
             primitive_state,
-            hdr_shader_id,
-            hdr_shader_id,
+            Some(hdr_shader_id),
+            Some(hdr_shader_id),
             vec![(0, hdr_bind_group_id)],
             RenderDraw::Direct {
                 vertices: 0..3,

@@ -1,7 +1,7 @@
 use crate::{
     project::{
-        BindGroupId, CameraId, DimensionId, ModelId, SamplerId, ShaderId, TextureId, TextureViewId,
-        UniformId, ViewportId,
+        BindGroupId, CameraId, DimensionId, ModelId, ProjectResourceId, RenderPassId, SamplerId,
+        ShaderId, TextureId, TextureViewId, UniformId, ViewportId,
     },
     ui::{components::tiles::Pane, pane::StateSnapshot},
 };
@@ -18,27 +18,37 @@ pub enum InspectorPane {
     TextureView(TextureViewId),
     Viewport(ViewportId),
     Model(ModelId),
+    RenderPass(RenderPassId),
+}
+
+impl InspectorPane {
+    pub fn id(&self) -> ProjectResourceId {
+        match *self {
+            InspectorPane::Uniform(id) => id.into(),
+            InspectorPane::BindGroup(id) => id.into(),
+            InspectorPane::Shader(id) => id.into(),
+            InspectorPane::Camera(id) => id.into(),
+            InspectorPane::Dimension(id) => id.into(),
+            InspectorPane::Sampler(id) => id.into(),
+            InspectorPane::Texture(id) => id.into(),
+            InspectorPane::TextureView(id) => id.into(),
+            InspectorPane::Viewport(id) => id.into(),
+            InspectorPane::Model(id) => id.into(),
+            InspectorPane::RenderPass(id) => id.into(),
+        }
+    }
 }
 
 impl Pane for InspectorPane {
     fn tab_title(&self, state: &StateSnapshot<'_>) -> egui::WidgetText {
-        let label = match self {
-            InspectorPane::Uniform(id) => state.project.label(*id),
-            InspectorPane::BindGroup(id) => state.project.label(*id),
-            InspectorPane::Shader(id) => state.project.label(*id),
-            InspectorPane::Camera(id) => state.project.label(*id),
-            InspectorPane::Dimension(id) => state.project.label(*id),
-            InspectorPane::Sampler(id) => state.project.label(*id),
-            InspectorPane::Texture(id) => state.project.label(*id),
-            InspectorPane::TextureView(id) => state.project.label(*id),
-            InspectorPane::Model(id) => state.project.label(*id),
-            InspectorPane::Viewport(id) => state.project.label(*id),
-        };
-
-        label
+        let id = self.id();
+        let label = state
+            .project
+            .label(id)
             .map(|l| l.to_string())
-            .unwrap_or(format!("Unknown {:?}", self))
-            .into()
+            .unwrap_or_else(|| format!("Unknown {:?}", id));
+
+        label.into()
     }
 
     fn pane_ui(
@@ -48,38 +58,43 @@ impl Pane for InspectorPane {
     ) -> egui_tiles::UiResponse {
         egui::CentralPanel::default().show_inside(ui, |ui| {
             egui::ScrollArea::both().auto_shrink(false).show(ui, |ui| {
-                match self {
-                    InspectorPane::Uniform(uniform_id) => {
-                        state.uniform_inspector_ui(*uniform_id, ui);
-                    }
-                    InspectorPane::BindGroup(bind_group_id) => {
-                        state.bind_group_inspector_ui(*bind_group_id, ui);
-                    }
-                    InspectorPane::Shader(shader_id) => {
-                        state.shader_inspector_ui(ui, *shader_id);
-                    }
-                    InspectorPane::Camera(camera_id) => {
-                        state.camera_inspector_ui(ui, *camera_id);
-                    }
-                    InspectorPane::Dimension(dimension_id) => {
-                        state.dimension_inspector_ui(ui, *dimension_id);
-                    }
-                    InspectorPane::Sampler(sampler_id) => {
-                        state.sampler_inspector_ui(ui, *sampler_id);
-                    }
-                    InspectorPane::Texture(texture_id) => {
-                        state.texture_inspector_ui(ui, *texture_id);
-                    }
-                    InspectorPane::TextureView(texture_view_id) => {
-                        state.texture_view_inspector_ui(ui, *texture_view_id)
-                    }
-                    InspectorPane::Viewport(viewport_id) => {
-                        state.viewport_inspector_ui(ui, *viewport_id);
-                    }
-                    InspectorPane::Model(model_id) => {
-                        state.model_inspector_ui(ui, *model_id);
-                    }
-                };
+                ui.push_id(self.id(), |ui| {
+                    match self {
+                        InspectorPane::Uniform(uniform_id) => {
+                            state.uniform_inspector_ui(*uniform_id, ui);
+                        }
+                        InspectorPane::BindGroup(bind_group_id) => {
+                            state.bind_group_inspector_ui(*bind_group_id, ui);
+                        }
+                        InspectorPane::Shader(shader_id) => {
+                            state.shader_inspector_ui(ui, *shader_id);
+                        }
+                        InspectorPane::Camera(camera_id) => {
+                            state.camera_inspector_ui(ui, *camera_id);
+                        }
+                        InspectorPane::Dimension(dimension_id) => {
+                            state.dimension_inspector_ui(ui, *dimension_id);
+                        }
+                        InspectorPane::Sampler(sampler_id) => {
+                            state.sampler_inspector_ui(ui, *sampler_id);
+                        }
+                        InspectorPane::Texture(texture_id) => {
+                            state.texture_inspector_ui(ui, *texture_id);
+                        }
+                        InspectorPane::TextureView(texture_view_id) => {
+                            state.texture_view_inspector_ui(ui, *texture_view_id)
+                        }
+                        InspectorPane::Viewport(viewport_id) => {
+                            state.viewport_inspector_ui(ui, *viewport_id);
+                        }
+                        InspectorPane::Model(model_id) => {
+                            state.model_inspector_ui(ui, *model_id);
+                        }
+                        InspectorPane::RenderPass(render_pass_id) => {
+                            state.render_pass_inspector_ui(ui, *render_pass_id);
+                        }
+                    };
+                });
             });
         });
 

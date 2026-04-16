@@ -3,8 +3,8 @@ use egui_ltreeview::{Action, TreeView};
 
 use crate::{
     project::{
-        BindGroupId, CameraId, DimensionId, ModelId, ProjectResource, SamplerId, ShaderId,
-        TextureId, TextureViewId, UniformId, ViewportId,
+        BindGroupId, CameraId, DimensionId, ModelId, ProjectResource, RenderPassId, SamplerId,
+        ShaderId, TextureId, TextureViewId, UniformId, ViewportId,
     },
     state::StateEvent,
     ui::{components::tree_node::TreeNode, pane::StateSnapshot, rename::RenameTarget},
@@ -32,6 +32,8 @@ pub enum TreeNodeId {
     TextureView(TextureViewId),
     ModelFolder,
     Model(ModelId),
+    RenderPassFolder,
+    RenderPass(RenderPassId),
 }
 
 pub fn ui(state: &mut StateSnapshot, ui: &mut egui::Ui) -> Response {
@@ -178,6 +180,18 @@ pub fn ui(state: &mut StateSnapshot, ui: &mut egui::Ui) -> Response {
                     .build_to(builder, state.pending_events, state.rename_state);
             }
             builder.close_dir();
+
+            TreeNode::folder(TreeNodeId::RenderPassFolder, "Render Passes").build_to(
+                builder,
+                state.pending_events,
+                state.rename_state,
+            );
+            for (id, render_pass) in state.project.render_passes.list() {
+                TreeNode::new(TreeNodeId::RenderPass(id), &render_pass.label)
+                    .with_event("Inspect", StateEvent::InspectResource(id.into()))
+                    .build_to(builder, state.pending_events, state.rename_state);
+            }
+            builder.close_dir();
         });
 
     for action in actions {
@@ -195,6 +209,7 @@ pub fn ui(state: &mut StateSnapshot, ui: &mut egui::Ui) -> Response {
                         TreeNodeId::Texture(id) => Some(StateEvent::InspectResource(id.into())),
                         TreeNodeId::TextureView(id) => Some(StateEvent::InspectResource(id.into())),
                         TreeNodeId::Model(id) => Some(StateEvent::InspectResource(id.into())),
+                        TreeNodeId::RenderPass(id) => Some(StateEvent::InspectResource(id.into())),
                         TreeNodeId::UniformFolder
                         | TreeNodeId::BindGroupFolder
                         | TreeNodeId::ViewportFolder
@@ -204,7 +219,8 @@ pub fn ui(state: &mut StateSnapshot, ui: &mut egui::Ui) -> Response {
                         | TreeNodeId::SamplerFolder
                         | TreeNodeId::TextureFolder
                         | TreeNodeId::TextureViewFolder
-                        | TreeNodeId::ModelFolder => None,
+                        | TreeNodeId::ModelFolder
+                        | TreeNodeId::RenderPassFolder => None,
                     };
 
                     if let Some(event) = event {
