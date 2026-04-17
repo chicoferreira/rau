@@ -269,17 +269,18 @@ impl State {
 
         let output = match self.surface.get_current_texture() {
             wgpu::CurrentSurfaceTexture::Success(surface_texture) => surface_texture,
-            wgpu::CurrentSurfaceTexture::Suboptimal(surface_texture) => {
+            wgpu::CurrentSurfaceTexture::Suboptimal(texture) => {
+                drop(texture);
                 self.surface.configure(&self.device, &self.config);
-                surface_texture
+                return Ok(());
             }
-            wgpu::CurrentSurfaceTexture::Timeout
-            | wgpu::CurrentSurfaceTexture::Occluded
-            | wgpu::CurrentSurfaceTexture::Validation => return Ok(()),
             wgpu::CurrentSurfaceTexture::Outdated => {
                 self.surface.configure(&self.device, &self.config);
                 return Ok(());
             }
+            wgpu::CurrentSurfaceTexture::Timeout
+            | wgpu::CurrentSurfaceTexture::Occluded
+            | wgpu::CurrentSurfaceTexture::Validation => return Ok(()),
             wgpu::CurrentSurfaceTexture::Lost => {
                 // TODO: recreate devices
                 anyhow::bail!("Lost device")
