@@ -10,7 +10,7 @@ use crate::{
     ui::{components::tree_node::TreeNode, pane::StateSnapshot, rename::RenameTarget},
 };
 
-#[derive(Clone, PartialEq, Eq, Hash)]
+#[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub enum TreeNodeId {
     UniformFolder,
     Uniform(UniformId),
@@ -182,8 +182,8 @@ pub fn ui(state: &mut StateSnapshot, ui: &mut egui::Ui) -> Response {
 
     for action in actions {
         match action {
-            Action::Activate(activate) => {
-                for node in activate.selected {
+            Action::SetSelected(selected) => {
+                for node in selected {
                     let event = match node {
                         TreeNodeId::Viewport(id) => Some(StateEvent::OpenViewport(id)),
                         TreeNodeId::Uniform(id) => Some(StateEvent::InspectResource(id.into())),
