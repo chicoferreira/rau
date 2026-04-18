@@ -14,8 +14,8 @@ use crate::{
             Uniform, UniformField, UniformFieldData, UniformFieldSource, camera::CameraField,
         },
     },
-    resources::{self, load_texture},
     ui::{self},
+    utils::resources::{self, load_texture},
 };
 
 mod loader;

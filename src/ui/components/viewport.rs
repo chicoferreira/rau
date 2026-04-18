@@ -1,10 +1,10 @@
 use egui::Ui;
 
 use crate::{
-    key::KeyboardState,
     project::ViewportId,
     state::{self, StateEvent, ViewportEvent},
     ui,
+    utils::key::KeyboardState,
 };
 
 pub fn ui(

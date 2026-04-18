@@ -2,9 +2,7 @@ use winit::event_loop::EventLoop;
 
 mod app;
 mod error;
-mod key;
 mod project;
-mod resources;
 mod scene;
 mod state;
 mod ui;

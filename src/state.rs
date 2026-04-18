@@ -6,7 +6,6 @@ use winit::{event::WindowEvent, window::Window};
 
 use crate::{
     error::{AppResult, SourcedError},
-    key::KeyboardState,
     project::{
         self, BindGroupId, CameraId, DimensionId, ModelId, ProjectResourceId, RenderPassId,
         SamplerId, ShaderId, TextureId, TextureViewId, UniformId, ViewportId,
@@ -23,13 +22,15 @@ use crate::{
         uniform::{UniformCreationContext, UniformField, UniformFieldSource},
         viewport::Viewport,
     },
-    resources, scene,
+    scene,
     ui::{
         self, Size2d,
         components::tiles::TreePane,
         panels::{inspector_pane::InspectorPane, viewport_pane::ViewportPane},
         rename::{RenameState, RenameTarget},
     },
+    utils::key::KeyboardState,
+    utils::resources,
 };
 
 #[derive(Debug, Clone)]

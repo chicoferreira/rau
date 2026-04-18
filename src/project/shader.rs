@@ -4,6 +4,7 @@ use crate::{
         ProjectResource, ShaderId,
         recreate::{ProjectEvent, Recreatable, RecreateTracker},
     },
+    utils,
 };
 
 pub struct Shader {
@@ -21,7 +22,7 @@ impl Shader {
     ) -> AppResult<Self> {
         let label = label.into();
         let source = source.into();
-        let inner = Self::create_wgpu_shader_module(device, &label, &source)?;
+        let inner = utils::shader::compile_wgsl_shader(device, &label, &source)?;
 
         Ok(Self {
             label,
@@ -42,27 +43,6 @@ impl Shader {
     pub fn set_source(&mut self, source: impl Into<String>) {
         self.source = source.into();
         self.dirty = true;
-    }
-
-    fn create_wgpu_shader_module(
-        device: &wgpu::Device,
-        label: &str,
-        source: &str,
-    ) -> AppResult<wgpu::ShaderModule> {
-        let module = naga::front::wgsl::parse_str(source)?;
-
-        let _module_info: naga::valid::ModuleInfo = naga::valid::Validator::new(
-            naga::valid::ValidationFlags::all(),
-            naga::valid::Capabilities::all(),
-        )
-        .subgroup_stages(naga::valid::ShaderStages::all())
-        .subgroup_operations(naga::valid::SubgroupOperationSet::all())
-        .validate(&module)?;
-
-        Ok(device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: Some(label),
-            source: wgpu::ShaderSource::Naga(std::borrow::Cow::Owned(module)),
-        }))
     }
 }
 
@@ -87,7 +67,7 @@ impl Recreatable for Shader {
             return Ok(None);
         }
 
-        let inner = Self::create_wgpu_shader_module(ctx, &self.label, &self.source)?;
+        let inner = utils::shader::compile_wgsl_shader(ctx, &self.label, &self.source)?;
         self.inner = inner;
 
         self.dirty = false;

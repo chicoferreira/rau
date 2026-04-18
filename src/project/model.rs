@@ -11,8 +11,8 @@ use crate::{
         recreate::{ProjectEvent, Recreatable, RecreateTracker},
         storage::Storage,
     },
-    resources::load_binary,
     utils::resizable_buffer::{ChangeResult, ResizableBuffer},
+    utils::resources::load_binary,
 };
 
 pub mod vertex_buffer;

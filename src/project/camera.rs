@@ -4,13 +4,13 @@ use cgmath::{Deg, InnerSpace, Matrix4, Point3, Rad, SquareMatrix, Vector3, Zero}
 
 use crate::{
     error::AppResult,
-    key::{Key, KeyboardState},
     project::{
         CameraId, DimensionId, ProjectResource,
         dimension::Dimension,
         recreate::{ProjectEvent, Recreatable, RecreateTracker},
         storage::Storage,
     },
+    utils::key::{Key, KeyboardState},
 };
 
 #[rustfmt::skip]

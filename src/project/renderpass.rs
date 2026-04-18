@@ -254,33 +254,6 @@ impl RenderPipeline {
         self.dirty = true;
     }
 
-    pub fn add_static_bind_group(&mut self, slot: u32, id: BindGroupId) {
-        self.static_bind_groups.push((slot, id));
-        self.dirty = true;
-    }
-
-    pub fn remove_static_bind_group(&mut self, index: usize) {
-        if index < self.static_bind_groups.len() {
-            self.static_bind_groups.remove(index);
-            self.dirty = true;
-        }
-    }
-
-    pub fn update_static_bind_group(&mut self, index: usize, slot: u32, id: BindGroupId) {
-        if index < self.static_bind_groups.len() {
-            self.static_bind_groups[index] = (slot, id);
-            self.dirty = true;
-        }
-    }
-
-    pub fn reorder_static_bind_groups(&mut self, from: usize, to: usize) {
-        if from == to {
-            return;
-        }
-        shift_vec(from, to, &mut self.static_bind_groups);
-        self.dirty = true;
-    }
-
     fn empty(label: String) -> Self {
         Self {
             id: fastrand::usize(..),
