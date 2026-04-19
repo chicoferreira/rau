@@ -178,7 +178,7 @@ impl Recreatable for Uniform {
                 let usage = wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST;
                 match runtime
                     .buffer
-                    .write(ctx.device, ctx.queue, &self.label, &content, usage)?
+                    .write(ctx.device, ctx.queue, &self.label, &content, usage)
                 {
                     ChangeResult::Uploaded => Ok(SyncOutcome::Kept(runtime)),
                     ChangeResult::Recreated => Ok(SyncOutcome::Recreated(runtime)),
@@ -187,7 +187,7 @@ impl Recreatable for Uniform {
             None => {
                 let content = cast_fields(&self.fields);
                 let usage = wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST;
-                let buffer = ResizableBuffer::new(ctx.device, &self.label, usage, &content)?;
+                let buffer = ResizableBuffer::new(ctx.device, &self.label, usage, &content);
                 Ok(SyncOutcome::Recreated(UniformRuntime { buffer }))
             }
         }

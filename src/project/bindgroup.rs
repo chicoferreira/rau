@@ -1,7 +1,7 @@
 use egui_dnd::utils::shift_vec;
 
 use crate::{
-    error::{AppError, AppResult, WgpuErrorScope},
+    error::{AppError, AppResult},
     project::{
         BindGroupId, ProjectResource, SamplerId, TextureViewId, UniformId,
         recreate::{Recreatable, RecreateTracker, Revision, SyncOutcome},
@@ -112,8 +112,6 @@ impl BindGroup {
         label: &str,
         entries: &[BindGroupEntry],
     ) -> AppResult<(wgpu::BindGroupLayout, wgpu::BindGroup)> {
-        let scope = WgpuErrorScope::push(ctx.device);
-
         let mut layout_entries = Vec::new();
         let mut group_entries = Vec::new();
 
@@ -137,8 +135,6 @@ impl BindGroup {
             layout: &layout,
             entries: &group_entries,
         });
-
-        scope.pop()?;
 
         Ok((layout, bind_group))
     }

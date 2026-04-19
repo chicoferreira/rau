@@ -1,5 +1,5 @@
 use crate::{
-    error::{AppError, AppResult, WgpuErrorScope},
+    error::{AppError, AppResult},
     project::{
         ProjectResource, TextureId, TextureViewId,
         recreate::{Recreatable, RecreateTracker, Revision, SyncOutcome},
@@ -96,13 +96,11 @@ impl TextureView {
 
     fn create_view(
         label: &str,
-        device: &wgpu::Device,
         texture: &Texture,
         runtime: &TextureRuntime,
         format: Option<TextureViewFormat>,
         dimension: Option<wgpu::TextureViewDimension>,
-    ) -> AppResult<wgpu::TextureView> {
-        let scope = WgpuErrorScope::push(device);
+    ) -> wgpu::TextureView {
         let wgpu_format = format.as_ref().map(|format| match format {
             TextureViewFormat::Srgb => texture.format().add_srgb_suffix(),
             TextureViewFormat::Linear => texture.format().remove_srgb_suffix(),
@@ -114,9 +112,8 @@ impl TextureView {
             dimension,
             ..Default::default()
         });
-        scope.pop()?;
 
-        Ok(view)
+        view
     }
 }
 
@@ -161,12 +158,11 @@ impl Recreatable for TextureView {
 
         let inner = Self::create_view(
             &self.label,
-            ctx.device,
             texture,
             runtime_texture,
             self.format,
             self.dimension,
-        )?;
+        );
 
         let has_correct_format = ALLOWED_EGUI_FORMATS.contains(&texture.format());
 
@@ -192,7 +188,10 @@ impl Recreatable for TextureView {
             (None, false) => None,
         };
 
-        Ok(SyncOutcome::Recreated(TextureViewRuntime { inner, egui_id }))
+        Ok(SyncOutcome::Recreated(TextureViewRuntime {
+            inner,
+            egui_id,
+        }))
     }
 
     fn revision(&self) -> Revision {

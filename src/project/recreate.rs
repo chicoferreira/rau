@@ -1,5 +1,5 @@
 use crate::{
-    error::{AppError, AppResult},
+    error::{AppError, AppResult, WgpuErrorScope},
     project::{
         ProjectResource, ProjectResourceId,
         storage::{RuntimeStorage, Storage},
@@ -70,6 +70,7 @@ impl RecreateTracker {
         storage: &mut Storage<R>,
         runtime_storage: &'a mut RuntimeStorage<R>,
         ctx: &mut R::Context<'_>,
+        device: &wgpu::Device,
     ) -> AppResult<Option<&'a R::Runtime>> {
         let resource = storage.get_mut(id)?;
         let current_revision = resource.revision();
@@ -93,7 +94,11 @@ impl RecreateTracker {
                 RuntimeCell::Errored { .. } | RuntimeCell::Empty => None,
             };
 
-            match resource.sync(ctx, previous) {
+            let scope = WgpuErrorScope::push(device);
+            let sync_result = resource.sync(ctx, previous);
+            let scope_result = scope.pop();
+
+            match scope_result.and(sync_result) {
                 Ok(SyncOutcome::Recreated(runtime)) => {
                     log::debug!("Recreated: {:?}", id);
                     self.recreations.push(id.into());
@@ -129,11 +134,12 @@ impl RecreateTracker {
         storage: &mut Storage<R>,
         runtime_storage: &mut RuntimeStorage<R>,
         ctx: &mut R::Context<'ctx>,
+        device: &wgpu::Device,
     ) {
         let ids = storage.list().map(|(id, _)| id).collect::<Vec<_>>();
 
         for id in ids {
-            let _ = self.sync(id, storage, runtime_storage, ctx);
+            let _ = self.sync(id, storage, runtime_storage, ctx, device);
         }
     }
 

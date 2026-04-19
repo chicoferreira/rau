@@ -5,6 +5,7 @@ use crate::{
     project::{
         Project, RuntimeProject, ShaderId, TextureId,
         recreate::RecreateTracker,
+        shader::ShaderCreationContext,
         texture::{Texture, TextureCreationContext, TextureSource},
     },
 };
@@ -17,18 +18,20 @@ pub struct HdrLoader {
 
 impl HdrLoader {
     pub fn new(
-        mut device: &wgpu::Device,
+        device: &wgpu::Device,
         project: &mut Project,
         runtime_project: &mut RuntimeProject,
         recreate_tracker: &mut RecreateTracker,
         equi_shader_id: ShaderId,
     ) -> AppResult<Self> {
+        let mut ctx = ShaderCreationContext { device };
         let shader_runtime = recreate_tracker
             .sync(
                 equi_shader_id,
                 &mut project.shaders,
                 &mut runtime_project.shaders,
-                &mut device,
+                &mut ctx,
+                device,
             )?
             .expect("The shader was synced successfully");
 
@@ -182,6 +185,7 @@ impl HdrLoader {
                 &mut project.textures,
                 &mut runtime_project.textures,
                 &mut ctx,
+                device,
             )?
             .expect("The texture was synced successfully");
 

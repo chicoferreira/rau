@@ -17,7 +17,7 @@ use crate::{
         recreate::RecreateTracker,
         renderpass,
         sampler::{Sampler, SamplerSpec},
-        shader::Shader,
+        shader::{Shader, ShaderCreationContext},
         texture::TextureCreationContext,
         texture_view::{TextureView, TextureViewCreationContext},
         uniform::{Uniform, UniformCreationContext, UniformField, UniformFieldSource},
@@ -360,6 +360,7 @@ impl State {
             &mut self.project.dimensions,
             &mut self.runtime_project.dimensions,
             &mut (),
+            &self.device,
         );
 
         let view = &mut TextureCreationContext {
@@ -371,6 +372,7 @@ impl State {
             &mut self.project.textures,
             &mut self.runtime_project.textures,
             view,
+            &self.device,
         );
 
         let view = &mut TextureViewCreationContext {
@@ -383,6 +385,7 @@ impl State {
             &mut self.project.texture_views,
             &mut self.runtime_project.texture_views,
             view,
+            &self.device,
         );
 
         let view = &mut CameraCreationContext {
@@ -393,12 +396,14 @@ impl State {
             &mut self.project.cameras,
             &mut self.runtime_project.cameras,
             view,
+            &self.device,
         );
 
         tracker.sync_storage(
             &mut self.project.samplers,
             &mut self.runtime_project.samplers,
             &mut &self.device,
+            &self.device,
         );
 
         let view = &mut UniformCreationContext {
@@ -410,6 +415,7 @@ impl State {
             &mut self.project.uniforms,
             &mut self.runtime_project.uniforms,
             view,
+            &self.device,
         );
 
         let view = &mut BindGroupCreationContext {
@@ -422,6 +428,7 @@ impl State {
             &mut self.project.bind_groups,
             &mut self.runtime_project.bind_groups,
             view,
+            &self.device,
         );
 
         let view = &mut ModelCreationContext {
@@ -432,12 +439,17 @@ impl State {
             &mut self.project.models,
             &mut self.runtime_project.models,
             view,
+            &self.device,
         );
 
+        let view = &mut ShaderCreationContext {
+            device: &self.device,
+        };
         tracker.sync_storage(
             &mut self.project.shaders,
             &mut self.runtime_project.shaders,
-            &mut &self.device,
+            view,
+            &self.device,
         );
 
         let view = &mut renderpass::Context {
@@ -451,6 +463,7 @@ impl State {
             &mut self.project.render_passes,
             &mut self.runtime_project.render_passes,
             view,
+            &self.device,
         );
     }
 

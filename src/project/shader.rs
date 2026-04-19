@@ -53,8 +53,12 @@ impl ProjectResource for Shader {
     }
 }
 
+pub struct ShaderCreationContext<'a> {
+    pub device: &'a wgpu::Device,
+}
+
 impl Recreatable for Shader {
-    type Context<'a> = &'a wgpu::Device;
+    type Context<'a> = ShaderCreationContext<'a>;
     type Runtime = ShaderRuntime;
 
     fn sync<'a>(
@@ -62,7 +66,7 @@ impl Recreatable for Shader {
         ctx: &mut Self::Context<'a>,
         _previous: Option<Self::Runtime>,
     ) -> AppResult<SyncOutcome<Self::Runtime>> {
-        let inner = utils::shader::compile_wgsl_shader(ctx, &self.label, &self.source)?;
+        let inner = utils::shader::compile_wgsl_shader(ctx.device, &self.label, &self.source)?;
 
         Ok(SyncOutcome::Recreated(ShaderRuntime { inner }))
     }
