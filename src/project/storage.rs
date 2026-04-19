@@ -4,7 +4,7 @@ use crate::{
     error::{AppError, AppResult},
     project::{
         ProjectResource, ProjectResourceId,
-        recreate::{Recreatable, RuntimeCell},
+        sync::{SyncResource, RuntimeCell},
     },
 };
 
@@ -54,11 +54,11 @@ impl<R: ProjectResource> Storage<R> {
     }
 }
 
-pub struct RuntimeStorage<R: Recreatable> {
+pub struct RuntimeStorage<R: SyncResource> {
     map: SecondaryMap<R::Id, RuntimeCell<R::Runtime>>,
 }
 
-impl<R: Recreatable> Default for RuntimeStorage<R> {
+impl<R: SyncResource> Default for RuntimeStorage<R> {
     fn default() -> Self {
         Self {
             map: SecondaryMap::default(),
@@ -66,7 +66,7 @@ impl<R: Recreatable> Default for RuntimeStorage<R> {
     }
 }
 
-impl<R: Recreatable> RuntimeStorage<R> {
+impl<R: SyncResource> RuntimeStorage<R> {
     /// Returns a reference to the [`RuntimeCell`] for the given key.
     /// Returns `AppError::InvalidResource` if the key is not found.
     /// Returns `None` if the runtime value is errored or empty.

@@ -2,7 +2,7 @@ use crate::{
     error::{AppError, AppResult},
     project::{
         ProjectResource, TextureId, TextureViewId,
-        recreate::{Recreatable, RecreateTracker, Revision, SyncOutcome},
+        sync::{SyncResource, SyncTracker, Revision, SyncOutcome},
         storage::{RuntimeStorage, Storage},
         texture::{Texture, TextureRuntime},
     },
@@ -137,7 +137,7 @@ impl ProjectResource for TextureView {
     }
 }
 
-impl Recreatable for TextureView {
+impl SyncResource for TextureView {
     type Context<'a> = TextureViewCreationContext<'a>;
     type Runtime = TextureViewRuntime;
 
@@ -188,7 +188,7 @@ impl Recreatable for TextureView {
             (None, false) => None,
         };
 
-        Ok(SyncOutcome::Recreated(TextureViewRuntime {
+        Ok(SyncOutcome::Changed(TextureViewRuntime {
             inner,
             egui_id,
         }))
@@ -198,10 +198,10 @@ impl Recreatable for TextureView {
         self.revision
     }
 
-    fn needs_rebuild_from_others(&self, tracker: &RecreateTracker) -> bool {
+    fn needs_rebuild_from_others(&self, tracker: &SyncTracker) -> bool {
         let Some(texture_id) = self.texture_id else {
             return false;
         };
-        tracker.was_recreated(texture_id)
+        tracker.was_changed(texture_id)
     }
 }

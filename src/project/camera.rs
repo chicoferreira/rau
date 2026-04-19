@@ -7,7 +7,7 @@ use crate::{
     project::{
         CameraId, DimensionId, ProjectResource,
         dimension::Dimension,
-        recreate::{Recreatable, RecreateTracker, Revision, SyncOutcome},
+        sync::{SyncResource, SyncTracker, Revision, SyncOutcome},
         storage::Storage,
     },
     utils::key::{Key, KeyboardState},
@@ -363,7 +363,7 @@ impl ProjectResource for Camera {
     }
 }
 
-impl Recreatable for Camera {
+impl SyncResource for Camera {
     type Context<'a> = CameraCreationContext<'a>;
     type Runtime = CameraRuntime;
 
@@ -391,23 +391,23 @@ impl Recreatable for Camera {
         }
 
         let Some(runtime) = previous else {
-            return Ok(SyncOutcome::Recreated(CameraRuntime));
+            return Ok(SyncOutcome::Changed(CameraRuntime));
         };
 
         if matrix_changed {
-            return Ok(SyncOutcome::Recreated(runtime));
+            return Ok(SyncOutcome::Changed(runtime));
         }
 
-        Ok(SyncOutcome::Kept(runtime))
+        Ok(SyncOutcome::Unchanged(runtime))
     }
 
     fn revision(&self) -> Revision {
         self.revision
     }
 
-    fn needs_rebuild_from_others(&self, tracker: &RecreateTracker) -> bool {
+    fn needs_rebuild_from_others(&self, tracker: &SyncTracker) -> bool {
         self.dimension_id
-            .map_or(false, |id| tracker.was_recreated(id))
+            .map_or(false, |id| tracker.was_changed(id))
             || self.current_speed.magnitude2() > 0.0
             || self.input != CameraFrameInput::default()
     }

@@ -8,7 +8,7 @@ use crate::{
         BindGroupId, ModelId, ProjectResource,
         bindgroup::BindGroup,
         model::vertex_buffer::{VertexBufferField, VertexBufferSpec},
-        recreate::{Recreatable, RecreateTracker, Revision, SyncOutcome},
+        sync::{SyncResource, SyncTracker, Revision, SyncOutcome},
         storage::RuntimeStorage,
     },
     utils::{
@@ -182,7 +182,7 @@ impl ProjectResource for Model {
     }
 }
 
-impl Recreatable for Model {
+impl SyncResource for Model {
     type Context<'a> = ModelCreationContext<'a>;
     type Runtime = ();
 
@@ -201,9 +201,9 @@ impl Recreatable for Model {
         }
 
         if recreated {
-            Ok(SyncOutcome::Recreated(()))
+            Ok(SyncOutcome::Changed(()))
         } else {
-            Ok(SyncOutcome::Kept(()))
+            Ok(SyncOutcome::Unchanged(()))
         }
     }
 
@@ -211,7 +211,7 @@ impl Recreatable for Model {
         self.revision
     }
 
-    fn needs_rebuild_from_others(&self, _: &RecreateTracker) -> bool {
+    fn needs_rebuild_from_others(&self, _: &SyncTracker) -> bool {
         false
     }
 }

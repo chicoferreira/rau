@@ -4,7 +4,7 @@ use crate::{
     error::AppResult,
     project::{
         Project, RuntimeProject, ShaderId, TextureId,
-        recreate::RecreateTracker,
+        sync::SyncTracker,
         shader::ShaderCreationContext,
         texture::{Texture, TextureCreationContext, TextureSource},
     },
@@ -21,7 +21,7 @@ impl HdrLoader {
         device: &wgpu::Device,
         project: &mut Project,
         runtime_project: &mut RuntimeProject,
-        recreate_tracker: &mut RecreateTracker,
+        recreate_tracker: &mut SyncTracker,
         equi_shader_id: ShaderId,
     ) -> AppResult<Self> {
         let mut ctx = ShaderCreationContext { device };
@@ -90,7 +90,7 @@ impl HdrLoader {
         &self,
         project: &mut Project,
         runtime_project: &mut RuntimeProject,
-        recreate_tracker: &mut RecreateTracker, // we need this for now to force creation of temporary texture views (remove later)
+        recreate_tracker: &mut SyncTracker, // we need this for now to force creation of temporary texture views (remove later)
         device: &wgpu::Device,
         queue: &wgpu::Queue,
         data: &[u8],

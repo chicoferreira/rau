@@ -9,7 +9,7 @@ use crate::{
     project::{
         CameraId, ProjectResource, UniformId,
         camera::Camera,
-        recreate::{Recreatable, RecreateTracker, Revision, SyncOutcome},
+        sync::{SyncResource, SyncTracker, Revision, SyncOutcome},
         storage::Storage,
         uniform::camera::CameraField,
     },
@@ -153,7 +153,7 @@ impl ProjectResource for Uniform {
     }
 }
 
-impl Recreatable for Uniform {
+impl SyncResource for Uniform {
     type Context<'a> = UniformCreationContext<'a>;
     type Runtime = UniformRuntime;
 
@@ -170,7 +170,7 @@ impl Recreatable for Uniform {
                 }
 
                 if !content_changed {
-                    return Ok(SyncOutcome::Kept(runtime));
+                    return Ok(SyncOutcome::Unchanged(runtime));
                 }
 
                 let content = cast_fields(&self.fields);
@@ -180,15 +180,15 @@ impl Recreatable for Uniform {
                     .buffer
                     .write(ctx.device, ctx.queue, &self.label, &content, usage)
                 {
-                    ChangeResult::Uploaded => Ok(SyncOutcome::Kept(runtime)),
-                    ChangeResult::Recreated => Ok(SyncOutcome::Recreated(runtime)),
+                    ChangeResult::Uploaded => Ok(SyncOutcome::Unchanged(runtime)),
+                    ChangeResult::Recreated => Ok(SyncOutcome::Changed(runtime)),
                 }
             }
             None => {
                 let content = cast_fields(&self.fields);
                 let usage = wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST;
                 let buffer = ResizableBuffer::new(ctx.device, &self.label, usage, &content);
-                Ok(SyncOutcome::Recreated(UniformRuntime { buffer }))
+                Ok(SyncOutcome::Changed(UniformRuntime { buffer }))
             }
         }
     }
@@ -197,7 +197,7 @@ impl Recreatable for Uniform {
         self.revision
     }
 
-    fn needs_rebuild_from_others(&self, tracker: &RecreateTracker) -> bool {
+    fn needs_rebuild_from_others(&self, tracker: &SyncTracker) -> bool {
         self.fields
             .iter()
             .any(|field| field.needs_rebuild_from_others(tracker))
@@ -245,7 +245,7 @@ impl UniformField {
         &self.source
     }
 
-    fn needs_rebuild_from_others(&self, tracker: &RecreateTracker) -> bool {
+    fn needs_rebuild_from_others(&self, tracker: &SyncTracker) -> bool {
         match &self.source {
             UniformFieldSource::UserDefined(_) => false,
             UniformFieldSource::Camera { camera_id, .. } => {
@@ -253,7 +253,7 @@ impl UniformField {
                     return false;
                 };
 
-                tracker.was_recreated(camera_id)
+                tracker.was_changed(camera_id)
             }
         }
     }

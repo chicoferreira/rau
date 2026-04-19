@@ -2,7 +2,7 @@ use crate::{
     error::AppResult,
     project::{
         DimensionId, ProjectResource,
-        recreate::{Recreatable, RecreateTracker, Revision, SyncOutcome},
+        sync::{SyncResource, Revision, SyncOutcome, SyncTracker},
     },
     ui::Size2d,
 };
@@ -42,7 +42,7 @@ impl ProjectResource for Dimension {
     }
 }
 
-impl Recreatable for Dimension {
+impl SyncResource for Dimension {
     type Context<'a> = ();
     type Runtime = ();
 
@@ -51,14 +51,14 @@ impl Recreatable for Dimension {
         _ctx: &mut Self::Context<'a>,
         _previous: Option<Self::Runtime>,
     ) -> AppResult<SyncOutcome<Self::Runtime>> {
-        Ok(SyncOutcome::Recreated(()))
+        Ok(SyncOutcome::Changed(()))
     }
 
     fn revision(&self) -> Revision {
         self.revision
     }
 
-    fn needs_rebuild_from_others(&self, _: &RecreateTracker) -> bool {
+    fn needs_rebuild_from_others(&self, _: &SyncTracker) -> bool {
         false
     }
 }
