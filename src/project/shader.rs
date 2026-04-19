@@ -2,7 +2,7 @@ use crate::{
     error::AppResult,
     project::{
         ProjectResource, ShaderId,
-        recreate::{Recreatable, RecreateTracker, Revision, SyncOutcome},
+        sync::{SyncResource, SyncTracker, Revision, SyncOutcome},
     },
     utils,
 };
@@ -57,7 +57,7 @@ pub struct ShaderCreationContext<'a> {
     pub device: &'a wgpu::Device,
 }
 
-impl Recreatable for Shader {
+impl SyncResource for Shader {
     type Context<'a> = ShaderCreationContext<'a>;
     type Runtime = ShaderRuntime;
 
@@ -68,14 +68,14 @@ impl Recreatable for Shader {
     ) -> AppResult<SyncOutcome<Self::Runtime>> {
         let inner = utils::shader::compile_wgsl_shader(ctx.device, &self.label, &self.source)?;
 
-        Ok(SyncOutcome::Recreated(ShaderRuntime { inner }))
+        Ok(SyncOutcome::Changed(ShaderRuntime { inner }))
     }
 
     fn revision(&self) -> Revision {
         self.revision
     }
 
-    fn needs_rebuild_from_others(&self, _: &RecreateTracker) -> bool {
+    fn needs_rebuild_from_others(&self, _: &SyncTracker) -> bool {
         false
     }
 }

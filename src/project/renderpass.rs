@@ -6,7 +6,7 @@ use crate::{
         BindGroupId, ModelId, ProjectResource, RenderPassId, ShaderId, TextureViewId,
         bindgroup::BindGroup,
         model::Model,
-        recreate::{Recreatable, RecreateTracker, Revision, SyncOutcome},
+        sync::{SyncResource, Revision, SyncOutcome, SyncTracker},
         shader::Shader,
         storage::{RuntimeStorage, Storage},
         texture_view::TextureView,
@@ -424,10 +424,10 @@ impl RenderPipeline {
         }
     }
 
-    fn needs_rebuild_from_others(&self, tracker: &RecreateTracker) -> bool {
+    fn needs_rebuild_from_others(&self, tracker: &SyncTracker) -> bool {
         [self.vertex_shader, self.fragment_shader]
             .into_iter()
-            .any(|shader| shader.is_some_and(|id| tracker.was_recreated(id)))
+            .any(|shader| shader.is_some_and(|id| tracker.was_changed(id)))
     }
 }
 
@@ -526,7 +526,7 @@ impl RenderDraw {
     }
 }
 
-impl Recreatable for RenderPass {
+impl SyncResource for RenderPass {
     type Context<'a> = Context<'a>;
     type Runtime = RenderPassRuntime;
 
@@ -563,16 +563,16 @@ impl Recreatable for RenderPass {
             pipeline.dirty = false;
         }
 
-        Ok(SyncOutcome::Recreated(RenderPassRuntime {
+        Ok(SyncOutcome::Changed(RenderPassRuntime {
             runtime_pipelines,
         }))
     }
 
-    fn revision(&self) -> super::recreate::Revision {
+    fn revision(&self) -> super::sync::Revision {
         self.revision
     }
 
-    fn needs_rebuild_from_others(&self, tracker: &RecreateTracker) -> bool {
+    fn needs_rebuild_from_others(&self, tracker: &SyncTracker) -> bool {
         self.pipelines
             .iter()
             .any(|pipeline| pipeline.dirty || pipeline.needs_rebuild_from_others(tracker))

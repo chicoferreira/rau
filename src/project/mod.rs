@@ -23,7 +23,7 @@ pub mod bindgroup;
 pub mod camera;
 pub mod dimension;
 pub mod model;
-pub mod recreate;
+pub mod sync;
 pub mod render_schedule;
 pub mod renderpass;
 pub mod sampler;

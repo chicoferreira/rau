@@ -6,8 +6,8 @@ use crate::{
     },
 };
 
-pub struct RecreateTracker {
-    recreations: Vec<ProjectResourceId>,
+pub struct SyncTracker {
+    changes: Vec<ProjectResourceId>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
@@ -19,13 +19,13 @@ impl Revision {
     }
 }
 
-pub trait Recreatable: ProjectResource {
+pub trait SyncResource: ProjectResource {
     type Context<'a>;
     type Runtime;
 
     fn revision(&self) -> Revision;
 
-    fn needs_rebuild_from_others(&self, tracker: &RecreateTracker) -> bool;
+    fn needs_rebuild_from_others(&self, tracker: &SyncTracker) -> bool;
 
     fn sync<'a>(
         &mut self,
@@ -35,10 +35,11 @@ pub trait Recreatable: ProjectResource {
 }
 
 pub enum SyncOutcome<T> {
-    Recreated(T),
-    Kept(T),
+    Changed(T),
+    Unchanged(T),
 }
 
+#[derive(Debug, Default)]
 pub enum RuntimeCell<R> {
     Created {
         runtime: R,
@@ -48,13 +49,14 @@ pub enum RuntimeCell<R> {
         at_revision: Revision,
         error: AppError,
     },
+    #[default]
     Empty,
 }
 
-impl RecreateTracker {
+impl SyncTracker {
     pub fn new() -> Self {
         Self {
-            recreations: Vec::new(),
+            changes: Vec::new(),
         }
     }
 
@@ -64,7 +66,7 @@ impl RecreateTracker {
     /// - `Ok(Some(runtime))` if the resource was successfully recreated;
     /// - `Ok(None)` if the resource sync errored;
     /// - `Err(AppError::InvalidResource)` if the resource could not be found;
-    pub fn sync<'a, R: Recreatable>(
+    pub fn sync<'a, R: SyncResource>(
         &mut self,
         id: R::Id,
         storage: &mut Storage<R>,
@@ -79,16 +81,12 @@ impl RecreateTracker {
         let cell = runtime_storage.cell_mut(id)?;
 
         let should_rebuild = match &*cell {
-            RuntimeCell::Created { revision, .. } => {
-                *revision != current_revision || should_rebuild_from_others
-            }
-            RuntimeCell::Errored { at_revision, .. } => {
-                *at_revision != current_revision || should_rebuild_from_others
-            }
+            RuntimeCell::Created { revision, .. } => *revision != current_revision,
+            RuntimeCell::Errored { at_revision, .. } => *at_revision != current_revision,
             RuntimeCell::Empty => true,
         };
 
-        if should_rebuild {
+        if should_rebuild || should_rebuild_from_others {
             let previous = match std::mem::replace(cell, RuntimeCell::Empty) {
                 RuntimeCell::Created { runtime, .. } => Some(runtime),
                 RuntimeCell::Errored { .. } | RuntimeCell::Empty => None,
@@ -99,15 +97,15 @@ impl RecreateTracker {
             let scope_result = scope.pop();
 
             match scope_result.and(sync_result) {
-                Ok(SyncOutcome::Recreated(runtime)) => {
+                Ok(SyncOutcome::Changed(runtime)) => {
                     log::debug!("Recreated: {:?}", id);
-                    self.recreations.push(id.into());
+                    self.changes.push(id.into());
                     *cell = RuntimeCell::Created {
                         runtime,
                         revision: current_revision,
                     };
                 }
-                Ok(SyncOutcome::Kept(runtime)) => {
+                Ok(SyncOutcome::Unchanged(runtime)) => {
                     *cell = RuntimeCell::Created {
                         runtime,
                         revision: current_revision,
@@ -129,7 +127,7 @@ impl RecreateTracker {
         }
     }
 
-    pub fn sync_storage<'ctx, R: Recreatable>(
+    pub fn sync_storage<'ctx, R: SyncResource>(
         &mut self,
         storage: &mut Storage<R>,
         runtime_storage: &mut RuntimeStorage<R>,
@@ -143,7 +141,7 @@ impl RecreateTracker {
         }
     }
 
-    pub fn was_recreated(&self, object_id: impl Into<ProjectResourceId>) -> bool {
-        self.recreations.contains(&object_id.into())
+    pub fn was_changed(&self, object_id: impl Into<ProjectResourceId>) -> bool {
+        self.changes.contains(&object_id.into())
     }
 }

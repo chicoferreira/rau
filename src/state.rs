@@ -14,7 +14,7 @@ use crate::{
         camera::{Camera, CameraCreationContext},
         dimension::Dimension,
         model::{MeshMaterialSelection, ModelCreationContext, vertex_buffer::VertexBufferField},
-        recreate::RecreateTracker,
+        sync::SyncTracker,
         renderpass,
         sampler::{Sampler, SamplerSpec},
         shader::{Shader, ShaderCreationContext},
@@ -197,7 +197,7 @@ impl State {
         let sky_shader_id = project.shaders.register(sky_shader);
 
         let mut runtime_project = RuntimeProject::default();
-        let mut recreate_tracker = RecreateTracker::new();
+        let mut recreate_tracker = SyncTracker::new();
 
         let viewport_id = scene::create_scene(
             &device,
@@ -354,7 +354,7 @@ impl State {
     }
 
     fn tick_objects(&mut self, dt: std::time::Duration) {
-        let mut tracker = RecreateTracker::new();
+        let mut tracker = SyncTracker::new();
 
         tracker.sync_storage(
             &mut self.project.dimensions,

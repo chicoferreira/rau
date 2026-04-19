@@ -4,7 +4,7 @@ use crate::{
     error::{AppError, AppResult},
     project::{
         BindGroupId, ProjectResource, SamplerId, TextureViewId, UniformId,
-        recreate::{Recreatable, RecreateTracker, Revision, SyncOutcome},
+        sync::{SyncResource, Revision, SyncOutcome, SyncTracker},
         sampler::Sampler,
         storage::RuntimeStorage,
         texture_view::TextureView,
@@ -222,17 +222,17 @@ impl BindGroupEntry {
         }
     }
 
-    fn resource_recreated(&self, tracker: &RecreateTracker) -> bool {
+    fn resource_recreated(&self, tracker: &SyncTracker) -> bool {
         match self.resource {
             BindGroupResource::Texture {
                 texture_view_id: Some(texture_view_id),
                 ..
-            } => tracker.was_recreated(texture_view_id),
+            } => tracker.was_changed(texture_view_id),
             BindGroupResource::Sampler {
                 sampler_id: Some(sampler_id),
                 ..
-            } => tracker.was_recreated(sampler_id),
-            BindGroupResource::Uniform(Some(uniform_id)) => tracker.was_recreated(uniform_id),
+            } => tracker.was_changed(sampler_id),
+            BindGroupResource::Uniform(Some(uniform_id)) => tracker.was_changed(uniform_id),
             _ => false,
         }
     }
@@ -263,7 +263,7 @@ impl From<BindGroupResource> for wgpu::BindingType {
     }
 }
 
-impl Recreatable for BindGroup {
+impl SyncResource for BindGroup {
     type Context<'a> = BindGroupCreationContext<'a>;
     type Runtime = BindGroupRuntime;
 
@@ -276,14 +276,14 @@ impl Recreatable for BindGroup {
 
         let new_runtime = Self::Runtime { layout, inner };
 
-        Ok(SyncOutcome::Recreated(new_runtime))
+        Ok(SyncOutcome::Changed(new_runtime))
     }
 
     fn revision(&self) -> Revision {
         self.revision
     }
 
-    fn needs_rebuild_from_others(&self, tracker: &RecreateTracker) -> bool {
+    fn needs_rebuild_from_others(&self, tracker: &SyncTracker) -> bool {
         self.entries
             .iter()
             .any(|entry| entry.resource_recreated(tracker))

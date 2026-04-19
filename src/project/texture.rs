@@ -5,7 +5,7 @@ use crate::{
     project::{
         DimensionId, ProjectResource, TextureId,
         dimension::Dimension,
-        recreate::{Recreatable, Revision, SyncOutcome},
+        sync::{SyncResource, Revision, SyncOutcome},
         storage::Storage,
     },
 };
@@ -173,7 +173,7 @@ impl ProjectResource for Texture {
     }
 }
 
-impl Recreatable for Texture {
+impl SyncResource for Texture {
     type Context<'a> = TextureCreationContext<'a>;
     type Runtime = TextureRuntime;
 
@@ -185,16 +185,16 @@ impl Recreatable for Texture {
         let texture =
             Self::create_texture(&ctx, &self.label, self.format, self.usage, &self.source)?;
 
-        Ok(SyncOutcome::Recreated(TextureRuntime { inner: texture }))
+        Ok(SyncOutcome::Changed(TextureRuntime { inner: texture }))
     }
 
     fn revision(&self) -> Revision {
         self.revision
     }
 
-    fn needs_rebuild_from_others(&self, tracker: &super::recreate::RecreateTracker) -> bool {
+    fn needs_rebuild_from_others(&self, tracker: &super::sync::SyncTracker) -> bool {
         match self.source {
-            TextureSource::Dimension(dimension_id) => tracker.was_recreated(dimension_id),
+            TextureSource::Dimension(dimension_id) => tracker.was_changed(dimension_id),
             TextureSource::Image(_) | TextureSource::Manual { .. } => false,
         }
     }

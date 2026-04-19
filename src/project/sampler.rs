@@ -2,7 +2,7 @@ use crate::{
     error::AppResult,
     project::{
         ProjectResource, SamplerId,
-        recreate::{Recreatable, RecreateTracker, Revision, SyncOutcome},
+        sync::{SyncResource, SyncTracker, Revision, SyncOutcome},
     },
 };
 
@@ -97,7 +97,7 @@ impl ProjectResource for Sampler {
     }
 }
 
-impl Recreatable for Sampler {
+impl SyncResource for Sampler {
     type Context<'a> = &'a wgpu::Device;
     type Runtime = SamplerRuntime;
 
@@ -108,14 +108,14 @@ impl Recreatable for Sampler {
     ) -> AppResult<SyncOutcome<Self::Runtime>> {
         let inner = Self::create_sampler(ctx, &self.label, &self.spec);
 
-        Ok(SyncOutcome::Recreated(SamplerRuntime { inner }))
+        Ok(SyncOutcome::Changed(SamplerRuntime { inner }))
     }
 
     fn revision(&self) -> Revision {
         self.revision
     }
 
-    fn needs_rebuild_from_others(&self, _: &RecreateTracker) -> bool {
+    fn needs_rebuild_from_others(&self, _: &SyncTracker) -> bool {
         false
     }
 }
