@@ -3,7 +3,7 @@ use egui::{CollapsingHeader, Grid, Label, Sense};
 use crate::{
     project::{
         ProjectResource, RenderPassId, bindgroup::BindGroup, model::Model,
-        renderpass::RenderPipeline, shader::Shader, storage::Storage,
+        render_pass::RenderPipeline, shader::Shader, storage::Storage,
     },
     state::StateEvent,
     ui::{

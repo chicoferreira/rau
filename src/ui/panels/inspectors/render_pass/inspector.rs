@@ -4,7 +4,7 @@ use egui_dnd::DragDropItem;
 use crate::{
     project::{
         RenderPassId, TextureViewId,
-        renderpass::{LoadOperation, RenderPassTarget},
+        render_pass::{LoadOperation, RenderPassTarget},
         storage::Storage,
         texture_view::TextureView,
     },

@@ -6,7 +6,7 @@ use crate::{
         camera::Camera,
         dimension::Dimension,
         model::Model,
-        renderpass::{LoadOperation, RenderDraw, RenderPass, RenderPassTarget},
+        render_pass::{LoadOperation, RenderDraw, RenderPass, RenderPassTarget},
         sampler::{Sampler, SamplerSpec},
         sync::SyncTracker,
         texture::{Texture, TextureSource},

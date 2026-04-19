@@ -8,7 +8,7 @@ use crate::{
         BindGroupId, RenderPassId,
         bindgroup::BindGroup,
         model::Model,
-        renderpass::{RenderDraw, RenderPipeline},
+        render_pass::{RenderDraw, RenderPipeline},
         storage::Storage,
     },
     ui::components::{
