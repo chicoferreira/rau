@@ -23,12 +23,14 @@ impl HdrLoader {
         recreate_tracker: &mut RecreateTracker,
         equi_shader_id: ShaderId,
     ) -> AppResult<Self> {
-        let shader_runtime = recreate_tracker.sync(
-            equi_shader_id,
-            &mut project.shaders,
-            &mut runtime_project.shaders,
-            &mut device,
-        )?;
+        let shader_runtime = recreate_tracker
+            .sync(
+                equi_shader_id,
+                &mut project.shaders,
+                &mut runtime_project.shaders,
+                &mut device,
+            )?
+            .expect("The shader was synced successfully");
 
         let module = shader_runtime.inner();
         let texture_format = wgpu::TextureFormat::Rgba32Float;
@@ -174,12 +176,14 @@ impl HdrLoader {
             queue,
         };
 
-        let dst_texture_runtime = recreate_tracker.sync(
-            dst_texture_id,
-            &mut project.textures,
-            &mut runtime_project.textures,
-            &mut ctx,
-        )?;
+        let dst_texture_runtime = recreate_tracker
+            .sync(
+                dst_texture_id,
+                &mut project.textures,
+                &mut runtime_project.textures,
+                &mut ctx,
+            )?
+            .expect("The texture was synced successfully");
 
         let dst_texture_view =
             dst_texture_runtime

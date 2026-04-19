@@ -1,5 +1,4 @@
 use crate::{
-    error::SourcedError,
     project::{Project, RuntimeProject},
     state,
     ui::{
@@ -17,7 +16,6 @@ pub struct StateSnapshot<'a> {
     pub project: &'a mut Project,
     pub runtime_project: &'a mut RuntimeProject,
     pub rename_state: &'a mut Option<RenameState>,
-    pub errors: &'a Vec<SourcedError>,
 }
 
 impl StateSnapshot<'_> {

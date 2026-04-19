@@ -30,27 +30,6 @@ pub enum AppError {
     ObjLoadError(#[from] tobj::LoadError),
 }
 
-pub struct SourcedError {
-    pub source: Option<ProjectResourceId>,
-    pub error: AppError,
-}
-
-impl SourcedError {
-    pub fn new_unknown(error: AppError) -> Self {
-        Self {
-            source: None,
-            error,
-        }
-    }
-
-    pub fn new(source: ProjectResourceId, error: AppError) -> Self {
-        Self {
-            source: Some(source),
-            error,
-        }
-    }
-}
-
 pub struct WgpuErrorScope {
     inner: wgpu::ErrorScopeGuard,
 }

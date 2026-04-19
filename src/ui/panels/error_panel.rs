@@ -1,6 +1,12 @@
 use egui::Context;
+use itertools::Itertools;
 
-use crate::{state::StateEvent, ui::pane::StateSnapshot};
+use crate::{
+    error::AppError,
+    project::{Project, ProjectResourceId},
+    state::StateEvent,
+    ui::pane::StateSnapshot,
+};
 
 const ERROR_PANEL_ID: &str = "error_panel_expanded";
 
@@ -24,7 +30,9 @@ fn toggle_open(ctx: &Context) {
 pub fn ui(state: &mut StateSnapshot, ui: &mut egui::Ui) {
     let mut show_error_list = is_open(ui.ctx());
 
-    if state.errors.is_empty() && show_error_list {
+    let errors = state.runtime_project.iter_errors().collect_vec();
+
+    if errors.is_empty() && show_error_list {
         set_open(ui.ctx(), false);
         show_error_list = false;
     }
@@ -32,26 +40,26 @@ pub fn ui(state: &mut StateSnapshot, ui: &mut egui::Ui) {
     egui::Panel::bottom("status_panel")
         .resizable(false)
         .show_inside(ui, |ui| {
-            status_bar_content(state, ui);
+            status_bar_content(ui, &errors);
         });
 
-    if show_error_list && !state.errors.is_empty() {
+    if show_error_list && !errors.is_empty() {
         egui::Panel::bottom("error_list_panel")
             .resizable(true)
             .default_size(200.0)
             .min_size(80.0)
             .show_inside(ui, |ui| {
-                error_list_content(state, ui);
+                error_list_content(ui, state.project, state.pending_events, &errors);
             });
     }
 }
 
-fn status_bar_content(state: &StateSnapshot, ui: &mut egui::Ui) {
+fn status_bar_content(ui: &mut egui::Ui, errors: &[(ProjectResourceId, &AppError)]) {
     ui.horizontal(|ui| {
-        if state.errors.is_empty() {
+        if errors.is_empty() {
             ui.label(egui::RichText::new("No errors").color(ui.visuals().weak_text_color()));
         } else {
-            let error_count = state.errors.len();
+            let error_count = errors.len();
             let label = format!(
                 "{} error{}",
                 error_count,
@@ -72,16 +80,19 @@ fn status_bar_content(state: &StateSnapshot, ui: &mut egui::Ui) {
     });
 }
 
-fn error_list_content(state: &mut StateSnapshot, ui: &mut egui::Ui) {
+fn error_list_content(
+    ui: &mut egui::Ui,
+    project: &Project,
+    pending_events: &mut Vec<StateEvent>,
+    errors: &[(ProjectResourceId, &AppError)],
+) {
     egui::ScrollArea::vertical()
         .auto_shrink(false)
         .show(ui, |ui| {
-            for error in state.errors {
+            for (id, error) in errors {
+                let id = *id;
                 ui.horizontal_wrapped(|ui| {
-                    let source_label = error
-                        .source
-                        .map(|s| state.project.label(s).unwrap_or("Unknown"))
-                        .unwrap_or("Unknown Source");
+                    let source_label = project.label(id).unwrap_or("Unknown");
 
                     let label_text = egui::RichText::new(format!("@{}", source_label))
                         .strong()
@@ -89,21 +100,16 @@ fn error_list_content(state: &mut StateSnapshot, ui: &mut egui::Ui) {
                         .color(ui.visuals().warn_fg_color);
 
                     let response = ui.add(egui::Button::new(label_text).frame(false));
-                    if let Some(source) = error.source {
-                        if response
-                            .on_hover_text("Click to inspect source")
-                            .on_hover_cursor(egui::CursorIcon::PointingHand)
-                            .clicked()
-                        {
-                            state
-                                .pending_events
-                                .push(StateEvent::InspectResource(source));
-                        }
+                    if response
+                        .on_hover_text("Click to inspect source")
+                        .on_hover_cursor(egui::CursorIcon::PointingHand)
+                        .clicked()
+                    {
+                        pending_events.push(StateEvent::InspectResource(id));
                     }
 
                     ui.label(
-                        egui::RichText::new(error.error.to_string())
-                            .color(ui.visuals().error_fg_color),
+                        egui::RichText::new(error.to_string()).color(ui.visuals().error_fg_color),
                     );
                 });
 

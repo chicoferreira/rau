@@ -1,5 +1,5 @@
 use crate::{
-    error::{AppError, AppResult, SourcedError},
+    error::{AppError, AppResult},
     project::{
         ProjectResource, ProjectResourceId,
         storage::{RuntimeStorage, Storage},
@@ -40,25 +40,15 @@ pub enum SyncOutcome<T> {
 }
 
 pub enum RuntimeCell<R> {
-    Created { runtime: R, revision: Revision },
-    Errored { at_revision: Revision },
+    Created {
+        runtime: R,
+        revision: Revision,
+    },
+    Errored {
+        at_revision: Revision,
+        error: AppError,
+    },
     Empty,
-}
-
-impl<R> RuntimeCell<R> {
-    fn runtime(&self) -> AppResult<&R> {
-        match self {
-            Self::Created { runtime, .. } => Ok(runtime),
-            Self::Errored { .. } | Self::Empty => Err(AppError::UninitResource),
-        }
-    }
-
-    fn take_runtime(&mut self) -> Option<R> {
-        match std::mem::replace(self, Self::Empty) {
-            Self::Created { runtime, .. } => Some(runtime),
-            Self::Errored { .. } | Self::Empty => None,
-        }
-    }
 }
 
 impl RecreateTracker {
@@ -68,35 +58,42 @@ impl RecreateTracker {
         }
     }
 
+    /// Creates the runtime variant of the resource tied with the given id.
+    ///
+    /// This function will return:
+    /// - `Ok(Some(runtime))` if the resource was successfully recreated;
+    /// - `Ok(None)` if the resource sync errored;
+    /// - `Err(AppError::InvalidResource)` if the resource could not be found;
     pub fn sync<'a, R: Recreatable>(
         &mut self,
         id: R::Id,
         storage: &mut Storage<R>,
         runtime_storage: &'a mut RuntimeStorage<R>,
         ctx: &mut R::Context<'_>,
-    ) -> AppResult<&'a R::Runtime> {
-        let resource = storage.get(id)?;
+    ) -> AppResult<Option<&'a R::Runtime>> {
+        let resource = storage.get_mut(id)?;
         let current_revision = resource.revision();
         let should_rebuild_from_others = resource.needs_rebuild_from_others(self);
 
-        let cell = runtime_storage
-            .cell_mut(id)
-            .ok_or_else(|| AppError::InvalidResource(id.into()))?;
+        let cell = runtime_storage.cell_mut(id)?;
 
         let should_rebuild = match &*cell {
             RuntimeCell::Created { revision, .. } => {
                 *revision != current_revision || should_rebuild_from_others
             }
-            RuntimeCell::Errored { at_revision } => {
+            RuntimeCell::Errored { at_revision, .. } => {
                 *at_revision != current_revision || should_rebuild_from_others
             }
             RuntimeCell::Empty => true,
         };
 
         if should_rebuild {
-            let previous = cell.take_runtime();
+            let previous = match std::mem::replace(cell, RuntimeCell::Empty) {
+                RuntimeCell::Created { runtime, .. } => Some(runtime),
+                RuntimeCell::Errored { .. } | RuntimeCell::Empty => None,
+            };
 
-            match storage.get_mut(id)?.sync(ctx, previous) {
+            match resource.sync(ctx, previous) {
                 Ok(SyncOutcome::Recreated(runtime)) => {
                     log::debug!("Recreated: {:?}", id);
                     self.recreations.push(id.into());
@@ -112,15 +109,19 @@ impl RecreateTracker {
                     };
                 }
                 Err(err) => {
+                    log::error!("Error while syncing {id:?}: {:?}", err);
                     *cell = RuntimeCell::Errored {
                         at_revision: current_revision,
+                        error: err,
                     };
-                    return Err(err);
                 }
             }
         }
 
-        cell.runtime()
+        match cell {
+            RuntimeCell::Created { runtime, .. } => Ok(Some(runtime)),
+            RuntimeCell::Errored { .. } | RuntimeCell::Empty => Ok(None),
+        }
     }
 
     pub fn sync_storage<'ctx, R: Recreatable>(
@@ -128,22 +129,12 @@ impl RecreateTracker {
         storage: &mut Storage<R>,
         runtime_storage: &mut RuntimeStorage<R>,
         ctx: &mut R::Context<'ctx>,
-    ) -> Vec<SourcedError>
-    where
-        R::Id: slotmap::Key + Into<ProjectResourceId>,
-    {
-        let mut errors = Vec::new();
+    ) {
         let ids = storage.list().map(|(id, _)| id).collect::<Vec<_>>();
 
         for id in ids {
-            if let Err(error) = self.sync(id, storage, runtime_storage, ctx) {
-                let err = SourcedError::new(id.into(), error);
-                log::error!("Error while syncing {id:?}: {:?}", err.error);
-                errors.push(err);
-            }
+            let _ = self.sync(id, storage, runtime_storage, ctx);
         }
-
-        errors
     }
 
     pub fn was_recreated(&self, object_id: impl Into<ProjectResourceId>) -> bool {
