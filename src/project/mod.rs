@@ -1,9 +1,18 @@
 use slotmap::new_key_type;
 
 use crate::project::{
-    bindgroup::BindGroup, camera::Camera, dimension::Dimension, model::Model,
-    renderpass::RenderPass, sampler::Sampler, shader::Shader, storage::Storage, texture::Texture,
-    texture_view::TextureView, uniform::Uniform, viewport::Viewport,
+    bindgroup::BindGroup,
+    camera::Camera,
+    dimension::Dimension,
+    model::Model,
+    renderpass::RenderPass,
+    sampler::Sampler,
+    shader::Shader,
+    storage::{RuntimeStorage, Storage},
+    texture::Texture,
+    texture_view::TextureView,
+    uniform::Uniform,
+    viewport::Viewport,
 };
 
 pub mod bindgroup;
@@ -34,37 +43,35 @@ new_key_type! {
     pub struct RenderPassId;
 }
 
+#[derive(Default)]
 pub struct Project {
-    pub shaders: Storage<ShaderId, Shader>,
-    pub viewports: Storage<ViewportId, Viewport>,
-    pub uniforms: Storage<UniformId, Uniform>,
-    pub bind_groups: Storage<BindGroupId, BindGroup>,
-    pub textures: Storage<TextureId, Texture>,
-    pub texture_views: Storage<TextureViewId, TextureView>,
-    pub samplers: Storage<SamplerId, Sampler>,
-    pub dimensions: Storage<DimensionId, Dimension>,
-    pub cameras: Storage<CameraId, Camera>,
-    pub models: Storage<ModelId, Model>,
-    pub render_passes: Storage<RenderPassId, RenderPass>,
+    pub shaders: Storage<Shader>,
+    pub viewports: Storage<Viewport>,
+    pub uniforms: Storage<Uniform>,
+    pub bind_groups: Storage<BindGroup>,
+    pub textures: Storage<Texture>,
+    pub texture_views: Storage<TextureView>,
+    pub samplers: Storage<Sampler>,
+    pub dimensions: Storage<Dimension>,
+    pub cameras: Storage<Camera>,
+    pub models: Storage<Model>,
+    pub render_passes: Storage<RenderPass>,
+}
+
+#[derive(Default)]
+pub struct RuntimeProject {
+    pub shaders: RuntimeStorage<Shader>,
+    pub uniforms: RuntimeStorage<Uniform>,
+    pub bind_groups: RuntimeStorage<BindGroup>,
+    pub textures: RuntimeStorage<Texture>,
+    pub texture_views: RuntimeStorage<TextureView>,
+    pub samplers: RuntimeStorage<Sampler>,
+    pub cameras: RuntimeStorage<Camera>,
+    pub models: RuntimeStorage<Model>,
+    pub render_passes: RuntimeStorage<RenderPass>,
 }
 
 impl Project {
-    pub fn new() -> Self {
-        Self {
-            shaders: Storage::new(),
-            viewports: Storage::new(),
-            uniforms: Storage::new(),
-            bind_groups: Storage::new(),
-            textures: Storage::new(),
-            texture_views: Storage::new(),
-            samplers: Storage::new(),
-            dimensions: Storage::new(),
-            cameras: Storage::new(),
-            models: Storage::new(),
-            render_passes: Storage::new(),
-        }
-    }
-
     pub fn label<'a>(&'a self, id: impl Into<ProjectResourceId>) -> Option<&'a str> {
         let label_err = match id.into() {
             ProjectResourceId::Shader(id) => self.shaders.get_label(id),
@@ -100,5 +107,7 @@ pub enum ProjectResourceId {
 }
 
 pub trait ProjectResource {
+    type Id: slotmap::Key + Into<ProjectResourceId>;
+
     fn label(&self) -> &str;
 }

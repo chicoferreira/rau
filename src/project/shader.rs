@@ -2,7 +2,7 @@ use crate::{
     error::AppResult,
     project::{
         ProjectResource, ShaderId,
-        recreate::{ProjectEvent, Recreatable, RecreateTracker},
+        recreate::{Recreatable, RecreateTracker, Revision, SyncResult},
     },
     utils,
 };
@@ -10,30 +10,23 @@ use crate::{
 pub struct Shader {
     pub label: String,
     source: String,
-    dirty: bool,
+    revision: Revision,
+}
+
+pub struct ShaderRuntime {
     inner: wgpu::ShaderModule,
 }
 
 impl Shader {
-    pub fn new(
-        device: &wgpu::Device,
-        label: impl Into<String>,
-        source: impl Into<String>,
-    ) -> AppResult<Self> {
+    pub fn new(label: impl Into<String>, source: impl Into<String>) -> Self {
         let label = label.into();
         let source = source.into();
-        let inner = utils::shader::compile_wgsl_shader(device, &label, &source)?;
 
-        Ok(Self {
+        Self {
             label,
             source,
-            dirty: false,
-            inner,
-        })
-    }
-
-    pub fn inner(&self) -> &wgpu::ShaderModule {
-        &self.inner
+            revision: Revision::default(),
+        }
     }
 
     pub fn source(&self) -> &str {
@@ -42,11 +35,19 @@ impl Shader {
 
     pub fn set_source(&mut self, source: impl Into<String>) {
         self.source = source.into();
-        self.dirty = true;
+        self.revision.increase();
+    }
+}
+
+impl ShaderRuntime {
+    pub fn inner(&self) -> &wgpu::ShaderModule {
+        &self.inner
     }
 }
 
 impl ProjectResource for Shader {
+    type Id = ShaderId;
+
     fn label(&self) -> &str {
         &self.label
     }
@@ -54,24 +55,24 @@ impl ProjectResource for Shader {
 
 impl Recreatable for Shader {
     type Context<'a> = &'a wgpu::Device;
+    type Runtime = ShaderRuntime;
 
-    type Id = ShaderId;
-
-    fn recreate<'a>(
+    fn sync<'a>(
         &mut self,
-        id: Self::Id,
         ctx: &mut Self::Context<'a>,
-        _tracker: &RecreateTracker,
-    ) -> AppResult<Option<ProjectEvent>> {
-        if !self.dirty {
-            return Ok(None);
-        }
-
+        runtime: &mut Option<Self::Runtime>,
+    ) -> AppResult<SyncResult> {
         let inner = utils::shader::compile_wgsl_shader(ctx, &self.label, &self.source)?;
-        self.inner = inner;
+        *runtime = Some(ShaderRuntime { inner });
 
-        self.dirty = false;
+        Ok(SyncResult::Recreated)
+    }
 
-        Ok(Some(ProjectEvent::ShaderRecreated(id)))
+    fn revision(&self) -> Revision {
+        self.revision
+    }
+
+    fn needs_rebuild_from_others(&self, _: &RecreateTracker) -> bool {
+        false
     }
 }

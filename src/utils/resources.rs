@@ -4,7 +4,7 @@ use anyhow::Context;
 
 use crate::{
     error::{AppError, AppResult},
-    project::texture::{Texture, TextureCreationContext, TextureSource},
+    project::texture::{Texture, TextureSource},
 };
 
 pub async fn load_string(file_name: impl AsRef<Path>) -> anyhow::Result<String> {
@@ -38,11 +38,7 @@ pub async fn load_binary(file_name: impl AsRef<Path>) -> anyhow::Result<Vec<u8>>
     Ok(data)
 }
 
-pub async fn load_texture(
-    ctx: &TextureCreationContext<'_>,
-    file_name: &str,
-    format: wgpu::TextureFormat,
-) -> AppResult<Texture> {
+pub async fn load_texture(file_name: &str, format: wgpu::TextureFormat) -> AppResult<Texture> {
     let data = load_binary(file_name)
         .await
         .map_err(AppError::FileLoadError)?;
@@ -51,10 +47,9 @@ pub async fn load_texture(
     let source = TextureSource::Image(img);
 
     Ok(Texture::new(
-        ctx,
         file_name.to_string(),
         format,
         wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
         source,
-    )?)
+    ))
 }

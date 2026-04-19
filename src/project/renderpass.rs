@@ -6,9 +6,9 @@ use crate::{
         BindGroupId, ModelId, ProjectResource, RenderPassId, ShaderId, TextureViewId,
         bindgroup::BindGroup,
         model::Model,
-        recreate::{ProjectEvent, Recreatable, RecreateTracker},
+        recreate::{Recreatable, RecreateTracker, Revision, SyncResult},
         shader::Shader,
-        storage::Storage,
+        storage::{RuntimeStorage, Storage},
         texture_view::TextureView,
     },
 };
@@ -18,7 +18,7 @@ pub struct RenderPass {
     pub target: RenderPassTarget<Color>,
     pub depth_target: Option<RenderPassTarget<f32>>,
     pub pipelines: Vec<RenderPipeline>,
-    dirty: bool,
+    revision: Revision,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -35,6 +35,14 @@ pub enum LoadOperation<T> {
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Color(pub [f32; 4]);
+
+pub struct RenderPassRuntime {
+    pub runtime_pipelines: Vec<RenderPipelineRuntime>,
+}
+
+pub struct RenderPipelineRuntime {
+    inner: wgpu::RenderPipeline,
+}
 
 pub type RenderPipelineId = usize;
 
@@ -57,12 +65,11 @@ pub struct RenderPipeline {
     pub fragment_shader: Option<ShaderId>,
     pub static_bind_groups: Vec<(u32, BindGroupId)>,
     pub draw: RenderDraw,
-    inner: Option<wgpu::RenderPipeline>,
     dirty: bool,
-    has_error: bool,
 }
 
 #[derive(Clone, Debug, PartialEq)]
+// TODO: rename this to RenderDrawStrategy
 pub enum RenderDraw {
     Model {
         model_id: Option<ModelId>,
@@ -76,15 +83,26 @@ pub enum RenderDraw {
     },
 }
 
+impl Default for RenderDraw {
+    fn default() -> Self {
+        Self::Direct {
+            vertices: 0..3,
+            instances: 0..1,
+        }
+    }
+}
+
 pub struct Context<'a> {
     pub device: &'a wgpu::Device,
-    pub models: &'a Storage<ModelId, Model>,
-    pub shaders: &'a Storage<ShaderId, Shader>,
-    pub texture_views: &'a Storage<TextureViewId, TextureView>,
-    pub bind_groups: &'a Storage<BindGroupId, BindGroup>,
+    pub models: &'a Storage<Model>,
+    pub runtime_shaders: &'a RuntimeStorage<Shader>,
+    pub runtime_texture_views: &'a RuntimeStorage<TextureView>,
+    pub runtime_bind_groups: &'a RuntimeStorage<BindGroup>,
 }
 
 impl ProjectResource for RenderPass {
+    type Id = RenderPassId;
+
     fn label(&self) -> &str {
         &self.label
     }
@@ -93,12 +111,12 @@ impl ProjectResource for RenderPass {
 impl RenderPass {
     pub fn set_target(&mut self, target: RenderPassTarget<Color>) {
         self.target = target;
-        self.dirty = true;
+        self.revision.increase();
     }
 
     pub fn set_depth_target(&mut self, target: Option<RenderPassTarget<f32>>) {
         self.depth_target = target;
-        self.dirty = true;
+        self.revision.increase();
     }
 
     pub fn new(
@@ -112,46 +130,46 @@ impl RenderPass {
             target,
             depth_target,
             pipelines: vec![],
-            dirty: false,
+            revision: Revision::default(),
         }
     }
 
     pub fn add_pipeline(
         &mut self,
         label: impl Into<String>,
-        ctx: &Context,
         primitive_state: wgpu::PrimitiveState,
         vertex_shader: Option<ShaderId>,
         fragment_shader: Option<ShaderId>,
         static_bind_groups: Vec<(u32, BindGroupId)>,
         draw: RenderDraw,
-    ) -> AppResult<()> {
-        let color_format = self.get_color_format(ctx)?;
-        let depth_format = self.get_depth_format(ctx)?;
-
+    ) {
         let pipeline = RenderPipeline::new(
             label.into(),
-            ctx,
-            color_format,
-            depth_format,
             primitive_state,
             vertex_shader,
             fragment_shader,
             static_bind_groups,
             draw,
-        )?;
+        );
         self.pipelines.push(pipeline);
-        Ok(())
+        self.revision.increase();
     }
 
     pub fn add_empty_pipeline(&mut self, label: impl Into<String>) {
-        let pipeline = RenderPipeline::empty(label.into());
-        self.pipelines.push(pipeline);
+        self.add_pipeline(
+            label,
+            wgpu::PrimitiveState::default(),
+            None,
+            None,
+            vec![],
+            RenderDraw::default(),
+        );
     }
 
     pub fn remove_pipeline(&mut self, index: usize) {
         if index < self.pipelines.len() {
             self.pipelines.remove(index);
+            self.revision.increase();
         }
     }
 
@@ -160,10 +178,11 @@ impl RenderPass {
             return;
         }
         shift_vec(from, to, &mut self.pipelines);
+        self.revision.increase();
     }
 
     pub fn get_color_format(&self, ctx: &Context) -> AppResult<wgpu::TextureFormat> {
-        let target_view = self.target.get_target_inner(ctx.texture_views)?;
+        let target_view = self.target.get_target_inner(ctx.runtime_texture_views)?;
         Ok(target_view.texture().format())
     }
 
@@ -171,19 +190,24 @@ impl RenderPass {
         Ok(self
             .depth_target
             .as_ref()
-            .map(|target| target.get_target_inner(ctx.texture_views))
+            .map(|target| target.get_target_inner(ctx.runtime_texture_views))
             .transpose()?
             .map(|view| view.texture().format()))
     }
 
-    pub fn submit(&self, encoder: &mut wgpu::CommandEncoder, ctx: &Context) -> AppResult<()> {
-        let color_view = self.target.get_target_inner(ctx.texture_views)?;
+    pub fn submit(
+        &self,
+        encoder: &mut wgpu::CommandEncoder,
+        ctx: &Context,
+        runtime: &RenderPassRuntime,
+    ) -> AppResult<()> {
+        let color_view = self.target.get_target_inner(ctx.runtime_texture_views)?;
 
         let depth_stencil_attachment = self
             .depth_target
             .as_ref()
             .map(|depth_target| -> AppResult<_> {
-                let depth_view = depth_target.get_target_inner(ctx.texture_views)?;
+                let depth_view = depth_target.get_target_inner(ctx.runtime_texture_views)?;
                 Ok(wgpu::RenderPassDepthStencilAttachment {
                     view: depth_view,
                     depth_ops: Some(wgpu::Operations {
@@ -214,8 +238,8 @@ impl RenderPass {
             multiview_mask: None,
         });
 
-        for pipeline in &self.pipelines {
-            pipeline.draw(&mut render_pass, ctx)?;
+        for (pipeline, pipeline_runtime) in self.pipelines.iter().zip(&runtime.runtime_pipelines) {
+            pipeline_runtime.draw(&mut render_pass, pipeline, ctx)?;
         }
         scope.pop()?;
 
@@ -224,6 +248,26 @@ impl RenderPass {
 }
 
 impl RenderPipeline {
+    fn new(
+        label: String,
+        primitive_state: wgpu::PrimitiveState,
+        vertex_shader: Option<ShaderId>,
+        fragment_shader: Option<ShaderId>,
+        static_bind_groups: Vec<(u32, BindGroupId)>,
+        draw: RenderDraw,
+    ) -> Self {
+        Self {
+            id: fastrand::usize(..),
+            label,
+            primitive_state,
+            vertex_shader,
+            fragment_shader,
+            static_bind_groups,
+            draw,
+            dirty: false,
+        }
+    }
+
     pub fn set_vertex_shader(&mut self, id: Option<ShaderId>) {
         self.vertex_shader = id;
         self.dirty = true;
@@ -252,116 +296,6 @@ impl RenderPipeline {
     pub fn set_static_bind_groups(&mut self, static_bind_groups: Vec<(u32, BindGroupId)>) {
         self.static_bind_groups = static_bind_groups;
         self.dirty = true;
-    }
-
-    fn empty(label: String) -> Self {
-        Self {
-            id: fastrand::usize(..),
-            label,
-            primitive_state: wgpu::PrimitiveState::default(),
-            vertex_shader: None,
-            fragment_shader: None,
-            static_bind_groups: vec![],
-            draw: RenderDraw::Direct {
-                vertices: 0..3,
-                instances: 0..1,
-            },
-            inner: None,
-            dirty: true,
-            has_error: false,
-        }
-    }
-
-    fn new(
-        label: String,
-        ctx: &Context,
-        color_format: wgpu::TextureFormat,
-        depth_format: Option<wgpu::TextureFormat>,
-        primitive_state: wgpu::PrimitiveState,
-        vertex_shader: Option<ShaderId>,
-        fragment_shader: Option<ShaderId>,
-        static_bind_groups: Vec<(u32, BindGroupId)>,
-        draw: RenderDraw,
-    ) -> AppResult<Self> {
-        let inner = match Self::create_wgpu_pipeline(
-            ctx,
-            &label,
-            &static_bind_groups,
-            &draw,
-            vertex_shader,
-            fragment_shader,
-            primitive_state,
-            color_format,
-            depth_format,
-        ) {
-            Ok(pipeline) => Some(pipeline),
-            Err(AppError::UninitResource) => None,
-            Err(e) => return Err(e),
-        };
-
-        Ok(Self {
-            id: fastrand::usize(..),
-            label,
-            primitive_state,
-            vertex_shader,
-            fragment_shader,
-            static_bind_groups,
-            draw,
-            inner,
-            dirty: false,
-            has_error: false,
-        })
-    }
-
-    pub fn draw(&self, render_pass: &mut wgpu::RenderPass, ctx: &Context) -> AppResult<()> {
-        let inner = self.inner.as_ref().ok_or(AppError::UninitResource)?;
-        render_pass.set_pipeline(inner);
-
-        for &(slot, id) in &self.static_bind_groups {
-            let bind_group = ctx.bind_groups.get(id)?;
-            render_pass.set_bind_group(slot, bind_group.inner(), &[]);
-        }
-
-        match &self.draw {
-            RenderDraw::Model {
-                model_id,
-                instances,
-                mesh_vertex_slot,
-                material_bind_group_slot,
-            } => {
-                let model_id = model_id.ok_or(AppError::UninitResource)?;
-                let model = ctx.models.get(model_id)?;
-
-                for mesh in model.meshes() {
-                    let vertex_buffer = mesh.vertex_buffer().inner();
-                    render_pass.set_vertex_buffer(*mesh_vertex_slot, vertex_buffer.slice(..));
-
-                    if let Some(mat_slot) = material_bind_group_slot {
-                        if let Some(material_index) = mesh.material_index() {
-                            if let Some(material) = model.get_material(material_index) {
-                                if let Some(bind_group_id) = material.bind_group_id() {
-                                    let bind_group = ctx.bind_groups.get(bind_group_id)?;
-                                    render_pass.set_bind_group(*mat_slot, bind_group.inner(), &[]);
-                                }
-                            }
-                        }
-                    }
-
-                    let index_buffer = mesh.index_buffer().inner();
-                    render_pass.set_index_buffer(index_buffer.slice(..), wgpu::IndexFormat::Uint32);
-
-                    render_pass.draw_indexed(0..mesh.indices().len() as u32, 0, instances.clone());
-                }
-            }
-            RenderDraw::Direct {
-                vertices,
-                instances,
-                ..
-            } => {
-                render_pass.draw(vertices.clone(), instances.clone());
-            }
-        }
-        Ok(())
     }
 
     fn create_wgpu_pipeline(
@@ -399,10 +333,10 @@ impl RenderPipeline {
             None => &[],
         };
 
-        let vertex_shader = ctx.shaders.get(vertex_shader_id)?;
+        let vertex_shader = ctx.runtime_shaders.get(vertex_shader_id)?;
         let vertex_shader = vertex_shader.inner();
 
-        let fragment_shader = ctx.shaders.get(fragment_shader_id)?;
+        let fragment_shader = ctx.runtime_shaders.get(fragment_shader_id)?;
         let fragment_shader = fragment_shader.inner();
 
         let scope = WgpuErrorScope::push(ctx.device);
@@ -458,7 +392,7 @@ impl RenderPipeline {
             .iter()
             .copied()
             .filter_map(|(slot, bind_group_id)| {
-                let bind_group = ctx.bind_groups.get(bind_group_id).ok()?;
+                let bind_group = ctx.runtime_bind_groups.get(bind_group_id).ok()?;
                 Some((slot, bind_group.inner_layout()))
             })
             .chain(draw.material_bind_group_slot_and_layout(ctx))
@@ -491,54 +425,66 @@ impl RenderPipeline {
         }
     }
 
-    fn recreate(
-        &mut self,
+    fn needs_rebuild_from_others(&self, tracker: &RecreateTracker) -> bool {
+        [self.vertex_shader, self.fragment_shader]
+            .into_iter()
+            .any(|shader| shader.is_some_and(|id| tracker.was_recreated(id)))
+    }
+}
+
+impl RenderPipelineRuntime {
+    pub fn draw(
+        &self,
+        render_pass: &mut wgpu::RenderPass,
+        pipeline: &RenderPipeline,
         ctx: &Context,
-        tracker: &RecreateTracker,
-        color_format: wgpu::TextureFormat,
-        depth_format: Option<wgpu::TextureFormat>,
-        render_pass_dirty: bool,
     ) -> AppResult<()> {
-        let shader_recreated = self
-            .vertex_shader
-            .is_some_and(|id| tracker.happened(ProjectEvent::ShaderRecreated(id)))
-            || self
-                .fragment_shader
-                .is_some_and(|id| tracker.happened(ProjectEvent::ShaderRecreated(id)));
+        render_pass.set_pipeline(&self.inner);
 
-        let recreate = render_pass_dirty || self.dirty || self.has_error || shader_recreated;
-
-        if !recreate {
-            return Ok(());
+        for &(slot, id) in &pipeline.static_bind_groups {
+            let bind_group = ctx.runtime_bind_groups.get(id)?;
+            render_pass.set_bind_group(slot, bind_group.inner(), &[]);
         }
 
-        match Self::create_wgpu_pipeline(
-            ctx,
-            &self.label,
-            &self.static_bind_groups,
-            &self.draw,
-            self.vertex_shader,
-            self.fragment_shader,
-            self.primitive_state,
-            color_format,
-            depth_format,
-        ) {
-            Ok(pipeline) => {
-                self.inner = Some(pipeline);
-                self.has_error = false;
-                self.dirty = false;
+        match &pipeline.draw {
+            RenderDraw::Model {
+                model_id,
+                instances,
+                mesh_vertex_slot,
+                material_bind_group_slot,
+            } => {
+                let model_id = model_id.ok_or(AppError::UninitResource)?;
+                let model = ctx.models.get(model_id)?;
+
+                for mesh in model.meshes() {
+                    let vertex_buffer = mesh.vertex_buffer().inner();
+                    render_pass.set_vertex_buffer(*mesh_vertex_slot, vertex_buffer.slice(..));
+
+                    if let Some(mat_slot) = material_bind_group_slot {
+                        if let Some(material_index) = mesh.material_index() {
+                            if let Some(material) = model.get_material(material_index) {
+                                if let Some(bind_group_id) = material.bind_group_id() {
+                                    let bind_group = ctx.runtime_bind_groups.get(bind_group_id)?;
+                                    render_pass.set_bind_group(*mat_slot, bind_group.inner(), &[]);
+                                }
+                            }
+                        }
+                    }
+
+                    let index_buffer = mesh.index_buffer().inner();
+                    render_pass.set_index_buffer(index_buffer.slice(..), wgpu::IndexFormat::Uint32);
+
+                    render_pass.draw_indexed(0..mesh.indices().len() as u32, 0, instances.clone());
+                }
             }
-            Err(AppError::UninitResource) => {
-                self.inner = None;
-                self.has_error = false;
-                self.dirty = false;
-            }
-            Err(e) => {
-                self.has_error = true;
-                return Err(e);
+            RenderDraw::Direct {
+                vertices,
+                instances,
+                ..
+            } => {
+                render_pass.draw(vertices.clone(), instances.clone());
             }
         }
-
         Ok(())
     }
 }
@@ -546,14 +492,11 @@ impl RenderPipeline {
 impl<T> RenderPassTarget<T> {
     pub fn get_target_inner<'a>(
         &self,
-        texture_views: &'a Storage<TextureViewId, TextureView>,
+        runtime_texture_views: &'a RuntimeStorage<TextureView>,
     ) -> AppResult<&'a wgpu::TextureView> {
         let target_view_id = self.texture_view_id.ok_or(AppError::UninitResource)?;
-        let target_view = texture_views.get(target_view_id)?;
-        let inner = target_view.inner().as_ref();
-        let inner = inner.ok_or(AppError::UninitResourceOther(target_view_id.into()))?;
-
-        Ok(inner)
+        let target_view = runtime_texture_views.get(target_view_id)?;
+        Ok(target_view.inner())
     }
 }
 
@@ -571,31 +514,61 @@ impl RenderDraw {
             return None;
         };
         let model = ctx.models.get(*model_id).ok()?;
-        let layout = model.get_bind_group_layout(ctx.bind_groups)?;
+        let layout = model.get_bind_group_layout(ctx.runtime_bind_groups)?;
         Some((*slot, layout))
     }
 }
 
 impl Recreatable for RenderPass {
     type Context<'a> = Context<'a>;
-    type Id = RenderPassId;
+    type Runtime = RenderPassRuntime;
 
-    fn recreate<'a>(
+    fn sync<'a>(
         &mut self,
-        _id: Self::Id,
         ctx: &mut Self::Context<'a>,
-        tracker: &RecreateTracker,
-    ) -> AppResult<Option<ProjectEvent>> {
+        runtime: &mut Option<Self::Runtime>,
+    ) -> AppResult<SyncResult> {
         let color_format = self.get_color_format(ctx)?;
         let depth_format = self.get_depth_format(ctx)?;
 
-        for ele in &mut self.pipelines {
-            ele.recreate(ctx, tracker, color_format, depth_format, self.dirty)?;
+        let runtime_pipelines: AppResult<Vec<RenderPipelineRuntime>> = self
+            .pipelines
+            .iter()
+            .map(|pipeline| {
+                RenderPipeline::create_wgpu_pipeline(
+                    ctx,
+                    &pipeline.label,
+                    &pipeline.static_bind_groups,
+                    &pipeline.draw,
+                    pipeline.vertex_shader,
+                    pipeline.fragment_shader,
+                    pipeline.primitive_state,
+                    color_format,
+                    depth_format,
+                )
+            })
+            .map(|wgpu_pipeline| wgpu_pipeline.map(|inner| RenderPipelineRuntime { inner }))
+            .collect();
+
+        let runtime_pipelines = runtime_pipelines?;
+
+        *runtime = Some(RenderPassRuntime { runtime_pipelines });
+
+        for pipeline in &mut self.pipelines {
+            pipeline.dirty = false;
         }
 
-        self.dirty = false;
+        Ok(SyncResult::Recreated)
+    }
 
-        Ok(None)
+    fn revision(&self) -> super::recreate::Revision {
+        self.revision
+    }
+
+    fn needs_rebuild_from_others(&self, tracker: &RecreateTracker) -> bool {
+        self.pipelines
+            .iter()
+            .any(|pipeline| pipeline.dirty || pipeline.needs_rebuild_from_others(tracker))
     }
 }
 

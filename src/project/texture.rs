@@ -5,14 +5,14 @@ use crate::{
     project::{
         DimensionId, ProjectResource, TextureId,
         dimension::Dimension,
-        recreate::{ProjectEvent, Recreatable, RecreateTracker},
+        recreate::{Recreatable, Revision, SyncResult},
         storage::Storage,
     },
 };
 
 #[derive(Clone, Copy)]
 pub struct TextureCreationContext<'a> {
-    pub dimensions: &'a Storage<DimensionId, Dimension>,
+    pub dimensions: &'a Storage<Dimension>,
     pub device: &'a wgpu::Device,
     pub queue: &'a wgpu::Queue,
 }
@@ -24,9 +24,11 @@ pub struct Texture {
     // TODO: decide if we want that the texture decides which source to grab the size to,
     // or it is the source's job to update the size if it changes
     source: TextureSource,
+    revision: Revision,
+}
+
+pub struct TextureRuntime {
     inner: wgpu::Texture,
-    dirty: bool,
-    has_error: bool,
 }
 
 #[derive(Clone, PartialEq)]
@@ -39,28 +41,18 @@ pub enum TextureSource {
 
 impl Texture {
     pub fn new(
-        project: &TextureCreationContext,
-        label: String,
+        label: impl Into<String>,
         format: wgpu::TextureFormat,
         usage: wgpu::TextureUsages,
         source: TextureSource,
-    ) -> AppResult<Texture> {
-        // TODO: this shoulnd't error on texture creation
-        let inner = Self::create_texture(project, &label, format, usage, &source)?;
-
-        Ok(Texture {
-            label,
+    ) -> Texture {
+        Texture {
+            label: label.into(),
             format,
             usage,
             source,
-            inner,
-            has_error: false,
-            dirty: false,
-        })
-    }
-
-    pub fn inner(&self) -> &wgpu::Texture {
-        &self.inner
+            revision: Revision::default(),
+        }
     }
 
     pub fn format(&self) -> wgpu::TextureFormat {
@@ -77,22 +69,22 @@ impl Texture {
 
     pub fn set_label(&mut self, label: String) {
         self.label = label;
-        self.dirty = true;
+        self.revision.increase();
     }
 
     pub fn set_format(&mut self, format: wgpu::TextureFormat) {
         self.format = format;
-        self.dirty = true;
+        self.revision.increase();
     }
 
     pub fn set_usage(&mut self, usage: wgpu::TextureUsages) {
         self.usage = usage;
-        self.dirty = true;
+        self.revision.increase();
     }
 
     pub fn set_source(&mut self, source: TextureSource) {
         self.source = source;
-        self.dirty = true;
+        self.revision.increase();
     }
 
     fn create_texture(
@@ -170,7 +162,15 @@ impl Texture {
     }
 }
 
+impl TextureRuntime {
+    pub fn inner(&self) -> &wgpu::Texture {
+        &self.inner
+    }
+}
+
 impl ProjectResource for Texture {
+    type Id = TextureId;
+
     fn label(&self) -> &str {
         &self.label
     }
@@ -178,22 +178,26 @@ impl ProjectResource for Texture {
 
 impl Recreatable for Texture {
     type Context<'a> = TextureCreationContext<'a>;
-    type Id = TextureId;
+    type Runtime = TextureRuntime;
 
-    fn recreate<'a>(
+    fn sync<'a>(
         &mut self,
-        id: Self::Id,
         ctx: &mut Self::Context<'a>,
-        _tracker: &RecreateTracker,
-    ) -> AppResult<Option<ProjectEvent>> {
+        runtime: &mut Option<Self::Runtime>,
+    ) -> AppResult<SyncResult> {
         let dirty_source = {
             let mut result = false;
             match &self.source {
                 TextureSource::Dimension(dimension_id) => {
+                    // TODO: make dimension throw change updates
                     if let Ok(dimension) = ctx.dimensions.get(*dimension_id) {
-                        let current_size = self.inner.size();
-                        result = dimension.size.width() != current_size.width
-                            || dimension.size.height() != current_size.height;
+                        if let Some(runtime) = runtime {
+                            let current_size = runtime.inner.size();
+                            result = dimension.size.width() != current_size.width
+                                || dimension.size.height() != current_size.height;
+                        } else {
+                            result = true;
+                        }
                     }
                 }
                 _ => (),
@@ -201,16 +205,24 @@ impl Recreatable for Texture {
             result
         };
 
-        if !self.dirty && !self.has_error && !dirty_source {
-            return Ok(None);
+        if !dirty_source {
+            return Ok(SyncResult::Nothing);
         }
 
-        self.inner = Self::create_texture(&ctx, &self.label, self.format, self.usage, &self.source)
-            .inspect_err(|_| self.has_error = true)?;
+        let texture =
+            Self::create_texture(&ctx, &self.label, self.format, self.usage, &self.source)?;
 
-        self.has_error = false;
-        self.dirty = false;
+        *runtime = Some(TextureRuntime { inner: texture });
 
-        Ok(Some(ProjectEvent::TextureRecreated(id)))
+        Ok(SyncResult::Recreated)
+    }
+
+    fn revision(&self) -> Revision {
+        self.revision
+    }
+
+    fn needs_rebuild_from_others(&self, _: &super::recreate::RecreateTracker) -> bool {
+        // TODO: this should actualy depend on the dimension, but it isn't being tracked
+        false
     }
 }

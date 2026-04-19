@@ -10,9 +10,6 @@ pub enum AppError {
     /// The resource where this error occurred is not yet initialized.
     #[error("resource is not yet initialized")]
     UninitResource,
-    /// The resource with the given ID is not yet initialized.
-    #[error("resource {0:?} is not yet initialized")]
-    UninitResourceOther(ProjectResourceId),
     /// A WGPU error occurred.
     #[error(transparent)]
     WgpuError(#[from] wgpu::Error),

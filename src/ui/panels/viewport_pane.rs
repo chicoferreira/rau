@@ -19,15 +19,18 @@ impl Pane for ViewportPane {
             return egui_tiles::UiResponse::None;
         };
 
-        let Some(texture_view) = viewport
-            .texture_view_id
-            .and_then(|texture_view_id| state.project.texture_views.get(texture_view_id).ok())
+        let Some(texture_view_id) = viewport.texture_view_id else {
+            ui.label("Please assign a texture view to this viewport.");
+            return egui_tiles::UiResponse::None;
+        };
+
+        let Ok(runtime_texture_view) = state.runtime_project.texture_views.get(texture_view_id)
         else {
             ui.label("Viewport points to a non-existent texture view.");
             return egui_tiles::UiResponse::None;
         };
 
-        let Some(egui_id) = texture_view.egui_id() else {
+        let Some(egui_id) = runtime_texture_view.egui_id() else {
             ui.label("Viewport points to a texture view format other than Rgba8UnormSrgb.");
             return egui_tiles::UiResponse::None;
         };

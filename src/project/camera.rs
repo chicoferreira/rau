@@ -7,7 +7,7 @@ use crate::{
     project::{
         CameraId, DimensionId, ProjectResource,
         dimension::Dimension,
-        recreate::{ProjectEvent, Recreatable, RecreateTracker},
+        recreate::{Recreatable, RecreateTracker, Revision, SyncResult},
         storage::Storage,
     },
     utils::key::{Key, KeyboardState},
@@ -24,7 +24,7 @@ pub const OPENGL_TO_WGPU_MATRIX: cgmath::Matrix4<f32> = cgmath::Matrix4::from_co
 const SAFE_FRAC_PI_2: f32 = FRAC_PI_2 - 0.0001;
 
 pub struct CameraCreationContext<'a> {
-    pub dimensions: &'a Storage<DimensionId, Dimension>,
+    pub dimensions: &'a Storage<Dimension>,
     pub dt: instant::Duration,
 }
 
@@ -35,7 +35,6 @@ pub struct Camera {
     yaw: Rad<f32>,
     pitch: Rad<f32>,
     dimension_id: Option<DimensionId>,
-    aspect: f32,
     fovy: Rad<f32>,
     znear: f32,
     zfar: f32,
@@ -45,12 +44,16 @@ pub struct Camera {
     drag: f32,
     sensitivity: f32,
     scroll_speed: f32,
+    aspect: f32,
     matrix: CameraMatrix,
     input: CameraFrameInput,
-    dirty: bool,
+    revision: Revision,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug)]
+pub struct CameraRuntime;
+
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct CameraMatrix {
     pub projection: Matrix4<f32>,
     pub view: Matrix4<f32>,
@@ -74,18 +77,14 @@ pub struct CameraFrameInput {
 
 impl Camera {
     pub fn new(label: String) -> Self {
-        let position = (0.0, 0.0, -1.0).into();
-        let pitch = Deg(0.0).into();
-        let yaw = Deg(0.0).into();
-        let fovy = Deg(60.0).into();
+        let position = Point3::new(0.0, 0.0, -1.0);
+        let pitch = Rad(0.0);
+        let yaw = Rad(0.0);
+        let fovy = Rad::from(Deg(60.0));
         let znear = 0.1;
         let zfar = 100.0;
-
-        // this will be updated when the camera is attached to a dimension
         let aspect = 1.0;
-
         let matrix = CameraMatrix::new(position, yaw, pitch, fovy, aspect, znear, zfar);
-        let input = CameraFrameInput::default();
 
         Self {
             label,
@@ -93,7 +92,6 @@ impl Camera {
             pitch,
             yaw,
             dimension_id: None,
-            aspect,
             fovy,
             max_speed: 20.0,
             znear,
@@ -103,9 +101,10 @@ impl Camera {
             current_speed: Vector3::zero(),
             sensitivity: 0.1,
             scroll_speed: 0.05,
+            aspect,
             matrix,
-            input,
-            dirty: false,
+            input: CameraFrameInput::default(),
+            revision: Revision::default(),
         }
     }
 
@@ -173,74 +172,131 @@ impl Camera {
         self.dimension_id
     }
 
-    fn mark_dirty(&mut self) {
-        self.dirty = true;
-    }
-
     pub fn set_position(&mut self, position: impl Into<Point3<f32>>) {
-        self.position = position.into();
-        self.mark_dirty();
+        let position = position.into();
+        if self.position != position {
+            self.position = position;
+            self.revision.increase();
+        }
     }
 
     pub fn set_yaw(&mut self, yaw: impl Into<Rad<f32>>) {
-        use std::f32::consts::PI;
-        let rad: Rad<f32> = yaw.into();
-        self.yaw = Rad((rad.0 + PI).rem_euclid(2.0 * PI) - PI);
-        self.mark_dirty();
+        let yaw = Self::normalize_yaw(yaw);
+        if self.yaw != yaw {
+            self.yaw = yaw;
+            self.revision.increase();
+        }
     }
 
     pub fn set_pitch(&mut self, pitch: impl Into<Rad<f32>>) {
-        let rad: Rad<f32> = pitch.into();
-        self.pitch = Rad(rad.0.clamp(-SAFE_FRAC_PI_2, SAFE_FRAC_PI_2));
-        self.mark_dirty();
+        let pitch = Self::clamp_pitch(pitch);
+        if self.pitch != pitch {
+            self.pitch = pitch;
+            self.revision.increase();
+        }
     }
 
     pub fn set_fovy(&mut self, fovy: impl Into<Rad<f32>>) {
-        let rad: Rad<f32> = fovy.into();
-        self.fovy = Rad(rad
-            .0
-            .clamp(Rad::from(Deg(1.0_f32)).0, Rad::from(Deg(179.0_f32)).0));
-        self.mark_dirty();
+        let fovy = Self::clamp_fovy(fovy);
+        if self.fovy != fovy {
+            self.fovy = fovy;
+            self.revision.increase();
+        }
     }
 
     pub fn set_znear(&mut self, znear: f32) {
-        self.znear = znear.max(0.0001);
-        self.mark_dirty();
+        let znear = znear.max(0.0001);
+        if self.znear != znear {
+            self.znear = znear;
+            if self.zfar < self.znear + 0.001 {
+                self.zfar = self.znear + 0.001;
+            }
+            self.revision.increase();
+        }
     }
 
     pub fn set_zfar(&mut self, zfar: f32) {
-        self.zfar = zfar.max(self.znear + 0.001);
-        self.mark_dirty();
+        let zfar = zfar.max(self.znear + 0.001);
+        if self.zfar != zfar {
+            self.zfar = zfar;
+            self.revision.increase();
+        }
     }
 
     pub fn set_max_speed(&mut self, max_speed: f32) {
-        self.max_speed = max_speed.max(0.0);
-        self.mark_dirty();
+        let max_speed = max_speed.max(0.0);
+        if self.max_speed != max_speed {
+            self.max_speed = max_speed;
+            self.revision.increase();
+        }
     }
 
     pub fn set_acceleration(&mut self, acceleration: f32) {
-        self.acceleration = acceleration.max(0.0);
-        self.mark_dirty();
+        let acceleration = acceleration.max(0.0);
+        if self.acceleration != acceleration {
+            self.acceleration = acceleration;
+            self.revision.increase();
+        }
     }
 
     pub fn set_drag_factor(&mut self, drag: f32) {
-        self.drag = drag.max(0.0);
-        self.mark_dirty();
+        let drag = drag.max(0.0);
+        if self.drag != drag {
+            self.drag = drag;
+            self.revision.increase();
+        }
     }
 
     pub fn set_sensitivity(&mut self, sensitivity: f32) {
-        self.sensitivity = sensitivity.max(0.0);
-        self.mark_dirty();
+        let sensitivity = sensitivity.max(0.0);
+        if self.sensitivity != sensitivity {
+            self.sensitivity = sensitivity;
+            self.revision.increase();
+        }
     }
 
     pub fn set_scroll_speed(&mut self, scroll_speed: f32) {
-        self.scroll_speed = scroll_speed.max(0.0);
-        self.mark_dirty();
+        let scroll_speed = scroll_speed.max(0.0);
+        if self.scroll_speed != scroll_speed {
+            self.scroll_speed = scroll_speed;
+            self.revision.increase();
+        }
     }
 
     pub fn set_dimension_id(&mut self, dimension_id: Option<DimensionId>) {
-        self.dimension_id = dimension_id;
-        self.mark_dirty();
+        if self.dimension_id != dimension_id {
+            self.dimension_id = dimension_id;
+            self.revision.increase();
+        }
+    }
+
+    fn normalize_yaw(yaw: impl Into<Rad<f32>>) -> Rad<f32> {
+        use std::f32::consts::PI;
+
+        let rad: Rad<f32> = yaw.into();
+        Rad((rad.0 + PI).rem_euclid(2.0 * PI) - PI)
+    }
+
+    fn clamp_pitch(pitch: impl Into<Rad<f32>>) -> Rad<f32> {
+        let rad: Rad<f32> = pitch.into();
+        Rad(rad.0.clamp(-SAFE_FRAC_PI_2, SAFE_FRAC_PI_2))
+    }
+
+    fn clamp_fovy(fovy: impl Into<Rad<f32>>) -> Rad<f32> {
+        let rad: Rad<f32> = fovy.into();
+        Rad(rad
+            .0
+            .clamp(Rad::from(Deg(1.0_f32)).0, Rad::from(Deg(179.0_f32)).0))
+    }
+
+    fn calculate_aspect(&self, dimensions: &Storage<Dimension>) -> f32 {
+        if let Some(dimension_id) = self.dimension_id {
+            if let Ok(dimension) = dimensions.get(dimension_id) {
+                return dimension.size.width() as f32 / dimension.size.height() as f32;
+            }
+        }
+
+        1.0
     }
 
     fn update(&mut self, dt: instant::Duration) {
@@ -283,10 +339,14 @@ impl Camera {
         self.position += front * self.input.scroll * self.scroll_speed;
 
         if self.input.mouse_h != 0.0 {
-            self.set_yaw(self.yaw + Rad::from(Deg(self.input.mouse_h * self.sensitivity)));
+            self.yaw = Self::normalize_yaw(
+                self.yaw + Rad::from(Deg(self.input.mouse_h * self.sensitivity)),
+            );
         }
         if self.input.mouse_v != 0.0 {
-            self.set_pitch(self.pitch + Rad::from(Deg(-self.input.mouse_v * self.sensitivity)));
+            self.pitch = Self::clamp_pitch(
+                self.pitch + Rad::from(Deg(-self.input.mouse_v * self.sensitivity)),
+            );
         }
 
         self.input.scroll = 0.0;
@@ -296,6 +356,8 @@ impl Camera {
 }
 
 impl ProjectResource for Camera {
+    type Id = CameraId;
+
     fn label(&self) -> &str {
         &self.label
     }
@@ -303,53 +365,53 @@ impl ProjectResource for Camera {
 
 impl Recreatable for Camera {
     type Context<'a> = CameraCreationContext<'a>;
-    type Id = CameraId;
+    type Runtime = CameraRuntime;
 
-    fn recreate<'a>(
+    fn sync<'a>(
         &mut self,
-        id: Self::Id,
         ctx: &mut Self::Context<'a>,
-        _tracker: &RecreateTracker,
-    ) -> AppResult<Option<ProjectEvent>> {
-        let mut event = None;
+        runtime: &mut Option<Self::Runtime>,
+    ) -> AppResult<SyncResult> {
+        let had_runtime = runtime.is_some();
 
-        let (position, yaw, pitch) = (self.position, self.yaw, self.pitch);
         self.update(ctx.dt);
-        if self.position != position || self.yaw != yaw || self.pitch != pitch {
-            event = Some(ProjectEvent::CameraUpdated(id));
+        self.aspect = self.calculate_aspect(ctx.dimensions);
+
+        let new_matrix = CameraMatrix::new(
+            self.position,
+            self.yaw,
+            self.pitch,
+            self.fovy,
+            self.aspect,
+            self.znear,
+            self.zfar,
+        );
+
+        let matrix_changed = self.matrix != new_matrix;
+        if matrix_changed {
+            self.matrix = new_matrix;
         }
 
-        if self.dirty {
-            self.dirty = false;
-            event = Some(ProjectEvent::CameraUpdated(id));
+        if !had_runtime {
+            *runtime = Some(CameraRuntime);
+            return Ok(SyncResult::Recreated);
         }
 
-        let new_aspect = if let Some(dimension_id) = self.dimension_id
-            && let Ok(dimension) = ctx.dimensions.get(dimension_id)
-        {
-            dimension.size.width() as f32 / dimension.size.height() as f32
-        } else {
-            1.0
-        };
-
-        if self.aspect != new_aspect {
-            self.aspect = new_aspect;
-            event = Some(ProjectEvent::CameraUpdated(id));
+        if matrix_changed {
+            return Ok(SyncResult::Recreated);
         }
 
-        if event.is_some() {
-            self.matrix = CameraMatrix::new(
-                self.position,
-                self.yaw,
-                self.pitch,
-                self.fovy,
-                self.aspect,
-                self.znear,
-                self.zfar,
-            );
-        }
+        Ok(SyncResult::Nothing)
+    }
 
-        Ok(event)
+    fn revision(&self) -> Revision {
+        self.revision
+    }
+
+    fn needs_rebuild_from_others(&self, _: &RecreateTracker) -> bool {
+        self.dimension_id.is_some()
+            || self.current_speed.magnitude2() > 0.0
+            || self.input != CameraFrameInput::default()
     }
 }
 
@@ -374,8 +436,8 @@ impl CameraMatrix {
         );
 
         let projection_view = projection * view;
-        let inverse_projection = projection.invert().unwrap().into();
-        let inverse_view = view.invert().unwrap().into();
+        let inverse_projection = projection.invert().unwrap();
+        let inverse_view = view.invert().unwrap();
 
         Self {
             projection,

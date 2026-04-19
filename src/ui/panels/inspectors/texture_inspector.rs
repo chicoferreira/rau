@@ -2,7 +2,9 @@ use egui::{ComboBox, Grid, PopupCloseBehavior, Ui, Widget};
 use wgpu::TextureUsages;
 
 use crate::{
-    project::{DimensionId, TextureId, texture::TextureSource},
+    project::{
+        DimensionId, TextureId, dimension::Dimension, storage::Storage, texture::TextureSource,
+    },
     ui::{
         components::selector::{AsWidgetText, ComboBoxExt},
         pane::StateSnapshot,
@@ -153,10 +155,7 @@ fn texture_usages_widget(ui: &mut Ui, usages: &mut TextureUsages) -> bool {
 fn ui_texture_source(
     ui: &mut egui::Ui,
     source: &mut TextureSource,
-    dimensions: &crate::project::storage::Storage<
-        DimensionId,
-        crate::project::dimension::Dimension,
-    >,
+    dimensions: &Storage<Dimension>,
 ) {
     let current_kind = TextureSourceKind::from_source(source);
     let mut selected_kind = current_kind;
@@ -235,11 +234,6 @@ fn ui_texture_source(
     ui.label("Create a Texture View to see the Texture contents.");
 }
 
-fn first_dimension_id(
-    dimensions: &crate::project::storage::Storage<
-        DimensionId,
-        crate::project::dimension::Dimension,
-    >,
-) -> Option<DimensionId> {
+fn first_dimension_id(dimensions: &Storage<Dimension>) -> Option<DimensionId> {
     dimensions.list().next().map(|(id, _)| id)
 }
