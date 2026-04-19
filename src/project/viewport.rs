@@ -1,6 +1,6 @@
 use crate::{
     error::AppResult,
-    project::{CameraId, DimensionId, ProjectResource, TextureViewId},
+    project::{CameraId, DimensionId, ProjectResource, TextureViewId, ViewportId},
     ui::Size2d,
 };
 
@@ -33,6 +33,8 @@ impl Viewport {
 }
 
 impl ProjectResource for Viewport {
+    type Id = ViewportId;
+
     fn label(&self) -> &str {
         &self.label
     }

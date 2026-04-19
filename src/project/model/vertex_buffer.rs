@@ -5,9 +5,7 @@ pub struct VertexBufferSpec {
     pub fields: Vec<VertexBufferField>,
 }
 
-#[derive(
-    Debug, Clone, Copy, PartialEq, Eq, Hash, strum::EnumIter, strum::Display,
-)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, strum::EnumIter, strum::Display)]
 pub enum VertexBufferField {
     #[strum(to_string = "Position")]
     Position,

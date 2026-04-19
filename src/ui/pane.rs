@@ -1,6 +1,6 @@
 use crate::{
     error::SourcedError,
-    project::{self},
+    project::{Project, RuntimeProject},
     state,
     ui::{
         components::tiles::TreePane,
@@ -14,7 +14,8 @@ use crate::{
 
 pub struct StateSnapshot<'a> {
     pub pending_events: &'a mut Vec<state::StateEvent>,
-    pub project: &'a mut project::Project,
+    pub project: &'a mut Project,
+    pub runtime_project: &'a mut RuntimeProject,
     pub rename_state: &'a mut Option<RenameState>,
     pub errors: &'a Vec<SourcedError>,
 }

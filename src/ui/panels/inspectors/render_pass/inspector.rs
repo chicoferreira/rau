@@ -185,7 +185,7 @@ impl StateSnapshot<'_> {
 fn render_pass_target_ui<T: Copy + PartialEq>(
     ui: &mut egui::Ui,
     id_salt: &str,
-    texture_views: &Storage<TextureViewId, TextureView>,
+    texture_views: &Storage<TextureView>,
     texture_view_id: &mut Option<TextureViewId>,
     load_op: &mut LoadOperation<T>,
     clear_value_ui: impl FnOnce(&mut egui::Ui, &mut T),

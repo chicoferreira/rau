@@ -1,12 +1,9 @@
-use std::fmt::Debug;
-
 use egui::{CollapsingHeader, Grid, Label, Sense};
 
 use crate::{
     project::{
-        BindGroupId, ModelId, ProjectResource, ProjectResourceId, RenderPassId, ShaderId,
-        bindgroup::BindGroup, model::Model, renderpass::RenderPipeline, shader::Shader,
-        storage::Storage,
+        ProjectResource, RenderPassId, bindgroup::BindGroup, model::Model,
+        renderpass::RenderPipeline, shader::Shader, storage::Storage,
     },
     state::StateEvent,
     ui::{
@@ -94,16 +91,12 @@ fn combo_list<T: Copy + PartialEq + AsWidgetText, I: IntoIterator<Item = T>>(
     *value != before
 }
 
-fn storage_combo_opt_with_none<K, V>(
+fn storage_combo_opt_with_none<V: ProjectResource>(
     ui: &mut egui::Ui,
     id_salt: impl std::hash::Hash,
-    storage: &Storage<K, V>,
-    value: &mut Option<K>,
-) -> bool
-where
-    K: slotmap::Key + Into<ProjectResourceId> + Debug + Copy + PartialEq,
-    V: ProjectResource,
-{
+    storage: &Storage<V>,
+    value: &mut Option<V::Id>,
+) -> bool {
     let before = *value;
     egui::ComboBox::from_id_salt(id_salt)
         .selected_text_storage_opt(storage, *value)
@@ -117,9 +110,9 @@ pub fn pipeline_entry_ui(
     render_pass_id: RenderPassId,
     pipeline_index: usize,
     pipeline: &mut RenderPipeline,
-    shaders: &Storage<ShaderId, Shader>,
-    bind_groups: &Storage<BindGroupId, BindGroup>,
-    models: &Storage<ModelId, Model>,
+    shaders: &Storage<Shader>,
+    bind_groups: &Storage<BindGroup>,
+    models: &Storage<Model>,
     pending_events: &mut Vec<StateEvent>,
     rename_state: &mut Option<RenameState>,
 ) {
@@ -158,9 +151,9 @@ fn pipeline_ui(
     ui: &mut egui::Ui,
     render_pass_id: RenderPassId,
     pipeline: &mut RenderPipeline,
-    shaders: &Storage<ShaderId, Shader>,
-    bind_groups: &Storage<BindGroupId, BindGroup>,
-    models: &Storage<ModelId, Model>,
+    shaders: &Storage<Shader>,
+    bind_groups: &Storage<BindGroup>,
+    models: &Storage<Model>,
 ) {
     CollapsingHeader::new("Shaders")
         .default_open(true)

@@ -4,7 +4,7 @@ use strum::IntoEnumIterator;
 
 use crate::{
     project::{
-        CameraId, UniformId,
+        UniformId,
         camera::Camera,
         storage::Storage,
         uniform::{
@@ -125,7 +125,7 @@ impl StateSnapshot<'_> {
 struct UniformUiContext<'a> {
     pending_events: &'a mut Vec<StateEvent>,
     rename_state: &'a mut Option<RenameState>,
-    cameras: &'a Storage<CameraId, Camera>,
+    cameras: &'a Storage<Camera>,
 }
 
 fn ui_uniform_field_title(

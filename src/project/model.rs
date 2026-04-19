@@ -5,14 +5,16 @@ use wgpu::BindGroupLayout;
 use crate::{
     error::{AppError, AppResult},
     project::{
-        BindGroupId, ProjectResource,
+        BindGroupId, ModelId, ProjectResource,
         bindgroup::BindGroup,
         model::vertex_buffer::{VertexBufferField, VertexBufferSpec},
-        recreate::{ProjectEvent, Recreatable, RecreateTracker},
-        storage::Storage,
+        recreate::{Recreatable, RecreateTracker, Revision, SyncResult},
+        storage::RuntimeStorage,
     },
-    utils::resizable_buffer::{ChangeResult, ResizableBuffer},
-    utils::resources::load_binary,
+    utils::{
+        resizable_buffer::{ChangeResult, ResizableBuffer},
+        resources::load_binary,
+    },
 };
 
 pub mod vertex_buffer;
@@ -27,9 +29,10 @@ pub struct Model {
     meshes: Vec<Mesh>,
     materials: Vec<Material>,
     vertex_buffer_spec: VertexBufferSpec,
-    dirty: bool,
+    revision: Revision,
 }
 
+// TODO: change this to a file handler and move everything to runtime
 pub struct Mesh {
     positions: Vec<[f32; 3]>,
     normals: Vec<[f32; 3]>,
@@ -93,7 +96,7 @@ impl Model {
             meshes,
             materials,
             vertex_buffer_spec,
-            dirty: false,
+            revision: Revision::default(),
         })
     }
 
@@ -129,21 +132,21 @@ impl Model {
 
     pub fn add_vertex_buffer_field(&mut self, field: VertexBufferField) {
         self.vertex_buffer_spec.fields.push(field);
-        self.dirty = true;
+        self.revision.increase();
     }
 
     pub fn remove_vertex_buffer_field(&mut self, index: usize) {
         let fields = &mut self.vertex_buffer_spec.fields;
         if index < fields.len() {
             fields.remove(index);
-            self.dirty = true;
+            self.revision.increase();
         }
     }
 
     pub fn set_vertex_buffer_field(&mut self, index: usize, field: VertexBufferField) {
         if let Some(f) = self.vertex_buffer_spec.fields.get_mut(index) {
             *f = field;
-            self.dirty = true;
+            self.revision.increase();
         }
     }
 
@@ -152,7 +155,7 @@ impl Model {
             return;
         }
         self.vertex_buffer_spec.reorder_field(from, to);
-        self.dirty = true;
+        self.revision.increase();
     }
 
     /// Returns the bind group layout of the first mesh.
@@ -160,18 +163,20 @@ impl Model {
     /// Otherwise the render pipeline will throw an error during rendering.
     pub fn get_bind_group_layout<'a>(
         &self,
-        bind_groups: &'a Storage<BindGroupId, BindGroup>,
+        runtime_bind_groups: &'a RuntimeStorage<BindGroup>,
     ) -> Option<&'a BindGroupLayout> {
         let mesh = self.meshes().first()?;
         let material_index = mesh.material_index()?;
         let material = self.get_material(material_index)?;
         let bind_group_id = material.bind_group_id()?;
-        let bind_group = bind_groups.get(bind_group_id).ok()?;
+        let bind_group = runtime_bind_groups.get(bind_group_id).ok()?;
         Some(bind_group.inner_layout())
     }
 }
 
 impl ProjectResource for Model {
+    type Id = ModelId;
+
     fn label(&self) -> &str {
         &self.label
     }
@@ -179,30 +184,31 @@ impl ProjectResource for Model {
 
 impl Recreatable for Model {
     type Context<'a> = ModelCreationContext<'a>;
-    type Id = super::ModelId;
+    type Runtime = ();
 
-    fn recreate<'a>(
+    fn sync<'a>(
         &mut self,
-        id: Self::Id,
         ctx: &mut Self::Context<'a>,
-        _tracker: &RecreateTracker,
-    ) -> AppResult<Option<ProjectEvent>> {
-        if !self.dirty {
-            return Ok(None);
-        }
-
+        _: &mut Option<Self::Runtime>,
+    ) -> AppResult<SyncResult> {
         let spec = &self.vertex_buffer_spec;
-        let mut any_recreated = false;
+        let mut result = SyncResult::Nothing;
         for mesh in &mut self.meshes {
             match mesh.write_vertex_buffer_from_spec(spec, ctx.device, ctx.queue)? {
                 ChangeResult::Uploaded => {}
-                ChangeResult::Recreated => any_recreated = true,
+                ChangeResult::Recreated => result = SyncResult::Recreated,
             }
         }
 
-        self.dirty = false;
+        Ok(result)
+    }
 
-        Ok(any_recreated.then_some(ProjectEvent::ModelVertexBufferRecreated(id)))
+    fn revision(&self) -> Revision {
+        self.revision
+    }
+
+    fn needs_rebuild_from_others(&self, _: &RecreateTracker) -> bool {
+        false
     }
 }
 

@@ -2,7 +2,7 @@ use crate::{
     error::{AppResult, WgpuErrorScope},
     project::{
         ProjectResource, SamplerId,
-        recreate::{ProjectEvent, Recreatable, RecreateTracker},
+        recreate::{Recreatable, RecreateTracker, Revision, SyncResult},
     },
 };
 
@@ -34,31 +34,25 @@ impl Default for SamplerSpec {
 pub struct Sampler {
     label: String,
     spec: SamplerSpec,
-    dirty: bool,
-    has_error: bool,
+    revision: Revision,
+}
+
+pub struct SamplerRuntime {
     inner: wgpu::Sampler,
 }
 
 impl Sampler {
-    pub fn new(device: &wgpu::Device, label: String, spec: SamplerSpec) -> AppResult<Sampler> {
-        let sampler = Self::create_sampler(device, &label, &spec)?;
-
-        Ok(Sampler {
-            label,
+    pub fn new(label: impl Into<String>, spec: SamplerSpec) -> Sampler {
+        Sampler {
+            label: label.into(),
             spec,
-            dirty: false,
-            has_error: false,
-            inner: sampler,
-        })
-    }
-
-    pub fn inner(&self) -> &wgpu::Sampler {
-        &self.inner
+            revision: Revision::default(),
+        }
     }
 
     pub fn set_label(&mut self, label: String) {
         self.label = label;
-        self.dirty = true;
+        self.revision.increase();
     }
 
     pub fn spec(&self) -> &SamplerSpec {
@@ -68,7 +62,7 @@ impl Sampler {
     pub fn set_spec(&mut self, spec: SamplerSpec) {
         self.spec = spec;
         self.spec.lod_max_clamp = self.spec.lod_max_clamp.max(self.spec.lod_min_clamp);
-        self.dirty = true;
+        self.revision.increase();
     }
 
     fn create_sampler(
@@ -95,7 +89,15 @@ impl Sampler {
     }
 }
 
+impl SamplerRuntime {
+    pub fn inner(&self) -> &wgpu::Sampler {
+        &self.inner
+    }
+}
+
 impl ProjectResource for Sampler {
+    type Id = SamplerId;
+
     fn label(&self) -> &str {
         &self.label
     }
@@ -103,24 +105,24 @@ impl ProjectResource for Sampler {
 
 impl Recreatable for Sampler {
     type Context<'a> = &'a wgpu::Device;
-    type Id = SamplerId;
+    type Runtime = SamplerRuntime;
 
-    fn recreate<'a>(
+    fn sync<'a>(
         &mut self,
-        id: Self::Id,
-        device: &mut Self::Context<'a>,
-        _tracker: &RecreateTracker,
-    ) -> AppResult<Option<ProjectEvent>> {
-        if !self.dirty && !self.has_error {
-            return Ok(None);
-        }
+        ctx: &mut Self::Context<'a>,
+        runtime: &mut Option<Self::Runtime>,
+    ) -> AppResult<SyncResult> {
+        let inner = Self::create_sampler(ctx, &self.label, &self.spec)?;
+        *runtime = Some(SamplerRuntime { inner });
 
-        self.inner = Self::create_sampler(device, &self.label, &self.spec)
-            .inspect_err(|_| self.has_error = true)?;
+        Ok(SyncResult::Recreated)
+    }
 
-        self.has_error = false;
-        self.dirty = false;
+    fn revision(&self) -> Revision {
+        self.revision
+    }
 
-        Ok(Some(ProjectEvent::SamplerRecreated(id)))
+    fn needs_rebuild_from_others(&self, _: &RecreateTracker) -> bool {
+        false
     }
 }

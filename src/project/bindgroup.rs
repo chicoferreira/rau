@@ -3,24 +3,31 @@ use egui_dnd::utils::shift_vec;
 use crate::{
     error::{AppResult, WgpuErrorScope},
     project::{
-        BindGroupId, Project, ProjectResource, SamplerId, TextureViewId, UniformId, recreate::{ProjectEvent, Recreatable, RecreateTracker}, sampler::Sampler, storage::Storage, texture_view::TextureView, uniform::Uniform
+        BindGroupId, ProjectResource, SamplerId, TextureViewId, UniformId,
+        recreate::{Recreatable, RecreateTracker, Revision, SyncResult},
+        sampler::Sampler,
+        storage::RuntimeStorage,
+        texture_view::TextureView,
+        uniform::Uniform,
     },
 };
 
 pub struct BindGroupCreationContext<'a> {
-    pub uniforms: &'a Storage<UniformId, Uniform>,
-    pub texture_views: &'a Storage<TextureViewId, TextureView>,
-    pub samplers: &'a Storage<SamplerId, Sampler>,
+    pub runtime_uniforms: &'a RuntimeStorage<Uniform>,
+    pub runtime_texture_views: &'a RuntimeStorage<TextureView>,
+    pub runtime_samplers: &'a RuntimeStorage<Sampler>,
     pub device: &'a wgpu::Device,
 }
 
 pub struct BindGroup {
     label: String,
+    entries: Vec<BindGroupEntry>,
+    revision: Revision,
+}
+
+pub struct BindGroupRuntime {
     layout: wgpu::BindGroupLayout,
     inner: wgpu::BindGroup,
-    entries: Vec<BindGroupEntry>,
-    dirty: bool,
-    has_error: bool,
 }
 
 pub type BindGroupEntryId = usize;
@@ -60,41 +67,16 @@ pub enum BindGroupResource {
 }
 
 impl BindGroup {
-    pub fn new(
-        project: &Project,
-        device: &wgpu::Device,
-        label: String,
-        entries: Vec<BindGroupEntry>,
-    ) -> AppResult<BindGroup> {
-        let ctx = &BindGroupCreationContext {
-            uniforms: &project.uniforms,
-            texture_views: &project.texture_views,
-            samplers: &project.samplers,
-            device,
-        };
-
-        let (layout, inner) = Self::create_layout_and_bind_group(ctx, &label, &entries)?;
-
-        Ok(BindGroup {
-            label,
-            layout,
-            inner,
+    pub fn new(label: impl Into<String>, entries: Vec<BindGroupEntry>) -> BindGroup {
+        BindGroup {
+            label: label.into(),
             entries,
-            dirty: false,
-            has_error: false,
-        })
+            revision: Revision::default(),
+        }
     }
 
     pub fn label(&self) -> &str {
         &self.label
-    }
-
-    pub fn inner_layout(&self) -> &wgpu::BindGroupLayout {
-        &self.layout
-    }
-
-    pub fn inner(&self) -> &wgpu::BindGroup {
-        &self.inner
     }
 
     pub fn entries(&self) -> &[BindGroupEntry] {
@@ -103,25 +85,25 @@ impl BindGroup {
 
     pub fn set_label(&mut self, label: String) {
         self.label = label;
-        self.dirty = true;
+        self.revision.increase();
     }
 
     pub fn add_entry(&mut self, entry: BindGroupEntry) {
         self.entries.push(entry);
-        self.dirty = true;
+        self.revision.increase();
     }
 
     pub fn remove_entry(&mut self, index: usize) {
         if index < self.entries.len() {
             self.entries.remove(index);
-            self.dirty = true;
+            self.revision.increase();
         }
     }
 
     pub fn update_entry(&mut self, index: usize, entry: BindGroupEntry) {
         if index < self.entries.len() {
             self.entries[index] = entry;
-            self.dirty = true;
+            self.revision.increase();
         }
     }
 
@@ -166,11 +148,23 @@ impl BindGroup {
             return;
         }
         shift_vec(from, to, &mut self.entries);
-        self.dirty = true;
+        self.revision.increase();
+    }
+}
+
+impl BindGroupRuntime {
+    pub fn inner_layout(&self) -> &wgpu::BindGroupLayout {
+        &self.layout
+    }
+
+    pub fn inner(&self) -> &wgpu::BindGroup {
+        &self.inner
     }
 }
 
 impl ProjectResource for BindGroup {
+    type Id = BindGroupId;
+
     fn label(&self) -> &str {
         &self.label
     }
@@ -180,7 +174,7 @@ impl BindGroupEntry {
     pub fn into_bind_group_entry<'a>(
         &self,
         binding: u32,
-        project: &'a BindGroupCreationContext<'a>,
+        ctx: &'a BindGroupCreationContext<'a>,
     ) -> AppResult<Option<wgpu::BindGroupEntry<'a>>> {
         let resource = match self.resource {
             BindGroupResource::Texture {
@@ -189,24 +183,24 @@ impl BindGroupEntry {
                 let Some(texture_view_id) = texture_view_id else {
                     return Ok(None);
                 };
-                let texture_view = project.texture_views.get(texture_view_id)?;
-                let Some(inner) = texture_view.inner() else {
-                    return Ok(None);
-                };
+
+                let texture_view_runtime = ctx.runtime_texture_views.get(texture_view_id)?;
+                let inner = texture_view_runtime.inner();
+
                 wgpu::BindingResource::TextureView(inner)
             }
             BindGroupResource::Sampler { sampler_id, .. } => {
                 let Some(sampler_id) = sampler_id else {
                     return Ok(None);
                 };
-                let sampler = project.samplers.get(sampler_id)?;
+                let sampler = ctx.runtime_samplers.get(sampler_id)?;
                 wgpu::BindingResource::Sampler(sampler.inner())
             }
             BindGroupResource::Uniform(uniform_id) => {
                 let Some(uniform_id) = uniform_id else {
                     return Ok(None);
                 };
-                let uniform = project.uniforms.get(uniform_id)?;
+                let uniform = ctx.runtime_uniforms.get(uniform_id)?;
                 uniform.buffer().inner().as_entire_binding()
             }
         };
@@ -228,14 +222,12 @@ impl BindGroupEntry {
             BindGroupResource::Texture {
                 texture_view_id: Some(texture_view_id),
                 ..
-            } => tracker.happened(ProjectEvent::TextureViewRecreated(texture_view_id)),
+            } => tracker.was_recreated(texture_view_id),
             BindGroupResource::Sampler {
                 sampler_id: Some(sampler_id),
                 ..
-            } => tracker.happened(ProjectEvent::SamplerRecreated(sampler_id)),
-            BindGroupResource::Uniform(Some(uniform_id)) => {
-                tracker.happened(ProjectEvent::UniformRecreated(uniform_id))
-            }
+            } => tracker.was_recreated(sampler_id),
+            BindGroupResource::Uniform(Some(uniform_id)) => tracker.was_recreated(uniform_id),
             _ => false,
         }
     }
@@ -268,30 +260,28 @@ impl From<BindGroupResource> for wgpu::BindingType {
 
 impl Recreatable for BindGroup {
     type Context<'a> = BindGroupCreationContext<'a>;
-    type Id = BindGroupId;
+    type Runtime = BindGroupRuntime;
 
-    fn recreate<'a>(
+    fn sync<'a>(
         &mut self,
-        id: Self::Id,
         ctx: &mut Self::Context<'a>,
-        tracker: &RecreateTracker,
-    ) -> AppResult<Option<ProjectEvent>> {
-        let resources_recreated = self
-            .entries
+        runtime: &mut Option<Self::Runtime>,
+    ) -> AppResult<SyncResult> {
+        let (layout, inner) = Self::create_layout_and_bind_group(ctx, &self.label, &self.entries)?;
+
+        let new_runtime = Self::Runtime { layout, inner };
+
+        *runtime = Some(new_runtime);
+        Ok(SyncResult::Recreated)
+    }
+
+    fn revision(&self) -> Revision {
+        self.revision
+    }
+
+    fn needs_rebuild_from_others(&self, tracker: &RecreateTracker) -> bool {
+        self.entries
             .iter()
-            .any(|entry| entry.resource_recreated(tracker));
-        if !self.dirty && !self.has_error && !resources_recreated {
-            return Ok(None);
-        }
-
-        let (layout, inner) = Self::create_layout_and_bind_group(ctx, &self.label, &self.entries)
-            .inspect_err(|_| self.has_error = true)?;
-
-        self.has_error = false;
-        self.dirty = false;
-
-        self.layout = layout;
-        self.inner = inner;
-        Ok(Some(ProjectEvent::BindGroupRecreated(id)))
+            .any(|entry| entry.resource_recreated(tracker))
     }
 }

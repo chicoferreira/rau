@@ -7,9 +7,10 @@ use winit::{event::WindowEvent, window::Window};
 use crate::{
     error::{AppResult, SourcedError},
     project::{
-        self, BindGroupId, CameraId, DimensionId, ModelId, ProjectResourceId, RenderPassId,
-        SamplerId, ShaderId, TextureId, TextureViewId, UniformId, ViewportId,
-        bindgroup::{BindGroupCreationContext, BindGroupEntry, BindGroupResource},
+        self, BindGroupId, CameraId, DimensionId, ModelId, Project, ProjectResourceId,
+        RenderPassId, RuntimeProject, SamplerId, ShaderId, TextureId, TextureViewId, UniformId,
+        ViewportId,
+        bindgroup::{BindGroup, BindGroupCreationContext, BindGroupEntry, BindGroupResource},
         camera::{Camera, CameraCreationContext},
         dimension::Dimension,
         model::{MeshMaterialSelection, ModelCreationContext, vertex_buffer::VertexBufferField},
@@ -19,7 +20,7 @@ use crate::{
         shader::Shader,
         texture::TextureCreationContext,
         texture_view::{TextureView, TextureViewCreationContext},
-        uniform::{UniformCreationContext, UniformField, UniformFieldSource},
+        uniform::{Uniform, UniformCreationContext, UniformField, UniformFieldSource},
         viewport::Viewport,
     },
     scene,
@@ -29,8 +30,7 @@ use crate::{
         panels::{inspector_pane::InspectorPane, viewport_pane::ViewportPane},
         rename::{RenameState, RenameTarget},
     },
-    utils::key::KeyboardState,
-    utils::resources,
+    utils::{key::KeyboardState, resources},
 };
 
 #[derive(Debug, Clone)]
@@ -102,7 +102,8 @@ pub struct State {
     viewport_tree_pane: TreePane<ViewportPane>,
     dimension_owners: SecondaryMap<DimensionId, ViewportId>,
     errors: Vec<SourcedError>,
-    project: project::Project,
+    project: Project,
+    runtime_project: RuntimeProject,
 }
 
 impl State {
@@ -173,53 +174,40 @@ impl State {
             desired_maximum_frame_latency: 2,
         };
 
-        let mut egui_renderer = ui::renderer::EguiRenderer::new(&device, config.format, &window);
+        let egui_renderer = ui::renderer::EguiRenderer::new(&device, config.format, &window);
 
         let size = ui::Size2d::new(config.width, config.height);
 
-        let mut project = project::Project::new();
+        let mut project = project::Project::default();
 
-        let equirectangular_shader = project::shader::Shader::new(
-            &device,
+        let equirectangular_shader = Shader::new(
             "Equirectengular Shader",
             resources::load_string("equirectangular.wgsl").await?,
-        )?;
+        );
         let equirectengular_shader_id = project.shaders.register(equirectangular_shader);
 
-        let hdr_shader = project::shader::Shader::new(
-            &device,
-            "HDR Shader",
-            resources::load_string("hdr.wgsl").await?,
-        )?;
+        let hdr_shader = Shader::new("HDR Shader", resources::load_string("hdr.wgsl").await?);
         let hdr_shader_id = project.shaders.register(hdr_shader);
 
-        let light_shader = project::shader::Shader::new(
-            &device,
-            "Light Shader",
-            resources::load_string("light.wgsl").await?,
-        )?;
+        let light_shader = Shader::new("Light Shader", resources::load_string("light.wgsl").await?);
         let light_shader_id = project.shaders.register(light_shader);
 
-        let main_shader = project::shader::Shader::new(
-            &device,
-            "Main Shader",
-            resources::load_string("shader.wgsl").await?,
-        )?;
+        let main_shader = Shader::new("Main Shader", resources::load_string("shader.wgsl").await?);
         let main_shader_id = project.shaders.register(main_shader);
 
-        let sky_shader = project::shader::Shader::new(
-            &device,
-            "Sky Shader",
-            resources::load_string("sky.wgsl").await?,
-        )?;
+        let sky_shader = Shader::new("Sky Shader", resources::load_string("sky.wgsl").await?);
         let sky_shader_id = project.shaders.register(sky_shader);
+
+        let mut runtime_project = RuntimeProject::default();
+        let mut recreate_tracker = RecreateTracker::new();
 
         let scene = scene::Scene::new(
             &device,
             &queue,
             size,
             &mut project,
-            &mut egui_renderer,
+            &mut runtime_project,
+            &mut recreate_tracker,
             equirectengular_shader_id,
             hdr_shader_id,
             light_shader_id,
@@ -252,6 +240,7 @@ impl State {
             viewport_tree_pane,
             project,
             errors: vec![],
+            runtime_project,
         })
     }
 
@@ -310,6 +299,7 @@ impl State {
             let mut snapshot = ui::pane::StateSnapshot {
                 pending_events: &mut self.pending_events,
                 project: &mut self.project,
+                runtime_project: &mut self.runtime_project,
                 rename_state: &mut self.rename_state,
                 errors: &self.errors,
             };
@@ -329,7 +319,12 @@ impl State {
 
         self.tick_objects(dt);
 
-        if let Err(error) = self.scene.render(&self.device, &mut encoder, &self.project) {
+        if let Err(error) = self.scene.render(
+            &self.device,
+            &mut encoder,
+            &self.project,
+            &self.runtime_project,
+        ) {
             self.errors.push(SourcedError::new_unknown(error));
         }
 
@@ -382,62 +377,91 @@ impl State {
             device: &self.device,
             queue: &self.queue,
         };
-        self.errors
-            .extend(tracker.recreate_storage(&mut self.project.textures, view));
+        self.errors.extend(tracker.sync_storage(
+            &mut self.project.textures,
+            &mut self.runtime_project.textures,
+            view,
+        ));
 
         let view = &mut TextureViewCreationContext {
             textures: &self.project.textures,
             egui_renderer: &mut self.egui_renderer,
             device: &self.device,
+            textures_runtime: &mut self.runtime_project.textures,
         };
-        self.errors
-            .extend(tracker.recreate_storage(&mut self.project.texture_views, view));
+        self.errors.extend(tracker.sync_storage(
+            &mut self.project.texture_views,
+            &mut self.runtime_project.texture_views,
+            view,
+        ));
 
         let view = &mut CameraCreationContext {
             dimensions: &self.project.dimensions,
             dt,
         };
-        self.errors
-            .extend(tracker.recreate_storage(&mut self.project.cameras, view));
+        self.errors.extend(tracker.sync_storage(
+            &mut self.project.cameras,
+            &mut self.runtime_project.cameras,
+            view,
+        ));
 
-        tracker.recreate_storage(&mut self.project.samplers, &mut &self.device);
+        self.errors.extend(tracker.sync_storage(
+            &mut self.project.samplers,
+            &mut self.runtime_project.samplers,
+            &mut &self.device,
+        ));
 
         let view = &mut UniformCreationContext {
             cameras: &self.project.cameras,
             device: &self.device,
             queue: &self.queue,
         };
-        self.errors
-            .extend(tracker.recreate_storage(&mut self.project.uniforms, view));
+        self.errors.extend(tracker.sync_storage(
+            &mut self.project.uniforms,
+            &mut self.runtime_project.uniforms,
+            view,
+        ));
 
         let view = &mut BindGroupCreationContext {
-            uniforms: &self.project.uniforms,
-            texture_views: &self.project.texture_views,
-            samplers: &self.project.samplers,
             device: &self.device,
+            runtime_uniforms: &mut self.runtime_project.uniforms,
+            runtime_texture_views: &mut self.runtime_project.texture_views,
+            runtime_samplers: &mut self.runtime_project.samplers,
         };
-        self.errors
-            .extend(tracker.recreate_storage(&mut self.project.bind_groups, view));
+        self.errors.extend(tracker.sync_storage(
+            &mut self.project.bind_groups,
+            &mut self.runtime_project.bind_groups,
+            view,
+        ));
 
         let view = &mut ModelCreationContext {
             device: &self.device,
             queue: &self.queue,
         };
-        self.errors
-            .extend(tracker.recreate_storage(&mut self.project.models, view));
+        self.errors.extend(tracker.sync_storage(
+            &mut self.project.models,
+            &mut self.runtime_project.models,
+            view,
+        ));
 
-        self.errors
-            .extend(tracker.recreate_storage(&mut self.project.shaders, &mut &self.device));
+        self.errors.extend(tracker.sync_storage(
+            &mut self.project.shaders,
+            &mut self.runtime_project.shaders,
+            &mut &self.device,
+        ));
 
         let view = &mut renderpass::Context {
             device: &self.device,
             models: &self.project.models,
-            shaders: &self.project.shaders,
-            texture_views: &self.project.texture_views,
-            bind_groups: &self.project.bind_groups,
+            runtime_shaders: &mut self.runtime_project.shaders,
+            runtime_texture_views: &mut self.runtime_project.texture_views,
+            runtime_bind_groups: &mut self.runtime_project.bind_groups,
         };
-        self.errors
-            .extend(tracker.recreate_storage(&mut self.project.render_passes, view));
+        self.errors.extend(tracker.sync_storage(
+            &mut self.project.render_passes,
+            &mut self.runtime_project.render_passes,
+            view,
+        ));
     }
 
     fn handle_events(&mut self) -> AppResult<()> {
@@ -468,8 +492,7 @@ impl State {
                 StateEvent::CreateUniform => {
                     const DEFAULT_NAME: &str = "Uniform";
 
-                    let uniform =
-                        project::uniform::Uniform::new(&self.device, DEFAULT_NAME, vec![])?;
+                    let uniform = Uniform::new(DEFAULT_NAME, vec![]);
 
                     let uniform_id = self.project.uniforms.register(uniform);
 
@@ -520,13 +543,7 @@ impl State {
                 StateEvent::CreateBindGroup => {
                     const DEFAULT_NAME: &str = "Bind Group";
 
-                    let bind_group = project::bindgroup::BindGroup::new(
-                        &self.project,
-                        &self.device,
-                        DEFAULT_NAME.to_string(),
-                        vec![],
-                    )?;
-
+                    let bind_group = BindGroup::new(DEFAULT_NAME, vec![]);
                     let bind_group_id = self.project.bind_groups.register(bind_group);
 
                     self.rename_state = Some(RenameState {
@@ -645,11 +662,7 @@ impl State {
                 StateEvent::CreateSampler => {
                     const DEFAULT_NAME: &str = "Sampler";
 
-                    let sampler = Sampler::new(
-                        &self.device,
-                        DEFAULT_NAME.to_string(),
-                        SamplerSpec::default(),
-                    )?;
+                    let sampler = Sampler::new(DEFAULT_NAME, SamplerSpec::default());
                     let sampler_id = self.project.samplers.register(sampler);
 
                     self.rename_state = Some(RenameState {
@@ -681,7 +694,7 @@ fn fs_main() -> @location(0) vec4<f32> {
 }
 "#;
 
-                    let shader = Shader::new(&self.device, DEFAULT_NAME, DEFAULT_SOURCE)?;
+                    let shader = Shader::new(DEFAULT_NAME, DEFAULT_SOURCE);
                     let shader_id = self.project.shaders.register(shader);
 
                     self.rename_state = Some(RenameState {
@@ -692,17 +705,7 @@ fn fs_main() -> @location(0) vec4<f32> {
                 StateEvent::CreateTextureView => {
                     const DEFAULT_NAME: &str = "Texture View";
 
-                    let texture_view = TextureView::new(
-                        &mut TextureViewCreationContext {
-                            textures: &self.project.textures,
-                            egui_renderer: &mut self.egui_renderer,
-                            device: &self.device,
-                        },
-                        DEFAULT_NAME.to_string(),
-                        None,
-                        None,
-                        None,
-                    )?;
+                    let texture_view = TextureView::new(DEFAULT_NAME.to_string(), None, None, None);
                     let texture_view_id = self.project.texture_views.register(texture_view);
 
                     self.rename_state = Some(RenameState {

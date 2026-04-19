@@ -89,9 +89,9 @@ impl StateSnapshot<'_> {
 
 struct BindGroupUiContext<'a> {
     pending_events: &'a mut Vec<StateEvent>,
-    uniforms: &'a Storage<UniformId, Uniform>,
-    texture_views: &'a Storage<TextureViewId, TextureView>,
-    samplers: &'a Storage<SamplerId, Sampler>,
+    uniforms: &'a Storage<Uniform>,
+    texture_views: &'a Storage<TextureView>,
+    samplers: &'a Storage<Sampler>,
 }
 
 fn ui_entry_title(

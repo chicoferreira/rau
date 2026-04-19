@@ -7,13 +7,17 @@ mod tests;
 use crate::{
     error::AppResult,
     project::{
-        CameraId, ProjectResource, UniformId, camera::Camera, recreate::{ProjectEvent, Recreatable, RecreateTracker}, storage::Storage, uniform::camera::CameraField
+        CameraId, ProjectResource, UniformId,
+        camera::Camera,
+        recreate::{Recreatable, RecreateTracker, Revision, SyncResult},
+        storage::Storage,
+        uniform::camera::CameraField,
     },
     utils::resizable_buffer::{ChangeResult, ResizableBuffer},
 };
 
 pub struct UniformCreationContext<'a> {
-    pub cameras: &'a Storage<CameraId, Camera>,
+    pub cameras: &'a Storage<Camera>,
     pub device: &'a wgpu::Device,
     pub queue: &'a wgpu::Queue,
 }
@@ -21,8 +25,11 @@ pub struct UniformCreationContext<'a> {
 pub struct Uniform {
     pub label: String,
     fields: Vec<UniformField>,
+    revision: Revision,
+}
+
+pub struct UniformRuntime {
     buffer: ResizableBuffer,
-    dirty: bool,
 }
 
 type UniformFieldId = usize;
@@ -36,6 +43,7 @@ pub struct UniformField {
 }
 
 #[derive(Debug, Clone)]
+// TODO: move current_value out of the UniformFieldSource to
 pub enum UniformFieldSource {
     UserDefined(UniformFieldData),
     Camera {
@@ -66,25 +74,13 @@ pub enum UniformFieldDataKind {
 }
 
 impl Uniform {
-    pub fn new(
-        device: &wgpu::Device,
-        label: impl Into<String>,
-        fields: Vec<UniformField>,
-    ) -> AppResult<Uniform> {
+    pub fn new(label: impl Into<String>, fields: Vec<UniformField>) -> Uniform {
         let label = label.into();
-        let content = cast_fields(&fields);
-        let usage = wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST;
-        let buffer = ResizableBuffer::new(device, &label, usage, &content)?;
-        Ok(Uniform {
+        Uniform {
             label,
             fields,
-            buffer,
-            dirty: false,
-        })
-    }
-
-    pub fn buffer(&self) -> &ResizableBuffer {
-        &self.buffer
+            revision: Revision::default(),
+        }
     }
 
     pub fn fields(&self) -> &[UniformField] {
@@ -97,13 +93,13 @@ impl Uniform {
 
     pub fn add_field(&mut self, field: UniformField) {
         self.fields.push(field);
-        self.dirty = true;
+        self.revision.increase();
     }
 
     pub fn remove_field(&mut self, index: usize) {
         if index < self.fields.len() {
             self.fields.remove(index);
-            self.dirty = true;
+            self.revision.increase();
         }
     }
 
@@ -118,7 +114,7 @@ impl Uniform {
         if let Some(field) = self.fields.get_mut(index) {
             field.source = source;
             field.dirty = true;
-            self.dirty = true;
+            self.revision.increase();
         }
     }
 
@@ -127,7 +123,7 @@ impl Uniform {
             return;
         }
         shift_vec(from, to, &mut self.fields);
-        self.dirty = true;
+        self.revision.increase();
     }
 
     pub fn layout(&self) -> (usize, usize) {
@@ -145,7 +141,15 @@ impl Uniform {
     }
 }
 
+impl UniformRuntime {
+    pub fn buffer(&self) -> &ResizableBuffer {
+        &self.buffer
+    }
+}
+
 impl ProjectResource for Uniform {
+    type Id = UniformId;
+
     fn label(&self) -> &str {
         &self.label
     }
@@ -153,35 +157,53 @@ impl ProjectResource for Uniform {
 
 impl Recreatable for Uniform {
     type Context<'a> = UniformCreationContext<'a>;
-    type Id = UniformId;
+    type Runtime = UniformRuntime;
 
-    fn recreate<'a>(
+    fn sync<'a>(
         &mut self,
-        id: Self::Id,
         ctx: &mut Self::Context<'a>,
-        tracker: &RecreateTracker,
-    ) -> AppResult<Option<ProjectEvent>> {
-        let mut content_changed = false;
-        for field in &mut self.fields {
-            content_changed |= field.refresh(&tracker, ctx)?;
+        runtime: &mut Option<Self::Runtime>,
+    ) -> AppResult<SyncResult> {
+        match runtime {
+            Some(runtime) => {
+                let mut content_changed = false;
+                for field in &mut self.fields {
+                    content_changed |= field.refresh(ctx)?;
+                }
+
+                if !content_changed {
+                    return Ok(SyncResult::Nothing);
+                }
+
+                let content = cast_fields(&self.fields);
+
+                let usage = wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST;
+                match runtime
+                    .buffer
+                    .write(ctx.device, ctx.queue, &self.label, &content, usage)?
+                {
+                    ChangeResult::Uploaded => Ok(SyncResult::Nothing),
+                    ChangeResult::Recreated => Ok(SyncResult::Recreated),
+                }
+            }
+            None => {
+                let content = cast_fields(&self.fields);
+                let usage = wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST;
+                let buffer = ResizableBuffer::new(ctx.device, &self.label, usage, &content)?;
+                *runtime = Some(UniformRuntime { buffer });
+                Ok(SyncResult::Recreated)
+            }
         }
+    }
 
-        if !self.dirty && !content_changed {
-            return Ok(None);
-        }
+    fn revision(&self) -> Revision {
+        self.revision
+    }
 
-        let content = cast_fields(&self.fields);
-
-        self.dirty = false;
-
-        let usage = wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST;
-        match self
-            .buffer
-            .write(ctx.device, ctx.queue, &self.label, &content, usage)?
-        {
-            ChangeResult::Uploaded => Ok(None),
-            ChangeResult::Recreated => Ok(Some(ProjectEvent::UniformRecreated(id))),
-        }
+    fn needs_rebuild_from_others(&self, tracker: &RecreateTracker) -> bool {
+        self.fields
+            .iter()
+            .any(|field| field.needs_rebuild_from_others(tracker))
     }
 }
 
@@ -227,13 +249,22 @@ impl UniformField {
         &self.source
     }
 
-    fn refresh(
-        &mut self,
-        recreate_tracker: &RecreateTracker,
-        context: &mut UniformCreationContext<'_>,
-    ) -> AppResult<bool> {
+    fn needs_rebuild_from_others(&self, tracker: &RecreateTracker) -> bool {
+        match &self.source {
+            UniformFieldSource::UserDefined(_) => false,
+            UniformFieldSource::Camera { camera_id, .. } => {
+                let Some(camera_id) = *camera_id else {
+                    return false;
+                };
+
+                tracker.was_recreated(camera_id)
+            }
+        }
+    }
+
+    fn refresh(&mut self, context: &mut UniformCreationContext<'_>) -> AppResult<bool> {
         match &mut self.source {
-            UniformFieldSource::UserDefined(_) => Ok(false), // Nothing to refresh
+            UniformFieldSource::UserDefined(_) => Ok(false),
             UniformFieldSource::Camera {
                 camera_id,
                 field,
@@ -243,8 +274,7 @@ impl UniformField {
                     return Ok(false);
                 };
 
-                if !self.dirty && !recreate_tracker.happened(ProjectEvent::CameraUpdated(camera_id))
-                {
+                if !self.dirty {
                     return Ok(false);
                 }
 

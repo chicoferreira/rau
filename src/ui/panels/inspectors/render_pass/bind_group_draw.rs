@@ -5,7 +5,7 @@ use strum::IntoEnumIterator;
 
 use crate::{
     project::{
-        BindGroupId, ModelId, RenderPassId,
+        BindGroupId, RenderPassId,
         bindgroup::BindGroup,
         model::Model,
         renderpass::{RenderDraw, RenderPipeline},
@@ -100,7 +100,7 @@ pub fn bind_groups_ui(
     ui: &mut egui::Ui,
     render_pass_id: RenderPassId,
     pipeline: &mut RenderPipeline,
-    bind_groups: &Storage<BindGroupId, BindGroup>,
+    bind_groups: &Storage<BindGroup>,
 ) {
     let static_before = pipeline.static_bind_groups.clone();
     let draw_before = pipeline.draw.clone();
@@ -356,7 +356,7 @@ pub fn draw_ui(
     ui: &mut egui::Ui,
     render_pass_id: RenderPassId,
     pipeline: &mut RenderPipeline,
-    models: &Storage<ModelId, Model>,
+    models: &Storage<Model>,
 ) {
     let before = pipeline.draw.clone();
 

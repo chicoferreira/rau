@@ -3,7 +3,8 @@ use std::io::Cursor;
 use crate::{
     error::AppResult,
     project::{
-        Project, ShaderId, TextureId,
+        Project, RuntimeProject, ShaderId, TextureId,
+        recreate::RecreateTracker,
         texture::{Texture, TextureCreationContext, TextureSource},
     },
 };
@@ -16,12 +17,18 @@ pub struct HdrLoader {
 
 impl HdrLoader {
     pub fn new(
-        device: &wgpu::Device,
-        project: &Project,
-        equirectangular_shader_id: ShaderId,
+        mut device: &wgpu::Device,
+        project: &mut Project,
+        runtime_project: &mut RuntimeProject,
+        recreate_tracker: &mut RecreateTracker,
+        equi_shader_id: ShaderId,
     ) -> AppResult<Self> {
-        let shader = project.shaders.get(equirectangular_shader_id)?;
-        let module = shader.inner();
+        let shader = project.shaders.get_mut(equi_shader_id)?;
+        let shader_runtime = runtime_project.shaders.get_cell_mut(equi_shader_id)?;
+        let _ = recreate_tracker.sync(equi_shader_id, shader, shader_runtime, &mut device);
+        let shader_runtime = runtime_project.shaders.get(equi_shader_id)?;
+
+        let module = shader_runtime.inner();
         let texture_format = wgpu::TextureFormat::Rgba32Float;
         let equirect_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("HdrLoader::equirect_layout"),
@@ -75,6 +82,8 @@ impl HdrLoader {
     pub fn from_equirectangular_bytes(
         &self,
         project: &mut Project,
+        runtime_project: &mut RuntimeProject,
+        recreate_tracker: &mut RecreateTracker, // we need this for now to force creation of temporary texture views (remove later)
         device: &wgpu::Device,
         queue: &wgpu::Queue,
         data: &[u8],
@@ -140,12 +149,7 @@ impl HdrLoader {
         );
 
         let dst_texture = Texture::new(
-            &TextureCreationContext {
-                dimensions: &project.dimensions,
-                device,
-                queue,
-            },
-            "Sky Texture".to_string(),
+            "Sky Texture",
             self.texture_format,
             wgpu::TextureUsages::STORAGE_BINDING
                 | wgpu::TextureUsages::TEXTURE_BINDING
@@ -157,18 +161,32 @@ impl HdrLoader {
                     depth_or_array_layers: 6,
                 },
             },
-        )?;
+        );
 
         // we can create without adding to the project because this D2Array will be only used by the shader
-        let dst_texture_view = dst_texture
-            .inner()
-            .create_view(&wgpu::TextureViewDescriptor {
-                label: Some("compute shader destination texture view"),
-                dimension: Some(wgpu::TextureViewDimension::D2Array),
-                ..Default::default()
-            });
-
         let dst_texture_id = project.textures.register(dst_texture);
+
+        let dst_texture = project.textures.get_mut(dst_texture_id)?;
+        let dst_texture_runtime = runtime_project.textures.get_cell_mut(dst_texture_id)?;
+
+        let mut ctx = TextureCreationContext {
+            dimensions: &project.dimensions,
+            device,
+            queue,
+        };
+
+        let _ = recreate_tracker.sync(dst_texture_id, dst_texture, dst_texture_runtime, &mut ctx);
+
+        let dst_texture_runtime = runtime_project.textures.get(dst_texture_id)?;
+
+        let dst_texture_view =
+            dst_texture_runtime
+                .inner()
+                .create_view(&wgpu::TextureViewDescriptor {
+                    label: Some("compute shader destination texture view"),
+                    dimension: Some(wgpu::TextureViewDimension::D2Array),
+                    ..Default::default()
+                });
 
         let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("compute shader bind group"),
