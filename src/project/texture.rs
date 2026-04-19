@@ -5,7 +5,7 @@ use crate::{
     project::{
         DimensionId, ProjectResource, TextureId,
         dimension::Dimension,
-        recreate::{Recreatable, Revision, SyncResult},
+        recreate::{Recreatable, Revision, SyncOutcome},
         storage::Storage,
     },
 };
@@ -106,7 +106,7 @@ impl Texture {
 
         let size = match source {
             TextureSource::Dimension(dimension_id) => {
-                let size = ctx.dimensions.get(*dimension_id)?.size;
+                let size = ctx.dimensions.get(*dimension_id)?.size();
 
                 wgpu::Extent3d {
                     width: size.width(),
@@ -183,46 +183,22 @@ impl Recreatable for Texture {
     fn sync<'a>(
         &mut self,
         ctx: &mut Self::Context<'a>,
-        runtime: &mut Option<Self::Runtime>,
-    ) -> AppResult<SyncResult> {
-        let dirty_source = {
-            let mut result = false;
-            match &self.source {
-                TextureSource::Dimension(dimension_id) => {
-                    // TODO: make dimension throw change updates
-                    if let Ok(dimension) = ctx.dimensions.get(*dimension_id) {
-                        if let Some(runtime) = runtime {
-                            let current_size = runtime.inner.size();
-                            result = dimension.size.width() != current_size.width
-                                || dimension.size.height() != current_size.height;
-                        } else {
-                            result = true;
-                        }
-                    }
-                }
-                _ => (),
-            }
-            result
-        };
-
-        if !dirty_source {
-            return Ok(SyncResult::Nothing);
-        }
-
+        _previous: Option<Self::Runtime>,
+    ) -> AppResult<SyncOutcome<Self::Runtime>> {
         let texture =
             Self::create_texture(&ctx, &self.label, self.format, self.usage, &self.source)?;
 
-        *runtime = Some(TextureRuntime { inner: texture });
-
-        Ok(SyncResult::Recreated)
+        Ok(SyncOutcome::Recreated(TextureRuntime { inner: texture }))
     }
 
     fn revision(&self) -> Revision {
         self.revision
     }
 
-    fn needs_rebuild_from_others(&self, _: &super::recreate::RecreateTracker) -> bool {
-        // TODO: this should actualy depend on the dimension, but it isn't being tracked
-        false
+    fn needs_rebuild_from_others(&self, tracker: &super::recreate::RecreateTracker) -> bool {
+        match self.source {
+            TextureSource::Dimension(dimension_id) => tracker.was_recreated(dimension_id),
+            TextureSource::Image(_) | TextureSource::Manual { .. } => false,
+        }
     }
 }

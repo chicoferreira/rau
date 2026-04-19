@@ -6,7 +6,7 @@ use crate::{
         BindGroupId, ModelId, ProjectResource, RenderPassId, ShaderId, TextureViewId,
         bindgroup::BindGroup,
         model::Model,
-        recreate::{Recreatable, RecreateTracker, Revision, SyncResult},
+        recreate::{Recreatable, RecreateTracker, Revision, SyncOutcome},
         shader::Shader,
         storage::{RuntimeStorage, Storage},
         texture_view::TextureView,
@@ -333,10 +333,16 @@ impl RenderPipeline {
             None => &[],
         };
 
-        let vertex_shader = ctx.runtime_shaders.get(vertex_shader_id)?;
+        let vertex_shader = ctx
+            .runtime_shaders
+            .get(vertex_shader_id)
+            .and_then(|runtime| runtime.ok_or(AppError::UninitResource))?;
         let vertex_shader = vertex_shader.inner();
 
-        let fragment_shader = ctx.runtime_shaders.get(fragment_shader_id)?;
+        let fragment_shader = ctx
+            .runtime_shaders
+            .get(fragment_shader_id)
+            .and_then(|runtime| runtime.ok_or(AppError::UninitResource))?;
         let fragment_shader = fragment_shader.inner();
 
         let scope = WgpuErrorScope::push(ctx.device);
@@ -392,7 +398,7 @@ impl RenderPipeline {
             .iter()
             .copied()
             .filter_map(|(slot, bind_group_id)| {
-                let bind_group = ctx.runtime_bind_groups.get(bind_group_id).ok()?;
+                let bind_group = ctx.runtime_bind_groups.get(bind_group_id).ok().flatten()?;
                 Some((slot, bind_group.inner_layout()))
             })
             .chain(draw.material_bind_group_slot_and_layout(ctx))
@@ -442,7 +448,10 @@ impl RenderPipelineRuntime {
         render_pass.set_pipeline(&self.inner);
 
         for &(slot, id) in &pipeline.static_bind_groups {
-            let bind_group = ctx.runtime_bind_groups.get(id)?;
+            let bind_group = ctx
+                .runtime_bind_groups
+                .get(id)
+                .and_then(|runtime| runtime.ok_or(AppError::UninitResource))?;
             render_pass.set_bind_group(slot, bind_group.inner(), &[]);
         }
 
@@ -464,7 +473,10 @@ impl RenderPipelineRuntime {
                         if let Some(material_index) = mesh.material_index() {
                             if let Some(material) = model.get_material(material_index) {
                                 if let Some(bind_group_id) = material.bind_group_id() {
-                                    let bind_group = ctx.runtime_bind_groups.get(bind_group_id)?;
+                                    let bind_group = ctx
+                                        .runtime_bind_groups
+                                        .get(bind_group_id)
+                                        .and_then(|runtime| runtime.ok_or(AppError::UninitResource))?;
                                     render_pass.set_bind_group(*mat_slot, bind_group.inner(), &[]);
                                 }
                             }
@@ -495,7 +507,9 @@ impl<T> RenderPassTarget<T> {
         runtime_texture_views: &'a RuntimeStorage<TextureView>,
     ) -> AppResult<&'a wgpu::TextureView> {
         let target_view_id = self.texture_view_id.ok_or(AppError::UninitResource)?;
-        let target_view = runtime_texture_views.get(target_view_id)?;
+        let target_view = runtime_texture_views
+            .get(target_view_id)
+            .and_then(|runtime| runtime.ok_or(AppError::UninitResource))?;
         Ok(target_view.inner())
     }
 }
@@ -526,8 +540,8 @@ impl Recreatable for RenderPass {
     fn sync<'a>(
         &mut self,
         ctx: &mut Self::Context<'a>,
-        runtime: &mut Option<Self::Runtime>,
-    ) -> AppResult<SyncResult> {
+        _previous: Option<Self::Runtime>,
+    ) -> AppResult<SyncOutcome<Self::Runtime>> {
         let color_format = self.get_color_format(ctx)?;
         let depth_format = self.get_depth_format(ctx)?;
 
@@ -552,13 +566,11 @@ impl Recreatable for RenderPass {
 
         let runtime_pipelines = runtime_pipelines?;
 
-        *runtime = Some(RenderPassRuntime { runtime_pipelines });
-
         for pipeline in &mut self.pipelines {
             pipeline.dirty = false;
         }
 
-        Ok(SyncResult::Recreated)
+        Ok(SyncOutcome::Recreated(RenderPassRuntime { runtime_pipelines }))
     }
 
     fn revision(&self) -> super::recreate::Revision {

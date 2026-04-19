@@ -2,7 +2,7 @@ use crate::{
     error::AppResult,
     project::{
         ProjectResource, ShaderId,
-        recreate::{Recreatable, RecreateTracker, Revision, SyncResult},
+        recreate::{Recreatable, RecreateTracker, Revision, SyncOutcome},
     },
     utils,
 };
@@ -60,12 +60,11 @@ impl Recreatable for Shader {
     fn sync<'a>(
         &mut self,
         ctx: &mut Self::Context<'a>,
-        runtime: &mut Option<Self::Runtime>,
-    ) -> AppResult<SyncResult> {
+        _previous: Option<Self::Runtime>,
+    ) -> AppResult<SyncOutcome<Self::Runtime>> {
         let inner = utils::shader::compile_wgsl_shader(ctx, &self.label, &self.source)?;
-        *runtime = Some(ShaderRuntime { inner });
 
-        Ok(SyncResult::Recreated)
+        Ok(SyncOutcome::Recreated(ShaderRuntime { inner }))
     }
 
     fn revision(&self) -> Revision {

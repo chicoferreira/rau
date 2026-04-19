@@ -67,24 +67,17 @@ impl<R: Recreatable> Default for RuntimeStorage<R> {
 }
 
 impl<R: Recreatable> RuntimeStorage<R> {
-    pub fn get_cell(&self, key: R::Id) -> AppResult<&RuntimeCell<R::Runtime>> {
+    pub fn get(&self, key: R::Id) -> AppResult<Option<&R::Runtime>> {
+        match self.map.get(key) {
+            Some(RuntimeCell::Created { runtime, .. }) => Ok(Some(runtime)),
+            Some(RuntimeCell::Errored { .. } | RuntimeCell::Empty) => Ok(None),
+            None => Err(AppError::InvalidResource(key.into())),
+        }
+    }
+
+    pub(super) fn cell_mut(&mut self, key: R::Id) -> Option<&mut RuntimeCell<R::Runtime>> {
         self.map
-            .get(key)
-            .ok_or_else(|| AppError::InvalidResource(key.into()))
-    }
-
-    pub fn get_cell_mut(&mut self, key: R::Id) -> AppResult<&mut RuntimeCell<R::Runtime>> {
-        Ok(self
-            .map
             .entry(key)
-            .ok_or_else(|| AppError::InvalidResource(key.into()))?
-            .or_insert(RuntimeCell::Empty))
-    }
-
-    pub fn get(&self, key: R::Id) -> AppResult<&R::Runtime> {
-        self.get_cell(key).and_then(|cell| match cell {
-            RuntimeCell::Created { runtime, .. } => Ok(runtime),
-            RuntimeCell::Errored | RuntimeCell::Empty => Err(AppError::InvalidResource(key.into())), // TODO: this is wrong, if it is empty we should return another thing
-        })
+            .map(|entry| entry.or_insert(RuntimeCell::Empty))
     }
 }

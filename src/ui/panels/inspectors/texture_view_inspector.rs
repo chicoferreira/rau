@@ -82,7 +82,8 @@ impl StateSnapshot<'_> {
         CollapsingHeader::new("Preview")
             .default_open(true)
             .show(ui, |ui| {
-                let Ok(texture_view) = self.runtime_project.texture_views.get(texture_view_id)
+                let Ok(Some(texture_view)) =
+                    self.runtime_project.texture_views.get(texture_view_id)
                 else {
                     return;
                 };

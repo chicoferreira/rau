@@ -9,7 +9,7 @@ use crate::{
     project::{
         CameraId, ProjectResource, UniformId,
         camera::Camera,
-        recreate::{Recreatable, RecreateTracker, Revision, SyncResult},
+        recreate::{Recreatable, RecreateTracker, Revision, SyncOutcome},
         storage::Storage,
         uniform::camera::CameraField,
     },
@@ -39,7 +39,6 @@ pub struct UniformField {
     label: String,
     id: UniformFieldId, // Used for stability in reordering
     source: UniformFieldSource,
-    dirty: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -113,7 +112,6 @@ impl Uniform {
     pub fn set_field_source(&mut self, index: usize, source: UniformFieldSource) {
         if let Some(field) = self.fields.get_mut(index) {
             field.source = source;
-            field.dirty = true;
             self.revision.increase();
         }
     }
@@ -162,17 +160,17 @@ impl Recreatable for Uniform {
     fn sync<'a>(
         &mut self,
         ctx: &mut Self::Context<'a>,
-        runtime: &mut Option<Self::Runtime>,
-    ) -> AppResult<SyncResult> {
-        match runtime {
-            Some(runtime) => {
+        previous: Option<Self::Runtime>,
+    ) -> AppResult<SyncOutcome<Self::Runtime>> {
+        match previous {
+            Some(mut runtime) => {
                 let mut content_changed = false;
                 for field in &mut self.fields {
                     content_changed |= field.refresh(ctx)?;
                 }
 
                 if !content_changed {
-                    return Ok(SyncResult::Nothing);
+                    return Ok(SyncOutcome::Kept(runtime));
                 }
 
                 let content = cast_fields(&self.fields);
@@ -182,16 +180,15 @@ impl Recreatable for Uniform {
                     .buffer
                     .write(ctx.device, ctx.queue, &self.label, &content, usage)?
                 {
-                    ChangeResult::Uploaded => Ok(SyncResult::Nothing),
-                    ChangeResult::Recreated => Ok(SyncResult::Recreated),
+                    ChangeResult::Uploaded => Ok(SyncOutcome::Kept(runtime)),
+                    ChangeResult::Recreated => Ok(SyncOutcome::Recreated(runtime)),
                 }
             }
             None => {
                 let content = cast_fields(&self.fields);
                 let usage = wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST;
                 let buffer = ResizableBuffer::new(ctx.device, &self.label, usage, &content)?;
-                *runtime = Some(UniformRuntime { buffer });
-                Ok(SyncResult::Recreated)
+                Ok(SyncOutcome::Recreated(UniformRuntime { buffer }))
             }
         }
     }
@@ -237,7 +234,6 @@ impl UniformField {
             id: fastrand::usize(..),
             label: label.into(),
             source,
-            dirty: false,
         }
     }
 
@@ -274,15 +270,14 @@ impl UniformField {
                     return Ok(false);
                 };
 
-                if !self.dirty {
+                let camera = context.cameras.get(camera_id)?;
+                let new_value = field.compute(camera);
+
+                if new_value == *current_value {
                     return Ok(false);
                 }
 
-                let camera = context.cameras.get(camera_id)?;
-
-                self.dirty = false;
-
-                *current_value = field.compute(camera);
+                *current_value = new_value;
                 Ok(true)
             }
         }

@@ -7,7 +7,7 @@ use crate::{
     project::{
         CameraId, DimensionId, ProjectResource,
         dimension::Dimension,
-        recreate::{Recreatable, RecreateTracker, Revision, SyncResult},
+        recreate::{Recreatable, RecreateTracker, Revision, SyncOutcome},
         storage::Storage,
     },
     utils::key::{Key, KeyboardState},
@@ -292,7 +292,7 @@ impl Camera {
     fn calculate_aspect(&self, dimensions: &Storage<Dimension>) -> f32 {
         if let Some(dimension_id) = self.dimension_id {
             if let Ok(dimension) = dimensions.get(dimension_id) {
-                return dimension.size.width() as f32 / dimension.size.height() as f32;
+                return dimension.size().width() as f32 / dimension.size().height() as f32;
             }
         }
 
@@ -370,10 +370,8 @@ impl Recreatable for Camera {
     fn sync<'a>(
         &mut self,
         ctx: &mut Self::Context<'a>,
-        runtime: &mut Option<Self::Runtime>,
-    ) -> AppResult<SyncResult> {
-        let had_runtime = runtime.is_some();
-
+        previous: Option<Self::Runtime>,
+    ) -> AppResult<SyncOutcome<Self::Runtime>> {
         self.update(ctx.dt);
         self.aspect = self.calculate_aspect(ctx.dimensions);
 
@@ -392,24 +390,24 @@ impl Recreatable for Camera {
             self.matrix = new_matrix;
         }
 
-        if !had_runtime {
-            *runtime = Some(CameraRuntime);
-            return Ok(SyncResult::Recreated);
-        }
+        let Some(runtime) = previous else {
+            return Ok(SyncOutcome::Recreated(CameraRuntime));
+        };
 
         if matrix_changed {
-            return Ok(SyncResult::Recreated);
+            return Ok(SyncOutcome::Recreated(runtime));
         }
 
-        Ok(SyncResult::Nothing)
+        Ok(SyncOutcome::Kept(runtime))
     }
 
     fn revision(&self) -> Revision {
         self.revision
     }
 
-    fn needs_rebuild_from_others(&self, _: &RecreateTracker) -> bool {
-        self.dimension_id.is_some()
+    fn needs_rebuild_from_others(&self, tracker: &RecreateTracker) -> bool {
+        self.dimension_id
+            .map_or(false, |id| tracker.was_recreated(id))
             || self.current_speed.magnitude2() > 0.0
             || self.input != CameraFrameInput::default()
     }
