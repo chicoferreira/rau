@@ -1,10 +1,10 @@
 use egui_dnd::utils::shift_vec;
 
 use crate::{
-    error::{AppResult, WgpuErrorScope},
+    error::{AppError, AppResult, WgpuErrorScope},
     project::{
         BindGroupId, ProjectResource, SamplerId, TextureViewId, UniformId,
-        recreate::{Recreatable, RecreateTracker, Revision, SyncResult},
+        recreate::{Recreatable, RecreateTracker, Revision, SyncOutcome},
         sampler::Sampler,
         storage::RuntimeStorage,
         texture_view::TextureView,
@@ -184,7 +184,10 @@ impl BindGroupEntry {
                     return Ok(None);
                 };
 
-                let texture_view_runtime = ctx.runtime_texture_views.get(texture_view_id)?;
+                let texture_view_runtime = ctx
+                    .runtime_texture_views
+                    .get(texture_view_id)
+                    .and_then(|runtime| runtime.ok_or(AppError::UninitResource))?;
                 let inner = texture_view_runtime.inner();
 
                 wgpu::BindingResource::TextureView(inner)
@@ -193,14 +196,20 @@ impl BindGroupEntry {
                 let Some(sampler_id) = sampler_id else {
                     return Ok(None);
                 };
-                let sampler = ctx.runtime_samplers.get(sampler_id)?;
+                let sampler = ctx
+                    .runtime_samplers
+                    .get(sampler_id)
+                    .and_then(|runtime| runtime.ok_or(AppError::UninitResource))?;
                 wgpu::BindingResource::Sampler(sampler.inner())
             }
             BindGroupResource::Uniform(uniform_id) => {
                 let Some(uniform_id) = uniform_id else {
                     return Ok(None);
                 };
-                let uniform = ctx.runtime_uniforms.get(uniform_id)?;
+                let uniform = ctx
+                    .runtime_uniforms
+                    .get(uniform_id)
+                    .and_then(|runtime| runtime.ok_or(AppError::UninitResource))?;
                 uniform.buffer().inner().as_entire_binding()
             }
         };
@@ -265,14 +274,13 @@ impl Recreatable for BindGroup {
     fn sync<'a>(
         &mut self,
         ctx: &mut Self::Context<'a>,
-        runtime: &mut Option<Self::Runtime>,
-    ) -> AppResult<SyncResult> {
+        _previous: Option<Self::Runtime>,
+    ) -> AppResult<SyncOutcome<Self::Runtime>> {
         let (layout, inner) = Self::create_layout_and_bind_group(ctx, &self.label, &self.entries)?;
 
         let new_runtime = Self::Runtime { layout, inner };
 
-        *runtime = Some(new_runtime);
-        Ok(SyncResult::Recreated)
+        Ok(SyncOutcome::Recreated(new_runtime))
     }
 
     fn revision(&self) -> Revision {

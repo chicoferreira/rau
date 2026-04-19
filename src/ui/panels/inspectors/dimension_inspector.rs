@@ -12,8 +12,8 @@ impl StateSnapshot<'_> {
             return;
         };
 
-        let mut width = dimension.size.width();
-        let mut height = dimension.size.height();
+        let mut width = dimension.size().width();
+        let mut height = dimension.size().height();
 
         Grid::new("dimension_inspector_grid")
             .num_columns(2)
@@ -34,6 +34,6 @@ impl StateSnapshot<'_> {
                 ui.end_row();
             });
 
-        dimension.size = Size2d::new(width, height);
+        dimension.set_size(Size2d::new(width, height));
     }
 }

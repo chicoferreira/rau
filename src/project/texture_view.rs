@@ -2,7 +2,7 @@ use crate::{
     error::{AppError, AppResult, WgpuErrorScope},
     project::{
         ProjectResource, TextureId, TextureViewId,
-        recreate::{Recreatable, RecreateTracker, Revision, SyncResult},
+        recreate::{Recreatable, RecreateTracker, Revision, SyncOutcome},
         storage::{RuntimeStorage, Storage},
         texture::{Texture, TextureRuntime},
     },
@@ -147,14 +147,17 @@ impl Recreatable for TextureView {
     fn sync<'a>(
         &mut self,
         ctx: &mut Self::Context<'a>,
-        runtime: &mut Option<Self::Runtime>,
-    ) -> AppResult<SyncResult> {
-        let previous_egui_id = runtime.as_mut().and_then(|r| r.egui_id);
+        previous: Option<Self::Runtime>,
+    ) -> AppResult<SyncOutcome<Self::Runtime>> {
+        let previous_egui_id = previous.as_ref().and_then(|runtime| runtime.egui_id);
 
         let texture_id = self.texture_id.ok_or(AppError::UninitResource)?;
 
         let texture = ctx.textures.get(texture_id)?;
-        let runtime_texture = ctx.textures_runtime.get(texture_id)?;
+        let runtime_texture = ctx
+            .textures_runtime
+            .get(texture_id)
+            .and_then(|runtime| runtime.ok_or(AppError::UninitResource))?;
 
         let inner = Self::create_view(
             &self.label,
@@ -189,8 +192,7 @@ impl Recreatable for TextureView {
             (None, false) => None,
         };
 
-        *runtime = Some(TextureViewRuntime { inner, egui_id });
-        Ok(SyncResult::Recreated)
+        Ok(SyncOutcome::Recreated(TextureViewRuntime { inner, egui_id }))
     }
 
     fn revision(&self) -> Revision {

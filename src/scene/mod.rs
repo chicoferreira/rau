@@ -41,10 +41,7 @@ impl Scene {
         main_shader_id: project::ShaderId,
         sky_shader_id: project::ShaderId,
     ) -> AppResult<Scene> {
-        let dimension = Dimension {
-            label: "Main Dimension".to_string(),
-            size,
-        };
+        let dimension = Dimension::new("Main Dimension", size);
         let dimension_id = project.dimensions.register(dimension);
 
         let mut camera = Camera::new("Main Camera".to_string());
@@ -428,8 +425,12 @@ impl Scene {
 
         let main_render_pass_runtime = runtime_project
             .render_passes
-            .get(self.main_render_pass_id)?;
-        let hdr_render_pass_runtime = runtime_project.render_passes.get(self.hdr_render_pass_id)?;
+            .get(self.main_render_pass_id)
+            .and_then(|runtime| runtime.ok_or(AppError::UninitResource))?;
+        let hdr_render_pass_runtime = runtime_project
+            .render_passes
+            .get(self.hdr_render_pass_id)
+            .and_then(|runtime| runtime.ok_or(AppError::UninitResource))?;
 
         let render_pass_ctx = renderpass::Context {
             device,

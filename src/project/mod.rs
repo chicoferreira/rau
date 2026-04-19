@@ -66,6 +66,7 @@ pub struct RuntimeProject {
     pub textures: RuntimeStorage<Texture>,
     pub texture_views: RuntimeStorage<TextureView>,
     pub samplers: RuntimeStorage<Sampler>,
+    pub dimensions: RuntimeStorage<Dimension>,
     pub cameras: RuntimeStorage<Camera>,
     pub models: RuntimeStorage<Model>,
     pub render_passes: RuntimeStorage<RenderPass>,

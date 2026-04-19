@@ -23,10 +23,12 @@ impl HdrLoader {
         recreate_tracker: &mut RecreateTracker,
         equi_shader_id: ShaderId,
     ) -> AppResult<Self> {
-        let shader = project.shaders.get_mut(equi_shader_id)?;
-        let shader_runtime = runtime_project.shaders.get_cell_mut(equi_shader_id)?;
-        let _ = recreate_tracker.sync(equi_shader_id, shader, shader_runtime, &mut device);
-        let shader_runtime = runtime_project.shaders.get(equi_shader_id)?;
+        let shader_runtime = recreate_tracker.ensure(
+            equi_shader_id,
+            &mut project.shaders,
+            &mut runtime_project.shaders,
+            &mut device,
+        )?;
 
         let module = shader_runtime.inner();
         let texture_format = wgpu::TextureFormat::Rgba32Float;
@@ -166,18 +168,18 @@ impl HdrLoader {
         // we can create without adding to the project because this D2Array will be only used by the shader
         let dst_texture_id = project.textures.register(dst_texture);
 
-        let dst_texture = project.textures.get_mut(dst_texture_id)?;
-        let dst_texture_runtime = runtime_project.textures.get_cell_mut(dst_texture_id)?;
-
         let mut ctx = TextureCreationContext {
             dimensions: &project.dimensions,
             device,
             queue,
         };
 
-        let _ = recreate_tracker.sync(dst_texture_id, dst_texture, dst_texture_runtime, &mut ctx);
-
-        let dst_texture_runtime = runtime_project.textures.get(dst_texture_id)?;
+        let dst_texture_runtime = recreate_tracker.ensure(
+            dst_texture_id,
+            &mut project.textures,
+            &mut runtime_project.textures,
+            &mut ctx,
+        )?;
 
         let dst_texture_view =
             dst_texture_runtime

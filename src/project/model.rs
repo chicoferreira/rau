@@ -8,7 +8,7 @@ use crate::{
         BindGroupId, ModelId, ProjectResource,
         bindgroup::BindGroup,
         model::vertex_buffer::{VertexBufferField, VertexBufferSpec},
-        recreate::{Recreatable, RecreateTracker, Revision, SyncResult},
+        recreate::{Recreatable, RecreateTracker, Revision, SyncOutcome},
         storage::RuntimeStorage,
     },
     utils::{
@@ -169,7 +169,7 @@ impl Model {
         let material_index = mesh.material_index()?;
         let material = self.get_material(material_index)?;
         let bind_group_id = material.bind_group_id()?;
-        let bind_group = runtime_bind_groups.get(bind_group_id).ok()?;
+        let bind_group = runtime_bind_groups.get(bind_group_id).ok().flatten()?;
         Some(bind_group.inner_layout())
     }
 }
@@ -189,18 +189,22 @@ impl Recreatable for Model {
     fn sync<'a>(
         &mut self,
         ctx: &mut Self::Context<'a>,
-        _: &mut Option<Self::Runtime>,
-    ) -> AppResult<SyncResult> {
+        previous: Option<Self::Runtime>,
+    ) -> AppResult<SyncOutcome<Self::Runtime>> {
         let spec = &self.vertex_buffer_spec;
-        let mut result = SyncResult::Nothing;
+        let mut recreated = previous.is_none();
         for mesh in &mut self.meshes {
             match mesh.write_vertex_buffer_from_spec(spec, ctx.device, ctx.queue)? {
                 ChangeResult::Uploaded => {}
-                ChangeResult::Recreated => result = SyncResult::Recreated,
+                ChangeResult::Recreated => recreated = true,
             }
         }
 
-        Ok(result)
+        if recreated {
+            Ok(SyncOutcome::Recreated(()))
+        } else {
+            Ok(SyncOutcome::Kept(previous.unwrap_or(())))
+        }
     }
 
     fn revision(&self) -> Revision {

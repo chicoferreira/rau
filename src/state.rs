@@ -372,6 +372,12 @@ impl State {
     fn tick_objects(&mut self, dt: std::time::Duration) {
         let mut tracker = RecreateTracker::new();
 
+        self.errors.extend(tracker.sync_storage(
+            &mut self.project.dimensions,
+            &mut self.runtime_project.dimensions,
+            &mut (),
+        ));
+
         let view = &mut TextureCreationContext {
             dimensions: &self.project.dimensions,
             device: &self.device,
@@ -592,7 +598,7 @@ impl State {
                                         if let Ok(dimension) =
                                             self.project.dimensions.get_mut(dimension_id)
                                         {
-                                            dimension.size = size;
+                                            dimension.set_size(size);
                                         }
                                     }
                                 }
@@ -605,7 +611,7 @@ impl State {
                                         if let Ok(dimension) =
                                             self.project.dimensions.get_mut(dimension_id)
                                         {
-                                            dimension.size = ui_size;
+                                            dimension.set_size(ui_size);
                                         }
                                     }
                                 }
@@ -648,10 +654,7 @@ impl State {
                 StateEvent::CreateDimension => {
                     const DEFAULT_NAME: &str = "Dimension";
 
-                    let dimension = Dimension {
-                        label: DEFAULT_NAME.to_string(),
-                        size: Size2d::new(1920, 1080),
-                    };
+                    let dimension = Dimension::new(DEFAULT_NAME, Size2d::new(1920, 1080));
                     let dimension_id = self.project.dimensions.register(dimension);
 
                     self.rename_state = Some(RenameState {
