@@ -1,5 +1,5 @@
 use crate::{
-    error::{AppResult, WgpuErrorScope},
+    error::AppResult,
     project::{
         ProjectResource, SamplerId,
         recreate::{Recreatable, RecreateTracker, Revision, SyncOutcome},
@@ -65,12 +65,7 @@ impl Sampler {
         self.revision.increase();
     }
 
-    fn create_sampler(
-        device: &wgpu::Device,
-        label: &str,
-        spec: &SamplerSpec,
-    ) -> AppResult<wgpu::Sampler> {
-        let scope = WgpuErrorScope::push(device);
+    fn create_sampler(device: &wgpu::Device, label: &str, spec: &SamplerSpec) -> wgpu::Sampler {
         let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
             label: Some(label),
             address_mode_u: spec.address_mode,
@@ -84,8 +79,7 @@ impl Sampler {
             compare: spec.compare,
             ..Default::default()
         });
-        scope.pop()?;
-        Ok(sampler)
+        sampler
     }
 }
 
@@ -112,7 +106,7 @@ impl Recreatable for Sampler {
         ctx: &mut Self::Context<'a>,
         _previous: Option<Self::Runtime>,
     ) -> AppResult<SyncOutcome<Self::Runtime>> {
-        let inner = Self::create_sampler(ctx, &self.label, &self.spec)?;
+        let inner = Self::create_sampler(ctx, &self.label, &self.spec);
 
         Ok(SyncOutcome::Recreated(SamplerRuntime { inner }))
     }

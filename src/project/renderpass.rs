@@ -1,7 +1,7 @@
 use egui_dnd::utils::shift_vec;
 
 use crate::{
-    error::{AppError, AppResult, WgpuErrorScope},
+    error::{AppError, AppResult},
     project::{
         BindGroupId, ModelId, ProjectResource, RenderPassId, ShaderId, TextureViewId,
         bindgroup::BindGroup,
@@ -219,8 +219,6 @@ impl RenderPass {
             })
             .transpose()?;
 
-        let scope = WgpuErrorScope::push(ctx.device);
-
         let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some(&self.label),
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
@@ -241,7 +239,6 @@ impl RenderPass {
         for (pipeline, pipeline_runtime) in self.pipelines.iter().zip(&runtime.runtime_pipelines) {
             pipeline_runtime.draw(&mut render_pass, pipeline, ctx)?;
         }
-        scope.pop()?;
 
         Ok(())
     }
@@ -315,13 +312,11 @@ impl RenderPipeline {
         let bind_group_layouts = Self::resolved_bind_group_layout(ctx, &static_bind_groups, draw);
         let device = ctx.device;
 
-        let scope = WgpuErrorScope::push(ctx.device);
         let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some(label),
             bind_group_layouts: &bind_group_layouts,
             immediate_size: 0,
         });
-        scope.pop()?;
 
         let resolved_attributes_and_stride = Self::resolved_attributes_and_stride(ctx, draw)?;
         let vertex_buffers: &[wgpu::VertexBufferLayout] = match &resolved_attributes_and_stride {
@@ -345,7 +340,6 @@ impl RenderPipeline {
             .and_then(|runtime| runtime.ok_or(AppError::UninitResource))?;
         let fragment_shader = fragment_shader.inner();
 
-        let scope = WgpuErrorScope::push(ctx.device);
         let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: Some(label),
             layout: Some(&layout),
@@ -384,7 +378,6 @@ impl RenderPipeline {
             multiview_mask: None,
             cache: None,
         });
-        scope.pop()?;
 
         Ok(render_pipeline)
     }

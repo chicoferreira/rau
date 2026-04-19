@@ -194,7 +194,7 @@ impl Recreatable for Model {
         let spec = &self.vertex_buffer_spec;
         let mut recreated = previous.is_none();
         for mesh in &mut self.meshes {
-            match mesh.write_vertex_buffer_from_spec(spec, ctx.device, ctx.queue)? {
+            match mesh.write_vertex_buffer_from_spec(spec, ctx.device, ctx.queue) {
                 ChangeResult::Uploaded => {}
                 ChangeResult::Recreated => recreated = true,
             }
@@ -203,7 +203,7 @@ impl Recreatable for Model {
         if recreated {
             Ok(SyncOutcome::Recreated(()))
         } else {
-            Ok(SyncOutcome::Kept(previous.unwrap_or(())))
+            Ok(SyncOutcome::Kept(()))
         }
     }
 
@@ -268,14 +268,14 @@ impl Mesh {
             "TODO: add vertex buffer name",
             wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
             bytemuck::cast_slice(&vertex_buffer_contents),
-        )?;
+        );
 
         let index_buffer = ResizableBuffer::new(
             device,
             "TODO: add index buffer name",
             wgpu::BufferUsages::INDEX,
             bytemuck::cast_slice(&indices),
-        )?;
+        );
 
         Ok(Self {
             positions: positions.to_vec(),
@@ -459,7 +459,7 @@ impl Mesh {
         vertex_buffer_spec: &VertexBufferSpec,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
-    ) -> AppResult<ChangeResult> {
+    ) -> ChangeResult {
         let vertex_buffer_contents = Self::calculate_compute_vertex_contents(
             &self.positions,
             &self.normals,
