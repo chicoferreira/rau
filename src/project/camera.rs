@@ -7,8 +7,8 @@ use crate::{
     project::{
         CameraId, DimensionId, ProjectResource,
         dimension::Dimension,
-        sync::{SyncResource, SyncTracker, Revision, SyncOutcome},
         storage::Storage,
+        sync::{Revision, SyncOutcome, SyncResource, SyncTracker},
     },
     utils::key::{Key, KeyboardState},
 };

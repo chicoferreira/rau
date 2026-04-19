@@ -5,19 +5,19 @@ use slotmap::SecondaryMap;
 use winit::{event::WindowEvent, window::Window};
 
 use crate::{
-    error::{AppError, AppResult, WgpuErrorScope},
     project::{
         self, BindGroupId, CameraId, DimensionId, ModelId, Project, ProjectResourceId,
-        RenderPassId, RuntimeProject, SamplerId, ShaderId, TextureId, TextureViewId, UniformId,
-        ViewportId,
+        RenderPassId, RenderScheduleId, RuntimeProject, SamplerId, ShaderId, TextureId,
+        TextureViewId, UniformId, ViewportId,
         bindgroup::{BindGroup, BindGroupCreationContext, BindGroupEntry, BindGroupResource},
         camera::{Camera, CameraCreationContext},
         dimension::Dimension,
         model::{MeshMaterialSelection, ModelCreationContext, vertex_buffer::VertexBufferField},
-        sync::SyncTracker,
+        render_schedule::RenderScheduleContext,
         renderpass,
         sampler::{Sampler, SamplerSpec},
         shader::{Shader, ShaderCreationContext},
+        sync::SyncTracker,
         texture::TextureCreationContext,
         texture_view::{TextureView, TextureViewCreationContext},
         uniform::{Uniform, UniformCreationContext, UniformField, UniformFieldSource},
@@ -305,12 +305,7 @@ impl State {
         });
 
         self.handle_events();
-        self.tick_objects(dt);
-
-        if let Err(error) = self.render_project(&self.device, &mut encoder) {
-            log::error!("Failed to render frame: {error:?}");
-            // TODO: this error should be tied to a specific resource
-        }
+        self.tick_objects(dt, &mut encoder);
 
         self.egui_renderer.render_egui_frame(
             &frame,
@@ -353,7 +348,7 @@ impl State {
         }
     }
 
-    fn tick_objects(&mut self, dt: std::time::Duration) {
+    fn tick_objects(&mut self, dt: std::time::Duration, encoder: &mut wgpu::CommandEncoder) {
         let mut tracker = SyncTracker::new();
 
         tracker.sync_storage(
@@ -465,35 +460,24 @@ impl State {
             view,
             &self.device,
         );
-    }
 
-    pub fn render_project(
-        &self,
-        device: &wgpu::Device,
-        encoder: &mut wgpu::CommandEncoder,
-    ) -> AppResult<()> {
-        for render_pass_id in self.project.render_schedule.iter() {
-            let render_pass = self.project.render_passes.get(render_pass_id)?;
-            let render_pass_runtime = self
-                .runtime_project
-                .render_passes
-                .get(render_pass_id)?
-                .ok_or(AppError::UninitResource)?;
-
-            let ctx = renderpass::Context {
-                device,
-                models: &self.project.models,
-                runtime_shaders: &self.runtime_project.shaders,
-                runtime_texture_views: &self.runtime_project.texture_views,
-                runtime_bind_groups: &self.runtime_project.bind_groups,
-            };
-
-            let scope = WgpuErrorScope::push(device);
-            render_pass.submit(encoder, &ctx, render_pass_runtime)?;
-            scope.pop()?;
-        }
-
-        Ok(())
+        let mut render_schedule_ctx = RenderScheduleContext {
+            device: &self.device,
+            encoder,
+            render_passes: &self.project.render_passes,
+            runtime_render_passes: &self.runtime_project.render_passes,
+            models: &self.project.models,
+            runtime_shaders: &self.runtime_project.shaders,
+            runtime_texture_views: &self.runtime_project.texture_views,
+            runtime_bind_groups: &self.runtime_project.bind_groups,
+        };
+        let _ = tracker.sync_singleton(
+            RenderScheduleId,
+            &mut self.project.render_schedule,
+            &mut self.runtime_project.render_schedule,
+            &mut render_schedule_ctx,
+            &self.device,
+        );
     }
 
     fn handle_events(&mut self) {
@@ -513,6 +497,7 @@ impl State {
                         ProjectResourceId::Texture(id) => InspectorPane::Texture(id),
                         ProjectResourceId::Model(id) => InspectorPane::Model(id),
                         ProjectResourceId::RenderPass(id) => InspectorPane::RenderPass(id),
+                        ProjectResourceId::RenderSchedule(_) => todo!(),
                     };
 
                     self.inspector_tree_pane.add_pane(pane);

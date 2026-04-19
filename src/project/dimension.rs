@@ -2,7 +2,7 @@ use crate::{
     error::AppResult,
     project::{
         DimensionId, ProjectResource,
-        sync::{SyncResource, Revision, SyncOutcome, SyncTracker},
+        sync::{Revision, SyncOutcome, SyncResource, SyncTracker},
     },
     ui::Size2d,
 };

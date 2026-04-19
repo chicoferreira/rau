@@ -5,8 +5,8 @@ use crate::{
     project::{
         DimensionId, ProjectResource, TextureId,
         dimension::Dimension,
-        sync::{SyncResource, Revision, SyncOutcome},
         storage::Storage,
+        sync::{Revision, SyncOutcome, SyncResource},
     },
 };
 

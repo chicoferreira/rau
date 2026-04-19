@@ -9,8 +9,8 @@ use crate::{
     project::{
         CameraId, ProjectResource, UniformId,
         camera::Camera,
-        sync::{SyncResource, SyncTracker, Revision, SyncOutcome},
         storage::Storage,
+        sync::{Revision, SyncOutcome, SyncResource, SyncTracker},
         uniform::camera::CameraField,
     },
     utils::resizable_buffer::{ChangeResult, ResizableBuffer},

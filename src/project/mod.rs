@@ -23,12 +23,12 @@ pub mod bindgroup;
 pub mod camera;
 pub mod dimension;
 pub mod model;
-pub mod sync;
 pub mod render_schedule;
 pub mod renderpass;
 pub mod sampler;
 pub mod shader;
 pub mod storage;
+pub mod sync;
 pub mod texture;
 pub mod texture_view;
 pub mod uniform;
@@ -47,6 +47,9 @@ new_key_type! {
     pub struct ModelId;
     pub struct RenderPassId;
 }
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+pub struct RenderScheduleId;
 
 #[derive(Default)]
 pub struct Project {
@@ -76,6 +79,7 @@ pub struct RuntimeProject {
     pub cameras: RuntimeStorage<Camera>,
     pub models: RuntimeStorage<Model>,
     pub render_passes: RuntimeStorage<RenderPass>,
+    pub render_schedule: sync::RuntimeCell<()>,
 }
 
 impl Project {
@@ -92,6 +96,7 @@ impl Project {
             ProjectResourceId::Dimension(id) => self.dimensions.get_label(id),
             ProjectResourceId::Camera(id) => self.cameras.get_label(id),
             ProjectResourceId::Model(id) => self.models.get_label(id),
+            ProjectResourceId::RenderSchedule(_) => Ok("Render Schedule"),
         };
 
         label_err.ok()
@@ -111,6 +116,7 @@ impl RuntimeProject {
             .chain(self.cameras.get_errors())
             .chain(self.models.get_errors())
             .chain(self.render_passes.get_errors())
+            .chain(self.render_schedule.get_error(RenderScheduleId))
     }
 }
 
@@ -127,10 +133,11 @@ pub enum ProjectResourceId {
     Camera(CameraId),
     Model(ModelId),
     RenderPass(RenderPassId),
+    RenderSchedule(RenderScheduleId),
 }
 
 pub trait ProjectResource {
-    type Id: slotmap::Key + Into<ProjectResourceId>;
+    type Id: Into<ProjectResourceId> + Copy + Eq + std::hash::Hash + std::fmt::Debug;
 
     fn label(&self) -> &str;
 }

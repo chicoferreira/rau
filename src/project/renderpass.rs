@@ -6,9 +6,9 @@ use crate::{
         BindGroupId, ModelId, ProjectResource, RenderPassId, ShaderId, TextureViewId,
         bindgroup::BindGroup,
         model::Model,
-        sync::{SyncResource, Revision, SyncOutcome, SyncTracker},
         shader::Shader,
         storage::{RuntimeStorage, Storage},
+        sync::{Revision, SyncOutcome, SyncResource, SyncTracker},
         texture_view::TextureView,
     },
 };

@@ -2,8 +2,8 @@ use crate::{
     error::{AppError, AppResult},
     project::{
         ProjectResource, TextureId, TextureViewId,
-        sync::{SyncResource, SyncTracker, Revision, SyncOutcome},
         storage::{RuntimeStorage, Storage},
+        sync::{Revision, SyncOutcome, SyncResource, SyncTracker},
         texture::{Texture, TextureRuntime},
     },
     ui::renderer::EguiRenderer,
@@ -188,10 +188,7 @@ impl SyncResource for TextureView {
             (None, false) => None,
         };
 
-        Ok(SyncOutcome::Changed(TextureViewRuntime {
-            inner,
-            egui_id,
-        }))
+        Ok(SyncOutcome::Changed(TextureViewRuntime { inner, egui_id }))
     }
 
     fn revision(&self) -> Revision {
