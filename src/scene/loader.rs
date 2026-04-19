@@ -23,7 +23,7 @@ impl HdrLoader {
         recreate_tracker: &mut RecreateTracker,
         equi_shader_id: ShaderId,
     ) -> AppResult<Self> {
-        let shader_runtime = recreate_tracker.ensure(
+        let shader_runtime = recreate_tracker.sync(
             equi_shader_id,
             &mut project.shaders,
             &mut runtime_project.shaders,
@@ -174,7 +174,7 @@ impl HdrLoader {
             queue,
         };
 
-        let dst_texture_runtime = recreate_tracker.ensure(
+        let dst_texture_runtime = recreate_tracker.sync(
             dst_texture_id,
             &mut project.textures,
             &mut runtime_project.textures,

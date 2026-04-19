@@ -205,7 +205,7 @@ impl Scene {
             Some(hdr_texture_view_id),
             Some(dimension_id),
             Some(camera_id),
-        )?;
+        );
         let _ = project.viewports.register(hdr_viewport);
 
         let viewport_texture_format = wgpu::TextureFormat::Rgba8UnormSrgb;
@@ -312,7 +312,7 @@ impl Scene {
             Some(viewport_texture_view_id),
             Some(dimension_id),
             Some(camera_id),
-        )?;
+        );
         let viewport_id = project.viewports.register(viewport);
 
         let primitive_state = wgpu::PrimitiveState {
