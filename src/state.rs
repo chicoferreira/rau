@@ -5,7 +5,7 @@ use slotmap::SecondaryMap;
 use winit::{event::WindowEvent, window::Window};
 
 use crate::{
-    error::{AppResult, SourcedError},
+    error::SourcedError,
     project::{
         self, BindGroupId, CameraId, DimensionId, ModelId, Project, ProjectResourceId,
         RenderPassId, RuntimeProject, SamplerId, ShaderId, TextureId, TextureViewId, UniformId,
@@ -313,10 +313,7 @@ impl State {
 
         self.errors.clear();
 
-        if let Err(error) = self.handle_events() {
-            self.errors.push(SourcedError::new_unknown(error));
-        }
-
+        self.handle_events();
         self.tick_objects(dt);
 
         if let Err(error) = self.scene.render(
@@ -470,7 +467,7 @@ impl State {
         ));
     }
 
-    fn handle_events(&mut self) -> AppResult<()> {
+    fn handle_events(&mut self) {
         for event in self.pending_events.drain(..) {
             log::debug!("Handling event {event:?}");
             match event {
@@ -676,7 +673,7 @@ impl State {
                 StateEvent::CreateViewport => {
                     const DEFAULT_NAME: &str = "Viewport";
 
-                    let viewport = Viewport::new(DEFAULT_NAME, None, None, None)?;
+                    let viewport = Viewport::new(DEFAULT_NAME, None, None, None);
                     let viewport_id = self.project.viewports.register(viewport);
 
                     self.rename_state = Some(RenameState {
@@ -817,6 +814,5 @@ fn fs_main() -> @location(0) vec4<f32> {
                 }
             }
         }
-        Ok(())
     }
 }

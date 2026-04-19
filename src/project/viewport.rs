@@ -1,5 +1,4 @@
 use crate::{
-    error::AppResult,
     project::{CameraId, DimensionId, ProjectResource, TextureViewId, ViewportId},
     ui::Size2d,
 };
@@ -19,16 +18,16 @@ impl Viewport {
         texture_view_id: Option<TextureViewId>,
         dimension_id: Option<DimensionId>,
         controls_camera_id: Option<CameraId>,
-    ) -> AppResult<Viewport> {
+    ) -> Viewport {
         let name = label.into();
 
-        Ok(Viewport {
+        Viewport {
             label: name,
             texture_view_id,
             dimension_id,
             controls_camera_id,
             requested_ui_size: None,
-        })
+        }
     }
 }
 
