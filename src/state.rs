@@ -5,6 +5,7 @@ use slotmap::SecondaryMap;
 use winit::{event::WindowEvent, window::Window};
 
 use crate::{
+    error::WgpuErrorScope,
     project::{
         self, BindGroupId, CameraId, DimensionId, ModelId, Project, ProjectResourceId,
         RenderPassId, RenderScheduleId, RuntimeProject, SamplerId, ShaderId, TextureId,
@@ -13,11 +14,11 @@ use crate::{
         camera::{Camera, CameraCreationContext},
         dimension::Dimension,
         model::{MeshMaterialSelection, ModelCreationContext, vertex_buffer::VertexBufferField},
-        render_schedule::RenderScheduleContext,
         render_pass,
+        render_schedule::RenderScheduleContext,
         sampler::{Sampler, SamplerSpec},
         shader::{Shader, ShaderCreationContext},
-        sync::SyncTracker,
+        sync::{RuntimeCell, SyncResource, SyncTracker},
         texture::TextureCreationContext,
         texture_view::{TextureView, TextureViewCreationContext},
         uniform::{Uniform, UniformCreationContext, UniformField, UniformFieldSource},
@@ -316,7 +317,15 @@ impl State {
             &screen_descriptor,
         );
 
+        let submit_scope = WgpuErrorScope::push(&self.device);
         self.queue.submit(std::iter::once(encoder.finish()));
+        if let Err(error) = submit_scope.pop() {
+            self.runtime_project.render_schedule = RuntimeCell::Errored {
+                at_revision: self.project.render_schedule.revision(),
+                error,
+            };
+        }
+
         output.present();
 
         Ok(())
