@@ -5,7 +5,7 @@ use slotmap::SecondaryMap;
 use winit::{event::WindowEvent, window::Window};
 
 use crate::{
-    error::SourcedError,
+    error::{AppError, AppResult, WgpuErrorScope},
     project::{
         self, BindGroupId, CameraId, DimensionId, ModelId, Project, ProjectResourceId,
         RenderPassId, RuntimeProject, SamplerId, ShaderId, TextureId, TextureViewId, UniformId,
@@ -95,13 +95,11 @@ pub struct State {
     window: Arc<Window>,
     last_render_time: instant::Instant,
     egui_renderer: ui::renderer::EguiRenderer,
-    scene: scene::Scene,
     rename_state: Option<ui::rename::RenameState>,
     pending_events: Vec<StateEvent>,
     inspector_tree_pane: TreePane<InspectorPane>,
     viewport_tree_pane: TreePane<ViewportPane>,
     dimension_owners: SecondaryMap<DimensionId, ViewportId>,
-    errors: Vec<SourcedError>,
     project: Project,
     runtime_project: RuntimeProject,
 }
@@ -201,7 +199,7 @@ impl State {
         let mut runtime_project = RuntimeProject::default();
         let mut recreate_tracker = RecreateTracker::new();
 
-        let scene = scene::Scene::new(
+        let viewport_id = scene::create_scene(
             &device,
             &queue,
             size,
@@ -219,9 +217,7 @@ impl State {
         let inspector_tree_pane = TreePane::new("inspector");
         let mut viewport_tree_pane = TreePane::new("viewport");
 
-        viewport_tree_pane.add_pane(ViewportPane {
-            viewport_id: scene.output_viewport_id,
-        });
+        viewport_tree_pane.add_pane(ViewportPane { viewport_id });
 
         Ok(Self {
             surface,
@@ -233,13 +229,11 @@ impl State {
             last_render_time: instant::Instant::now(),
             egui_renderer,
             dimension_owners: Default::default(),
-            scene,
             rename_state: None,
             pending_events: vec![],
             inspector_tree_pane,
             viewport_tree_pane,
             project,
-            errors: vec![],
             runtime_project,
         })
     }
@@ -301,7 +295,6 @@ impl State {
                 project: &mut self.project,
                 runtime_project: &mut self.runtime_project,
                 rename_state: &mut self.rename_state,
-                errors: &self.errors,
             };
 
             snapshot.ui(
@@ -311,18 +304,12 @@ impl State {
             );
         });
 
-        self.errors.clear();
-
         self.handle_events();
         self.tick_objects(dt);
 
-        if let Err(error) = self.scene.render(
-            &self.device,
-            &mut encoder,
-            &self.project,
-            &self.runtime_project,
-        ) {
-            self.errors.push(SourcedError::new_unknown(error));
+        if let Err(error) = self.render_project(&self.device, &mut encoder) {
+            log::error!("Failed to render frame: {error:?}");
+            // TODO: this error should be tied to a specific resource
         }
 
         self.egui_renderer.render_egui_frame(
@@ -369,22 +356,22 @@ impl State {
     fn tick_objects(&mut self, dt: std::time::Duration) {
         let mut tracker = RecreateTracker::new();
 
-        self.errors.extend(tracker.sync_storage(
+        tracker.sync_storage(
             &mut self.project.dimensions,
             &mut self.runtime_project.dimensions,
             &mut (),
-        ));
+        );
 
         let view = &mut TextureCreationContext {
             dimensions: &self.project.dimensions,
             device: &self.device,
             queue: &self.queue,
         };
-        self.errors.extend(tracker.sync_storage(
+        tracker.sync_storage(
             &mut self.project.textures,
             &mut self.runtime_project.textures,
             view,
-        ));
+        );
 
         let view = &mut TextureViewCreationContext {
             textures: &self.project.textures,
@@ -392,38 +379,38 @@ impl State {
             device: &self.device,
             textures_runtime: &mut self.runtime_project.textures,
         };
-        self.errors.extend(tracker.sync_storage(
+        tracker.sync_storage(
             &mut self.project.texture_views,
             &mut self.runtime_project.texture_views,
             view,
-        ));
+        );
 
         let view = &mut CameraCreationContext {
             dimensions: &self.project.dimensions,
             dt,
         };
-        self.errors.extend(tracker.sync_storage(
+        tracker.sync_storage(
             &mut self.project.cameras,
             &mut self.runtime_project.cameras,
             view,
-        ));
+        );
 
-        self.errors.extend(tracker.sync_storage(
+        tracker.sync_storage(
             &mut self.project.samplers,
             &mut self.runtime_project.samplers,
             &mut &self.device,
-        ));
+        );
 
         let view = &mut UniformCreationContext {
             cameras: &self.project.cameras,
             device: &self.device,
             queue: &self.queue,
         };
-        self.errors.extend(tracker.sync_storage(
+        tracker.sync_storage(
             &mut self.project.uniforms,
             &mut self.runtime_project.uniforms,
             view,
-        ));
+        );
 
         let view = &mut BindGroupCreationContext {
             device: &self.device,
@@ -431,27 +418,27 @@ impl State {
             runtime_texture_views: &mut self.runtime_project.texture_views,
             runtime_samplers: &mut self.runtime_project.samplers,
         };
-        self.errors.extend(tracker.sync_storage(
+        tracker.sync_storage(
             &mut self.project.bind_groups,
             &mut self.runtime_project.bind_groups,
             view,
-        ));
+        );
 
         let view = &mut ModelCreationContext {
             device: &self.device,
             queue: &self.queue,
         };
-        self.errors.extend(tracker.sync_storage(
+        tracker.sync_storage(
             &mut self.project.models,
             &mut self.runtime_project.models,
             view,
-        ));
+        );
 
-        self.errors.extend(tracker.sync_storage(
+        tracker.sync_storage(
             &mut self.project.shaders,
             &mut self.runtime_project.shaders,
             &mut &self.device,
-        ));
+        );
 
         let view = &mut renderpass::Context {
             device: &self.device,
@@ -460,11 +447,40 @@ impl State {
             runtime_texture_views: &mut self.runtime_project.texture_views,
             runtime_bind_groups: &mut self.runtime_project.bind_groups,
         };
-        self.errors.extend(tracker.sync_storage(
+        tracker.sync_storage(
             &mut self.project.render_passes,
             &mut self.runtime_project.render_passes,
             view,
-        ));
+        );
+    }
+
+    pub fn render_project(
+        &self,
+        device: &wgpu::Device,
+        encoder: &mut wgpu::CommandEncoder,
+    ) -> AppResult<()> {
+        for render_pass_id in self.project.render_schedule.iter() {
+            let render_pass = self.project.render_passes.get(render_pass_id)?;
+            let render_pass_runtime = self
+                .runtime_project
+                .render_passes
+                .get(render_pass_id)?
+                .ok_or(AppError::UninitResource)?;
+
+            let ctx = renderpass::Context {
+                device,
+                models: &self.project.models,
+                runtime_shaders: &self.runtime_project.shaders,
+                runtime_texture_views: &self.runtime_project.texture_views,
+                runtime_bind_groups: &self.runtime_project.bind_groups,
+            };
+
+            let scope = WgpuErrorScope::push(device);
+            render_pass.submit(encoder, &ctx, render_pass_runtime)?;
+            scope.pop()?;
+        }
+
+        Ok(())
     }
 
     fn handle_events(&mut self) {

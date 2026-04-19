@@ -473,10 +473,10 @@ impl RenderPipelineRuntime {
                         if let Some(material_index) = mesh.material_index() {
                             if let Some(material) = model.get_material(material_index) {
                                 if let Some(bind_group_id) = material.bind_group_id() {
-                                    let bind_group = ctx
-                                        .runtime_bind_groups
-                                        .get(bind_group_id)
-                                        .and_then(|runtime| runtime.ok_or(AppError::UninitResource))?;
+                                    let bind_group =
+                                        ctx.runtime_bind_groups.get(bind_group_id).and_then(
+                                            |runtime| runtime.ok_or(AppError::UninitResource),
+                                        )?;
                                     render_pass.set_bind_group(*mat_slot, bind_group.inner(), &[]);
                                 }
                             }
@@ -570,7 +570,9 @@ impl Recreatable for RenderPass {
             pipeline.dirty = false;
         }
 
-        Ok(SyncOutcome::Recreated(RenderPassRuntime { runtime_pipelines }))
+        Ok(SyncOutcome::Recreated(RenderPassRuntime {
+            runtime_pipelines,
+        }))
     }
 
     fn revision(&self) -> super::recreate::Revision {

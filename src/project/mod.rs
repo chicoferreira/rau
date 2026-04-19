@@ -1,18 +1,22 @@
 use slotmap::new_key_type;
 
-use crate::project::{
-    bindgroup::BindGroup,
-    camera::Camera,
-    dimension::Dimension,
-    model::Model,
-    renderpass::RenderPass,
-    sampler::Sampler,
-    shader::Shader,
-    storage::{RuntimeStorage, Storage},
-    texture::Texture,
-    texture_view::TextureView,
-    uniform::Uniform,
-    viewport::Viewport,
+use crate::{
+    error::AppError,
+    project::{
+        bindgroup::BindGroup,
+        camera::Camera,
+        dimension::Dimension,
+        model::Model,
+        render_schedule::RenderSchedule,
+        renderpass::RenderPass,
+        sampler::Sampler,
+        shader::Shader,
+        storage::{RuntimeStorage, Storage},
+        texture::Texture,
+        texture_view::TextureView,
+        uniform::Uniform,
+        viewport::Viewport,
+    },
 };
 
 pub mod bindgroup;
@@ -20,6 +24,7 @@ pub mod camera;
 pub mod dimension;
 pub mod model;
 pub mod recreate;
+pub mod render_schedule;
 pub mod renderpass;
 pub mod sampler;
 pub mod shader;
@@ -56,6 +61,7 @@ pub struct Project {
     pub cameras: Storage<Camera>,
     pub models: Storage<Model>,
     pub render_passes: Storage<RenderPass>,
+    pub render_schedule: RenderSchedule,
 }
 
 #[derive(Default)]
@@ -89,6 +95,22 @@ impl Project {
         };
 
         label_err.ok()
+    }
+}
+
+impl RuntimeProject {
+    pub fn iter_errors(&self) -> impl Iterator<Item = (ProjectResourceId, &AppError)> {
+        self.shaders
+            .get_errors()
+            .chain(self.uniforms.get_errors())
+            .chain(self.bind_groups.get_errors())
+            .chain(self.textures.get_errors())
+            .chain(self.texture_views.get_errors())
+            .chain(self.samplers.get_errors())
+            .chain(self.dimensions.get_errors())
+            .chain(self.cameras.get_errors())
+            .chain(self.models.get_errors())
+            .chain(self.render_passes.get_errors())
     }
 }
 

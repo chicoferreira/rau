@@ -3,7 +3,7 @@ use slotmap::{SecondaryMap, SlotMap};
 use crate::{
     error::{AppError, AppResult},
     project::{
-        ProjectResource,
+        ProjectResource, ProjectResourceId,
         recreate::{Recreatable, RuntimeCell},
     },
 };
@@ -67,6 +67,9 @@ impl<R: Recreatable> Default for RuntimeStorage<R> {
 }
 
 impl<R: Recreatable> RuntimeStorage<R> {
+    /// Returns a reference to the [`RuntimeCell`] for the given key.
+    /// Returns `AppError::InvalidResource` if the key is not found.
+    /// Returns `None` if the runtime value is errored or empty.
     pub fn get(&self, key: R::Id) -> AppResult<Option<&R::Runtime>> {
         match self.map.get(key) {
             Some(RuntimeCell::Created { runtime, .. }) => Ok(Some(runtime)),
@@ -75,9 +78,22 @@ impl<R: Recreatable> RuntimeStorage<R> {
         }
     }
 
-    pub(super) fn cell_mut(&mut self, key: R::Id) -> Option<&mut RuntimeCell<R::Runtime>> {
+    /// Returns a mutable reference to the [`RuntimeCell`] for the given key.
+    /// Returns `AppError::InvalidResource` if the key is not found.
+    pub(super) fn cell_mut(&mut self, key: R::Id) -> AppResult<&mut RuntimeCell<R::Runtime>> {
         self.map
             .entry(key)
             .map(|entry| entry.or_insert(RuntimeCell::Empty))
+            .ok_or_else(|| AppError::InvalidResource(key.into()))
+    }
+
+    pub fn get_errors(&self) -> impl Iterator<Item = (ProjectResourceId, &AppError)> {
+        self.map.iter().filter_map(|(key, cell)| {
+            if let RuntimeCell::Errored { error, .. } = cell {
+                Some((key.into(), error))
+            } else {
+                None
+            }
+        })
     }
 }
