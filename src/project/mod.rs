@@ -8,7 +8,7 @@ use crate::{
         dimension::Dimension,
         model::Model,
         render_schedule::RenderSchedule,
-        renderpass::RenderPass,
+        render_pass::RenderPass,
         sampler::Sampler,
         shader::Shader,
         storage::{RuntimeStorage, Storage},
@@ -24,7 +24,7 @@ pub mod camera;
 pub mod dimension;
 pub mod model;
 pub mod render_schedule;
-pub mod renderpass;
+pub mod render_pass;
 pub mod sampler;
 pub mod shader;
 pub mod storage;

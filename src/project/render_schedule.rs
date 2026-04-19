@@ -3,7 +3,7 @@ use crate::{
     project::{
         Model, ProjectResource, RenderPassId, RenderScheduleId, Shader, TextureView,
         bindgroup::BindGroup,
-        renderpass::{self, RenderPass},
+        render_pass::{self, RenderPass},
         storage::{RuntimeStorage, Storage},
         sync::{Revision, RuntimeCell, SyncOutcome, SyncResource, SyncTracker},
     },
@@ -68,7 +68,7 @@ impl SyncResource for RenderSchedule {
         ctx: &mut Self::Context<'a>,
         _previous: Option<Self::Runtime>,
     ) -> AppResult<SyncOutcome<Self::Runtime>> {
-        let render_ctx = renderpass::Context {
+        let render_ctx = render_pass::Context {
             device: ctx.device,
             models: ctx.models,
             runtime_shaders: ctx.runtime_shaders,

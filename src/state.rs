@@ -14,7 +14,7 @@ use crate::{
         dimension::Dimension,
         model::{MeshMaterialSelection, ModelCreationContext, vertex_buffer::VertexBufferField},
         render_schedule::RenderScheduleContext,
-        renderpass,
+        render_pass,
         sampler::{Sampler, SamplerSpec},
         shader::{Shader, ShaderCreationContext},
         sync::SyncTracker,
@@ -447,7 +447,7 @@ impl State {
             &self.device,
         );
 
-        let view = &mut renderpass::Context {
+        let view = &mut render_pass::Context {
             device: &self.device,
             models: &self.project.models,
             runtime_shaders: &mut self.runtime_project.shaders,
