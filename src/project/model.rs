@@ -8,8 +8,8 @@ use crate::{
         BindGroupId, ModelId, ProjectResource,
         bindgroup::BindGroup,
         model::vertex_buffer::{VertexBufferField, VertexBufferSpec},
-        sync::{SyncResource, SyncTracker, Revision, SyncOutcome},
         storage::RuntimeStorage,
+        sync::{Revision, SyncOutcome, SyncResource, SyncTracker},
     },
     utils::{
         resizable_buffer::{ChangeResult, ResizableBuffer},

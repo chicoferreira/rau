@@ -27,6 +27,19 @@ pub trait SyncResource: ProjectResource {
 
     fn needs_rebuild_from_others(&self, tracker: &SyncTracker) -> bool;
 
+    fn should_sync(&self, tracker: &SyncTracker, runtime: &RuntimeCell<Self::Runtime>) -> bool {
+        let current_revision = self.revision();
+        let should_rebuild_from_others = self.needs_rebuild_from_others(tracker);
+
+        let should_rebuild = match runtime {
+            RuntimeCell::Created { revision, .. } => *revision != current_revision,
+            RuntimeCell::Errored { at_revision, .. } => *at_revision != current_revision,
+            RuntimeCell::Empty => true,
+        };
+
+        should_rebuild || should_rebuild_from_others
+    }
+
     fn sync<'a>(
         &mut self,
         ctx: &mut Self::Context<'a>,
@@ -53,6 +66,19 @@ pub enum RuntimeCell<R> {
     Empty,
 }
 
+impl<R> RuntimeCell<R> {
+    pub fn get_error(
+        &self,
+        id: impl Into<ProjectResourceId>,
+    ) -> Option<(ProjectResourceId, &AppError)> {
+        if let RuntimeCell::Errored { error, .. } = self {
+            Some((id.into(), error))
+        } else {
+            None
+        }
+    }
+}
+
 impl SyncTracker {
     pub fn new() -> Self {
         Self {
@@ -73,20 +99,42 @@ impl SyncTracker {
         runtime_storage: &'a mut RuntimeStorage<R>,
         ctx: &mut R::Context<'_>,
         device: &wgpu::Device,
-    ) -> AppResult<Option<&'a R::Runtime>> {
+    ) -> AppResult<Option<&'a R::Runtime>>
+    where
+        R::Id: slotmap::Key,
+    {
         let resource = storage.get_mut(id)?;
-        let current_revision = resource.revision();
-        let should_rebuild_from_others = resource.needs_rebuild_from_others(self);
-
         let cell = runtime_storage.cell_mut(id)?;
+        self.sync_singleton(id, resource, cell, ctx, device)
+    }
 
-        let should_rebuild = match &*cell {
-            RuntimeCell::Created { revision, .. } => *revision != current_revision,
-            RuntimeCell::Errored { at_revision, .. } => *at_revision != current_revision,
-            RuntimeCell::Empty => true,
-        };
+    pub fn sync_storage<'ctx, R: SyncResource>(
+        &mut self,
+        storage: &mut Storage<R>,
+        runtime_storage: &mut RuntimeStorage<R>,
+        ctx: &mut R::Context<'ctx>,
+        device: &wgpu::Device,
+    ) where
+        R::Id: slotmap::Key,
+    {
+        let ids = storage.list().map(|(id, _)| id).collect::<Vec<_>>();
 
-        if should_rebuild || should_rebuild_from_others {
+        for id in ids {
+            let _ = self.sync(id, storage, runtime_storage, ctx, device);
+        }
+    }
+
+    pub fn sync_singleton<'a, R: SyncResource>(
+        &mut self,
+        id: R::Id,
+        resource: &mut R,
+        cell: &'a mut RuntimeCell<R::Runtime>,
+        ctx: &mut R::Context<'_>,
+        device: &wgpu::Device,
+    ) -> AppResult<Option<&'a R::Runtime>> {
+        let current_revision = resource.revision();
+
+        if resource.should_sync(self, cell) {
             let previous = match std::mem::replace(cell, RuntimeCell::Empty) {
                 RuntimeCell::Created { runtime, .. } => Some(runtime),
                 RuntimeCell::Errored { .. } | RuntimeCell::Empty => None,
@@ -124,20 +172,6 @@ impl SyncTracker {
         match cell {
             RuntimeCell::Created { runtime, .. } => Ok(Some(runtime)),
             RuntimeCell::Errored { .. } | RuntimeCell::Empty => Ok(None),
-        }
-    }
-
-    pub fn sync_storage<'ctx, R: SyncResource>(
-        &mut self,
-        storage: &mut Storage<R>,
-        runtime_storage: &mut RuntimeStorage<R>,
-        ctx: &mut R::Context<'ctx>,
-        device: &wgpu::Device,
-    ) {
-        let ids = storage.list().map(|(id, _)| id).collect::<Vec<_>>();
-
-        for id in ids {
-            let _ = self.sync(id, storage, runtime_storage, ctx, device);
         }
     }
 

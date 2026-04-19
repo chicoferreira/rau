@@ -2,7 +2,7 @@ use crate::{
     error::AppResult,
     project::{
         ProjectResource, SamplerId,
-        sync::{SyncResource, SyncTracker, Revision, SyncOutcome},
+        sync::{Revision, SyncOutcome, SyncResource, SyncTracker},
     },
 };
 

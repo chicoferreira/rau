@@ -96,7 +96,10 @@ fn storage_combo_opt_with_none<V: ProjectResource>(
     id_salt: impl std::hash::Hash,
     storage: &Storage<V>,
     value: &mut Option<V::Id>,
-) -> bool {
+) -> bool
+where
+    V::Id: slotmap::Key,
+{
     let before = *value;
     egui::ComboBox::from_id_salt(id_salt)
         .selected_text_storage_opt(storage, *value)

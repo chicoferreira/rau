@@ -11,7 +11,9 @@ pub trait ComboBoxExt {
         self,
         storage: &Storage<R>,
         id: Option<R::Id>,
-    ) -> Self;
+    ) -> Self
+    where
+        R::Id: slotmap::Key;
 
     fn show_ui_list<I: AsWidgetText + PartialEq + Clone>(
         self,
@@ -25,14 +27,18 @@ pub trait ComboBoxExt {
         ui: &mut egui::Ui,
         storage: &Storage<R>,
         current_value: &mut Option<R::Id>,
-    ) -> egui::InnerResponse<Option<()>>;
+    ) -> egui::InnerResponse<Option<()>>
+    where
+        R::Id: slotmap::Key;
 
     fn show_ui_storage_opt<R: ProjectResource>(
         self,
         ui: &mut egui::Ui,
         storage: &Storage<R>,
         current_value: &mut Option<R::Id>,
-    ) -> egui::InnerResponse<Option<()>>;
+    ) -> egui::InnerResponse<Option<()>>
+    where
+        R::Id: slotmap::Key;
 
     fn show_ui_iter<V: PartialEq>(
         self,
@@ -48,7 +54,10 @@ impl ComboBoxExt for egui::ComboBox {
         self,
         storage: &Storage<R>,
         id: Option<R::Id>,
-    ) -> Self {
+    ) -> Self
+    where
+        R::Id: slotmap::Key,
+    {
         match id.map(|id| storage.get_label(id).ok()) {
             Some(Some(label)) => self.selected_text(label),
             Some(None) => self.selected_text(format!("Unknown {id:?}")),
@@ -74,11 +83,14 @@ impl ComboBoxExt for egui::ComboBox {
         ui: &mut egui::Ui,
         storage: &Storage<R>,
         current_value: &mut Option<R::Id>,
-    ) -> egui::InnerResponse<Option<()>> {
+    ) -> egui::InnerResponse<Option<()>>
+    where
+        R::Id: slotmap::Key,
+    {
         self.show_ui(ui, |ui| {
             ui.selectable_value(current_value, None, "None");
             for (id, item) in storage.list() {
-                ui.selectable_value(current_value, Some(id.clone()), item.label());
+                ui.selectable_value(current_value, Some(id), item.label());
             }
         })
     }
@@ -88,10 +100,13 @@ impl ComboBoxExt for egui::ComboBox {
         ui: &mut egui::Ui,
         storage: &Storage<R>,
         current_value: &mut Option<R::Id>,
-    ) -> egui::InnerResponse<Option<()>> {
+    ) -> egui::InnerResponse<Option<()>>
+    where
+        R::Id: slotmap::Key,
+    {
         self.show_ui(ui, |ui| {
             for (id, item) in storage.list() {
-                ui.selectable_value(current_value, Some(id.clone()), item.label());
+                ui.selectable_value(current_value, Some(id), item.label());
             }
         })
     }

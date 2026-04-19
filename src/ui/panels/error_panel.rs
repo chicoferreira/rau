@@ -96,16 +96,20 @@ fn error_list_content(
 
                     let label_text = egui::RichText::new(format!("@{}", source_label))
                         .strong()
-                        .underline()
                         .color(ui.visuals().warn_fg_color);
 
-                    let response = ui.add(egui::Button::new(label_text).frame(false));
-                    if response
-                        .on_hover_text("Click to inspect source")
-                        .on_hover_cursor(egui::CursorIcon::PointingHand)
-                        .clicked()
-                    {
-                        pending_events.push(StateEvent::InspectResource(id));
+                    if matches!(id, ProjectResourceId::RenderSchedule(_)) {
+                        ui.label(label_text);
+                    } else {
+                        let response =
+                            ui.add(egui::Button::new(label_text.underline()).frame(false));
+                        if response
+                            .on_hover_text("Click to inspect source")
+                            .on_hover_cursor(egui::CursorIcon::PointingHand)
+                            .clicked()
+                        {
+                            pending_events.push(StateEvent::InspectResource(id));
+                        }
                     }
 
                     ui.label(

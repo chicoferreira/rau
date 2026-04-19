@@ -4,15 +4,23 @@ use crate::{
     error::{AppError, AppResult},
     project::{
         ProjectResource, ProjectResourceId,
-        sync::{SyncResource, RuntimeCell},
+        sync::{RuntimeCell, SyncResource},
     },
 };
 
-pub struct Storage<R: ProjectResource> {
+pub struct Storage<R>
+where
+    R: ProjectResource,
+    R::Id: slotmap::Key,
+{
     map: SlotMap<R::Id, R>,
 }
 
-impl<R: ProjectResource> Default for Storage<R> {
+impl<R> Default for Storage<R>
+where
+    R: ProjectResource,
+    R::Id: slotmap::Key,
+{
     fn default() -> Self {
         Self {
             map: SlotMap::default(),
@@ -20,7 +28,11 @@ impl<R: ProjectResource> Default for Storage<R> {
     }
 }
 
-impl<R: ProjectResource> Storage<R> {
+impl<R> Storage<R>
+where
+    R: ProjectResource,
+    R::Id: slotmap::Key,
+{
     pub fn list(&self) -> impl Iterator<Item = (R::Id, &R)> {
         self.map.iter()
     }
@@ -54,11 +66,19 @@ impl<R: ProjectResource> Storage<R> {
     }
 }
 
-pub struct RuntimeStorage<R: SyncResource> {
+pub struct RuntimeStorage<R>
+where
+    R: SyncResource,
+    R::Id: slotmap::Key,
+{
     map: SecondaryMap<R::Id, RuntimeCell<R::Runtime>>,
 }
 
-impl<R: SyncResource> Default for RuntimeStorage<R> {
+impl<R> Default for RuntimeStorage<R>
+where
+    R: SyncResource,
+    R::Id: slotmap::Key,
+{
     fn default() -> Self {
         Self {
             map: SecondaryMap::default(),
@@ -66,7 +86,11 @@ impl<R: SyncResource> Default for RuntimeStorage<R> {
     }
 }
 
-impl<R: SyncResource> RuntimeStorage<R> {
+impl<R> RuntimeStorage<R>
+where
+    R: SyncResource,
+    R::Id: slotmap::Key,
+{
     /// Returns a reference to the [`RuntimeCell`] for the given key.
     /// Returns `AppError::InvalidResource` if the key is not found.
     /// Returns `None` if the runtime value is errored or empty.

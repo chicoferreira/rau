@@ -4,8 +4,8 @@ use crate::{
     error::AppResult,
     project::{
         Project, RuntimeProject, ShaderId, TextureId,
-        sync::SyncTracker,
         shader::ShaderCreationContext,
+        sync::SyncTracker,
         texture::{Texture, TextureCreationContext, TextureSource},
     },
 };

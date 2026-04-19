@@ -2,7 +2,7 @@ use crate::{
     error::AppResult,
     project::{
         ProjectResource, ShaderId,
-        sync::{SyncResource, SyncTracker, Revision, SyncOutcome},
+        sync::{Revision, SyncOutcome, SyncResource, SyncTracker},
     },
     utils,
 };
