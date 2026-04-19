@@ -59,8 +59,11 @@ impl SyncResource for RenderSchedule {
         false
     }
 
-    fn should_sync(&self, _: &SyncTracker, _: &RuntimeCell<Self::Runtime>) -> bool {
-        true
+    fn should_sync(&self, tracker: &SyncTracker, runtime: &RuntimeCell<Self::Runtime>) -> bool {
+        match runtime {
+            RuntimeCell::Empty | RuntimeCell::Created { .. } => true,
+            RuntimeCell::Errored { .. } => tracker.has_changes(),
+        }
     }
 
     fn sync<'a>(

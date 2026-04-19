@@ -178,4 +178,8 @@ impl SyncTracker {
     pub fn was_changed(&self, object_id: impl Into<ProjectResourceId>) -> bool {
         self.changes.contains(&object_id.into())
     }
+
+    pub fn has_changes(&self) -> bool {
+        !self.changes.is_empty()
+    }
 }
