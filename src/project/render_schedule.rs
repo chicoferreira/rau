@@ -126,7 +126,9 @@ impl SyncResource for RenderSchedule {
     fn should_sync(&self, tracker: &SyncTracker, runtime: &RuntimeCell<Self::Runtime>) -> bool {
         match runtime {
             RuntimeCell::Empty | RuntimeCell::Created { .. } => true,
-            RuntimeCell::Errored { at_revision, .. } => *at_revision != self.revision || tracker.has_changes(),
+            RuntimeCell::Errored { at_revision, .. } => {
+                *at_revision != self.revision || tracker.has_changes()
+            }
         }
     }
 

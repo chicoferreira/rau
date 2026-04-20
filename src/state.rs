@@ -65,7 +65,7 @@ pub enum StateEvent {
     DeleteBindGroup(BindGroupId),
     CreateBindGroupEntry(BindGroupId, BindGroupResource),
     DeleteBindGroupEntry(BindGroupId, usize),
-    UpdateBindGroupEntry(BindGroupId, usize, BindGroupResource),
+    UpdateBindGroupEntry(BindGroupId, usize, BindGroupEntry),
     ReorderBindGroupEntry(BindGroupId, DragUpdate),
     CreateViewport,
     DeleteViewport(ViewportId),
@@ -177,7 +177,7 @@ impl State {
             desired_maximum_frame_latency: 2,
         };
 
-        let egui_renderer = ui::renderer::EguiRenderer::new(&device, config.format, &window);
+        let mut egui_renderer = ui::renderer::EguiRenderer::new(&device, config.format, &window);
 
         let size = ui::Size2d::new(config.width, config.height);
 
@@ -211,6 +211,7 @@ impl State {
             &mut project,
             &mut runtime_project,
             &mut recreate_tracker,
+            &mut egui_renderer,
             equirectengular_shader_id,
             hdr_shader_id,
             light_shader_id,
@@ -599,12 +600,12 @@ impl State {
                 }
                 StateEvent::CreateBindGroupEntry(id, resource) => {
                     if let Ok(bind_group) = self.project.bind_groups.get_mut(id) {
-                        bind_group.add_entry(BindGroupEntry::new(resource));
+                        bind_group.add_entry(BindGroupEntry::new_vertex_fragment(resource));
                     }
                 }
-                StateEvent::UpdateBindGroupEntry(id, index, resource) => {
+                StateEvent::UpdateBindGroupEntry(id, index, entry) => {
                     if let Ok(bind_group) = self.project.bind_groups.get_mut(id) {
-                        bind_group.update_entry(index, BindGroupEntry::new(resource));
+                        bind_group.update_entry(index, entry);
                     }
                 }
                 StateEvent::ReorderBindGroupEntry(bind_group_id, drag_update) => {

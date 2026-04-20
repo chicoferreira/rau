@@ -1,5 +1,5 @@
 use crate::{
-    error::{AppError, AppResult},
+    error::AppResult,
     project::{
         self, Project, RuntimeProject, ViewportId,
         bindgroup::{BindGroup, BindGroupEntry, BindGroupResource},
@@ -9,13 +9,13 @@ use crate::{
         render_pass::{LoadOperation, RenderDraw, RenderPass, RenderPassTarget},
         sampler::{Sampler, SamplerSpec},
         sync::SyncTracker,
-        texture::{Texture, TextureSource},
+        texture::{Texture, TextureCreationContext, TextureSource},
         texture_view::{TextureView, TextureViewFormat},
         uniform::{
             Uniform, UniformField, UniformFieldData, UniformFieldSource, camera::CameraField,
         },
     },
-    ui::{self},
+    ui::{self, renderer::EguiRenderer},
     utils::resources::{self, load_texture},
 };
 
@@ -28,6 +28,7 @@ pub async fn create_scene(
     project: &mut Project,
     runtime_project: &mut RuntimeProject,
     recreate_tracker: &mut SyncTracker,
+    egui_renderer: &mut EguiRenderer,
     equirectangular_shader_id: project::ShaderId,
     hdr_shader_id: project::ShaderId,
     light_shader_id: project::ShaderId,
@@ -80,9 +81,9 @@ pub async fn create_scene(
 
     let camera_bind_group = BindGroup::new(
         "camera bind group",
-        vec![BindGroupEntry::new(BindGroupResource::Uniform(Some(
-            camera_uniform_id,
-        )))],
+        vec![BindGroupEntry::new_vertex_fragment(
+            BindGroupResource::Uniform(Some(camera_uniform_id)),
+        )],
     );
     let camera_bind_group_id = project.bind_groups.register(camera_bind_group);
 
@@ -103,9 +104,9 @@ pub async fn create_scene(
 
     let light_bind_group = BindGroup::new(
         "light bind group",
-        vec![BindGroupEntry::new(BindGroupResource::Uniform(Some(
-            light_uniform_id,
-        )))],
+        vec![BindGroupEntry::new_vertex_fragment(
+            BindGroupResource::Uniform(Some(light_uniform_id)),
+        )],
     );
     let light_bind_group_id = project.bind_groups.register(light_bind_group);
 
@@ -150,17 +151,17 @@ pub async fn create_scene(
         let normal_texture_view_id = project.texture_views.register(normal_view);
 
         let entries = vec![
-            BindGroupEntry::new(BindGroupResource::Texture {
+            BindGroupEntry::new_vertex_fragment(BindGroupResource::Texture {
                 texture_view_id: Some(diffuse_texture_view_id),
                 view_dimension: wgpu::TextureViewDimension::D2,
                 sample_type: wgpu::TextureSampleType::Float { filterable: true },
             }),
-            BindGroupEntry::new(BindGroupResource::Texture {
+            BindGroupEntry::new_vertex_fragment(BindGroupResource::Texture {
                 texture_view_id: Some(normal_texture_view_id),
                 view_dimension: wgpu::TextureViewDimension::D2,
                 sample_type: wgpu::TextureSampleType::Float { filterable: true },
             }),
-            BindGroupEntry::new(BindGroupResource::Sampler {
+            BindGroupEntry::new_vertex_fragment(BindGroupResource::Sampler {
                 sampler_id: Some(image_texture_sampler_id),
                 sampler_binding_type: wgpu::SamplerBindingType::Filtering,
             }),
@@ -202,12 +203,12 @@ pub async fn create_scene(
     let hdr_bind_group = BindGroup::new(
         "HDR Bind Group",
         vec![
-            BindGroupEntry::new(BindGroupResource::Texture {
+            BindGroupEntry::new_vertex_fragment(BindGroupResource::Texture {
                 texture_view_id: Some(hdr_texture_view_id),
                 view_dimension: wgpu::TextureViewDimension::D2,
                 sample_type: wgpu::TextureSampleType::Float { filterable: true },
             }),
-            BindGroupEntry::new(BindGroupResource::Sampler {
+            BindGroupEntry::new_vertex_fragment(BindGroupResource::Sampler {
                 sampler_id: Some(image_texture_sampler_id),
                 sampler_binding_type: wgpu::SamplerBindingType::Filtering,
             }),
@@ -216,23 +217,35 @@ pub async fn create_scene(
 
     let hdr_bind_group_id = project.bind_groups.register(hdr_bind_group);
 
-    let hdr_loader = loader::HdrLoader::new(
-        &device,
-        project,
-        runtime_project,
-        recreate_tracker,
-        equirectangular_shader_id,
+    let sky_texture =
+        resources::load_texture("pure-sky.hdr", wgpu::TextureFormat::Rgba32Float).await?;
+    let sky_texture_id = project.textures.register(sky_texture);
+
+    let ctx = &mut TextureCreationContext {
+        dimensions: &project.dimensions,
+        device,
+        queue,
+    };
+    recreate_tracker.sync(
+        sky_texture_id,
+        &mut project.textures,
+        &mut runtime_project.textures,
+        ctx,
+        device,
     )?;
-    let sky_bytes = resources::load_binary("pure-sky.hdr")
-        .await
-        .map_err(AppError::FileLoadError)?;
-    let sky_texture_id = hdr_loader.from_equirectangular_bytes(
+
+    let sky_texture_view = TextureView::new("label", Some(sky_texture_id), None, None);
+    let sky_texture_view_id = project.texture_views.register(sky_texture_view);
+
+    let sky_texture_id = loader::from_equirectangular_bytes(
         project,
         runtime_project,
         recreate_tracker,
+        egui_renderer,
         &device,
         &queue,
-        &sky_bytes,
+        equirectangular_shader_id,
+        sky_texture_view_id,
         1080,
     )?;
 
@@ -247,19 +260,15 @@ pub async fn create_scene(
     let environment_bind_group = BindGroup::new(
         "Environment Bind Group",
         vec![
-            project::bindgroup::BindGroupEntry::new(
-                project::bindgroup::BindGroupResource::Texture {
-                    texture_view_id: Some(sky_texture_view_id),
-                    view_dimension: wgpu::TextureViewDimension::Cube,
-                    sample_type: wgpu::TextureSampleType::Float { filterable: false },
-                },
-            ),
-            project::bindgroup::BindGroupEntry::new(
-                project::bindgroup::BindGroupResource::Sampler {
-                    sampler_id: Some(sky_sampler_id),
-                    sampler_binding_type: wgpu::SamplerBindingType::NonFiltering,
-                },
-            ),
+            BindGroupEntry::new_vertex_fragment(BindGroupResource::Texture {
+                texture_view_id: Some(sky_texture_view_id),
+                view_dimension: wgpu::TextureViewDimension::Cube,
+                sample_type: wgpu::TextureSampleType::Float { filterable: false },
+            }),
+            BindGroupEntry::new_vertex_fragment(BindGroupResource::Sampler {
+                sampler_id: Some(sky_sampler_id),
+                sampler_binding_type: wgpu::SamplerBindingType::NonFiltering,
+            }),
         ],
     );
 

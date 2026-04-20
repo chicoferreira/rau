@@ -2876,6 +2876,7 @@ name = "rau"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "bitflags 2.11.0",
  "bytemuck",
  "cgmath",
  "console_error_panic_hook",

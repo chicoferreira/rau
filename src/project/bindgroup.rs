@@ -36,16 +36,8 @@ pub type BindGroupEntryId = usize;
 pub struct BindGroupEntry {
     // Used for stability in bind group entry reordering
     pub id: BindGroupEntryId,
+    pub visibility: wgpu::ShaderStages,
     pub resource: BindGroupResource,
-}
-
-impl BindGroupEntry {
-    pub fn new(resource: BindGroupResource) -> Self {
-        Self {
-            id: fastrand::usize(..),
-            resource,
-        }
-    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -56,6 +48,11 @@ pub enum BindGroupResource {
         // TODO: Decide if we keep this here, or move it to the TextureViewId, or separate the layout from the BindGroup
         view_dimension: wgpu::TextureViewDimension,
         sample_type: wgpu::TextureSampleType,
+    },
+    StorageTexture {
+        texture_view_id: Option<TextureViewId>,
+        access: wgpu::StorageTextureAccess,
+        view_dimension: wgpu::TextureViewDimension,
     },
     Sampler {
         sampler_id: Option<SamplerId>,
@@ -116,10 +113,13 @@ impl BindGroup {
         let mut group_entries = Vec::new();
 
         for (index, entry) in entries.iter().copied().enumerate() {
+            // TODO: this should error instead of ignoring
             let Some(group_entry) = entry.into_bind_group_entry(index as u32, ctx)? else {
                 continue;
             };
-            let layout_entry = entry.into_bind_group_layout_entry(index as u32);
+            let Some(layout_entry) = entry.into_bind_group_layout_entry(index as u32, ctx)? else {
+                continue;
+            };
             layout_entries.push(layout_entry);
             group_entries.push(group_entry);
         }
@@ -167,13 +167,32 @@ impl ProjectResource for BindGroup {
 }
 
 impl BindGroupEntry {
-    pub fn into_bind_group_entry<'a>(
+    pub fn new(resource: BindGroupResource, visibility: wgpu::ShaderStages) -> Self {
+        Self {
+            id: fastrand::usize(..),
+            visibility,
+            resource,
+        }
+    }
+
+    pub fn new_vertex_fragment(resource: BindGroupResource) -> Self {
+        Self::new(resource, wgpu::ShaderStages::VERTEX_FRAGMENT)
+    }
+
+    pub fn new_compute(resource: BindGroupResource) -> Self {
+        Self::new(resource, wgpu::ShaderStages::COMPUTE)
+    }
+
+    fn into_bind_group_entry<'a>(
         &self,
         binding: u32,
         ctx: &'a BindGroupCreationContext<'a>,
     ) -> AppResult<Option<wgpu::BindGroupEntry<'a>>> {
         let resource = match self.resource {
             BindGroupResource::Texture {
+                texture_view_id, ..
+            }
+            | BindGroupResource::StorageTexture {
                 texture_view_id, ..
             } => {
                 let Some(texture_view_id) = texture_view_id else {
@@ -213,13 +232,21 @@ impl BindGroupEntry {
         Ok(Some(wgpu::BindGroupEntry { binding, resource }))
     }
 
-    fn into_bind_group_layout_entry(&self, binding: u32) -> wgpu::BindGroupLayoutEntry {
-        wgpu::BindGroupLayoutEntry {
+    fn into_bind_group_layout_entry(
+        &self,
+        binding: u32,
+        ctx: &BindGroupCreationContext,
+    ) -> AppResult<Option<wgpu::BindGroupLayoutEntry>> {
+        let Some(ty) = self.resource.to_wgpu_binding_type(ctx)? else {
+            return Ok(None);
+        };
+
+        Ok(Some(wgpu::BindGroupLayoutEntry {
             binding,
-            visibility: wgpu::ShaderStages::VERTEX | wgpu::ShaderStages::FRAGMENT,
-            ty: self.resource.into(),
+            visibility: self.visibility,
+            ty,
             count: None,
-        }
+        }))
     }
 
     fn resource_recreated(&self, tracker: &SyncTracker) -> bool {
@@ -238,9 +265,12 @@ impl BindGroupEntry {
     }
 }
 
-impl From<BindGroupResource> for wgpu::BindingType {
-    fn from(value: BindGroupResource) -> Self {
-        match value {
+impl BindGroupResource {
+    fn to_wgpu_binding_type(
+        self,
+        ctx: &BindGroupCreationContext,
+    ) -> AppResult<Option<wgpu::BindingType>> {
+        Ok(Some(match self {
             BindGroupResource::Texture {
                 view_dimension,
                 sample_type,
@@ -259,7 +289,29 @@ impl From<BindGroupResource> for wgpu::BindingType {
                 has_dynamic_offset: false,
                 min_binding_size: None,
             },
-        }
+            BindGroupResource::StorageTexture {
+                texture_view_id,
+                access,
+                view_dimension,
+            } => {
+                let Some(texture_view_id) = texture_view_id else {
+                    return Ok(None);
+                };
+
+                let texture_view_runtime = ctx
+                    .runtime_texture_views
+                    .get(texture_view_id)
+                    .and_then(|runtime| runtime.ok_or(AppError::UninitResource))?;
+
+                let format = texture_view_runtime.inner().texture().format();
+
+                wgpu::BindingType::StorageTexture {
+                    access,
+                    view_dimension,
+                    format,
+                }
+            }
+        }))
     }
 }
 

@@ -17,6 +17,7 @@ path = "src/main.rs"
 
 [dependencies]
 anyhow = "1.0.100"
+bitflags = "2.11.0"
 bytemuck = { version = "1.24.0", features = ["derive"] }
 cgmath = "0.18.0"
 derive_more = { version = "2.1.1", features = ["from"] }

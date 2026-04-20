@@ -1,4 +1,4 @@
-use egui::{ComboBox, Grid, PopupCloseBehavior, Ui, Widget};
+use egui::{Grid, Widget};
 use wgpu::TextureUsages;
 
 use crate::{
@@ -6,7 +6,11 @@ use crate::{
         DimensionId, TextureId, dimension::Dimension, storage::Storage, texture::TextureSource,
     },
     ui::{
-        components::selector::{AsWidgetText, ComboBoxExt},
+        components::{
+            flags_selector::flags_selector,
+            hint,
+            selector::{AsWidgetText, ComboBoxExt},
+        },
         pane::StateSnapshot,
     },
 };
@@ -92,13 +96,28 @@ impl StateSnapshot<'_> {
                 ui.end_row();
 
                 ui.label("Usage");
-                texture_usages_widget(ui, &mut usage);
+                const USAGES: &[(TextureUsages, &str)] = &[
+                    (TextureUsages::COPY_SRC, "COPY_SRC"),
+                    (TextureUsages::COPY_DST, "COPY_DST"),
+                    (TextureUsages::TEXTURE_BINDING, "TEXTURE_BINDING"),
+                    (TextureUsages::STORAGE_BINDING, "STORAGE_BINDING"),
+                    (TextureUsages::RENDER_ATTACHMENT, "RENDER_ATTACHMENT"),
+                    (TextureUsages::STORAGE_ATOMIC, "STORAGE_ATOMIC"),
+                    (TextureUsages::TRANSIENT, "TRANSIENT"),
+                ];
+                flags_selector(ui, "texture_usage", &mut usage, USAGES);
                 ui.end_row();
 
                 ui.label("Source");
                 ui_texture_source(ui, &mut source, &self.project.dimensions);
                 ui.end_row();
             });
+
+        ui.add_space(6.0);
+
+        ui.add(hint::hint(|ui| {
+            ui.label("Create a Texture View to see the Texture contents.")
+        }));
 
         if format != format_before {
             texture.set_format(format);
@@ -112,44 +131,6 @@ impl StateSnapshot<'_> {
             texture.set_source(source);
         }
     }
-}
-
-fn texture_usages_widget(ui: &mut Ui, usages: &mut TextureUsages) -> bool {
-    const FLAGS: &[(TextureUsages, &str)] = &[
-        (TextureUsages::COPY_SRC, "COPY_SRC"),
-        (TextureUsages::COPY_DST, "COPY_DST"),
-        (TextureUsages::TEXTURE_BINDING, "TEXTURE_BINDING"),
-        (TextureUsages::STORAGE_BINDING, "STORAGE_BINDING"),
-        (TextureUsages::RENDER_ATTACHMENT, "RENDER_ATTACHMENT"),
-        (TextureUsages::STORAGE_ATOMIC, "STORAGE_ATOMIC"),
-        (TextureUsages::TRANSIENT, "TRANSIENT"),
-    ];
-
-    let before = *usages;
-
-    let summary = if usages.is_empty() {
-        "None".to_owned()
-    } else {
-        FLAGS
-            .iter()
-            .filter_map(|(flag, name)| usages.contains(*flag).then_some(*name))
-            .collect::<Vec<_>>()
-            .join(" | ")
-    };
-
-    ComboBox::from_id_salt("texture_usage")
-        .selected_text(summary)
-        .close_behavior(PopupCloseBehavior::CloseOnClickOutside)
-        .show_ui(ui, |ui| {
-            for &(flag, name) in FLAGS {
-                let mut enabled = usages.contains(flag);
-                if ui.checkbox(&mut enabled, name).changed() {
-                    usages.set(flag, enabled);
-                }
-            }
-        });
-
-    *usages != before
 }
 
 fn ui_texture_source(
@@ -231,7 +212,6 @@ fn ui_texture_source(
             }
         }
     });
-    ui.label("Create a Texture View to see the Texture contents.");
 }
 
 fn first_dimension_id(dimensions: &Storage<Dimension>) -> Option<DimensionId> {

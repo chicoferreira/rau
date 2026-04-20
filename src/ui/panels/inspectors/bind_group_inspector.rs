@@ -14,6 +14,7 @@ use crate::{
     state::StateEvent,
     ui::{
         components::{
+            flags_selector::flags_selector,
             hint::hint,
             selector::{AsWidgetText, ComboBoxExt},
         },
@@ -137,6 +138,16 @@ fn ui_entry_fields(
                         .show_ui_list(ui, ResourceKind::iter(), &mut current_kind);
                     ui.end_row();
 
+                    let mut visibility = entry.visibility;
+                    ui.label("Visibility");
+                    const SHADER_STAGE_OPTIONS: &[(wgpu::ShaderStages, &str)] = &[
+                        (wgpu::ShaderStages::VERTEX, "COPY_SRC"),
+                        (wgpu::ShaderStages::FRAGMENT, "COPY_DST"),
+                        (wgpu::ShaderStages::COMPUTE, "TEXTURE_BINDING"),
+                    ];
+                    flags_selector(ui, "visibility", &mut visibility, SHADER_STAGE_OPTIONS);
+                    ui.end_row();
+
                     let resource_from_fields = match entry.resource {
                         BindGroupResource::Uniform(id) => ui_uniform_fields(ui, ctx, id),
                         BindGroupResource::Texture {
@@ -150,17 +161,34 @@ fn ui_entry_fields(
                             sampler_id,
                             sampler_binding_type,
                         } => ui_sampler_fields(ui, ctx, sampler_id, sampler_binding_type),
+                        BindGroupResource::StorageTexture {
+                            texture_view_id,
+                            access,
+                            view_dimension,
+                        } => ui_storage_texture_fields(
+                            ui,
+                            ctx,
+                            texture_view_id,
+                            access,
+                            view_dimension,
+                        ),
                     };
 
                     let resource = (current_kind != kind_before)
                         .then_some(current_kind.default_value())
                         .or(resource_from_fields);
 
-                    if let Some(r) = resource {
+                    let updated_entry = BindGroupEntry {
+                        resource: resource.unwrap_or(entry.resource),
+                        visibility,
+                        ..*entry
+                    };
+
+                    if updated_entry != *entry {
                         ctx.pending_events.push(StateEvent::UpdateBindGroupEntry(
                             bind_group_id,
                             index,
-                            r,
+                            updated_entry,
                         ));
                     }
                 });
@@ -247,6 +275,42 @@ fn ui_sampler_fields(
     )
 }
 
+fn ui_storage_texture_fields(
+    ui: &mut egui::Ui,
+    ctx: &mut BindGroupUiContext,
+    mut texture_view_id: Option<TextureViewId>,
+    mut access: wgpu::StorageTextureAccess,
+    mut view_dimension: wgpu::TextureViewDimension,
+) -> Option<BindGroupResource> {
+    let before = (texture_view_id, access, view_dimension);
+
+    ui.label("Texture View");
+    egui::ComboBox::from_id_salt("storage_texture_view")
+        .selected_text_storage_opt(ctx.texture_views, texture_view_id)
+        .show_ui_storage_opt(ui, ctx.texture_views, &mut texture_view_id);
+    ui.end_row();
+
+    ui.label("Access");
+    egui::ComboBox::from_id_salt("storage_texture_access")
+        .selected_text(access.as_widget_text())
+        .show_ui_list(ui, STORAGE_TEXTURE_ACCESS, &mut access);
+    ui.end_row();
+
+    ui.label("Dimension");
+    egui::ComboBox::from_id_salt("storage_texture_view_dimension")
+        .selected_text(view_dimension.as_widget_text())
+        .show_ui_list(ui, TEXTURE_VIEW_DIMENSIONS, &mut view_dimension);
+    ui.end_row();
+
+    ((texture_view_id, access, view_dimension) != before).then_some(
+        BindGroupResource::StorageTexture {
+            texture_view_id,
+            access,
+            view_dimension,
+        },
+    )
+}
+
 const TEXTURE_VIEW_DIMENSIONS: [wgpu::TextureViewDimension; 6] = [
     wgpu::TextureViewDimension::D1,
     wgpu::TextureViewDimension::D2,
@@ -308,11 +372,32 @@ impl AsWidgetText for wgpu::SamplerBindingType {
     }
 }
 
+const STORAGE_TEXTURE_ACCESS: [wgpu::StorageTextureAccess; 4] = [
+    wgpu::StorageTextureAccess::WriteOnly,
+    wgpu::StorageTextureAccess::ReadOnly,
+    wgpu::StorageTextureAccess::ReadWrite,
+    wgpu::StorageTextureAccess::Atomic,
+];
+
+impl AsWidgetText for wgpu::StorageTextureAccess {
+    fn as_widget_text(&self) -> egui::WidgetText {
+        let r = match self {
+            wgpu::StorageTextureAccess::WriteOnly => "Write-Only",
+            wgpu::StorageTextureAccess::ReadOnly => "Read-Only",
+            wgpu::StorageTextureAccess::ReadWrite => "Read-Write",
+            wgpu::StorageTextureAccess::Atomic => "Atomic",
+        };
+        r.into()
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, strum::EnumIter, strum::Display)]
 enum ResourceKind {
     Uniform,
     #[strum(to_string = "Texture View")]
     TextureView,
+    #[strum(to_string = "Storage Texture")]
+    StorageTexture,
     Sampler,
 }
 
@@ -324,6 +409,11 @@ impl ResourceKind {
                 texture_view_id: None,
                 view_dimension: wgpu::TextureViewDimension::D2,
                 sample_type: wgpu::TextureSampleType::Float { filterable: true },
+            },
+            ResourceKind::StorageTexture => BindGroupResource::StorageTexture {
+                texture_view_id: None,
+                access: wgpu::StorageTextureAccess::WriteOnly,
+                view_dimension: wgpu::TextureViewDimension::D2,
             },
             ResourceKind::Sampler => BindGroupResource::Sampler {
                 sampler_id: None,
@@ -344,6 +434,7 @@ impl From<BindGroupResource> for ResourceKind {
         match resource {
             BindGroupResource::Uniform(_) => ResourceKind::Uniform,
             BindGroupResource::Texture { .. } => ResourceKind::TextureView,
+            BindGroupResource::StorageTexture { .. } => ResourceKind::StorageTexture,
             BindGroupResource::Sampler { .. } => ResourceKind::Sampler,
         }
     }

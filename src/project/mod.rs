@@ -7,8 +7,8 @@ use crate::{
         camera::Camera,
         dimension::Dimension,
         model::Model,
-        render_schedule::RenderSchedule,
         render_pass::RenderPass,
+        render_schedule::RenderSchedule,
         sampler::Sampler,
         shader::Shader,
         storage::{RuntimeStorage, Storage},
@@ -23,8 +23,8 @@ pub mod bindgroup;
 pub mod camera;
 pub mod dimension;
 pub mod model;
-pub mod render_schedule;
 pub mod render_pass;
+pub mod render_schedule;
 pub mod sampler;
 pub mod shader;
 pub mod storage;
