@@ -161,6 +161,7 @@ impl SyncTracker {
                 }
                 Err(err) => {
                     log::error!("Error while syncing {id:?}: {:?}", err);
+                    self.changes.push(id.into());
                     *cell = RuntimeCell::Errored {
                         at_revision: current_revision,
                         error: err,
