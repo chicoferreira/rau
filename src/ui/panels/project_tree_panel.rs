@@ -3,8 +3,8 @@ use egui_ltreeview::{Action, TreeView};
 
 use crate::{
     project::{
-        BindGroupId, CameraId, DimensionId, ModelId, ProjectResource, RenderPassId, SamplerId,
-        ShaderId, TextureId, TextureViewId, UniformId, ViewportId,
+        BindGroupId, CameraId, DimensionId, ModelId, ProjectResource, RenderPassId,
+        RenderScheduleId, SamplerId, ShaderId, TextureId, TextureViewId, UniformId, ViewportId,
     },
     state::StateEvent,
     ui::{components::tree_node::TreeNode, pane::StateSnapshot, rename::RenameTarget},
@@ -34,6 +34,7 @@ pub enum TreeNodeId {
     Model(ModelId),
     RenderPassFolder,
     RenderPass(RenderPassId),
+    RenderSchedule(RenderScheduleId),
 }
 
 pub fn ui(state: &mut StateSnapshot, ui: &mut egui::Ui) -> Response {
@@ -192,6 +193,16 @@ pub fn ui(state: &mut StateSnapshot, ui: &mut egui::Ui) -> Response {
                     .build_to(builder, state.pending_events, state.rename_state);
             }
             builder.close_dir();
+
+            TreeNode::new(
+                TreeNodeId::RenderSchedule(RenderScheduleId),
+                "Render Schedule",
+            )
+            .with_event(
+                "Inspect",
+                StateEvent::InspectResource(RenderScheduleId.into()),
+            )
+            .build_to(builder, state.pending_events, state.rename_state);
         });
 
     for action in actions {
@@ -210,6 +221,9 @@ pub fn ui(state: &mut StateSnapshot, ui: &mut egui::Ui) -> Response {
                         TreeNodeId::TextureView(id) => Some(StateEvent::InspectResource(id.into())),
                         TreeNodeId::Model(id) => Some(StateEvent::InspectResource(id.into())),
                         TreeNodeId::RenderPass(id) => Some(StateEvent::InspectResource(id.into())),
+                        TreeNodeId::RenderSchedule(id) => {
+                            Some(StateEvent::InspectResource(id.into()))
+                        }
                         TreeNodeId::UniformFolder
                         | TreeNodeId::BindGroupFolder
                         | TreeNodeId::ViewportFolder

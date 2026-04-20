@@ -48,6 +48,10 @@ pub enum StateEvent {
     ViewportEvent(ViewportId, ViewportEvent),
     InspectResource(ProjectResourceId),
     OpenViewport(ViewportId),
+    CreateRenderScheduleEntry,
+    DeleteRenderScheduleEntry(usize),
+    UpdateRenderScheduleEntry(usize, Option<RenderPassId>),
+    ReorderRenderScheduleEntry(DragUpdate),
     CreateUniform,
     DeleteUniform(UniformId),
     CreateUniformField(UniformId, UniformFieldSource),
@@ -506,10 +510,26 @@ impl State {
                         ProjectResourceId::Texture(id) => InspectorPane::Texture(id),
                         ProjectResourceId::Model(id) => InspectorPane::Model(id),
                         ProjectResourceId::RenderPass(id) => InspectorPane::RenderPass(id),
-                        ProjectResourceId::RenderSchedule(_) => todo!(),
+                        ProjectResourceId::RenderSchedule(id) => InspectorPane::RenderSchedule(id),
                     };
 
                     self.inspector_tree_pane.add_pane(pane);
+                }
+                StateEvent::CreateRenderScheduleEntry => {
+                    self.project.render_schedule.add(None);
+                }
+                StateEvent::DeleteRenderScheduleEntry(index) => {
+                    self.project.render_schedule.remove_entry(index);
+                }
+                StateEvent::UpdateRenderScheduleEntry(index, render_pass_id) => {
+                    self.project
+                        .render_schedule
+                        .update_entry(index, render_pass_id);
+                }
+                StateEvent::ReorderRenderScheduleEntry(drag_update) => {
+                    self.project
+                        .render_schedule
+                        .reorder_entries(drag_update.from, drag_update.to);
                 }
                 StateEvent::OpenViewport(viewport_id) => {
                     self.viewport_tree_pane
