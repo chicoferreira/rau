@@ -21,8 +21,6 @@ pub struct Texture {
     label: String,
     format: wgpu::TextureFormat,
     usage: wgpu::TextureUsages,
-    // TODO: decide if we want that the texture decides which source to grab the size to,
-    // or it is the source's job to update the size if it changes
     source: TextureSource,
     revision: Revision,
 }
@@ -136,23 +134,17 @@ impl Texture {
         });
 
         if let TextureSource::Image(image) = source {
-            let rgba = image.to_rgba8();
-
-            ctx.queue.write_texture(
-                wgpu::TexelCopyTextureInfo {
-                    aspect: wgpu::TextureAspect::All,
-                    texture: &texture,
-                    mip_level: 0,
-                    origin: wgpu::Origin3d::ZERO,
-                },
-                &rgba,
-                wgpu::TexelCopyBufferLayout {
-                    offset: 0,
-                    bytes_per_row: Some(4 * size.width),
-                    rows_per_image: Some(size.height),
-                },
-                size,
-            );
+            // TODO: Change this format to an enum that we list all supported formats, instead of relying on all wgpu formats
+            match format {
+                wgpu::TextureFormat::Rgba32Float => {
+                    let rgba = image.to_rgba32f();
+                    write_image_to_texture(ctx.queue, &texture, &rgba, size);
+                }
+                _ => {
+                    let rgba = image.to_rgba8();
+                    write_image_to_texture(ctx.queue, &texture, &rgba, size);
+                }
+            }
         }
 
         Ok(texture)
@@ -198,4 +190,34 @@ impl SyncResource for Texture {
             TextureSource::Image(_) | TextureSource::Manual { .. } => false,
         }
     }
+}
+
+pub(crate) fn write_image_to_texture<P, Container>(
+    queue: &wgpu::Queue,
+    texture: &wgpu::Texture,
+    image: &image::ImageBuffer<P, Container>,
+    size: wgpu::Extent3d,
+) where
+    P: image::Pixel,
+    P::Subpixel: bytemuck::Pod,
+    Container: std::ops::Deref<Target = [P::Subpixel]>,
+{
+    let bytes_per_row =
+        image.width() * P::CHANNEL_COUNT as u32 * std::mem::size_of::<P::Subpixel>() as u32;
+
+    queue.write_texture(
+        wgpu::TexelCopyTextureInfo {
+            aspect: wgpu::TextureAspect::All,
+            texture,
+            mip_level: 0,
+            origin: wgpu::Origin3d::ZERO,
+        },
+        bytemuck::cast_slice(image.as_raw()),
+        wgpu::TexelCopyBufferLayout {
+            offset: 0,
+            bytes_per_row: Some(bytes_per_row),
+            rows_per_image: Some(size.height),
+        },
+        size,
+    );
 }

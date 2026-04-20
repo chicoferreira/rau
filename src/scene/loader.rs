@@ -1,12 +1,10 @@
-use std::io::Cursor;
-
 use crate::{
     error::AppResult,
     project::{
         Project, RuntimeProject, ShaderId, TextureId,
         shader::ShaderCreationContext,
         sync::SyncTracker,
-        texture::{Texture, TextureCreationContext, TextureSource},
+        texture::{Texture, TextureCreationContext, TextureSource, write_image_to_texture},
     },
 };
 
@@ -96,34 +94,11 @@ impl HdrLoader {
         data: &[u8],
         dst_size: u32,
     ) -> AppResult<TextureId> {
-        let hdr_decoder = image::codecs::hdr::HdrDecoder::new(Cursor::new(data))?;
-        let meta = hdr_decoder.metadata();
-
-        #[cfg(not(target_arch = "wasm32"))]
-        let pixels = {
-            let mut pixels = vec![[0.0, 0.0, 0.0, 0.0]; meta.width as usize * meta.height as usize];
-            hdr_decoder.read_image_transform(
-                |pix| {
-                    let rgb = pix.to_hdr();
-                    [rgb.0[0], rgb.0[1], rgb.0[2], 1.0f32]
-                },
-                &mut pixels[..],
-            )?;
-            pixels
-        };
-        #[cfg(target_arch = "wasm32")]
-        let pixels = hdr_decoder
-            .read_image_native()?
-            .into_iter()
-            .map(|pix| {
-                let rgb = pix.to_hdr();
-                [rgb.0[0], rgb.0[1], rgb.0[2], 1.0f32]
-            })
-            .collect::<Vec<_>>();
+        let image = image::load_from_memory(data)?;
 
         let size = wgpu::Extent3d {
-            width: meta.width,
-            height: meta.height,
+            width: image.width(),
+            height: image.height(),
             depth_or_array_layers: 1,
         };
 
@@ -139,21 +114,7 @@ impl HdrLoader {
         });
         let src_view = src.create_view(&wgpu::TextureViewDescriptor::default());
 
-        queue.write_texture(
-            wgpu::TexelCopyTextureInfo {
-                texture: &src,
-                mip_level: 0,
-                origin: wgpu::Origin3d::ZERO,
-                aspect: wgpu::TextureAspect::All,
-            },
-            &bytemuck::cast_slice(&pixels),
-            wgpu::TexelCopyBufferLayout {
-                offset: 0,
-                bytes_per_row: Some(size.width * std::mem::size_of::<[f32; 4]>() as u32),
-                rows_per_image: Some(size.height),
-            },
-            size,
-        );
+        write_image_to_texture(queue, &src, &image.to_rgba32f(), size);
 
         let dst_texture = Texture::new(
             "Sky Texture",
