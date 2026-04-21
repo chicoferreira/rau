@@ -12,6 +12,7 @@ use crate::{
         TextureViewId, UniformId, ViewportId,
         bindgroup::{BindGroup, BindGroupCreationContext, BindGroupEntry, BindGroupResource},
         camera::{Camera, CameraCreationContext},
+        compute_pass,
         dimension::Dimension,
         model::{MeshMaterialSelection, ModelCreationContext, vertex_buffer::VertexBufferField},
         render_pass,
@@ -177,7 +178,7 @@ impl State {
             desired_maximum_frame_latency: 2,
         };
 
-        let mut egui_renderer = ui::renderer::EguiRenderer::new(&device, config.format, &window);
+        let egui_renderer = ui::renderer::EguiRenderer::new(&device, config.format, &window);
 
         let size = ui::Size2d::new(config.width, config.height);
 
@@ -211,7 +212,6 @@ impl State {
             &mut project,
             &mut runtime_project,
             &mut recreate_tracker,
-            &mut egui_renderer,
             equirectengular_shader_id,
             hdr_shader_id,
             light_shader_id,
@@ -475,6 +475,19 @@ impl State {
             &self.device,
         );
 
+        let view = &mut compute_pass::Context {
+            device: &self.device,
+            encoder,
+            runtime_shaders: &mut self.runtime_project.shaders,
+            runtime_bind_groups: &mut self.runtime_project.bind_groups,
+        };
+        tracker.sync_storage(
+            &mut self.project.compute_passes,
+            &mut self.runtime_project.compute_passes,
+            view,
+            &self.device,
+        );
+
         let mut render_schedule_ctx = RenderScheduleContext {
             device: &self.device,
             encoder,
@@ -512,6 +525,7 @@ impl State {
                         ProjectResourceId::Model(id) => InspectorPane::Model(id),
                         ProjectResourceId::RenderPass(id) => InspectorPane::RenderPass(id),
                         ProjectResourceId::RenderSchedule(id) => InspectorPane::RenderSchedule(id),
+                        ProjectResourceId::ComputePass(_) => todo!(),
                     };
 
                     self.inspector_tree_pane.add_pane(pane);

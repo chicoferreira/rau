@@ -15,7 +15,7 @@ use crate::{
             Uniform, UniformField, UniformFieldData, UniformFieldSource, camera::CameraField,
         },
     },
-    ui::{self, renderer::EguiRenderer},
+    ui::{self},
     utils::resources::{self, load_texture},
 };
 
@@ -28,7 +28,6 @@ pub async fn create_scene(
     project: &mut Project,
     runtime_project: &mut RuntimeProject,
     recreate_tracker: &mut SyncTracker,
-    egui_renderer: &mut EguiRenderer,
     equirectangular_shader_id: project::ShaderId,
     hdr_shader_id: project::ShaderId,
     light_shader_id: project::ShaderId,
@@ -239,11 +238,6 @@ pub async fn create_scene(
 
     let sky_texture_id = loader::from_equirectangular_bytes(
         project,
-        runtime_project,
-        recreate_tracker,
-        egui_renderer,
-        &device,
-        &queue,
         equirectangular_shader_id,
         sky_texture_view_id,
         1080,

@@ -5,6 +5,7 @@ use crate::{
     project::{
         bindgroup::BindGroup,
         camera::Camera,
+        compute_pass::ComputePass,
         dimension::Dimension,
         model::Model,
         render_pass::RenderPass,
@@ -21,6 +22,7 @@ use crate::{
 
 pub mod bindgroup;
 pub mod camera;
+pub mod compute_pass;
 pub mod dimension;
 pub mod model;
 pub mod render_pass;
@@ -46,6 +48,7 @@ new_key_type! {
     pub struct CameraId;
     pub struct ModelId;
     pub struct RenderPassId;
+    pub struct ComputePassId;
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
@@ -65,6 +68,7 @@ pub struct Project {
     pub models: Storage<Model>,
     pub render_passes: Storage<RenderPass>,
     pub render_schedule: RenderSchedule,
+    pub compute_passes: Storage<ComputePass>,
 }
 
 #[derive(Default)]
@@ -80,6 +84,7 @@ pub struct RuntimeProject {
     pub models: RuntimeStorage<Model>,
     pub render_passes: RuntimeStorage<RenderPass>,
     pub render_schedule: sync::RuntimeCell<()>,
+    pub compute_passes: RuntimeStorage<ComputePass>,
 }
 
 impl Project {
@@ -97,6 +102,7 @@ impl Project {
             ProjectResourceId::Camera(id) => self.cameras.get_label(id),
             ProjectResourceId::Model(id) => self.models.get_label(id),
             ProjectResourceId::RenderSchedule(_) => Ok("Render Schedule"),
+            ProjectResourceId::ComputePass(id) => self.compute_passes.get_label(id),
         };
 
         label_err.ok()
@@ -134,6 +140,7 @@ pub enum ProjectResourceId {
     Model(ModelId),
     RenderPass(RenderPassId),
     RenderSchedule(RenderScheduleId),
+    ComputePass(ComputePassId),
 }
 
 pub trait ProjectResource {
