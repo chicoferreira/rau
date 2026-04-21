@@ -7,12 +7,12 @@ use winit::{event::WindowEvent, window::Window};
 use crate::{
     error::WgpuErrorScope,
     project::{
-        self, BindGroupId, CameraId, DimensionId, ModelId, Project, ProjectResourceId,
-        RenderPassId, RenderScheduleId, RuntimeProject, SamplerId, ShaderId, TextureId,
-        TextureViewId, UniformId, ViewportId,
+        self, BindGroupId, CameraId, ComputePassId, DimensionId, ModelId, Project,
+        ProjectResourceId, RenderPassId, RenderScheduleId, RuntimeProject, SamplerId, ShaderId,
+        TextureId, TextureViewId, UniformId, ViewportId,
         bindgroup::{BindGroup, BindGroupCreationContext, BindGroupEntry, BindGroupResource},
         camera::{Camera, CameraCreationContext},
-        compute_pass,
+        compute_pass::{self, ComputePass},
         dimension::Dimension,
         model::{MeshMaterialSelection, ModelCreationContext, vertex_buffer::VertexBufferField},
         render_pass,
@@ -90,6 +90,8 @@ pub enum StateEvent {
     CreateRenderPipeline(RenderPassId),
     DeleteRenderPipeline(RenderPassId, usize),
     ReorderRenderPipeline(RenderPassId, DragUpdate),
+    CreateComputePass,
+    DeleteComputePass(ComputePassId),
 }
 
 pub struct State {
@@ -525,7 +527,7 @@ impl State {
                         ProjectResourceId::Model(id) => InspectorPane::Model(id),
                         ProjectResourceId::RenderPass(id) => InspectorPane::RenderPass(id),
                         ProjectResourceId::RenderSchedule(id) => InspectorPane::RenderSchedule(id),
-                        ProjectResourceId::ComputePass(_) => todo!(),
+                        ProjectResourceId::ComputePass(id) => InspectorPane::ComputePass(id),
                     };
 
                     self.inspector_tree_pane.add_pane(pane);
@@ -533,8 +535,22 @@ impl State {
                 StateEvent::CreateRenderScheduleEntry => {
                     self.project.render_schedule.add(None);
                 }
+                StateEvent::CreateComputePass => {
+                    const DEFAULT_NAME: &str = "Compute Pass";
+
+                    let compute_pass = ComputePass::new(DEFAULT_NAME, vec![], None, 1, 1, 1);
+                    let compute_pass_id = self.project.compute_passes.register(compute_pass);
+
+                    self.rename_state = Some(RenameState {
+                        target: RenameTarget::ComputePass(compute_pass_id),
+                        current_label: DEFAULT_NAME.to_string(),
+                    });
+                }
                 StateEvent::DeleteRenderScheduleEntry(index) => {
                     self.project.render_schedule.remove_entry(index);
+                }
+                StateEvent::DeleteComputePass(compute_pass_id) => {
+                    self.project.compute_passes.unregister(compute_pass_id);
                 }
                 StateEvent::UpdateRenderScheduleEntry(index, render_pass_id) => {
                     self.project

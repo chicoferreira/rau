@@ -1,6 +1,6 @@
 use crate::project::{
-    BindGroupId, CameraId, DimensionId, Project, RenderPassId, SamplerId, ShaderId, TextureId,
-    TextureViewId, UniformId, ViewportId,
+    BindGroupId, CameraId, ComputePassId, DimensionId, Project, RenderPassId, SamplerId, ShaderId,
+    TextureId, TextureViewId, UniformId, ViewportId,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -22,6 +22,7 @@ pub enum RenameTarget {
     Texture(TextureId),
     TextureView(TextureViewId),
     RenderPipeline(RenderPassId, usize),
+    ComputePass(ComputePassId),
 }
 
 impl RenameTarget {
@@ -36,6 +37,7 @@ impl RenameTarget {
             RenameTarget::Texture(id) => project.label(id),
             RenameTarget::TextureView(id) => project.label(id),
             RenameTarget::Uniform(id) => project.label(id),
+            RenameTarget::ComputePass(id) => project.label(id),
             RenameTarget::UniformField(id, index) => project
                 .uniforms
                 .get(id)
@@ -108,6 +110,11 @@ impl RenameTarget {
                     if let Some(pipeline) = render_pass.pipelines.get_mut(index) {
                         pipeline.set_label(new_name);
                     }
+                }
+            }
+            RenameTarget::ComputePass(compute_pass_id) => {
+                if let Ok(compute_pass) = project.compute_passes.get_mut(compute_pass_id) {
+                    compute_pass.set_label(new_name);
                 }
             }
         }

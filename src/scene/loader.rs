@@ -3,7 +3,7 @@ use crate::{
     project::{
         Project, ShaderId, TextureId, TextureViewId,
         bindgroup::{BindGroup, BindGroupEntry, BindGroupResource},
-        compute_pass::ComputePass,
+        compute_pass::{ComputePass, ComputePassBindGroupEntry},
         texture::{Texture, TextureSource},
         texture_view::TextureView,
     },
@@ -63,7 +63,7 @@ pub fn from_equirectangular_bytes(
     let num_workgroups = (dst_size + 15) / 16;
     let compute_pass = ComputePass::new(
         "equirect_to_cube_map",
-        vec![bind_group_id],
+        vec![ComputePassBindGroupEntry::new(Some(bind_group_id))],
         Some(equi_shader_id),
         num_workgroups,
         num_workgroups,

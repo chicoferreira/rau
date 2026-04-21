@@ -122,6 +122,7 @@ impl RuntimeProject {
             .chain(self.cameras.get_errors())
             .chain(self.models.get_errors())
             .chain(self.render_passes.get_errors())
+            .chain(self.compute_passes.get_errors())
             .chain(self.render_schedule.get_error(RenderScheduleId))
     }
 }

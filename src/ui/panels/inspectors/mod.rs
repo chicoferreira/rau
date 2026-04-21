@@ -1,5 +1,6 @@
 pub mod bind_group_inspector;
 pub mod camera_inspector;
+pub mod compute_pass_inspector;
 pub mod dimension_inspector;
 pub mod model_inspector;
 pub mod render_pass;

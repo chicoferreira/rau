@@ -3,7 +3,7 @@ use egui_ltreeview::{Action, TreeView};
 
 use crate::{
     project::{
-        BindGroupId, CameraId, DimensionId, ModelId, ProjectResource, RenderPassId,
+        BindGroupId, CameraId, ComputePassId, DimensionId, ModelId, ProjectResource, RenderPassId,
         RenderScheduleId, SamplerId, ShaderId, TextureId, TextureViewId, UniformId, ViewportId,
     },
     state::StateEvent,
@@ -34,6 +34,8 @@ pub enum TreeNodeId {
     Model(ModelId),
     RenderPassFolder,
     RenderPass(RenderPassId),
+    ComputePassFolder,
+    ComputePass(ComputePassId),
     RenderSchedule(RenderScheduleId),
 }
 
@@ -194,6 +196,20 @@ pub fn ui(state: &mut StateSnapshot, ui: &mut egui::Ui) -> Response {
             }
             builder.close_dir();
 
+            TreeNode::folder(TreeNodeId::ComputePassFolder, "Compute Passes")
+                .with_event("Create New Compute Pass", StateEvent::CreateComputePass)
+                .build_to(builder, state.pending_events, state.rename_state);
+            for (id, compute_pass) in state.project.compute_passes.list() {
+                TreeNode::new(TreeNodeId::ComputePass(id), compute_pass.label())
+                    .with_event("Inspect", StateEvent::InspectResource(id.into()))
+                    .with_rename_event("Rename", RenameTarget::ComputePass(id))
+                    .with_event("Delete", StateEvent::DeleteComputePass(id))
+                    .with_separator()
+                    .with_event("Create New Compute Pass", StateEvent::CreateComputePass)
+                    .build_to(builder, state.pending_events, state.rename_state);
+            }
+            builder.close_dir();
+
             TreeNode::new(
                 TreeNodeId::RenderSchedule(RenderScheduleId),
                 "Render Schedule",
@@ -221,6 +237,7 @@ pub fn ui(state: &mut StateSnapshot, ui: &mut egui::Ui) -> Response {
                         TreeNodeId::TextureView(id) => Some(StateEvent::InspectResource(id.into())),
                         TreeNodeId::Model(id) => Some(StateEvent::InspectResource(id.into())),
                         TreeNodeId::RenderPass(id) => Some(StateEvent::InspectResource(id.into())),
+                        TreeNodeId::ComputePass(id) => Some(StateEvent::InspectResource(id.into())),
                         TreeNodeId::RenderSchedule(id) => {
                             Some(StateEvent::InspectResource(id.into()))
                         }
@@ -234,7 +251,8 @@ pub fn ui(state: &mut StateSnapshot, ui: &mut egui::Ui) -> Response {
                         | TreeNodeId::TextureFolder
                         | TreeNodeId::TextureViewFolder
                         | TreeNodeId::ModelFolder
-                        | TreeNodeId::RenderPassFolder => None,
+                        | TreeNodeId::RenderPassFolder
+                        | TreeNodeId::ComputePassFolder => None,
                     };
 
                     if let Some(event) = event {

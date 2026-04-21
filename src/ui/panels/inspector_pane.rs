@@ -1,7 +1,8 @@
 use crate::{
     project::{
-        BindGroupId, CameraId, DimensionId, ModelId, ProjectResourceId, RenderPassId,
-        RenderScheduleId, SamplerId, ShaderId, TextureId, TextureViewId, UniformId, ViewportId,
+        BindGroupId, CameraId, ComputePassId, DimensionId, ModelId, ProjectResourceId,
+        RenderPassId, RenderScheduleId, SamplerId, ShaderId, TextureId, TextureViewId, UniformId,
+        ViewportId,
     },
     ui::{components::tiles::Pane, pane::StateSnapshot},
 };
@@ -20,6 +21,7 @@ pub enum InspectorPane {
     Model(ModelId),
     RenderPass(RenderPassId),
     RenderSchedule(RenderScheduleId),
+    ComputePass(ComputePassId),
 }
 
 impl InspectorPane {
@@ -37,6 +39,7 @@ impl InspectorPane {
             InspectorPane::Model(id) => id.into(),
             InspectorPane::RenderPass(id) => id.into(),
             InspectorPane::RenderSchedule(id) => id.into(),
+            InspectorPane::ComputePass(id) => id.into(),
         }
     }
 }
@@ -97,6 +100,9 @@ impl Pane for InspectorPane {
                         }
                         InspectorPane::RenderSchedule(_) => {
                             state.render_schedule_inspector_ui(ui);
+                        }
+                        InspectorPane::ComputePass(compute_pass_id) => {
+                            state.compute_pass_inspector_ui(ui, *compute_pass_id);
                         }
                     };
                 });
