@@ -189,6 +189,8 @@ impl SyncTracker {
                         runtime,
                         revision: current_revision,
                     };
+                    // On the other variants the `Drop´ impl for the error scope will already pop the error by itself.
+                    error_waiter.pop_error(id, current_revision, scope);
                 }
                 Ok(SyncOutcome::Unchanged(runtime)) => {
                     *cell = RuntimeCell::Created {
@@ -205,8 +207,6 @@ impl SyncTracker {
                     };
                 }
             }
-
-            error_waiter.pop_error(id, current_revision, scope);
         }
 
         match cell {
