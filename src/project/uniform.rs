@@ -137,6 +137,15 @@ impl Uniform {
 
         (size.next_multiple_of(struct_align), struct_align)
     }
+
+    fn refresh_fields(&mut self, ctx: &mut UniformCreationContext<'_>) -> AppResult<bool> {
+        let mut content_changed = false;
+        for field in &mut self.fields {
+            content_changed |= field.refresh(ctx)?;
+        }
+
+        Ok(content_changed)
+    }
 }
 
 impl UniformRuntime {
@@ -162,13 +171,9 @@ impl SyncResource for Uniform {
         ctx: &mut Self::Context<'a>,
         previous: Option<Self::Runtime>,
     ) -> AppResult<SyncOutcome<Self::Runtime>> {
+        let content_changed = self.refresh_fields(ctx)?;
         match previous {
             Some(mut runtime) => {
-                let mut content_changed = false;
-                for field in &mut self.fields {
-                    content_changed |= field.refresh(ctx)?;
-                }
-
                 if !content_changed {
                     return Ok(SyncOutcome::Unchanged(runtime));
                 }
@@ -260,7 +265,8 @@ impl UniformField {
 
     fn refresh(&mut self, context: &mut UniformCreationContext<'_>) -> AppResult<bool> {
         match &mut self.source {
-            UniformFieldSource::UserDefined(_) => Ok(false),
+            // TODO: change this to return true only if the value actually changed
+            UniformFieldSource::UserDefined(_) => Ok(true),
             UniformFieldSource::Camera {
                 camera_id,
                 field,
