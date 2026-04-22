@@ -1,13 +1,15 @@
 use crate::{
-    error::{AppError, AppResult, WgpuErrorScope},
+    error::{AppError, AppResult},
     project::{
-        ProjectResource, ProjectResourceId,
+        ProjectResource, ResourceId,
         storage::{RuntimeStorage, Storage},
     },
+    utils::wgpu_error_scope::{WgpuErrorScope, WgpuErrorScopeWaiter},
 };
 
+#[derive(Default)]
 pub struct SyncTracker {
-    changes: Vec<ProjectResourceId>,
+    changes: Vec<ResourceId>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
@@ -33,7 +35,14 @@ pub trait SyncResource: ProjectResource {
 
         let should_rebuild = match runtime {
             RuntimeCell::Created { revision, .. } => *revision != current_revision,
-            RuntimeCell::Errored { at_revision, .. } => *at_revision != current_revision,
+            RuntimeCell::Errored {
+                revision: at_revision,
+                ..
+            } => *at_revision != current_revision,
+            RuntimeCell::PendingValidation {
+                revision: at_revision,
+                ..
+            } => *at_revision != current_revision,
             RuntimeCell::Empty => true,
         };
 
@@ -59,31 +68,54 @@ pub enum RuntimeCell<R> {
         revision: Revision,
     },
     Errored {
-        at_revision: Revision,
         error: AppError,
+        revision: Revision,
+    },
+    PendingValidation {
+        runtime: R,
+        revision: Revision,
     },
     #[default]
     Empty,
 }
 
 impl<R> RuntimeCell<R> {
-    pub fn get_error(
-        &self,
-        id: impl Into<ProjectResourceId>,
-    ) -> Option<(ProjectResourceId, &AppError)> {
+    pub fn get_error(&self, id: impl Into<ResourceId>) -> Option<(ResourceId, &AppError)> {
         if let RuntimeCell::Errored { error, .. } = self {
             Some((id.into(), error))
         } else {
             None
         }
     }
+
+    pub fn handle_validation(&mut self, rev: Revision, error: Option<wgpu::Error>) {
+        let RuntimeCell::PendingValidation { revision, .. } = self else {
+            return;
+        };
+
+        if *revision != rev {
+            return;
+        }
+
+        let RuntimeCell::PendingValidation { runtime, revision } =
+            std::mem::replace(self, RuntimeCell::Empty)
+        else {
+            unreachable!();
+        };
+
+        *self = match error {
+            Some(error) => RuntimeCell::Errored {
+                revision,
+                error: error.into(),
+            },
+            None => RuntimeCell::Created { runtime, revision },
+        };
+    }
 }
 
 impl SyncTracker {
-    pub fn new() -> Self {
-        Self {
-            changes: Vec::new(),
-        }
+    pub fn clear_changes(&mut self) {
+        self.changes.clear();
     }
 
     /// Creates the runtime variant of the resource tied with the given id.
@@ -99,13 +131,14 @@ impl SyncTracker {
         runtime_storage: &'a mut RuntimeStorage<R>,
         ctx: &mut R::Context<'_>,
         device: &wgpu::Device,
+        error_waiter: &WgpuErrorScopeWaiter,
     ) -> AppResult<Option<&'a R::Runtime>>
     where
         R::Id: slotmap::Key,
     {
         let resource = storage.get_mut(id)?;
         let cell = runtime_storage.cell_mut(id)?;
-        self.sync_singleton(id, resource, cell, ctx, device)
+        self.sync_singleton(id, resource, cell, ctx, device, error_waiter)
     }
 
     pub fn sync_storage<'ctx, R: SyncResource>(
@@ -114,13 +147,14 @@ impl SyncTracker {
         runtime_storage: &mut RuntimeStorage<R>,
         ctx: &mut R::Context<'ctx>,
         device: &wgpu::Device,
+        error_waiter: &WgpuErrorScopeWaiter,
     ) where
         R::Id: slotmap::Key,
     {
         let ids = storage.list().map(|(id, _)| id).collect::<Vec<_>>();
 
         for id in ids {
-            let _ = self.sync(id, storage, runtime_storage, ctx, device);
+            let _ = self.sync(id, storage, runtime_storage, ctx, device, error_waiter);
         }
     }
 
@@ -131,24 +165,27 @@ impl SyncTracker {
         cell: &'a mut RuntimeCell<R::Runtime>,
         ctx: &mut R::Context<'_>,
         device: &wgpu::Device,
+        error_waiter: &WgpuErrorScopeWaiter,
     ) -> AppResult<Option<&'a R::Runtime>> {
         let current_revision = resource.revision();
 
         if resource.should_sync(self, cell) {
             let previous = match std::mem::replace(cell, RuntimeCell::Empty) {
                 RuntimeCell::Created { runtime, .. } => Some(runtime),
-                RuntimeCell::Errored { .. } | RuntimeCell::Empty => None,
+                RuntimeCell::Errored { .. }
+                | RuntimeCell::PendingValidation { .. }
+                | RuntimeCell::Empty => None,
             };
 
             let scope = WgpuErrorScope::push(device);
             let sync_result = resource.sync(ctx, previous);
-            let scope_result = scope.pop();
 
-            match scope_result.and(sync_result) {
+            let id = id.into();
+            match sync_result {
                 Ok(SyncOutcome::Changed(runtime)) => {
                     log::debug!("Recreated: {:?}", id);
                     self.changes.push(id.into());
-                    *cell = RuntimeCell::Created {
+                    *cell = RuntimeCell::PendingValidation {
                         runtime,
                         revision: current_revision,
                     };
@@ -163,24 +200,32 @@ impl SyncTracker {
                     log::error!("Error while syncing {id:?}: {:?}", err);
                     self.changes.push(id.into());
                     *cell = RuntimeCell::Errored {
-                        at_revision: current_revision,
+                        revision: current_revision,
                         error: err,
                     };
                 }
             }
+
+            error_waiter.pop_error(id, current_revision, scope);
         }
 
         match cell {
             RuntimeCell::Created { runtime, .. } => Ok(Some(runtime)),
-            RuntimeCell::Errored { .. } | RuntimeCell::Empty => Ok(None),
+            RuntimeCell::Errored { .. }
+            | RuntimeCell::PendingValidation { .. }
+            | RuntimeCell::Empty => Ok(None),
         }
     }
 
-    pub fn was_changed(&self, object_id: impl Into<ProjectResourceId>) -> bool {
+    pub fn was_changed(&self, object_id: impl Into<ResourceId>) -> bool {
         self.changes.contains(&object_id.into())
     }
 
     pub fn has_changes(&self) -> bool {
         !self.changes.is_empty()
+    }
+
+    pub(crate) fn push_change(&mut self, id: ResourceId) {
+        self.changes.push(id);
     }
 }

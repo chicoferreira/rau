@@ -148,13 +148,10 @@ impl SyncResource for TextureView {
     ) -> AppResult<SyncOutcome<Self::Runtime>> {
         let previous_egui_id = previous.as_ref().and_then(|runtime| runtime.egui_id);
 
-        let texture_id = self.texture_id.ok_or(AppError::UninitResource)?;
+        let texture_id = self.texture_id.ok_or(AppError::UninitializedFields)?;
 
         let texture = ctx.textures.get(texture_id)?;
-        let runtime_texture = ctx
-            .textures_runtime
-            .get(texture_id)
-            .and_then(|runtime| runtime.ok_or(AppError::UninitResource))?;
+        let runtime_texture = ctx.textures_runtime.get_init(texture_id)?;
 
         let inner = Self::create_view(
             &self.label,

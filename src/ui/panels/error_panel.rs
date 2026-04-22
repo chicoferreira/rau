@@ -3,7 +3,7 @@ use itertools::Itertools;
 
 use crate::{
     error::AppError,
-    project::{Project, ProjectResourceId},
+    project::{Project, ResourceId},
     state::StateEvent,
     ui::pane::StateSnapshot,
 };
@@ -54,7 +54,7 @@ pub fn ui(state: &mut StateSnapshot, ui: &mut egui::Ui) {
     }
 }
 
-fn status_bar_content(ui: &mut egui::Ui, errors: &[(ProjectResourceId, &AppError)]) {
+fn status_bar_content(ui: &mut egui::Ui, errors: &[(ResourceId, &AppError)]) {
     ui.horizontal(|ui| {
         if errors.is_empty() {
             ui.label(egui::RichText::new("No errors").color(ui.visuals().weak_text_color()));
@@ -84,7 +84,7 @@ fn error_list_content(
     ui: &mut egui::Ui,
     project: &Project,
     pending_events: &mut Vec<StateEvent>,
-    errors: &[(ProjectResourceId, &AppError)],
+    errors: &[(ResourceId, &AppError)],
 ) {
     egui::ScrollArea::vertical()
         .auto_shrink(false)

@@ -5,11 +5,10 @@ use slotmap::SecondaryMap;
 use winit::{event::WindowEvent, window::Window};
 
 use crate::{
-    error::WgpuErrorScope,
     project::{
-        self, BindGroupId, CameraId, ComputePassId, DimensionId, ModelId, Project,
-        ProjectResourceId, RenderPassId, RenderScheduleId, RuntimeProject, SamplerId, ShaderId,
-        TextureId, TextureViewId, UniformId, ViewportId,
+        self, BindGroupId, CameraId, ComputePassId, DimensionId, ModelId, Project, RenderPassId,
+        RenderScheduleId, ResourceId, RuntimeProject, SamplerId, ShaderId, TextureId,
+        TextureViewId, UniformId, ViewportId,
         bindgroup::{BindGroup, BindGroupCreationContext, BindGroupEntry, BindGroupResource},
         camera::{Camera, CameraCreationContext},
         compute_pass::{self, ComputePass},
@@ -19,7 +18,7 @@ use crate::{
         render_schedule::RenderScheduleContext,
         sampler::{Sampler, SamplerSpec},
         shader::{Shader, ShaderCreationContext},
-        sync::{RuntimeCell, SyncResource, SyncTracker},
+        sync::SyncTracker,
         texture::TextureCreationContext,
         texture_view::{TextureView, TextureViewCreationContext},
         uniform::{Uniform, UniformCreationContext, UniformField, UniformFieldSource},
@@ -32,7 +31,11 @@ use crate::{
         panels::{inspector_pane::InspectorPane, viewport_pane::ViewportPane},
         rename::{RenameState, RenameTarget},
     },
-    utils::{key::KeyboardState, resources},
+    utils::{
+        key::KeyboardState,
+        resources,
+        wgpu_error_scope::{self, WgpuErrorScopeReceiver, WgpuErrorScopeWaiter},
+    },
 };
 
 #[derive(Debug, Clone)]
@@ -47,7 +50,7 @@ pub enum ViewportEvent {
 #[derive(Debug, Clone)]
 pub enum StateEvent {
     ViewportEvent(ViewportId, ViewportEvent),
-    InspectResource(ProjectResourceId),
+    InspectResource(ResourceId),
     OpenViewport(ViewportId),
     CreateRenderScheduleEntry,
     DeleteRenderScheduleEntry(usize),
@@ -110,6 +113,9 @@ pub struct State {
     dimension_owners: SecondaryMap<DimensionId, ViewportId>,
     project: Project,
     runtime_project: RuntimeProject,
+    error_waiter: WgpuErrorScopeWaiter,
+    error_receiver: WgpuErrorScopeReceiver,
+    tracker: SyncTracker,
 }
 
 impl State {
@@ -204,16 +210,12 @@ impl State {
         let sky_shader = Shader::new("Sky Shader", resources::load_string("sky.wgsl").await?);
         let sky_shader_id = project.shaders.register(sky_shader);
 
-        let mut runtime_project = RuntimeProject::default();
-        let mut recreate_tracker = SyncTracker::new();
+        let runtime_project = RuntimeProject::default();
 
         let viewport_id = scene::create_scene(
             &device,
-            &queue,
             size,
             &mut project,
-            &mut runtime_project,
-            &mut recreate_tracker,
             equirectengular_shader_id,
             hdr_shader_id,
             light_shader_id,
@@ -226,6 +228,8 @@ impl State {
         let mut viewport_tree_pane = TreePane::new("viewport");
 
         viewport_tree_pane.add_pane(ViewportPane { viewport_id });
+
+        let (error_waiter, error_receiver) = wgpu_error_scope::new_handler();
 
         Ok(Self {
             surface,
@@ -243,6 +247,9 @@ impl State {
             viewport_tree_pane,
             project,
             runtime_project,
+            error_waiter,
+            error_receiver,
+            tracker: SyncTracker::default(),
         })
     }
 
@@ -313,6 +320,18 @@ impl State {
         });
 
         self.handle_events();
+
+        while let Some(result) = self.error_receiver.try_next() {
+            let id = result.resource_id;
+            if let Err(e) = self.runtime_project.handle_validation(result) {
+                log::error!("Couldn't handle validation result: {}", e);
+            } else {
+                log::info!("Validated resource: {:?}", id);
+                // TODO: This shouldn't be here
+                self.tracker.push_change(id)
+            }
+        }
+
         self.tick_objects(dt, &mut encoder);
 
         self.egui_renderer.render_egui_frame(
@@ -324,14 +343,15 @@ impl State {
             &screen_descriptor,
         );
 
-        let submit_scope = WgpuErrorScope::push(&self.device);
+        // TODO: add validation for the render_schedule
+        // let submit_scope = WgpuErrorScope::push(&self.device);
         self.queue.submit(std::iter::once(encoder.finish()));
-        if let Err(error) = submit_scope.pop() {
-            self.runtime_project.render_schedule = RuntimeCell::Errored {
-                at_revision: self.project.render_schedule.revision(),
-                error,
-            };
-        }
+        // if let Err(error) = submit_scope.pop() {
+        //     self.runtime_project.render_schedule = RuntimeCell::Errored {
+        //         at_revision: self.project.render_schedule.revision(),
+        //         error,
+        //     };
+        // }
 
         output.present();
 
@@ -365,13 +385,12 @@ impl State {
     }
 
     fn tick_objects(&mut self, dt: std::time::Duration, encoder: &mut wgpu::CommandEncoder) {
-        let mut tracker = SyncTracker::new();
-
-        tracker.sync_storage(
+        self.tracker.sync_storage(
             &mut self.project.dimensions,
             &mut self.runtime_project.dimensions,
             &mut (),
             &self.device,
+            &mut self.error_waiter,
         );
 
         let view = &mut TextureCreationContext {
@@ -379,11 +398,12 @@ impl State {
             device: &self.device,
             queue: &self.queue,
         };
-        tracker.sync_storage(
+        self.tracker.sync_storage(
             &mut self.project.textures,
             &mut self.runtime_project.textures,
             view,
             &self.device,
+            &self.error_waiter,
         );
 
         let view = &mut TextureViewCreationContext {
@@ -392,29 +412,32 @@ impl State {
             device: &self.device,
             textures_runtime: &mut self.runtime_project.textures,
         };
-        tracker.sync_storage(
+        self.tracker.sync_storage(
             &mut self.project.texture_views,
             &mut self.runtime_project.texture_views,
             view,
             &self.device,
+            &self.error_waiter,
         );
 
         let view = &mut CameraCreationContext {
             dimensions: &self.project.dimensions,
             dt,
         };
-        tracker.sync_storage(
+        self.tracker.sync_storage(
             &mut self.project.cameras,
             &mut self.runtime_project.cameras,
             view,
             &self.device,
+            &self.error_waiter,
         );
 
-        tracker.sync_storage(
+        self.tracker.sync_storage(
             &mut self.project.samplers,
             &mut self.runtime_project.samplers,
             &mut &self.device,
             &self.device,
+            &self.error_waiter,
         );
 
         let view = &mut UniformCreationContext {
@@ -422,11 +445,12 @@ impl State {
             device: &self.device,
             queue: &self.queue,
         };
-        tracker.sync_storage(
+        self.tracker.sync_storage(
             &mut self.project.uniforms,
             &mut self.runtime_project.uniforms,
             view,
             &self.device,
+            &self.error_waiter,
         );
 
         let view = &mut BindGroupCreationContext {
@@ -435,32 +459,35 @@ impl State {
             runtime_texture_views: &mut self.runtime_project.texture_views,
             runtime_samplers: &mut self.runtime_project.samplers,
         };
-        tracker.sync_storage(
+        self.tracker.sync_storage(
             &mut self.project.bind_groups,
             &mut self.runtime_project.bind_groups,
             view,
             &self.device,
+            &self.error_waiter,
         );
 
         let view = &mut ModelCreationContext {
             device: &self.device,
             queue: &self.queue,
         };
-        tracker.sync_storage(
+        self.tracker.sync_storage(
             &mut self.project.models,
             &mut self.runtime_project.models,
             view,
             &self.device,
+            &self.error_waiter,
         );
 
         let view = &mut ShaderCreationContext {
             device: &self.device,
         };
-        tracker.sync_storage(
+        self.tracker.sync_storage(
             &mut self.project.shaders,
             &mut self.runtime_project.shaders,
             view,
             &self.device,
+            &self.error_waiter,
         );
 
         let view = &mut render_pass::Context {
@@ -470,11 +497,12 @@ impl State {
             runtime_texture_views: &mut self.runtime_project.texture_views,
             runtime_bind_groups: &mut self.runtime_project.bind_groups,
         };
-        tracker.sync_storage(
+        self.tracker.sync_storage(
             &mut self.project.render_passes,
             &mut self.runtime_project.render_passes,
             view,
             &self.device,
+            &self.error_waiter,
         );
 
         let view = &mut compute_pass::Context {
@@ -483,11 +511,12 @@ impl State {
             runtime_shaders: &mut self.runtime_project.shaders,
             runtime_bind_groups: &mut self.runtime_project.bind_groups,
         };
-        tracker.sync_storage(
+        self.tracker.sync_storage(
             &mut self.project.compute_passes,
             &mut self.runtime_project.compute_passes,
             view,
             &self.device,
+            &self.error_waiter,
         );
 
         let mut render_schedule_ctx = RenderScheduleContext {
@@ -500,13 +529,16 @@ impl State {
             runtime_texture_views: &self.runtime_project.texture_views,
             runtime_bind_groups: &self.runtime_project.bind_groups,
         };
-        let _ = tracker.sync_singleton(
+        let _ = self.tracker.sync_singleton(
             RenderScheduleId,
             &mut self.project.render_schedule,
             &mut self.runtime_project.render_schedule,
             &mut render_schedule_ctx,
             &self.device,
+            &self.error_waiter,
         );
+
+        self.tracker.clear_changes();
     }
 
     fn handle_events(&mut self) {
@@ -515,19 +547,19 @@ impl State {
             match event {
                 StateEvent::InspectResource(resource_id) => {
                     let pane = match resource_id {
-                        ProjectResourceId::Uniform(id) => InspectorPane::Uniform(id),
-                        ProjectResourceId::BindGroup(id) => InspectorPane::BindGroup(id),
-                        ProjectResourceId::Shader(id) => InspectorPane::Shader(id),
-                        ProjectResourceId::Camera(id) => InspectorPane::Camera(id),
-                        ProjectResourceId::Dimension(id) => InspectorPane::Dimension(id),
-                        ProjectResourceId::Sampler(id) => InspectorPane::Sampler(id),
-                        ProjectResourceId::TextureView(id) => InspectorPane::TextureView(id),
-                        ProjectResourceId::Viewport(id) => InspectorPane::Viewport(id),
-                        ProjectResourceId::Texture(id) => InspectorPane::Texture(id),
-                        ProjectResourceId::Model(id) => InspectorPane::Model(id),
-                        ProjectResourceId::RenderPass(id) => InspectorPane::RenderPass(id),
-                        ProjectResourceId::RenderSchedule(id) => InspectorPane::RenderSchedule(id),
-                        ProjectResourceId::ComputePass(id) => InspectorPane::ComputePass(id),
+                        ResourceId::Uniform(id) => InspectorPane::Uniform(id),
+                        ResourceId::BindGroup(id) => InspectorPane::BindGroup(id),
+                        ResourceId::Shader(id) => InspectorPane::Shader(id),
+                        ResourceId::Camera(id) => InspectorPane::Camera(id),
+                        ResourceId::Dimension(id) => InspectorPane::Dimension(id),
+                        ResourceId::Sampler(id) => InspectorPane::Sampler(id),
+                        ResourceId::TextureView(id) => InspectorPane::TextureView(id),
+                        ResourceId::Viewport(id) => InspectorPane::Viewport(id),
+                        ResourceId::Texture(id) => InspectorPane::Texture(id),
+                        ResourceId::Model(id) => InspectorPane::Model(id),
+                        ResourceId::RenderPass(id) => InspectorPane::RenderPass(id),
+                        ResourceId::RenderSchedule(id) => InspectorPane::RenderSchedule(id),
+                        ResourceId::ComputePass(id) => InspectorPane::ComputePass(id),
                     };
 
                     self.inspector_tree_pane.add_pane(pane);

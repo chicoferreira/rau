@@ -3,8 +3,8 @@ use slotmap::{SecondaryMap, SlotMap};
 use crate::{
     error::{AppError, AppResult},
     project::{
-        ProjectResource, ProjectResourceId,
-        sync::{RuntimeCell, SyncResource},
+        ProjectResource, ResourceId,
+        sync::{Revision, RuntimeCell, SyncResource},
     },
 };
 
@@ -91,14 +91,14 @@ where
     R: SyncResource,
     R::Id: slotmap::Key,
 {
-    /// Returns a reference to the [`RuntimeCell`] for the given key.
-    /// Returns `AppError::InvalidResource` if the key is not found.
-    /// Returns `None` if the runtime value is errored or empty.
-    pub fn get(&self, key: R::Id) -> AppResult<Option<&R::Runtime>> {
+    pub fn get_init(&self, key: R::Id) -> AppResult<&R::Runtime> {
+        let id = key.into();
         match self.map.get(key) {
-            Some(RuntimeCell::Created { runtime, .. }) => Ok(Some(runtime)),
-            Some(RuntimeCell::Errored { .. } | RuntimeCell::Empty) => Ok(None),
-            None => Err(AppError::InvalidResource(key.into())),
+            Some(RuntimeCell::Created { runtime, .. }) => Ok(runtime),
+            Some(RuntimeCell::PendingValidation { .. }) => Err(AppError::WaitingForValidation(id)),
+            Some(RuntimeCell::Errored { .. }) => Err(AppError::WaitingForErroredResource(id)),
+            Some(RuntimeCell::Empty) => Err(AppError::WaitingForUninitResource(id)),
+            None => Err(AppError::InvalidResource(id)),
         }
     }
 
@@ -111,7 +111,7 @@ where
             .ok_or_else(|| AppError::InvalidResource(key.into()))
     }
 
-    pub fn get_errors(&self) -> impl Iterator<Item = (ProjectResourceId, &AppError)> {
+    pub fn get_errors(&self) -> impl Iterator<Item = (ResourceId, &AppError)> {
         self.map.iter().filter_map(|(key, cell)| {
             if let RuntimeCell::Errored { error, .. } = cell {
                 Some((key.into(), error))
@@ -119,5 +119,16 @@ where
                 None
             }
         })
+    }
+
+    pub fn handle_validation(
+        &mut self,
+        id: R::Id,
+        rev: Revision,
+        err: Option<wgpu::Error>,
+    ) -> AppResult<()> {
+        let cell = self.cell_mut(id)?;
+        cell.handle_validation(rev, err);
+        Ok(())
     }
 }

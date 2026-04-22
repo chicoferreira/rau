@@ -1,4 +1,4 @@
-use crate::project::ProjectResourceId;
+use crate::project::ResourceId;
 
 pub type AppResult<T> = std::result::Result<T, AppError>;
 
@@ -6,10 +6,19 @@ pub type AppResult<T> = std::result::Result<T, AppError>;
 pub enum AppError {
     /// The resource with the given ID is invalid.
     #[error("invalid resource: {0:?}")]
-    InvalidResource(ProjectResourceId),
+    InvalidResource(ResourceId),
+    /// The resource has uninitialized fields.
+    #[error("resource has uninitialized fields")]
+    UninitializedFields,
     /// The resource where this error occurred is not yet initialized.
-    #[error("resource is not yet initialized")]
-    UninitResource,
+    #[error("resource is not yet initialized: {0:?}")]
+    WaitingForUninitResource(ResourceId),
+    /// Access to a resource that is erroring
+    #[error("resource is erroring: {0:?}")]
+    WaitingForErroredResource(ResourceId),
+    /// The resource is waiting for validation.
+    #[error("resource is waiting for validation: {0:?}")]
+    WaitingForValidation(ResourceId),
     /// A WGPU error occurred.
     #[error(transparent)]
     WgpuError(#[from] wgpu::Error),
@@ -28,35 +37,4 @@ pub enum AppError {
     /// An OBJ load error occurred.
     #[error(transparent)]
     ObjLoadError(#[from] tobj::LoadError),
-}
-
-pub struct WgpuErrorScope {
-    inner: wgpu::ErrorScopeGuard,
-}
-
-impl WgpuErrorScope {
-    pub fn push(device: &wgpu::Device) -> Self {
-        Self {
-            inner: device.push_error_scope(wgpu::ErrorFilter::Validation),
-        }
-    }
-
-    pub fn pop(self) -> AppResult<()> {
-        let error = self.inner.pop();
-
-        #[cfg(not(target_arch = "wasm32"))]
-        {
-            pollster::block_on(error).map_or(Ok(()), |e| Err(e.into()))
-        }
-        #[cfg(target_arch = "wasm32")]
-        {
-            wasm_bindgen_futures::spawn_local(async move {
-                if let Some(error) = error.await {
-                    // TODO: send to main thread
-                    log::error!("Unhandled WGPU error: {:?}", error);
-                }
-            });
-            Ok(())
-        }
-    }
 }

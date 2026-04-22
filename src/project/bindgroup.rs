@@ -113,13 +113,8 @@ impl BindGroup {
         let mut group_entries = Vec::new();
 
         for (index, entry) in entries.iter().copied().enumerate() {
-            // TODO: this should error instead of ignoring
-            let Some(group_entry) = entry.into_bind_group_entry(index as u32, ctx)? else {
-                continue;
-            };
-            let Some(layout_entry) = entry.into_bind_group_layout_entry(index as u32, ctx)? else {
-                continue;
-            };
+            let group_entry = entry.into_bind_group_entry(index as u32, ctx)?;
+            let layout_entry = entry.into_bind_group_layout_entry(index as u32, ctx)?;
             layout_entries.push(layout_entry);
             group_entries.push(group_entry);
         }
@@ -187,7 +182,7 @@ impl BindGroupEntry {
         &self,
         binding: u32,
         ctx: &'a BindGroupCreationContext<'a>,
-    ) -> AppResult<Option<wgpu::BindGroupEntry<'a>>> {
+    ) -> AppResult<wgpu::BindGroupEntry<'a>> {
         let resource = match self.resource {
             BindGroupResource::Texture {
                 texture_view_id, ..
@@ -195,58 +190,40 @@ impl BindGroupEntry {
             | BindGroupResource::StorageTexture {
                 texture_view_id, ..
             } => {
-                let Some(texture_view_id) = texture_view_id else {
-                    return Ok(None);
-                };
-
-                let texture_view_runtime = ctx
-                    .runtime_texture_views
-                    .get(texture_view_id)
-                    .and_then(|runtime| runtime.ok_or(AppError::UninitResource))?;
+                let texture_view_id = texture_view_id.ok_or(AppError::UninitializedFields)?;
+                let texture_view_runtime = ctx.runtime_texture_views.get_init(texture_view_id)?;
                 let inner = texture_view_runtime.inner();
 
                 wgpu::BindingResource::TextureView(inner)
             }
             BindGroupResource::Sampler { sampler_id, .. } => {
-                let Some(sampler_id) = sampler_id else {
-                    return Ok(None);
-                };
-                let sampler = ctx
-                    .runtime_samplers
-                    .get(sampler_id)
-                    .and_then(|runtime| runtime.ok_or(AppError::UninitResource))?;
+                let sampler_id = sampler_id.ok_or(AppError::UninitializedFields)?;
+                let sampler = ctx.runtime_samplers.get_init(sampler_id)?;
                 wgpu::BindingResource::Sampler(sampler.inner())
             }
             BindGroupResource::Uniform(uniform_id) => {
-                let Some(uniform_id) = uniform_id else {
-                    return Ok(None);
-                };
-                let uniform = ctx
-                    .runtime_uniforms
-                    .get(uniform_id)
-                    .and_then(|runtime| runtime.ok_or(AppError::UninitResource))?;
+                let uniform_id = uniform_id.ok_or(AppError::UninitializedFields)?;
+                let uniform = ctx.runtime_uniforms.get_init(uniform_id)?;
                 uniform.buffer().inner().as_entire_binding()
             }
         };
 
-        Ok(Some(wgpu::BindGroupEntry { binding, resource }))
+        Ok(wgpu::BindGroupEntry { binding, resource })
     }
 
     fn into_bind_group_layout_entry(
         &self,
         binding: u32,
         ctx: &BindGroupCreationContext,
-    ) -> AppResult<Option<wgpu::BindGroupLayoutEntry>> {
-        let Some(ty) = self.resource.to_wgpu_binding_type(ctx)? else {
-            return Ok(None);
-        };
+    ) -> AppResult<wgpu::BindGroupLayoutEntry> {
+        let ty = self.resource.to_wgpu_binding_type(ctx)?;
 
-        Ok(Some(wgpu::BindGroupLayoutEntry {
+        Ok(wgpu::BindGroupLayoutEntry {
             binding,
             visibility: self.visibility,
             ty,
             count: None,
-        }))
+        })
     }
 
     fn resource_recreated(&self, tracker: &SyncTracker) -> bool {
@@ -266,11 +243,8 @@ impl BindGroupEntry {
 }
 
 impl BindGroupResource {
-    fn to_wgpu_binding_type(
-        self,
-        ctx: &BindGroupCreationContext,
-    ) -> AppResult<Option<wgpu::BindingType>> {
-        Ok(Some(match self {
+    fn to_wgpu_binding_type(self, ctx: &BindGroupCreationContext) -> AppResult<wgpu::BindingType> {
+        Ok(match self {
             BindGroupResource::Texture {
                 view_dimension,
                 sample_type,
@@ -294,15 +268,8 @@ impl BindGroupResource {
                 access,
                 view_dimension,
             } => {
-                let Some(texture_view_id) = texture_view_id else {
-                    return Ok(None);
-                };
-
-                let texture_view_runtime = ctx
-                    .runtime_texture_views
-                    .get(texture_view_id)
-                    .and_then(|runtime| runtime.ok_or(AppError::UninitResource))?;
-
+                let texture_view_id = texture_view_id.ok_or(AppError::UninitializedFields)?;
+                let texture_view_runtime = ctx.runtime_texture_views.get_init(texture_view_id)?;
                 let format = texture_view_runtime.inner().texture().format();
 
                 wgpu::BindingType::StorageTexture {
@@ -311,7 +278,7 @@ impl BindGroupResource {
                     format,
                 }
             }
-        }))
+        })
     }
 }
 

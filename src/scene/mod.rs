@@ -1,15 +1,14 @@
 use crate::{
     error::AppResult,
     project::{
-        self, Project, RuntimeProject, ViewportId,
+        self, Project, ViewportId,
         bindgroup::{BindGroup, BindGroupEntry, BindGroupResource},
         camera::Camera,
         dimension::Dimension,
         model::Model,
         render_pass::{LoadOperation, RenderDraw, RenderPass, RenderPassTarget},
         sampler::{Sampler, SamplerSpec},
-        sync::SyncTracker,
-        texture::{Texture, TextureCreationContext, TextureSource},
+        texture::{Texture, TextureSource},
         texture_view::{TextureView, TextureViewFormat},
         uniform::{
             Uniform, UniformField, UniformFieldData, UniformFieldSource, camera::CameraField,
@@ -23,11 +22,8 @@ mod loader;
 
 pub async fn create_scene(
     device: &wgpu::Device,
-    queue: &wgpu::Queue,
     size: ui::Size2d,
     project: &mut Project,
-    runtime_project: &mut RuntimeProject,
-    recreate_tracker: &mut SyncTracker,
     equirectangular_shader_id: project::ShaderId,
     hdr_shader_id: project::ShaderId,
     light_shader_id: project::ShaderId,
@@ -219,19 +215,6 @@ pub async fn create_scene(
     let sky_texture =
         resources::load_texture("pure-sky.hdr", wgpu::TextureFormat::Rgba32Float).await?;
     let sky_texture_id = project.textures.register(sky_texture);
-
-    let ctx = &mut TextureCreationContext {
-        dimensions: &project.dimensions,
-        device,
-        queue,
-    };
-    recreate_tracker.sync(
-        sky_texture_id,
-        &mut project.textures,
-        &mut runtime_project.textures,
-        ctx,
-        device,
-    )?;
 
     let sky_texture_view = TextureView::new("label", Some(sky_texture_id), None, None);
     let sky_texture_view_id = project.texture_views.register(sky_texture_view);

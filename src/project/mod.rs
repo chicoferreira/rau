@@ -1,7 +1,7 @@
 use slotmap::new_key_type;
 
 use crate::{
-    error::AppError,
+    error::{AppError, AppResult},
     project::{
         bindgroup::BindGroup,
         camera::Camera,
@@ -18,6 +18,7 @@ use crate::{
         uniform::Uniform,
         viewport::Viewport,
     },
+    utils::wgpu_error_scope::ErrorScopeResult,
 };
 
 pub mod bindgroup;
@@ -88,21 +89,21 @@ pub struct RuntimeProject {
 }
 
 impl Project {
-    pub fn label<'a>(&'a self, id: impl Into<ProjectResourceId>) -> Option<&'a str> {
+    pub fn label<'a>(&'a self, id: impl Into<ResourceId>) -> Option<&'a str> {
         let label_err = match id.into() {
-            ProjectResourceId::Shader(id) => self.shaders.get_label(id),
-            ProjectResourceId::Viewport(id) => self.viewports.get_label(id),
-            ProjectResourceId::Uniform(id) => self.uniforms.get_label(id),
-            ProjectResourceId::BindGroup(id) => self.bind_groups.get_label(id),
-            ProjectResourceId::Texture(id) => self.textures.get_label(id),
-            ProjectResourceId::TextureView(id) => self.texture_views.get_label(id),
-            ProjectResourceId::RenderPass(id) => self.render_passes.get_label(id),
-            ProjectResourceId::Sampler(id) => self.samplers.get_label(id),
-            ProjectResourceId::Dimension(id) => self.dimensions.get_label(id),
-            ProjectResourceId::Camera(id) => self.cameras.get_label(id),
-            ProjectResourceId::Model(id) => self.models.get_label(id),
-            ProjectResourceId::RenderSchedule(_) => Ok("Render Schedule"),
-            ProjectResourceId::ComputePass(id) => self.compute_passes.get_label(id),
+            ResourceId::Shader(id) => self.shaders.get_label(id),
+            ResourceId::Viewport(id) => self.viewports.get_label(id),
+            ResourceId::Uniform(id) => self.uniforms.get_label(id),
+            ResourceId::BindGroup(id) => self.bind_groups.get_label(id),
+            ResourceId::Texture(id) => self.textures.get_label(id),
+            ResourceId::TextureView(id) => self.texture_views.get_label(id),
+            ResourceId::RenderPass(id) => self.render_passes.get_label(id),
+            ResourceId::Sampler(id) => self.samplers.get_label(id),
+            ResourceId::Dimension(id) => self.dimensions.get_label(id),
+            ResourceId::Camera(id) => self.cameras.get_label(id),
+            ResourceId::Model(id) => self.models.get_label(id),
+            ResourceId::RenderSchedule(_) => Ok("Render Schedule"),
+            ResourceId::ComputePass(id) => self.compute_passes.get_label(id),
         };
 
         label_err.ok()
@@ -110,7 +111,7 @@ impl Project {
 }
 
 impl RuntimeProject {
-    pub fn iter_errors(&self) -> impl Iterator<Item = (ProjectResourceId, &AppError)> {
+    pub fn iter_errors(&self) -> impl Iterator<Item = (ResourceId, &AppError)> {
         self.shaders
             .get_errors()
             .chain(self.uniforms.get_errors())
@@ -125,10 +126,31 @@ impl RuntimeProject {
             .chain(self.compute_passes.get_errors())
             .chain(self.render_schedule.get_error(RenderScheduleId))
     }
+
+    pub fn handle_validation(&mut self, result: ErrorScopeResult) -> AppResult<()> {
+        let id = result.resource_id;
+        let rev = result.revision;
+        let error = result.error;
+        match id {
+            ResourceId::Shader(id) => self.shaders.handle_validation(id, rev, error),
+            ResourceId::Uniform(id) => self.uniforms.handle_validation(id, rev, error),
+            ResourceId::BindGroup(id) => self.bind_groups.handle_validation(id, rev, error),
+            ResourceId::Texture(id) => self.textures.handle_validation(id, rev, error),
+            ResourceId::TextureView(id) => self.texture_views.handle_validation(id, rev, error),
+            ResourceId::Sampler(id) => self.samplers.handle_validation(id, rev, error),
+            ResourceId::Dimension(id) => self.dimensions.handle_validation(id, rev, error),
+            ResourceId::Camera(id) => self.cameras.handle_validation(id, rev, error),
+            ResourceId::Model(id) => self.models.handle_validation(id, rev, error),
+            ResourceId::RenderPass(id) => self.render_passes.handle_validation(id, rev, error),
+            ResourceId::RenderSchedule(_) => Ok(self.render_schedule.handle_validation(rev, error)),
+            ResourceId::ComputePass(id) => self.compute_passes.handle_validation(id, rev, error),
+            ResourceId::Viewport(_) => Ok(()),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, derive_more::From)]
-pub enum ProjectResourceId {
+pub enum ResourceId {
     Shader(ShaderId),
     Viewport(ViewportId),
     Uniform(UniformId),
@@ -145,7 +167,7 @@ pub enum ProjectResourceId {
 }
 
 pub trait ProjectResource {
-    type Id: Into<ProjectResourceId> + Copy + Eq + std::hash::Hash + std::fmt::Debug;
+    type Id: Into<ResourceId> + Copy + Eq + std::hash::Hash + std::fmt::Debug + Send + Sync;
 
     fn label(&self) -> &str;
 }

@@ -169,7 +169,7 @@ impl Model {
         let material_index = mesh.material_index()?;
         let material = self.get_material(material_index)?;
         let bind_group_id = material.bind_group_id()?;
-        let bind_group = runtime_bind_groups.get(bind_group_id).ok().flatten()?;
+        let bind_group = runtime_bind_groups.get_init(bind_group_id).ok()?;
         Some(bind_group.inner_layout())
     }
 }

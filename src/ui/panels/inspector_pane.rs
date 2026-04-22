@@ -1,8 +1,7 @@
 use crate::{
     project::{
-        BindGroupId, CameraId, ComputePassId, DimensionId, ModelId, ProjectResourceId,
-        RenderPassId, RenderScheduleId, SamplerId, ShaderId, TextureId, TextureViewId, UniformId,
-        ViewportId,
+        BindGroupId, CameraId, ComputePassId, DimensionId, ModelId, RenderPassId, RenderScheduleId,
+        ResourceId, SamplerId, ShaderId, TextureId, TextureViewId, UniformId, ViewportId,
     },
     ui::{components::tiles::Pane, pane::StateSnapshot},
 };
@@ -25,7 +24,7 @@ pub enum InspectorPane {
 }
 
 impl InspectorPane {
-    pub fn id(&self) -> ProjectResourceId {
+    pub fn id(&self) -> ResourceId {
         match *self {
             InspectorPane::Uniform(id) => id.into(),
             InspectorPane::BindGroup(id) => id.into(),

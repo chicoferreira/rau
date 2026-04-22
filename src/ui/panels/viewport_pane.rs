@@ -24,10 +24,12 @@ impl Pane for ViewportPane {
             return egui_tiles::UiResponse::None;
         };
 
-        let Ok(Some(runtime_texture_view)) =
-            state.runtime_project.texture_views.get(texture_view_id)
+        let Ok(runtime_texture_view) = state
+            .runtime_project
+            .texture_views
+            .get_init(texture_view_id)
         else {
-            ui.label("Viewport points to a non-existent texture view.");
+            ui.label("Viewport points to a valid texture view.");
             return egui_tiles::UiResponse::None;
         };
 

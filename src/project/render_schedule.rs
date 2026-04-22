@@ -1,7 +1,7 @@
 use egui_dnd::utils::shift_vec;
 
 use crate::{
-    error::{AppError, AppResult},
+    error::AppResult,
     project::{
         Model, ProjectResource, RenderPassId, RenderScheduleId, Shader, TextureView,
         bindgroup::BindGroup,
@@ -126,9 +126,14 @@ impl SyncResource for RenderSchedule {
     fn should_sync(&self, tracker: &SyncTracker, runtime: &RuntimeCell<Self::Runtime>) -> bool {
         match runtime {
             RuntimeCell::Empty | RuntimeCell::Created { .. } => true,
-            RuntimeCell::Errored { at_revision, .. } => {
-                *at_revision != self.revision || tracker.has_changes()
+            RuntimeCell::Errored {
+                revision: at_revision,
+                ..
             }
+            | RuntimeCell::PendingValidation {
+                revision: at_revision,
+                ..
+            } => *at_revision != self.revision || tracker.has_changes(),
         }
     }
 
@@ -147,10 +152,7 @@ impl SyncResource for RenderSchedule {
 
         for render_pass_id in self.iter() {
             let render_pass = ctx.render_passes.get(render_pass_id)?;
-            let render_pass_runtime = ctx
-                .runtime_render_passes
-                .get(render_pass_id)?
-                .ok_or(AppError::UninitResource)?;
+            let render_pass_runtime = ctx.runtime_render_passes.get_init(render_pass_id)?;
 
             render_pass.submit(ctx.encoder, &render_ctx, render_pass_runtime)?;
         }

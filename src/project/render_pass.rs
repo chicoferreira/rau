@@ -306,8 +306,8 @@ impl RenderPipeline {
         color_format: wgpu::TextureFormat,
         depth_format: Option<wgpu::TextureFormat>,
     ) -> AppResult<wgpu::RenderPipeline> {
-        let vertex_shader_id = vertex_shader_id.ok_or(AppError::UninitResource)?;
-        let fragment_shader_id = fragment_shader_id.ok_or(AppError::UninitResource)?;
+        let vertex_shader_id = vertex_shader_id.ok_or(AppError::UninitializedFields)?;
+        let fragment_shader_id = fragment_shader_id.ok_or(AppError::UninitializedFields)?;
 
         let bind_group_layouts = Self::resolved_bind_group_layout(ctx, &static_bind_groups, draw);
         let device = ctx.device;
@@ -328,16 +328,10 @@ impl RenderPipeline {
             None => &[],
         };
 
-        let vertex_shader = ctx
-            .runtime_shaders
-            .get(vertex_shader_id)
-            .and_then(|runtime| runtime.ok_or(AppError::UninitResource))?;
+        let vertex_shader = ctx.runtime_shaders.get_init(vertex_shader_id)?;
         let vertex_shader = vertex_shader.inner();
 
-        let fragment_shader = ctx
-            .runtime_shaders
-            .get(fragment_shader_id)
-            .and_then(|runtime| runtime.ok_or(AppError::UninitResource))?;
+        let fragment_shader = ctx.runtime_shaders.get_init(fragment_shader_id)?;
         let fragment_shader = fragment_shader.inner();
 
         let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
@@ -391,7 +385,7 @@ impl RenderPipeline {
             .iter()
             .copied()
             .filter_map(|(slot, bind_group_id)| {
-                let bind_group = ctx.runtime_bind_groups.get(bind_group_id).ok().flatten()?;
+                let bind_group = ctx.runtime_bind_groups.get_init(bind_group_id).ok()?;
                 Some((slot, bind_group.inner_layout()))
             })
             .chain(draw.material_bind_group_slot_and_layout(ctx))
@@ -415,7 +409,7 @@ impl RenderPipeline {
     ) -> AppResult<Option<(Vec<wgpu::VertexAttribute>, u64)>> {
         match &draw {
             RenderDraw::Model { model_id, .. } => {
-                let model_id = model_id.ok_or(AppError::UninitResource)?;
+                let model_id = model_id.ok_or(AppError::UninitializedFields)?;
                 let model = ctx.models.get(model_id)?;
                 let spec = model.vertex_buffer_spec();
                 Ok(Some(spec.to_wgpu_attributes_and_stride()))
@@ -427,7 +421,13 @@ impl RenderPipeline {
     fn needs_rebuild_from_others(&self, tracker: &SyncTracker) -> bool {
         [self.vertex_shader, self.fragment_shader]
             .into_iter()
-            .any(|shader| shader.is_some_and(|id| tracker.was_changed(id)))
+            .flatten()
+            .any(|shader| tracker.was_changed(shader))
+            || self
+                .static_bind_groups
+                .iter()
+                .any(|(_, bind_group_id)| tracker.was_changed(*bind_group_id))
+            || self.draw.needs_rebuild_from_others(tracker)
     }
 }
 
@@ -441,10 +441,7 @@ impl RenderPipelineRuntime {
         render_pass.set_pipeline(&self.inner);
 
         for &(slot, id) in &pipeline.static_bind_groups {
-            let bind_group = ctx
-                .runtime_bind_groups
-                .get(id)
-                .and_then(|runtime| runtime.ok_or(AppError::UninitResource))?;
+            let bind_group = ctx.runtime_bind_groups.get_init(id)?;
             render_pass.set_bind_group(slot, bind_group.inner(), &[]);
         }
 
@@ -455,7 +452,7 @@ impl RenderPipelineRuntime {
                 mesh_vertex_slot,
                 material_bind_group_slot,
             } => {
-                let model_id = model_id.ok_or(AppError::UninitResource)?;
+                let model_id = model_id.ok_or(AppError::UninitializedFields)?;
                 let model = ctx.models.get(model_id)?;
 
                 for mesh in model.meshes() {
@@ -467,9 +464,7 @@ impl RenderPipelineRuntime {
                             if let Some(material) = model.get_material(material_index) {
                                 if let Some(bind_group_id) = material.bind_group_id() {
                                     let bind_group =
-                                        ctx.runtime_bind_groups.get(bind_group_id).and_then(
-                                            |runtime| runtime.ok_or(AppError::UninitResource),
-                                        )?;
+                                        ctx.runtime_bind_groups.get_init(bind_group_id)?;
                                     render_pass.set_bind_group(*mat_slot, bind_group.inner(), &[]);
                                 }
                             }
@@ -499,10 +494,8 @@ impl<T> RenderPassTarget<T> {
         &self,
         runtime_texture_views: &'a RuntimeStorage<TextureView>,
     ) -> AppResult<&'a wgpu::TextureView> {
-        let target_view_id = self.texture_view_id.ok_or(AppError::UninitResource)?;
-        let target_view = runtime_texture_views
-            .get(target_view_id)
-            .and_then(|runtime| runtime.ok_or(AppError::UninitResource))?;
+        let target_view_id = self.texture_view_id.ok_or(AppError::UninitializedFields)?;
+        let target_view = runtime_texture_views.get_init(target_view_id)?;
         Ok(target_view.inner())
     }
 }
@@ -523,6 +516,15 @@ impl RenderDraw {
         let model = ctx.models.get(*model_id).ok()?;
         let layout = model.get_bind_group_layout(ctx.runtime_bind_groups)?;
         Some((*slot, layout))
+    }
+
+    fn needs_rebuild_from_others(&self, tracker: &SyncTracker) -> bool {
+        match self {
+            RenderDraw::Model { model_id, .. } => {
+                model_id.is_some_and(|id| tracker.was_changed(id))
+            }
+            RenderDraw::Direct { .. } => false,
+        }
     }
 }
 
@@ -573,9 +575,18 @@ impl SyncResource for RenderPass {
     }
 
     fn needs_rebuild_from_others(&self, tracker: &SyncTracker) -> bool {
-        self.pipelines
-            .iter()
-            .any(|pipeline| pipeline.dirty || pipeline.needs_rebuild_from_others(tracker))
+        self.target
+            .texture_view_id
+            .is_some_and(|id| tracker.was_changed(id))
+            || self
+                .depth_target
+                .as_ref()
+                .and_then(|target| target.texture_view_id)
+                .is_some_and(|id| tracker.was_changed(id))
+            || self
+                .pipelines
+                .iter()
+                .any(|pipeline| pipeline.dirty || pipeline.needs_rebuild_from_others(tracker))
     }
 }
 

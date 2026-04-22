@@ -183,11 +183,8 @@ impl SyncResource for ComputePass {
     ) -> AppResult<SyncOutcome<Self::Runtime>> {
         let mut bind_groups = vec![];
         for entry in &self.bind_groups {
-            let id = entry.bind_group_id().ok_or(AppError::UninitResource)?;
-            let bind_group_runtime = ctx
-                .runtime_bind_groups
-                .get(id)
-                .and_then(|r| r.ok_or(AppError::UninitResource))?;
+            let id = entry.bind_group_id().ok_or(AppError::UninitializedFields)?;
+            let bind_group_runtime = ctx.runtime_bind_groups.get_init(id)?;
 
             bind_groups.push(bind_group_runtime);
         }
@@ -205,14 +202,9 @@ impl SyncResource for ComputePass {
                 immediate_size: 0,
             });
 
-        let Some(shader_id) = self.shader else {
-            return Err(AppError::UninitResource);
-        };
+        let shader_id = self.shader.ok_or(AppError::UninitializedFields)?;
 
-        let shader_runtime = ctx
-            .runtime_shaders
-            .get(shader_id)
-            .and_then(|r| r.ok_or(AppError::UninitResource))?;
+        let shader_runtime = ctx.runtime_shaders.get_init(shader_id)?;
 
         let pipeline = ctx
             .device
