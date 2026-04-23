@@ -357,7 +357,7 @@ pub async fn create_scene(
     );
 
     let main_render_pass_id = project.render_passes.register(main_render_pass);
-    project.render_schedule.add(Some(main_render_pass_id));
+    project.frame_plan.add(Some(main_render_pass_id));
 
     let mut hdr_render_pass = RenderPass::new(
         "HDR render pass",
@@ -381,7 +381,7 @@ pub async fn create_scene(
     );
 
     let hdr_render_pass_id = project.render_passes.register(hdr_render_pass);
-    project.render_schedule.add(Some(hdr_render_pass_id));
+    project.frame_plan.add(Some(hdr_render_pass_id));
 
     Ok(viewport_id)
 }

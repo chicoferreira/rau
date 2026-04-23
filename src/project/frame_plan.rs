@@ -3,7 +3,7 @@ use egui_dnd::utils::shift_vec;
 use crate::{
     error::AppResult,
     project::{
-        Model, ProjectResource, RenderPassId, RenderScheduleId, Shader, TextureView,
+        FramePlanId, Model, ProjectResource, RenderPassId, Shader, TextureView,
         bindgroup::BindGroup,
         render_pass::{self, RenderPass},
         storage::{RuntimeStorage, Storage},
@@ -12,20 +12,20 @@ use crate::{
 };
 
 #[derive(Default)]
-pub struct RenderSchedule {
-    entries: Vec<RenderScheduleEntry>,
+pub struct FramePlan {
+    entries: Vec<FramePlanStep>,
     revision: Revision,
 }
 
-pub type RenderScheduleEntryId = usize;
+pub type FramePlanStepId = usize;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct RenderScheduleEntry {
-    id: RenderScheduleEntryId,
+pub struct FramePlanStep {
+    id: FramePlanStepId,
     render_pass_id: Option<RenderPassId>,
 }
 
-pub struct RenderScheduleContext<'a> {
+pub struct FramePlanContext<'a> {
     pub device: &'a wgpu::Device,
     pub encoder: &'a mut wgpu::CommandEncoder,
     pub render_passes: &'a Storage<RenderPass>,
@@ -36,12 +36,12 @@ pub struct RenderScheduleContext<'a> {
     pub runtime_bind_groups: &'a RuntimeStorage<BindGroup>,
 }
 
-impl RenderSchedule {
+impl FramePlan {
     pub fn iter(&self) -> impl Iterator<Item = RenderPassId> {
         self.entries.iter().filter_map(|entry| entry.render_pass_id)
     }
 
-    pub fn entries(&self) -> &[RenderScheduleEntry] {
+    pub fn entries(&self) -> &[FramePlanStep] {
         &self.entries
     }
 
@@ -56,7 +56,7 @@ impl RenderSchedule {
             return;
         }
 
-        self.entries.push(RenderScheduleEntry::new(render_pass_id));
+        self.entries.push(FramePlanStep::new(render_pass_id));
         self.revision.increase();
     }
 
@@ -86,15 +86,15 @@ impl RenderSchedule {
     }
 }
 
-impl ProjectResource for RenderSchedule {
-    type Id = RenderScheduleId;
+impl ProjectResource for FramePlan {
+    type Id = FramePlanId;
 
     fn label(&self) -> &str {
-        "Render Schedule"
+        "Frame Plan"
     }
 }
 
-impl RenderScheduleEntry {
+impl FramePlanStep {
     fn new(render_pass_id: Option<RenderPassId>) -> Self {
         Self {
             id: fastrand::usize(..),
@@ -102,7 +102,7 @@ impl RenderScheduleEntry {
         }
     }
 
-    pub fn id(&self) -> RenderScheduleEntryId {
+    pub fn id(&self) -> FramePlanStepId {
         self.id
     }
 
@@ -111,8 +111,8 @@ impl RenderScheduleEntry {
     }
 }
 
-impl SyncResource for RenderSchedule {
-    type Context<'a> = RenderScheduleContext<'a>;
+impl SyncResource for FramePlan {
+    type Context<'a> = FramePlanContext<'a>;
     type Runtime = ();
 
     fn revision(&self) -> Revision {

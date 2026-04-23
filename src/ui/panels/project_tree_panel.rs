@@ -3,8 +3,8 @@ use egui_ltreeview::{Action, TreeView};
 
 use crate::{
     project::{
-        BindGroupId, CameraId, ComputePassId, DimensionId, ModelId, ProjectResource, RenderPassId,
-        RenderScheduleId, ResourceKind, SamplerId, ShaderId, TextureId, TextureViewId, UniformId,
+        BindGroupId, CameraId, ComputePassId, DimensionId, FramePlanId, ModelId, ProjectResource,
+        RenderPassId, ResourceKind, SamplerId, ShaderId, TextureId, TextureViewId, UniformId,
         ViewportId,
     },
     state::StateEvent,
@@ -37,7 +37,7 @@ pub enum TreeNodeId {
     RenderPass(RenderPassId),
     ComputePassFolder,
     ComputePass(ComputePassId),
-    RenderSchedule(RenderScheduleId),
+    FramePlan(FramePlanId),
 }
 
 pub fn ui(state: &mut StateSnapshot, ui: &mut egui::Ui) -> Response {
@@ -266,15 +266,9 @@ pub fn ui(state: &mut StateSnapshot, ui: &mut egui::Ui) -> Response {
             }
             builder.close_dir();
 
-            TreeNode::new(
-                TreeNodeId::RenderSchedule(RenderScheduleId),
-                "Render Schedule",
-            )
-            .with_event(
-                "Inspect",
-                StateEvent::InspectResource(RenderScheduleId.into()),
-            )
-            .build_to(builder, state.pending_events, state.rename_state);
+            TreeNode::new(TreeNodeId::FramePlan(FramePlanId), "Frame Plan")
+                .with_event("Inspect", StateEvent::InspectResource(FramePlanId.into()))
+                .build_to(builder, state.pending_events, state.rename_state);
         });
 
     for action in actions {
@@ -294,9 +288,7 @@ pub fn ui(state: &mut StateSnapshot, ui: &mut egui::Ui) -> Response {
                         TreeNodeId::Model(id) => Some(StateEvent::InspectResource(id.into())),
                         TreeNodeId::RenderPass(id) => Some(StateEvent::InspectResource(id.into())),
                         TreeNodeId::ComputePass(id) => Some(StateEvent::InspectResource(id.into())),
-                        TreeNodeId::RenderSchedule(id) => {
-                            Some(StateEvent::InspectResource(id.into()))
-                        }
+                        TreeNodeId::FramePlan(id) => Some(StateEvent::InspectResource(id.into())),
                         TreeNodeId::UniformFolder
                         | TreeNodeId::BindGroupFolder
                         | TreeNodeId::ViewportFolder

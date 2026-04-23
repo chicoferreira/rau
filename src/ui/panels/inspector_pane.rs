@@ -1,6 +1,6 @@
 use crate::{
     project::{
-        BindGroupId, CameraId, ComputePassId, DimensionId, ModelId, RenderPassId, RenderScheduleId,
+        BindGroupId, CameraId, ComputePassId, DimensionId, FramePlanId, ModelId, RenderPassId,
         ResourceId, SamplerId, ShaderId, TextureId, TextureViewId, UniformId, ViewportId,
     },
     ui::{components::tiles::Pane, pane::StateSnapshot},
@@ -19,7 +19,7 @@ pub enum InspectorPane {
     Viewport(ViewportId),
     Model(ModelId),
     RenderPass(RenderPassId),
-    RenderSchedule(RenderScheduleId),
+    FramePlan(FramePlanId),
     ComputePass(ComputePassId),
 }
 
@@ -37,7 +37,7 @@ impl InspectorPane {
             InspectorPane::Viewport(id) => id.into(),
             InspectorPane::Model(id) => id.into(),
             InspectorPane::RenderPass(id) => id.into(),
-            InspectorPane::RenderSchedule(id) => id.into(),
+            InspectorPane::FramePlan(id) => id.into(),
             InspectorPane::ComputePass(id) => id.into(),
         }
     }
@@ -97,8 +97,8 @@ impl Pane for InspectorPane {
                         InspectorPane::RenderPass(render_pass_id) => {
                             state.render_pass_inspector_ui(ui, *render_pass_id);
                         }
-                        InspectorPane::RenderSchedule(_) => {
-                            state.render_schedule_inspector_ui(ui);
+                        InspectorPane::FramePlan(_) => {
+                            state.frame_plan_inspector_ui(ui);
                         }
                         InspectorPane::ComputePass(compute_pass_id) => {
                             state.compute_pass_inspector_ui(ui, *compute_pass_id);

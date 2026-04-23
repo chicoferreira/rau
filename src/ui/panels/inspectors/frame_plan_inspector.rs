@@ -1,7 +1,7 @@
 use egui::RichText;
 
 use crate::{
-    project::RenderScheduleId,
+    project::FramePlanId,
     ui::{
         components::{hint::hint, selector::ComboBoxExt},
         pane::StateSnapshot,
@@ -9,10 +9,10 @@ use crate::{
 };
 
 impl StateSnapshot<'_> {
-    pub fn render_schedule_inspector_ui(&mut self, ui: &mut egui::Ui) {
+    pub fn frame_plan_inspector_ui(&mut self, ui: &mut egui::Ui) {
         let entries = self
             .project
-            .render_schedule
+            .frame_plan
             .entries()
             .iter()
             .map(|entry| (entry.id(), entry.render_pass_id()))
@@ -21,10 +21,10 @@ impl StateSnapshot<'_> {
         let mut entry_edits = Vec::new();
 
         if entries.is_empty() {
-            ui.label("No render passes in the render schedule.");
+            ui.label("No render passes in the frame plan.");
         }
 
-        let response = egui_dnd::dnd(ui, RenderScheduleId).show_custom(|ui, iter| {
+        let response = egui_dnd::dnd(ui, FramePlanId).show_custom(|ui, iter| {
             for (index, (entry_id, render_pass_id)) in entries.iter().copied().enumerate() {
                 if index != 0 {
                     ui.add_space(5.0);
@@ -43,7 +43,7 @@ impl StateSnapshot<'_> {
                                     )
                                     .context_menu(|ui| {
                                         if ui.button("Delete Entry").clicked() {
-                                            entry_edits.push(RenderScheduleEdit::Delete(index));
+                                            entry_edits.push(FramePlanEdit::Delete(index));
                                             ui.close();
                                         }
                                     });
@@ -51,7 +51,7 @@ impl StateSnapshot<'_> {
                             });
 
                             ui.indent("entry", |ui| {
-                                egui::Grid::new(("render_schedule_entry", index))
+                                egui::Grid::new(("frame_plan_step", index))
                                     .num_columns(2)
                                     .spacing([8.0, 4.0])
                                     .show(ui, |ui| {
@@ -59,14 +59,14 @@ impl StateSnapshot<'_> {
                                         let mut id = before;
 
                                         ui.label("Render Pass");
-                                        egui::ComboBox::from_id_salt("render_schedule_pass")
+                                        egui::ComboBox::from_id_salt("frame_plan_pass")
                                             .selected_text_storage_opt(render_passes, id)
                                             .show_ui_storage_opt(ui, render_passes, &mut id);
 
                                         ui.end_row();
 
                                         if id != before {
-                                            entry_edits.push(RenderScheduleEdit::Update(index, id));
+                                            entry_edits.push(FramePlanEdit::Update(index, id));
                                         }
                                     });
                             });
@@ -77,28 +77,24 @@ impl StateSnapshot<'_> {
         });
 
         if let Some(update) = response.final_update() {
-            entry_edits.push(RenderScheduleEdit::Reorder(update));
+            entry_edits.push(FramePlanEdit::Reorder(update));
         }
 
         ui.add_space(6.0);
 
         if ui.button("Add Render Pass").clicked() {
-            self.project.render_schedule.add(None);
+            self.project.frame_plan.add(None);
         }
 
         for edit in entry_edits {
             match edit {
-                RenderScheduleEdit::Delete(index) => {
-                    self.project.render_schedule.remove_entry(index)
+                FramePlanEdit::Delete(index) => self.project.frame_plan.remove_entry(index),
+                FramePlanEdit::Update(index, render_pass_id) => {
+                    self.project.frame_plan.update_entry(index, render_pass_id);
                 }
-                RenderScheduleEdit::Update(index, render_pass_id) => {
+                FramePlanEdit::Reorder(update) => {
                     self.project
-                        .render_schedule
-                        .update_entry(index, render_pass_id);
-                }
-                RenderScheduleEdit::Reorder(update) => {
-                    self.project
-                        .render_schedule
+                        .frame_plan
                         .reorder_entries(update.from, update.to);
                 }
             }
@@ -115,7 +111,7 @@ impl StateSnapshot<'_> {
     }
 }
 
-enum RenderScheduleEdit {
+enum FramePlanEdit {
     Delete(usize),
     Update(usize, Option<crate::project::RenderPassId>),
     Reorder(egui_dnd::DragUpdate),

@@ -150,7 +150,7 @@ impl From<ResourceId> for Option<RenameTarget> {
             ResourceId::Model(id) => Some(RenameTarget::Model(id)),
             ResourceId::RenderPass(id) => Some(RenameTarget::RenderPass(id)),
             ResourceId::ComputePass(id) => Some(RenameTarget::ComputePass(id)),
-            ResourceId::RenderSchedule(_) => None,
+            ResourceId::FramePlan(_) => None,
         }
     }
 }

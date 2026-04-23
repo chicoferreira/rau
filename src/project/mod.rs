@@ -7,9 +7,9 @@ use crate::{
         camera::Camera,
         compute_pass::ComputePass,
         dimension::Dimension,
+        frame_plan::FramePlan,
         model::Model,
         render_pass::RenderPass,
-        render_schedule::RenderSchedule,
         sampler::Sampler,
         shader::Shader,
         storage::{RuntimeStorage, Storage},
@@ -25,9 +25,9 @@ pub mod bindgroup;
 pub mod camera;
 pub mod compute_pass;
 pub mod dimension;
+pub mod frame_plan;
 pub mod model;
 pub mod render_pass;
-pub mod render_schedule;
 pub mod sampler;
 pub mod shader;
 pub mod storage;
@@ -53,7 +53,7 @@ new_key_type! {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
-pub struct RenderScheduleId;
+pub struct FramePlanId;
 
 #[derive(Default)]
 pub struct Project {
@@ -68,7 +68,7 @@ pub struct Project {
     pub cameras: Storage<Camera>,
     pub models: Storage<Model>,
     pub render_passes: Storage<RenderPass>,
-    pub render_schedule: RenderSchedule,
+    pub frame_plan: FramePlan,
     pub compute_passes: Storage<ComputePass>,
 }
 
@@ -84,7 +84,7 @@ pub struct RuntimeProject {
     pub cameras: RuntimeStorage<Camera>,
     pub models: RuntimeStorage<Model>,
     pub render_passes: RuntimeStorage<RenderPass>,
-    pub render_schedule: sync::RuntimeCell<()>,
+    pub frame_plan: sync::RuntimeCell<()>,
     pub compute_passes: RuntimeStorage<ComputePass>,
 }
 
@@ -102,7 +102,7 @@ impl Project {
             ResourceId::Dimension(id) => self.dimensions.get_label(id),
             ResourceId::Camera(id) => self.cameras.get_label(id),
             ResourceId::Model(id) => self.models.get_label(id),
-            ResourceId::RenderSchedule(_) => Ok("Render Schedule"),
+            ResourceId::FramePlan(_) => Ok("Frame Plan"),
             ResourceId::ComputePass(id) => self.compute_passes.get_label(id),
         };
 
@@ -122,7 +122,7 @@ impl Project {
             ResourceKind::Camera => self.cameras.create().into(),
             ResourceKind::Model => todo!("not yet implemented"),
             ResourceKind::RenderPass => self.render_passes.create().into(),
-            ResourceKind::RenderSchedule => return None,
+            ResourceKind::FramePlan => return None,
             ResourceKind::ComputePass => self.compute_passes.create().into(),
         };
         Some(id)
@@ -139,7 +139,7 @@ impl Project {
             ResourceId::Dimension(id) => self.dimensions.unregister(id),
             ResourceId::Camera(id) => self.cameras.unregister(id),
             ResourceId::Model(id) => self.models.unregister(id),
-            ResourceId::RenderSchedule(_) => {}
+            ResourceId::FramePlan(_) => {}
             ResourceId::ComputePass(id) => self.compute_passes.unregister(id),
             ResourceId::Viewport(id) => self.viewports.unregister(id),
             ResourceId::RenderPass(id) => self.render_passes.unregister(id),
@@ -160,7 +160,7 @@ impl RuntimeProject {
             ResourceId::Camera(id) => self.cameras.unregister(id),
             ResourceId::Model(id) => self.models.unregister(id),
             ResourceId::RenderPass(id) => self.render_passes.unregister(id),
-            ResourceId::RenderSchedule(_) => self.render_schedule = sync::RuntimeCell::Empty,
+            ResourceId::FramePlan(_) => self.frame_plan = sync::RuntimeCell::Empty,
             ResourceId::ComputePass(id) => self.compute_passes.unregister(id),
             ResourceId::Viewport(_) => {}
         };
@@ -179,7 +179,7 @@ impl RuntimeProject {
             .chain(self.models.get_errors())
             .chain(self.render_passes.get_errors())
             .chain(self.compute_passes.get_errors())
-            .chain(self.render_schedule.get_error(RenderScheduleId))
+            .chain(self.frame_plan.get_error(FramePlanId))
     }
 
     pub fn handle_validation(&mut self, result: ErrorScopeResult) -> AppResult<()> {
@@ -197,7 +197,7 @@ impl RuntimeProject {
             ResourceId::Camera(id) => self.cameras.handle_validation(id, rev, error),
             ResourceId::Model(id) => self.models.handle_validation(id, rev, error),
             ResourceId::RenderPass(id) => self.render_passes.handle_validation(id, rev, error),
-            ResourceId::RenderSchedule(_) => Ok(self.render_schedule.handle_validation(rev, error)),
+            ResourceId::FramePlan(_) => Ok(self.frame_plan.handle_validation(rev, error)),
             ResourceId::ComputePass(id) => self.compute_passes.handle_validation(id, rev, error),
             ResourceId::Viewport(_) => Ok(()),
         }
@@ -217,7 +217,7 @@ pub enum ResourceId {
     Camera(CameraId),
     Model(ModelId),
     RenderPass(RenderPassId),
-    RenderSchedule(RenderScheduleId),
+    FramePlan(FramePlanId),
     ComputePass(ComputePassId),
 }
 
@@ -234,7 +234,7 @@ pub enum ResourceKind {
     Camera,
     Model,
     RenderPass,
-    RenderSchedule,
+    FramePlan,
     ComputePass,
 }
 

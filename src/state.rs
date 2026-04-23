@@ -5,14 +5,14 @@ use winit::{event::WindowEvent, window::Window};
 
 use crate::{
     project::{
-        self, DimensionId, Project, RenderScheduleId, ResourceId, ResourceKind, RuntimeProject,
+        self, DimensionId, FramePlanId, Project, ResourceId, ResourceKind, RuntimeProject,
         ViewportId,
         bindgroup::BindGroupCreationContext,
         camera::CameraCreationContext,
         compute_pass,
+        frame_plan::FramePlanContext,
         model::ModelCreationContext,
         render_pass,
-        render_schedule::RenderScheduleContext,
         shader::{Shader, ShaderCreationContext},
         sync::SyncTracker,
         texture::TextureCreationContext,
@@ -300,12 +300,12 @@ impl State {
             &screen_descriptor,
         );
 
-        // TODO: add validation for the render_schedule
+        // TODO: add validation for the frame_plan
         // let submit_scope = WgpuErrorScope::push(&self.device);
         self.queue.submit(std::iter::once(encoder.finish()));
         // if let Err(error) = submit_scope.pop() {
-        //     self.runtime_project.render_schedule = RuntimeCell::Errored {
-        //         at_revision: self.project.render_schedule.revision(),
+        //     self.runtime_project.frame_plan = RuntimeCell::Errored {
+        //         at_revision: self.project.frame_plan.revision(),
         //         error,
         //     };
         // }
@@ -476,7 +476,7 @@ impl State {
             &self.error_waiter,
         );
 
-        let mut render_schedule_ctx = RenderScheduleContext {
+        let mut frame_plan_ctx = FramePlanContext {
             device: &self.device,
             encoder,
             render_passes: &self.project.render_passes,
@@ -487,10 +487,10 @@ impl State {
             runtime_bind_groups: &self.runtime_project.bind_groups,
         };
         let _ = self.tracker.sync_singleton(
-            RenderScheduleId,
-            &mut self.project.render_schedule,
-            &mut self.runtime_project.render_schedule,
-            &mut render_schedule_ctx,
+            FramePlanId,
+            &mut self.project.frame_plan,
+            &mut self.runtime_project.frame_plan,
+            &mut frame_plan_ctx,
             &self.device,
             &self.error_waiter,
         );
@@ -515,7 +515,7 @@ impl State {
                         ResourceId::Texture(id) => InspectorPane::Texture(id),
                         ResourceId::Model(id) => InspectorPane::Model(id),
                         ResourceId::RenderPass(id) => InspectorPane::RenderPass(id),
-                        ResourceId::RenderSchedule(id) => InspectorPane::RenderSchedule(id),
+                        ResourceId::FramePlan(id) => InspectorPane::FramePlan(id),
                         ResourceId::ComputePass(id) => InspectorPane::ComputePass(id),
                     };
 
