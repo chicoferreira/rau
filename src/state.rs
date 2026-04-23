@@ -1,32 +1,27 @@
 use std::sync::Arc;
 
-use egui_dnd::DragUpdate;
 use slotmap::SecondaryMap;
 use winit::{event::WindowEvent, window::Window};
 
 use crate::{
     project::{
-        self, BindGroupId, CameraId, ComputePassId, DimensionId, ModelId, Project, RenderPassId,
-        RenderScheduleId, ResourceId, RuntimeProject, SamplerId, ShaderId, TextureId,
-        TextureViewId, UniformId, ViewportId,
-        bindgroup::{BindGroup, BindGroupCreationContext, BindGroupEntry, BindGroupResource},
-        camera::{Camera, CameraCreationContext},
-        compute_pass::{self, ComputePass},
-        dimension::Dimension,
-        model::{MeshMaterialSelection, ModelCreationContext, vertex_buffer::VertexBufferField},
+        self, DimensionId, Project, RenderScheduleId, ResourceId, ResourceKind, RuntimeProject,
+        ViewportId,
+        bindgroup::BindGroupCreationContext,
+        camera::CameraCreationContext,
+        compute_pass,
+        model::ModelCreationContext,
         render_pass,
         render_schedule::RenderScheduleContext,
-        sampler::{Sampler, SamplerSpec},
         shader::{Shader, ShaderCreationContext},
         sync::SyncTracker,
         texture::TextureCreationContext,
-        texture_view::{TextureView, TextureViewCreationContext},
-        uniform::{Uniform, UniformCreationContext, UniformField, UniformFieldSource},
-        viewport::Viewport,
+        texture_view::TextureViewCreationContext,
+        uniform::UniformCreationContext,
     },
     scene,
     ui::{
-        self, Size2d,
+        self,
         components::tiles::TreePane,
         panels::{inspector_pane::InspectorPane, viewport_pane::ViewportPane},
         rename::{RenameState, RenameTarget},
@@ -52,49 +47,11 @@ pub enum StateEvent {
     ViewportEvent(ViewportId, ViewportEvent),
     InspectResource(ResourceId),
     OpenViewport(ViewportId),
-    CreateRenderScheduleEntry,
-    DeleteRenderScheduleEntry(usize),
-    UpdateRenderScheduleEntry(usize, Option<RenderPassId>),
-    ReorderRenderScheduleEntry(DragUpdate),
-    CreateUniform,
-    DeleteUniform(UniformId),
-    CreateUniformField(UniformId, UniformFieldSource),
-    UpdateUniformFieldSource(UniformId, usize, UniformFieldSource),
-    DeleteUniformField(UniformId, usize),
-    ReorderUniformField(UniformId, DragUpdate),
+    CreateResource(ResourceKind),
     StartRename(RenameTarget),
     CancelRename,
     ApplyRename(RenameTarget, String),
-    CreateBindGroup,
-    DeleteBindGroup(BindGroupId),
-    CreateBindGroupEntry(BindGroupId, BindGroupResource),
-    DeleteBindGroupEntry(BindGroupId, usize),
-    UpdateBindGroupEntry(BindGroupId, usize, BindGroupEntry),
-    ReorderBindGroupEntry(BindGroupId, DragUpdate),
-    CreateViewport,
-    DeleteViewport(ViewportId),
-    CreateShader,
-    DeleteShader(ShaderId),
-    CreateCamera,
-    DeleteCamera(CameraId),
-    CreateDimension,
-    DeleteDimension(DimensionId),
-    CreateSampler,
-    DeleteSampler(SamplerId),
-    DeleteTexture(TextureId),
-    CreateTextureView,
-    DeleteTextureView(TextureViewId),
-    AddModelVertexBufferField(ModelId, VertexBufferField),
-    DeleteModelVertexBufferField(ModelId, usize),
-    UpdateModelVertexBufferField(ModelId, usize, VertexBufferField),
-    ReorderModelVertexBufferField(ModelId, DragUpdate),
-    SetModelMaterialBindGroup(ModelId, usize, Option<BindGroupId>),
-    SetMeshMaterialSelection(ModelId, usize, MeshMaterialSelection),
-    CreateRenderPipeline(RenderPassId),
-    DeleteRenderPipeline(RenderPassId, usize),
-    ReorderRenderPipeline(RenderPassId, DragUpdate),
-    CreateComputePass,
-    DeleteComputePass(ComputePassId),
+    DeleteResource(ResourceId),
 }
 
 pub struct State {
@@ -564,51 +521,28 @@ impl State {
 
                     self.inspector_tree_pane.add_pane(pane);
                 }
-                StateEvent::CreateRenderScheduleEntry => {
-                    self.project.render_schedule.add(None);
-                }
-                StateEvent::CreateComputePass => {
-                    const DEFAULT_NAME: &str = "Compute Pass";
+                StateEvent::CreateResource(kind) => {
+                    let Some(resource_id) = self.project.register(kind) else {
+                        continue;
+                    };
 
-                    let compute_pass = ComputePass::new(DEFAULT_NAME, vec![], None, 1, 1, 1);
-                    let compute_pass_id = self.project.compute_passes.register(compute_pass);
-
-                    self.rename_state = Some(RenameState {
-                        target: RenameTarget::ComputePass(compute_pass_id),
-                        current_label: DEFAULT_NAME.to_string(),
-                    });
+                    if let Some(target) = Option::<RenameTarget>::from(resource_id)
+                        && let Some(current_label) = self.project.label(resource_id)
+                    {
+                        self.rename_state = Some(RenameState {
+                            target,
+                            current_label: current_label.to_string(),
+                        });
+                    }
                 }
-                StateEvent::DeleteRenderScheduleEntry(index) => {
-                    self.project.render_schedule.remove_entry(index);
-                }
-                StateEvent::DeleteComputePass(compute_pass_id) => {
-                    self.project.compute_passes.unregister(compute_pass_id);
-                }
-                StateEvent::UpdateRenderScheduleEntry(index, render_pass_id) => {
-                    self.project
-                        .render_schedule
-                        .update_entry(index, render_pass_id);
-                }
-                StateEvent::ReorderRenderScheduleEntry(drag_update) => {
-                    self.project
-                        .render_schedule
-                        .reorder_entries(drag_update.from, drag_update.to);
+                StateEvent::DeleteResource(id) => {
+                    self.project.unregister(id);
+                    self.runtime_project.unregister(id);
+                    self.tracker.push_change(id);
                 }
                 StateEvent::OpenViewport(viewport_id) => {
                     self.viewport_tree_pane
                         .add_pane(ViewportPane { viewport_id });
-                }
-                StateEvent::CreateUniform => {
-                    const DEFAULT_NAME: &str = "Uniform";
-
-                    let uniform = Uniform::new(DEFAULT_NAME, vec![]);
-
-                    let uniform_id = self.project.uniforms.register(uniform);
-
-                    self.rename_state = Some(RenameState {
-                        target: RenameTarget::Uniform(uniform_id),
-                        current_label: DEFAULT_NAME.to_string(),
-                    });
                 }
                 StateEvent::StartRename(rename_target) => {
                     if let Some(current_name) = rename_target.get_label(&self.project) {
@@ -624,56 +558,6 @@ impl State {
                 StateEvent::ApplyRename(rename_target, new_name) => {
                     self.rename_state = None;
                     rename_target.apply(new_name, &mut self.project);
-                }
-                StateEvent::CreateUniformField(id, source) => {
-                    if let Ok(uniform) = self.project.uniforms.get_mut(id) {
-                        const DEFAULT_NAME: &str = "Field";
-
-                        let index = uniform.fields().len();
-
-                        uniform.add_field(UniformField::new(DEFAULT_NAME, source));
-
-                        self.rename_state = Some(RenameState {
-                            target: RenameTarget::UniformField(id, index),
-                            current_label: DEFAULT_NAME.to_string(),
-                        });
-                    }
-                }
-                StateEvent::UpdateUniformFieldSource(uniform_id, index, source) => {
-                    if let Ok(uniform) = self.project.uniforms.get_mut(uniform_id) {
-                        uniform.set_field_source(index, source);
-                    }
-                }
-                StateEvent::ReorderUniformField(uniform_id, drag_update) => {
-                    if let Ok(uniform) = self.project.uniforms.get_mut(uniform_id) {
-                        uniform.reorder_field(drag_update.from, drag_update.to);
-                    }
-                }
-                StateEvent::CreateBindGroup => {
-                    const DEFAULT_NAME: &str = "Bind Group";
-
-                    let bind_group = BindGroup::new(DEFAULT_NAME, vec![]);
-                    let bind_group_id = self.project.bind_groups.register(bind_group);
-
-                    self.rename_state = Some(RenameState {
-                        target: RenameTarget::BindGroup(bind_group_id),
-                        current_label: DEFAULT_NAME.to_string(),
-                    });
-                }
-                StateEvent::CreateBindGroupEntry(id, resource) => {
-                    if let Ok(bind_group) = self.project.bind_groups.get_mut(id) {
-                        bind_group.add_entry(BindGroupEntry::new_vertex_fragment(resource));
-                    }
-                }
-                StateEvent::UpdateBindGroupEntry(id, index, entry) => {
-                    if let Ok(bind_group) = self.project.bind_groups.get_mut(id) {
-                        bind_group.update_entry(index, entry);
-                    }
-                }
-                StateEvent::ReorderBindGroupEntry(bind_group_id, drag_update) => {
-                    if let Ok(bind_group) = self.project.bind_groups.get_mut(bind_group_id) {
-                        bind_group.reorder_entries(drag_update.from, drag_update.to);
-                    }
                 }
                 StateEvent::ViewportEvent(viewport_id, viewport_event) => {
                     if let Ok(viewport) = self.project.viewports.get_mut(viewport_id) {
@@ -741,181 +625,6 @@ impl State {
                                 }
                             }
                         }
-                    }
-                }
-                StateEvent::CreateCamera => {
-                    const DEFAULT_NAME: &str = "Camera";
-
-                    let camera = Camera::new(DEFAULT_NAME.to_string());
-                    let camera_id = self.project.cameras.register(camera);
-
-                    self.rename_state = Some(RenameState {
-                        target: RenameTarget::Camera(camera_id),
-                        current_label: DEFAULT_NAME.to_string(),
-                    });
-                }
-                StateEvent::CreateDimension => {
-                    const DEFAULT_NAME: &str = "Dimension";
-
-                    let dimension = Dimension::new(DEFAULT_NAME, Size2d::new(1920, 1080));
-                    let dimension_id = self.project.dimensions.register(dimension);
-
-                    self.rename_state = Some(RenameState {
-                        target: RenameTarget::Dimension(dimension_id),
-                        current_label: DEFAULT_NAME.to_string(),
-                    });
-                }
-                StateEvent::CreateSampler => {
-                    const DEFAULT_NAME: &str = "Sampler";
-
-                    let sampler = Sampler::new(DEFAULT_NAME, SamplerSpec::default());
-                    let sampler_id = self.project.samplers.register(sampler);
-
-                    self.rename_state = Some(RenameState {
-                        target: RenameTarget::Sampler(sampler_id),
-                        current_label: DEFAULT_NAME.to_string(),
-                    });
-                }
-                StateEvent::CreateViewport => {
-                    const DEFAULT_NAME: &str = "Viewport";
-
-                    let viewport = Viewport::new(DEFAULT_NAME, None, None, None);
-                    let viewport_id = self.project.viewports.register(viewport);
-
-                    self.rename_state = Some(RenameState {
-                        target: RenameTarget::Viewport(viewport_id),
-                        current_label: DEFAULT_NAME.to_string(),
-                    });
-                }
-                StateEvent::CreateShader => {
-                    const DEFAULT_NAME: &str = "Shader";
-                    const DEFAULT_SOURCE: &str = r#"@vertex
-fn vs_main() -> @builtin(position) vec4<f32> {
-    return vec4<f32>(0.0, 0.0, 0.0, 1.0);
-}
-
-@fragment
-fn fs_main() -> @location(0) vec4<f32> {
-    return vec4<f32>(1.0, 1.0, 1.0, 1.0);
-}
-"#;
-
-                    let shader = Shader::new(DEFAULT_NAME, DEFAULT_SOURCE);
-                    let shader_id = self.project.shaders.register(shader);
-
-                    self.rename_state = Some(RenameState {
-                        target: RenameTarget::Shader(shader_id),
-                        current_label: DEFAULT_NAME.to_string(),
-                    });
-                }
-                StateEvent::CreateTextureView => {
-                    const DEFAULT_NAME: &str = "Texture View";
-
-                    let texture_view = TextureView::new(DEFAULT_NAME.to_string(), None, None, None);
-                    let texture_view_id = self.project.texture_views.register(texture_view);
-
-                    self.rename_state = Some(RenameState {
-                        target: RenameTarget::TextureView(texture_view_id),
-                        current_label: DEFAULT_NAME.to_string(),
-                    });
-                }
-                StateEvent::DeleteUniform(id) => {
-                    self.project.uniforms.unregister(id);
-                }
-                StateEvent::DeleteUniformField(id, index) => {
-                    if let Ok(uniform) = self.project.uniforms.get_mut(id) {
-                        uniform.remove_field(index);
-                    }
-                }
-                StateEvent::DeleteBindGroup(bind_group_id) => {
-                    for (_, model) in self.project.models.list_mut() {
-                        for material in model.materials_mut() {
-                            if material.bind_group_id() == Some(bind_group_id) {
-                                material.set_bind_group_id(None);
-                            }
-                        }
-                    }
-                    self.project.bind_groups.unregister(bind_group_id);
-                }
-                StateEvent::DeleteBindGroupEntry(id, index) => {
-                    if let Ok(bind_group) = self.project.bind_groups.get_mut(id) {
-                        bind_group.remove_entry(index);
-                    }
-                }
-                StateEvent::DeleteViewport(viewport_id) => {
-                    self.project.viewports.unregister(viewport_id);
-                }
-                StateEvent::DeleteShader(shader_id) => {
-                    self.project.shaders.unregister(shader_id);
-                }
-                StateEvent::DeleteCamera(camera_id) => {
-                    self.project.cameras.unregister(camera_id);
-                }
-                StateEvent::DeleteDimension(dimension_id) => {
-                    self.project.dimensions.unregister(dimension_id);
-                }
-                StateEvent::DeleteSampler(sampler_id) => {
-                    self.project.samplers.unregister(sampler_id);
-                }
-                StateEvent::DeleteTexture(texture_id) => {
-                    self.project.textures.unregister(texture_id);
-                }
-                StateEvent::DeleteTextureView(texture_view_id) => {
-                    self.project.texture_views.unregister(texture_view_id);
-                }
-                StateEvent::AddModelVertexBufferField(model_id, field) => {
-                    if let Ok(model) = self.project.models.get_mut(model_id) {
-                        model.add_vertex_buffer_field(field);
-                    }
-                }
-                StateEvent::DeleteModelVertexBufferField(model_id, index) => {
-                    if let Ok(model) = self.project.models.get_mut(model_id) {
-                        model.remove_vertex_buffer_field(index);
-                    }
-                }
-                StateEvent::UpdateModelVertexBufferField(model_id, index, field) => {
-                    if let Ok(model) = self.project.models.get_mut(model_id) {
-                        model.set_vertex_buffer_field(index, field);
-                    }
-                }
-                StateEvent::ReorderModelVertexBufferField(model_id, drag_update) => {
-                    if let Ok(model) = self.project.models.get_mut(model_id) {
-                        model.reorder_vertex_buffer_field(drag_update.from, drag_update.to);
-                    }
-                }
-                StateEvent::SetModelMaterialBindGroup(model_id, material_index, bind_group_id) => {
-                    if let Ok(model) = self.project.models.get_mut(model_id) {
-                        if let Some(material) = model.materials_mut().get_mut(material_index) {
-                            material.set_bind_group_id(bind_group_id);
-                        }
-                    }
-                }
-                StateEvent::SetMeshMaterialSelection(model_id, mesh_index, selection) => {
-                    if let Ok(model) = self.project.models.get_mut(model_id) {
-                        model.set_mesh_material_selection(mesh_index, selection);
-                    }
-                }
-                StateEvent::CreateRenderPipeline(render_pass_id) => {
-                    if let Ok(render_pass) = self.project.render_passes.get_mut(render_pass_id) {
-                        const DEFAULT_NAME: &str = "Pipeline";
-
-                        let index = render_pass.pipelines.len();
-                        render_pass.add_empty_pipeline(DEFAULT_NAME);
-
-                        self.rename_state = Some(RenameState {
-                            target: RenameTarget::RenderPipeline(render_pass_id, index),
-                            current_label: DEFAULT_NAME.to_string(),
-                        });
-                    }
-                }
-                StateEvent::DeleteRenderPipeline(render_pass_id, index) => {
-                    if let Ok(render_pass) = self.project.render_passes.get_mut(render_pass_id) {
-                        render_pass.remove_pipeline(index);
-                    }
-                }
-                StateEvent::ReorderRenderPipeline(render_pass_id, drag_update) => {
-                    if let Ok(render_pass) = self.project.render_passes.get_mut(render_pass_id) {
-                        render_pass.reorder_pipelines(drag_update.from, drag_update.to);
                     }
                 }
             }

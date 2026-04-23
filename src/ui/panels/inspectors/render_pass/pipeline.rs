@@ -118,6 +118,7 @@ pub fn pipeline_entry_ui(
     models: &Storage<Model>,
     pending_events: &mut Vec<StateEvent>,
     rename_state: &mut Option<RenameState>,
+    delete_pipeline: &mut Option<usize>,
 ) {
     let rename_target = RenameTarget::RenderPipeline(render_pass_id, pipeline_index);
 
@@ -137,10 +138,7 @@ pub fn pipeline_entry_ui(
                     ui.close();
                 }
                 if ui.button("Delete Pipeline").clicked() {
-                    pending_events.push(StateEvent::DeleteRenderPipeline(
-                        render_pass_id,
-                        pipeline_index,
-                    ));
+                    *delete_pipeline = Some(pipeline_index);
                     ui.close();
                 }
             });

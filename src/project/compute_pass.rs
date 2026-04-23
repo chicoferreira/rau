@@ -4,7 +4,7 @@ use itertools::Itertools;
 use crate::{
     error::{AppError, AppResult},
     project::{
-        BindGroupId, ComputePassId, ProjectResource, ShaderId,
+        BindGroupId, ComputePassId, Creatable, ProjectResource, ShaderId,
         bindgroup::BindGroup,
         shader::Shader,
         storage::RuntimeStorage,
@@ -35,6 +35,22 @@ pub struct Context<'a> {
     pub encoder: &'a mut wgpu::CommandEncoder,
     pub runtime_shaders: &'a RuntimeStorage<Shader>,
     pub runtime_bind_groups: &'a RuntimeStorage<BindGroup>,
+}
+
+impl Creatable for ComputePass {
+    const DEFAULT_LABEL: &'static str = "Compute Pass";
+
+    fn create(label: String) -> Self {
+        Self {
+            label,
+            bind_groups: Default::default(),
+            shader: Default::default(),
+            work_groups_x: Default::default(),
+            work_groups_y: Default::default(),
+            work_groups_z: Default::default(),
+            revision: Default::default(),
+        }
+    }
 }
 
 impl ComputePass {

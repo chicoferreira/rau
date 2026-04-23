@@ -1,7 +1,7 @@
 use crate::{
     error::AppResult,
     project::{
-        DimensionId, ProjectResource,
+        Creatable, DimensionId, ProjectResource,
         sync::{Revision, SyncOutcome, SyncResource, SyncTracker},
     },
     ui::Size2d,
@@ -31,6 +31,14 @@ impl Dimension {
             self.size = size;
             self.revision.increase();
         }
+    }
+}
+
+impl Creatable for Dimension {
+    const DEFAULT_LABEL: &'static str = "Dimension";
+
+    fn create(label: String) -> Self {
+        Self::new(label, Size2d::new(1920, 1080))
     }
 }
 

@@ -11,7 +11,6 @@ use crate::{
         texture_view::TextureView,
         uniform::Uniform,
     },
-    state::StateEvent,
     ui::{
         components::{
             flags_selector::flags_selector,
@@ -29,13 +28,14 @@ impl StateSnapshot<'_> {
             return;
         };
 
-        let entries = bind_group.entries();
+        let entries = bind_group.entries().to_vec();
         if entries.is_empty() {
             ui.label("No entries in bind group");
         }
 
+        let mut edits = Vec::new();
         let mut ctx = BindGroupUiContext {
-            pending_events: self.pending_events,
+            edits: &mut edits,
             uniforms: &self.project.uniforms,
             texture_views: &self.project.texture_views,
             samplers: &self.project.samplers,
@@ -50,9 +50,9 @@ impl StateSnapshot<'_> {
                     iter.next(ui, field.id(), index, true, |ui, item_handle| {
                         item_handle.ui(ui, |ui, handle, _state| {
                             handle.ui(ui, |ui| {
-                                ui_entry_title(ui, &mut ctx, bind_group_id, index);
+                                ui_entry_title(ui, &mut ctx, index);
                             });
-                            ui_entry_fields(ui, &mut ctx, bind_group_id, index, field);
+                            ui_entry_fields(ui, &mut ctx, index, field);
                         })
                     });
                 });
@@ -60,8 +60,7 @@ impl StateSnapshot<'_> {
         });
 
         if let Some(update) = response.final_update() {
-            self.pending_events
-                .push(StateEvent::ReorderBindGroupEntry(bind_group_id, update));
+            edits.push(BindGroupEdit::Reorder(update));
         }
 
         ui.add_space(6.0);
@@ -71,11 +70,12 @@ impl StateSnapshot<'_> {
                 if ui.button(kind.to_string()).clicked() {
                     ui.close();
                     let resource = kind.default_value();
-                    self.pending_events
-                        .push(StateEvent::CreateBindGroupEntry(bind_group_id, resource));
+                    edits.push(BindGroupEdit::AddEntry(resource));
                 }
             }
         });
+
+        apply_bind_group_edits(self, bind_group_id, edits);
 
         if !entries.is_empty() {
             ui.add_space(6.0);
@@ -89,18 +89,13 @@ impl StateSnapshot<'_> {
 }
 
 struct BindGroupUiContext<'a> {
-    pending_events: &'a mut Vec<StateEvent>,
+    edits: &'a mut Vec<BindGroupEdit>,
     uniforms: &'a Storage<Uniform>,
     texture_views: &'a Storage<TextureView>,
     samplers: &'a Storage<Sampler>,
 }
 
-fn ui_entry_title(
-    ui: &mut egui::Ui,
-    ctx: &mut BindGroupUiContext,
-    bind_group_id: BindGroupId,
-    index: usize,
-) {
+fn ui_entry_title(ui: &mut egui::Ui, ctx: &mut BindGroupUiContext, index: usize) {
     ui.horizontal(|ui| {
         ui.add(
             egui::Label::new(format!("Binding {index}"))
@@ -109,8 +104,7 @@ fn ui_entry_title(
         )
         .context_menu(|ui| {
             if ui.button("Delete Entry").clicked() {
-                ctx.pending_events
-                    .push(StateEvent::DeleteBindGroupEntry(bind_group_id, index));
+                ctx.edits.push(BindGroupEdit::DeleteEntry(index));
                 ui.close();
             }
         });
@@ -120,7 +114,6 @@ fn ui_entry_title(
 fn ui_entry_fields(
     ui: &mut egui::Ui,
     ctx: &mut BindGroupUiContext,
-    bind_group_id: BindGroupId,
     index: usize,
     entry: &BindGroupEntry,
 ) {
@@ -185,15 +178,44 @@ fn ui_entry_fields(
                     };
 
                     if updated_entry != *entry {
-                        ctx.pending_events.push(StateEvent::UpdateBindGroupEntry(
-                            bind_group_id,
-                            index,
-                            updated_entry,
-                        ));
+                        ctx.edits
+                            .push(BindGroupEdit::UpdateEntry(index, updated_entry));
                     }
                 });
         });
     });
+}
+
+enum BindGroupEdit {
+    AddEntry(BindGroupResource),
+    DeleteEntry(usize),
+    UpdateEntry(usize, BindGroupEntry),
+    Reorder(egui_dnd::DragUpdate),
+}
+
+fn apply_bind_group_edits(
+    state: &mut StateSnapshot<'_>,
+    bind_group_id: BindGroupId,
+    edits: Vec<BindGroupEdit>,
+) {
+    if edits.is_empty() {
+        return;
+    }
+
+    if let Ok(bind_group) = state.project.bind_groups.get_mut(bind_group_id) {
+        for edit in edits {
+            match edit {
+                BindGroupEdit::AddEntry(resource) => {
+                    bind_group.add_entry(BindGroupEntry::new_vertex_fragment(resource));
+                }
+                BindGroupEdit::DeleteEntry(index) => bind_group.remove_entry(index),
+                BindGroupEdit::UpdateEntry(index, entry) => bind_group.update_entry(index, entry),
+                BindGroupEdit::Reorder(update) => {
+                    bind_group.reorder_entries(update.from, update.to);
+                }
+            }
+        }
+    }
 }
 
 fn ui_uniform_fields(

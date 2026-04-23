@@ -2,7 +2,6 @@ use egui::RichText;
 
 use crate::{
     project::RenderScheduleId,
-    state::StateEvent,
     ui::{
         components::{hint::hint, selector::ComboBoxExt},
         pane::StateSnapshot,
@@ -11,20 +10,28 @@ use crate::{
 
 impl StateSnapshot<'_> {
     pub fn render_schedule_inspector_ui(&mut self, ui: &mut egui::Ui) {
-        let entries = self.project.render_schedule.entries();
+        let entries = self
+            .project
+            .render_schedule
+            .entries()
+            .iter()
+            .map(|entry| (entry.id(), entry.render_pass_id()))
+            .collect::<Vec<_>>();
+        let render_passes = &self.project.render_passes;
+        let mut entry_edits = Vec::new();
 
         if entries.is_empty() {
             ui.label("No render passes in the render schedule.");
         }
 
         let response = egui_dnd::dnd(ui, RenderScheduleId).show_custom(|ui, iter| {
-            for (index, entry) in entries.iter().copied().enumerate() {
+            for (index, (entry_id, render_pass_id)) in entries.iter().copied().enumerate() {
                 if index != 0 {
                     ui.add_space(5.0);
                 }
 
                 ui.push_id(index, |ui| {
-                    let item_id = egui::Id::new(entry.id());
+                    let item_id = egui::Id::new(entry_id);
                     iter.next(ui, item_id, index, true, |ui, item_handle| {
                         item_handle.ui(ui, |ui, handle, _state| {
                             handle.ui(ui, |ui| {
@@ -36,8 +43,7 @@ impl StateSnapshot<'_> {
                                     )
                                     .context_menu(|ui| {
                                         if ui.button("Delete Entry").clicked() {
-                                            self.pending_events
-                                                .push(StateEvent::DeleteRenderScheduleEntry(index));
+                                            entry_edits.push(RenderScheduleEdit::Delete(index));
                                             ui.close();
                                         }
                                     });
@@ -49,10 +55,8 @@ impl StateSnapshot<'_> {
                                     .num_columns(2)
                                     .spacing([8.0, 4.0])
                                     .show(ui, |ui| {
-                                        let before = entry.render_pass_id();
+                                        let before = render_pass_id;
                                         let mut id = before;
-
-                                        let render_passes = &self.project.render_passes;
 
                                         ui.label("Render Pass");
                                         egui::ComboBox::from_id_salt("render_schedule_pass")
@@ -62,9 +66,7 @@ impl StateSnapshot<'_> {
                                         ui.end_row();
 
                                         if id != before {
-                                            self.pending_events.push(
-                                                StateEvent::UpdateRenderScheduleEntry(index, id),
-                                            );
+                                            entry_edits.push(RenderScheduleEdit::Update(index, id));
                                         }
                                     });
                             });
@@ -75,15 +77,31 @@ impl StateSnapshot<'_> {
         });
 
         if let Some(update) = response.final_update() {
-            self.pending_events
-                .push(StateEvent::ReorderRenderScheduleEntry(update));
+            entry_edits.push(RenderScheduleEdit::Reorder(update));
         }
 
         ui.add_space(6.0);
 
         if ui.button("Add Render Pass").clicked() {
-            self.pending_events
-                .push(StateEvent::CreateRenderScheduleEntry);
+            self.project.render_schedule.add(None);
+        }
+
+        for edit in entry_edits {
+            match edit {
+                RenderScheduleEdit::Delete(index) => {
+                    self.project.render_schedule.remove_entry(index)
+                }
+                RenderScheduleEdit::Update(index, render_pass_id) => {
+                    self.project
+                        .render_schedule
+                        .update_entry(index, render_pass_id);
+                }
+                RenderScheduleEdit::Reorder(update) => {
+                    self.project
+                        .render_schedule
+                        .reorder_entries(update.from, update.to);
+                }
+            }
         }
 
         if !entries.is_empty() {
@@ -95,4 +113,10 @@ impl StateSnapshot<'_> {
             }));
         }
     }
+}
+
+enum RenderScheduleEdit {
+    Delete(usize),
+    Update(usize, Option<crate::project::RenderPassId>),
+    Reorder(egui_dnd::DragUpdate),
 }

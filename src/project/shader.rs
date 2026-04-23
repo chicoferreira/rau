@@ -1,7 +1,7 @@
 use crate::{
     error::AppResult,
     project::{
-        ProjectResource, ShaderId,
+        Creatable, ProjectResource, ShaderId,
         sync::{Revision, SyncOutcome, SyncResource, SyncTracker},
     },
     utils,
@@ -42,6 +42,25 @@ impl Shader {
 impl ShaderRuntime {
     pub fn inner(&self) -> &wgpu::ShaderModule {
         &self.inner
+    }
+}
+
+impl Creatable for Shader {
+    const DEFAULT_LABEL: &'static str = "Shader";
+
+    fn create(label: String) -> Self {
+        const DEFAULT_SOURCE: &str = r#"@vertex
+fn vs_main() -> @builtin(position) vec4<f32> {
+    return vec4<f32>(0.0, 0.0, 0.0, 1.0);
+}
+
+@fragment
+fn fs_main() -> @location(0) vec4<f32> {
+    return vec4<f32>(1.0, 1.0, 1.0, 1.0);
+}
+"#;
+
+        Self::new(label, DEFAULT_SOURCE)
     }
 }
 

@@ -1,7 +1,7 @@
 use crate::{
     error::{AppError, AppResult},
     project::{
-        ProjectResource, TextureId, TextureViewId,
+        Creatable, ProjectResource, TextureId, TextureViewId,
         storage::{RuntimeStorage, Storage},
         sync::{Revision, SyncOutcome, SyncResource, SyncTracker},
         texture::{Texture, TextureRuntime},
@@ -126,6 +126,14 @@ impl TextureViewRuntime {
     /// Only returns `Some` if the texture format is `Rgba8UnormSrgb` due to egui texture format requirements.
     pub fn egui_id(&self) -> Option<egui::TextureId> {
         self.egui_id
+    }
+}
+
+impl Creatable for TextureView {
+    const DEFAULT_LABEL: &'static str = "Texture View";
+
+    fn create(label: String) -> Self {
+        Self::new(label, None, None, None)
     }
 }
 

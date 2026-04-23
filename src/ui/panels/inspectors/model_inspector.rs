@@ -6,7 +6,6 @@ use crate::{
         BindGroupId, ModelId,
         model::{MeshMaterialSelection, Model, vertex_buffer::VertexBufferField},
     },
-    state::StateEvent,
     ui::{
         components::{
             hint::hint,
@@ -23,7 +22,9 @@ impl StateSnapshot<'_> {
             return;
         };
 
-        model_vertex_buffer_spec_inspector_ui(ui, &mut self.pending_events, model_id, &model);
+        let mut edits = Vec::new();
+
+        model_vertex_buffer_spec_inspector_ui(ui, &mut edits, model_id, &model);
 
         egui::CollapsingHeader::new(format!("Meshes ({})", model.meshes().len()))
             .default_open(true)
@@ -107,11 +108,9 @@ impl StateSnapshot<'_> {
                                     );
 
                                     if selection != *mesh.material_selection() {
-                                        self.pending_events.push(
-                                            StateEvent::SetMeshMaterialSelection(
-                                                model_id, mesh_index, selection,
-                                            ),
-                                        );
+                                        edits.push(ModelEdit::SetMeshMaterialSelection(
+                                            mesh_index, selection,
+                                        ));
                                     }
                                     ui.end_row();
                                 });
@@ -173,13 +172,10 @@ impl StateSnapshot<'_> {
                                     .selected_text_storage_opt(storage, bind_group_id)
                                     .show_ui_storage_opt_with_none(ui, storage, &mut bind_group_id);
                                 if bind_group_id != mat.bind_group_id() {
-                                    self.pending_events.push(
-                                        StateEvent::SetModelMaterialBindGroup(
-                                            model_id,
-                                            mat_index,
-                                            bind_group_id,
-                                        ),
-                                    );
+                                    edits.push(ModelEdit::SetMaterialBindGroup(
+                                        mat_index,
+                                        bind_group_id,
+                                    ));
                                 }
                             });
 
@@ -202,11 +198,13 @@ impl StateSnapshot<'_> {
                     });
                 }
             });
+
+        apply_model_edits(self, model_id, edits);
     }
 }
 fn model_vertex_buffer_spec_inspector_ui(
     ui: &mut egui::Ui,
-    pending_events: &mut Vec<StateEvent>,
+    edits: &mut Vec<ModelEdit>,
     model_id: ModelId,
     model: &Model,
 ) {
@@ -234,11 +232,9 @@ fn model_vertex_buffer_spec_inspector_ui(
                                             )
                                             .context_menu(|ui| {
                                                 if ui.button("Delete attribute").clicked() {
-                                                    pending_events.push(
-                                                        StateEvent::DeleteModelVertexBufferField(
-                                                            model_id, index,
-                                                        ),
-                                                    );
+                                                    edits.push(ModelEdit::DeleteVertexBufferField(
+                                                        index,
+                                                    ));
                                                     ui.close();
                                                 }
                                             });
@@ -251,11 +247,9 @@ fn model_vertex_buffer_spec_inspector_ui(
                                             .show_ui_list(ui, fields, &mut current);
 
                                         if current != *field {
-                                            pending_events.push(
-                                                StateEvent::UpdateModelVertexBufferField(
-                                                    model_id, index, current,
-                                                ),
-                                            );
+                                            edits.push(ModelEdit::UpdateVertexBufferField(
+                                                index, current,
+                                            ));
                                         }
                                     });
                                 })
@@ -266,7 +260,7 @@ fn model_vertex_buffer_spec_inspector_ui(
             );
 
             if let Some(update) = response.final_update() {
-                pending_events.push(StateEvent::ReorderModelVertexBufferField(model_id, update));
+                edits.push(ModelEdit::ReorderVertexBufferField(update));
             }
 
             ui.add_space(6.0);
@@ -275,7 +269,7 @@ fn model_vertex_buffer_spec_inspector_ui(
                 for kind in VertexBufferField::iter() {
                     if ui.button(kind.to_string()).clicked() {
                         ui.close();
-                        pending_events.push(StateEvent::AddModelVertexBufferField(model_id, kind));
+                        edits.push(ModelEdit::AddVertexBufferField(kind));
                     }
                 }
             });
@@ -289,6 +283,46 @@ fn model_vertex_buffer_spec_inspector_ui(
                 }));
             }
         });
+}
+
+enum ModelEdit {
+    AddVertexBufferField(VertexBufferField),
+    DeleteVertexBufferField(usize),
+    UpdateVertexBufferField(usize, VertexBufferField),
+    ReorderVertexBufferField(egui_dnd::DragUpdate),
+    SetMaterialBindGroup(usize, Option<BindGroupId>),
+    SetMeshMaterialSelection(usize, MeshMaterialSelection),
+}
+
+fn apply_model_edits(state: &mut StateSnapshot<'_>, model_id: ModelId, edits: Vec<ModelEdit>) {
+    if edits.is_empty() {
+        return;
+    }
+
+    if let Ok(model) = state.project.models.get_mut(model_id) {
+        for edit in edits {
+            match edit {
+                ModelEdit::AddVertexBufferField(field) => model.add_vertex_buffer_field(field),
+                ModelEdit::DeleteVertexBufferField(index) => {
+                    model.remove_vertex_buffer_field(index)
+                }
+                ModelEdit::UpdateVertexBufferField(index, field) => {
+                    model.set_vertex_buffer_field(index, field)
+                }
+                ModelEdit::ReorderVertexBufferField(update) => {
+                    model.reorder_vertex_buffer_field(update.from, update.to)
+                }
+                ModelEdit::SetMaterialBindGroup(material_index, bind_group_id) => {
+                    if let Some(material) = model.materials_mut().get_mut(material_index) {
+                        material.set_bind_group_id(bind_group_id);
+                    }
+                }
+                ModelEdit::SetMeshMaterialSelection(mesh_index, selection) => {
+                    model.set_mesh_material_selection(mesh_index, selection);
+                }
+            }
+        }
+    }
 }
 
 struct TriangleTableDelegate<'a> {

@@ -3,7 +3,7 @@ use slotmap::{SecondaryMap, SlotMap};
 use crate::{
     error::{AppError, AppResult},
     project::{
-        ProjectResource, ResourceId,
+        Creatable, ProjectResource, ResourceId,
         sync::{Revision, RuntimeCell, SyncResource},
     },
 };
@@ -37,16 +37,31 @@ where
         self.map.iter()
     }
 
-    pub fn list_mut(&mut self) -> impl Iterator<Item = (R::Id, &mut R)> {
-        self.map.iter_mut()
-    }
-
     pub fn register(&mut self, value: R) -> R::Id {
         self.map.insert(value)
     }
 
-    pub fn unregister(&mut self, id: R::Id) -> Option<R> {
-        self.map.remove(id)
+    pub fn has_label(&self, label: &str) -> bool {
+        self.map.values().any(|resource| resource.label() == label)
+    }
+
+    pub fn next_label(&self, preferred_label: &str) -> String {
+        if !self.has_label(preferred_label) {
+            return preferred_label.to_owned();
+        }
+
+        let mut index = 1;
+        loop {
+            let label = format!("{preferred_label} ({index})");
+            if !self.has_label(&label) {
+                return label;
+            }
+            index += 1;
+        }
+    }
+
+    pub fn unregister(&mut self, id: R::Id) {
+        self.map.remove(id);
     }
 
     pub fn get(&self, id: R::Id) -> AppResult<&R> {
@@ -63,6 +78,17 @@ where
 
     pub fn get_label(&self, id: R::Id) -> AppResult<&str> {
         Ok(self.get(id)?.label())
+    }
+}
+
+impl<R> Storage<R>
+where
+    R: Creatable,
+    R::Id: slotmap::Key,
+{
+    pub fn create(&mut self) -> R::Id {
+        let label = self.next_label(R::DEFAULT_LABEL);
+        self.register(R::create(label))
     }
 }
 
@@ -91,6 +117,10 @@ where
     R: SyncResource,
     R::Id: slotmap::Key,
 {
+    pub fn unregister(&mut self, key: R::Id) {
+        self.map.remove(key);
+    }
+
     pub fn get_init(&self, key: R::Id) -> AppResult<&R::Runtime> {
         let id = key.into();
         match self.map.get(key) {

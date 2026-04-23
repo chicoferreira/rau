@@ -8,7 +8,6 @@ use crate::{
         storage::Storage,
         texture_view::TextureView,
     },
-    state::StateEvent,
     ui::{
         components::{
             color_edit::color_edit_rgba,
@@ -125,16 +124,16 @@ impl StateSnapshot<'_> {
         let shaders = &self.project.shaders;
         let bind_groups = &self.project.bind_groups;
         let models = &self.project.models;
-        let pipelines = &mut render_pass.pipelines;
         let pending_events = &mut *self.pending_events;
         let rename_state = &mut *self.rename_state;
+        let mut delete_pipeline = None;
 
         CollapsingHeader::new(format!("Pipelines ({})", pipeline_count))
             .default_open(true)
             .show(ui, |ui| {
                 let response =
                     egui_dnd::dnd(ui, (render_pass_id, "pipelines")).show_custom(|ui, iter| {
-                        for (index, pipeline) in pipelines.iter_mut().enumerate() {
+                        for (index, pipeline) in render_pass.pipelines.iter_mut().enumerate() {
                             if index != 0 {
                                 ui.add_space(5.0);
                             }
@@ -153,6 +152,7 @@ impl StateSnapshot<'_> {
                                             models,
                                             pending_events,
                                             rename_state,
+                                            &mut delete_pipeline,
                                         );
                                     })
                                 });
@@ -161,13 +161,24 @@ impl StateSnapshot<'_> {
                     });
 
                 if let Some(update) = response.final_update() {
-                    pending_events.push(StateEvent::ReorderRenderPipeline(render_pass_id, update));
+                    render_pass.reorder_pipelines(update.from, update.to);
                 }
 
                 ui.add_space(6.0);
 
                 if ui.button("Add Pipeline").clicked() {
-                    pending_events.push(StateEvent::CreateRenderPipeline(render_pass_id));
+                    const DEFAULT_NAME: &str = "Pipeline";
+
+                    let index = render_pass.pipelines.len();
+                    render_pass.add_empty_pipeline(DEFAULT_NAME);
+
+                    *rename_state = Some(crate::ui::rename::RenameState {
+                        target: crate::ui::rename::RenameTarget::RenderPipeline(
+                            render_pass_id,
+                            index,
+                        ),
+                        current_label: DEFAULT_NAME.to_string(),
+                    });
                 }
 
                 if pipeline_count > 0 {
@@ -179,6 +190,10 @@ impl StateSnapshot<'_> {
                     }));
                 }
             });
+
+        if let Some(index) = delete_pipeline {
+            render_pass.remove_pipeline(index);
+        }
     }
 }
 

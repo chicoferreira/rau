@@ -1,6 +1,6 @@
 use crate::project::{
-    BindGroupId, CameraId, ComputePassId, DimensionId, Project, RenderPassId, SamplerId, ShaderId,
-    TextureId, TextureViewId, UniformId, ViewportId,
+    BindGroupId, CameraId, ComputePassId, DimensionId, ModelId, Project, RenderPassId, ResourceId,
+    SamplerId, ShaderId, TextureId, TextureViewId, UniformId, ViewportId,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -21,6 +21,8 @@ pub enum RenameTarget {
     Sampler(SamplerId),
     Texture(TextureId),
     TextureView(TextureViewId),
+    Model(ModelId),
+    RenderPass(RenderPassId),
     RenderPipeline(RenderPassId, usize),
     ComputePass(ComputePassId),
 }
@@ -37,6 +39,8 @@ impl RenameTarget {
             RenameTarget::Texture(id) => project.label(id),
             RenameTarget::TextureView(id) => project.label(id),
             RenameTarget::Uniform(id) => project.label(id),
+            RenameTarget::Model(id) => project.label(id),
+            RenameTarget::RenderPass(id) => project.label(id),
             RenameTarget::ComputePass(id) => project.label(id),
             RenameTarget::UniformField(id, index) => project
                 .uniforms
@@ -105,6 +109,16 @@ impl RenameTarget {
                     texture_view.set_label(new_name);
                 }
             }
+            RenameTarget::Model(model_id) => {
+                if let Ok(model) = project.models.get_mut(model_id) {
+                    model.set_label(new_name);
+                }
+            }
+            RenameTarget::RenderPass(render_pass_id) => {
+                if let Ok(render_pass) = project.render_passes.get_mut(render_pass_id) {
+                    render_pass.set_label(new_name);
+                }
+            }
             RenameTarget::RenderPipeline(render_pass_id, index) => {
                 if let Ok(render_pass) = project.render_passes.get_mut(render_pass_id) {
                     if let Some(pipeline) = render_pass.pipelines.get_mut(index) {
@@ -117,6 +131,26 @@ impl RenameTarget {
                     compute_pass.set_label(new_name);
                 }
             }
+        }
+    }
+}
+
+impl From<ResourceId> for Option<RenameTarget> {
+    fn from(id: ResourceId) -> Self {
+        match id {
+            ResourceId::Uniform(id) => Some(RenameTarget::Uniform(id)),
+            ResourceId::BindGroup(id) => Some(RenameTarget::BindGroup(id)),
+            ResourceId::Viewport(id) => Some(RenameTarget::Viewport(id)),
+            ResourceId::Shader(id) => Some(RenameTarget::Shader(id)),
+            ResourceId::Camera(id) => Some(RenameTarget::Camera(id)),
+            ResourceId::Dimension(id) => Some(RenameTarget::Dimension(id)),
+            ResourceId::Sampler(id) => Some(RenameTarget::Sampler(id)),
+            ResourceId::Texture(id) => Some(RenameTarget::Texture(id)),
+            ResourceId::TextureView(id) => Some(RenameTarget::TextureView(id)),
+            ResourceId::Model(id) => Some(RenameTarget::Model(id)),
+            ResourceId::RenderPass(id) => Some(RenameTarget::RenderPass(id)),
+            ResourceId::ComputePass(id) => Some(RenameTarget::ComputePass(id)),
+            ResourceId::RenderSchedule(_) => None,
         }
     }
 }

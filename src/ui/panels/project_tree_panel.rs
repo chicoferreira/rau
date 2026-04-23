@@ -4,7 +4,8 @@ use egui_ltreeview::{Action, TreeView};
 use crate::{
     project::{
         BindGroupId, CameraId, ComputePassId, DimensionId, ModelId, ProjectResource, RenderPassId,
-        RenderScheduleId, SamplerId, ShaderId, TextureId, TextureViewId, UniformId, ViewportId,
+        RenderScheduleId, ResourceKind, SamplerId, ShaderId, TextureId, TextureViewId, UniformId,
+        ViewportId,
     },
     state::StateEvent,
     ui::{components::tree_node::TreeNode, pane::StateSnapshot, rename::RenameTarget},
@@ -44,100 +45,142 @@ pub fn ui(state: &mut StateSnapshot, ui: &mut egui::Ui) -> Response {
         .allow_multi_selection(false)
         .show(ui, |builder| {
             TreeNode::folder(TreeNodeId::UniformFolder, "Uniforms")
-                .with_event("Create New Uniform", StateEvent::CreateUniform)
+                .with_event(
+                    "Create New Uniform",
+                    StateEvent::CreateResource(ResourceKind::Uniform),
+                )
                 .build_to(builder, state.pending_events, state.rename_state);
             for (id, uniform) in state.project.uniforms.list() {
                 TreeNode::new(TreeNodeId::Uniform(id), &uniform.label)
                     .with_event("Inspect", StateEvent::InspectResource(id.into()))
                     .with_rename_event("Rename", RenameTarget::Uniform(id))
-                    .with_event("Delete", StateEvent::DeleteUniform(id))
+                    .with_event("Delete", StateEvent::DeleteResource(id.into()))
                     .with_separator()
-                    .with_event("Create New Uniform", StateEvent::CreateUniform)
+                    .with_event(
+                        "Create New Uniform",
+                        StateEvent::CreateResource(ResourceKind::Uniform),
+                    )
                     .build_to(builder, state.pending_events, state.rename_state);
             }
             builder.close_dir();
 
             TreeNode::folder(TreeNodeId::BindGroupFolder, "Bind Groups")
-                .with_event("Create New Bind Group", StateEvent::CreateBindGroup)
+                .with_event(
+                    "Create New Bind Group",
+                    StateEvent::CreateResource(ResourceKind::BindGroup),
+                )
                 .build_to(builder, state.pending_events, state.rename_state);
             for (id, bind_group) in state.project.bind_groups.list() {
                 TreeNode::new(TreeNodeId::BindGroup(id), bind_group.label())
                     .with_event("Inspect", StateEvent::InspectResource(id.into()))
                     .with_rename_event("Rename", RenameTarget::BindGroup(id))
-                    .with_event("Delete", StateEvent::DeleteBindGroup(id))
+                    .with_event("Delete", StateEvent::DeleteResource(id.into()))
                     .with_separator()
-                    .with_event("Create New Bind Group", StateEvent::CreateBindGroup)
+                    .with_event(
+                        "Create New Bind Group",
+                        StateEvent::CreateResource(ResourceKind::BindGroup),
+                    )
                     .build_to(builder, state.pending_events, state.rename_state);
             }
             builder.close_dir();
 
             TreeNode::folder(TreeNodeId::ViewportFolder, "Viewports")
-                .with_event("Create New Viewport", StateEvent::CreateViewport)
+                .with_event(
+                    "Create New Viewport",
+                    StateEvent::CreateResource(ResourceKind::Viewport),
+                )
                 .build_to(builder, state.pending_events, state.rename_state);
             for (id, viewport) in state.project.viewports.list() {
                 TreeNode::new(TreeNodeId::Viewport(id), &viewport.label)
                     .with_event("View", StateEvent::OpenViewport(id))
                     .with_event("Inspect", StateEvent::InspectResource(id.into()))
                     .with_rename_event("Rename", RenameTarget::Viewport(id))
-                    .with_event("Delete", StateEvent::DeleteViewport(id))
+                    .with_event("Delete", StateEvent::DeleteResource(id.into()))
                     .with_separator()
-                    .with_event("Create New Viewport", StateEvent::CreateViewport)
+                    .with_event(
+                        "Create New Viewport",
+                        StateEvent::CreateResource(ResourceKind::Viewport),
+                    )
                     .build_to(builder, state.pending_events, state.rename_state);
             }
             builder.close_dir();
 
             TreeNode::folder(TreeNodeId::ShaderFolder, "Shaders")
-                .with_event("Create New Shader", StateEvent::CreateShader)
+                .with_event(
+                    "Create New Shader",
+                    StateEvent::CreateResource(ResourceKind::Shader),
+                )
                 .build_to(builder, state.pending_events, state.rename_state);
             for (id, shader) in state.project.shaders.list() {
                 TreeNode::new(TreeNodeId::Shader(id), &shader.label)
                     .with_event("Inspect", StateEvent::InspectResource(id.into()))
                     .with_rename_event("Rename", RenameTarget::Shader(id))
-                    .with_event("Delete", StateEvent::DeleteShader(id))
+                    .with_event("Delete", StateEvent::DeleteResource(id.into()))
                     .with_separator()
-                    .with_event("Create New Shader", StateEvent::CreateShader)
+                    .with_event(
+                        "Create New Shader",
+                        StateEvent::CreateResource(ResourceKind::Shader),
+                    )
                     .build_to(builder, state.pending_events, state.rename_state);
             }
             builder.close_dir();
 
             TreeNode::folder(TreeNodeId::CameraFolder, "Cameras")
-                .with_event("Create New Camera", StateEvent::CreateCamera)
+                .with_event(
+                    "Create New Camera",
+                    StateEvent::CreateResource(ResourceKind::Camera),
+                )
                 .build_to(builder, state.pending_events, state.rename_state);
             for (id, camera) in state.project.cameras.list() {
                 TreeNode::new(TreeNodeId::Camera(id), &camera.label)
                     .with_event("Inspect", StateEvent::InspectResource(id.into()))
                     .with_rename_event("Rename", RenameTarget::Camera(id))
-                    .with_event("Delete", StateEvent::DeleteCamera(id))
+                    .with_event("Delete", StateEvent::DeleteResource(id.into()))
                     .with_separator()
-                    .with_event("Create New Camera", StateEvent::CreateCamera)
+                    .with_event(
+                        "Create New Camera",
+                        StateEvent::CreateResource(ResourceKind::Camera),
+                    )
                     .build_to(builder, state.pending_events, state.rename_state);
             }
             builder.close_dir();
 
             TreeNode::folder(TreeNodeId::DimensionFolder, "Dimensions")
-                .with_event("Create New Dimension", StateEvent::CreateDimension)
+                .with_event(
+                    "Create New Dimension",
+                    StateEvent::CreateResource(ResourceKind::Dimension),
+                )
                 .build_to(builder, state.pending_events, state.rename_state);
             for (id, dimension) in state.project.dimensions.list() {
                 TreeNode::new(TreeNodeId::Dimension(id), &dimension.label)
                     .with_event("Inspect", StateEvent::InspectResource(id.into()))
                     .with_rename_event("Rename", RenameTarget::Dimension(id))
-                    .with_event("Delete", StateEvent::DeleteDimension(id))
+                    .with_event("Delete", StateEvent::DeleteResource(id.into()))
                     .with_separator()
-                    .with_event("Create New Dimension", StateEvent::CreateDimension)
+                    .with_event(
+                        "Create New Dimension",
+                        StateEvent::CreateResource(ResourceKind::Dimension),
+                    )
                     .build_to(builder, state.pending_events, state.rename_state);
             }
             builder.close_dir();
 
             TreeNode::folder(TreeNodeId::SamplerFolder, "Samplers")
-                .with_event("Create New Sampler", StateEvent::CreateSampler)
+                .with_event(
+                    "Create New Sampler",
+                    StateEvent::CreateResource(ResourceKind::Sampler),
+                )
                 .build_to(builder, state.pending_events, state.rename_state);
             for (id, sampler) in state.project.samplers.list() {
                 TreeNode::new(TreeNodeId::Sampler(id), sampler.label())
                     .with_event("Inspect", StateEvent::InspectResource(id.into()))
                     .with_rename_event("Rename", RenameTarget::Sampler(id))
-                    .with_event("Delete", StateEvent::DeleteSampler(id))
+                    .with_event("Delete", StateEvent::DeleteResource(id.into()))
                     .with_separator()
-                    .with_event("Create New Sampler", StateEvent::CreateSampler)
+                    .with_event(
+                        "Create New Sampler",
+                        StateEvent::CreateResource(ResourceKind::Sampler),
+                    )
                     .build_to(builder, state.pending_events, state.rename_state);
             }
             builder.close_dir();
@@ -151,21 +194,27 @@ pub fn ui(state: &mut StateSnapshot, ui: &mut egui::Ui) -> Response {
                 TreeNode::new(TreeNodeId::Texture(id), texture.label())
                     .with_event("Inspect", StateEvent::InspectResource(id.into()))
                     .with_rename_event("Rename", RenameTarget::Texture(id))
-                    .with_event("Delete", StateEvent::DeleteTexture(id))
+                    .with_event("Delete", StateEvent::DeleteResource(id.into()))
                     .build_to(builder, state.pending_events, state.rename_state);
             }
             builder.close_dir();
 
             TreeNode::folder(TreeNodeId::TextureViewFolder, "Texture Views")
-                .with_event("Create New Texture View", StateEvent::CreateTextureView)
+                .with_event(
+                    "Create New Texture View",
+                    StateEvent::CreateResource(ResourceKind::TextureView),
+                )
                 .build_to(builder, state.pending_events, state.rename_state);
             for (id, texture_view) in state.project.texture_views.list() {
                 TreeNode::new(TreeNodeId::TextureView(id), texture_view.label())
                     .with_event("Inspect", StateEvent::InspectResource(id.into()))
                     .with_rename_event("Rename", RenameTarget::TextureView(id))
-                    .with_event("Delete", StateEvent::DeleteTextureView(id))
+                    .with_event("Delete", StateEvent::DeleteResource(id.into()))
                     .with_separator()
-                    .with_event("Create New Texture View", StateEvent::CreateTextureView)
+                    .with_event(
+                        "Create New Texture View",
+                        StateEvent::CreateResource(ResourceKind::TextureView),
+                    )
                     .build_to(builder, state.pending_events, state.rename_state);
             }
             builder.close_dir();
@@ -176,10 +225,10 @@ pub fn ui(state: &mut StateSnapshot, ui: &mut egui::Ui) -> Response {
             for (id, model) in state.project.models.list() {
                 TreeNode::new(TreeNodeId::Model(id), &model.label)
                     .with_event("Inspect", StateEvent::InspectResource(id.into()))
-                    // .with_rename_event("Rename", RenameTarget::Model(id))
+                    .with_rename_event("Rename", RenameTarget::Model(id))
                     // .with_event("Delete", StateEvent::DeleteModel(id))
-                    .with_separator()
-                    .with_event("Create New Texture View", StateEvent::CreateTextureView)
+                    // .with_separator()
+                    // .with_event("Create New Texture View", StateEvent::CreateTextureView)
                     .build_to(builder, state.pending_events, state.rename_state);
             }
             builder.close_dir();
@@ -192,20 +241,27 @@ pub fn ui(state: &mut StateSnapshot, ui: &mut egui::Ui) -> Response {
             for (id, render_pass) in state.project.render_passes.list() {
                 TreeNode::new(TreeNodeId::RenderPass(id), &render_pass.label)
                     .with_event("Inspect", StateEvent::InspectResource(id.into()))
+                    .with_rename_event("Rename", RenameTarget::RenderPass(id))
                     .build_to(builder, state.pending_events, state.rename_state);
             }
             builder.close_dir();
 
             TreeNode::folder(TreeNodeId::ComputePassFolder, "Compute Passes")
-                .with_event("Create New Compute Pass", StateEvent::CreateComputePass)
+                .with_event(
+                    "Create New Compute Pass",
+                    StateEvent::CreateResource(ResourceKind::ComputePass),
+                )
                 .build_to(builder, state.pending_events, state.rename_state);
             for (id, compute_pass) in state.project.compute_passes.list() {
                 TreeNode::new(TreeNodeId::ComputePass(id), compute_pass.label())
                     .with_event("Inspect", StateEvent::InspectResource(id.into()))
                     .with_rename_event("Rename", RenameTarget::ComputePass(id))
-                    .with_event("Delete", StateEvent::DeleteComputePass(id))
+                    .with_event("Delete", StateEvent::DeleteResource(id.into()))
                     .with_separator()
-                    .with_event("Create New Compute Pass", StateEvent::CreateComputePass)
+                    .with_event(
+                        "Create New Compute Pass",
+                        StateEvent::CreateResource(ResourceKind::ComputePass),
+                    )
                     .build_to(builder, state.pending_events, state.rename_state);
             }
             builder.close_dir();

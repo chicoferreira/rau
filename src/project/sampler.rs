@@ -1,7 +1,7 @@
 use crate::{
     error::AppResult,
     project::{
-        ProjectResource, SamplerId,
+        Creatable, ProjectResource, SamplerId,
         sync::{Revision, SyncOutcome, SyncResource, SyncTracker},
     },
 };
@@ -86,6 +86,14 @@ impl Sampler {
 impl SamplerRuntime {
     pub fn inner(&self) -> &wgpu::Sampler {
         &self.inner
+    }
+}
+
+impl Creatable for Sampler {
+    const DEFAULT_LABEL: &'static str = "Sampler";
+
+    fn create(label: String) -> Self {
+        Self::new(label, SamplerSpec::default())
     }
 }
 

@@ -3,7 +3,7 @@ use egui_dnd::utils::shift_vec;
 use crate::{
     error::{AppError, AppResult},
     project::{
-        BindGroupId, ProjectResource, SamplerId, TextureViewId, UniformId,
+        BindGroupId, Creatable, ProjectResource, SamplerId, TextureViewId, UniformId,
         sampler::Sampler,
         storage::RuntimeStorage,
         sync::{Revision, SyncOutcome, SyncResource, SyncTracker},
@@ -150,6 +150,14 @@ impl BindGroupRuntime {
 
     pub fn inner(&self) -> &wgpu::BindGroup {
         &self.inner
+    }
+}
+
+impl Creatable for BindGroup {
+    const DEFAULT_LABEL: &'static str = "Bind Group";
+
+    fn create(label: String) -> Self {
+        Self::new(label, vec![])
     }
 }
 

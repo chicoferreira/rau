@@ -1,5 +1,5 @@
 use crate::{
-    project::{CameraId, DimensionId, ProjectResource, TextureViewId, ViewportId},
+    project::{CameraId, Creatable, DimensionId, ProjectResource, TextureViewId, ViewportId},
     ui::Size2d,
 };
 
@@ -28,6 +28,14 @@ impl Viewport {
             controls_camera_id,
             requested_ui_size: None,
         }
+    }
+}
+
+impl Creatable for Viewport {
+    const DEFAULT_LABEL: &'static str = "Viewport";
+
+    fn create(label: String) -> Self {
+        Viewport::new(label, None, None, None)
     }
 }
 

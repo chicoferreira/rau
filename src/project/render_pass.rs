@@ -3,7 +3,7 @@ use egui_dnd::utils::shift_vec;
 use crate::{
     error::{AppError, AppResult},
     project::{
-        BindGroupId, ModelId, ProjectResource, RenderPassId, ShaderId, TextureViewId,
+        BindGroupId, Creatable, ModelId, ProjectResource, RenderPassId, ShaderId, TextureViewId,
         bindgroup::BindGroup,
         model::Model,
         shader::Shader,
@@ -92,6 +92,20 @@ impl Default for RenderDraw {
     }
 }
 
+impl Creatable for RenderPass {
+    const DEFAULT_LABEL: &'static str = "Render Pass";
+
+    fn create(label: String) -> Self {
+        Self {
+            label,
+            target: Default::default(),
+            depth_target: Default::default(),
+            pipelines: Default::default(),
+            revision: Default::default(),
+        }
+    }
+}
+
 pub struct Context<'a> {
     pub device: &'a wgpu::Device,
     pub models: &'a Storage<Model>,
@@ -109,6 +123,10 @@ impl ProjectResource for RenderPass {
 }
 
 impl RenderPass {
+    pub fn set_label(&mut self, label: String) {
+        self.label = label;
+    }
+
     pub fn set_target(&mut self, target: RenderPassTarget<Color>) {
         self.target = target;
         self.revision.increase();

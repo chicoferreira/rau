@@ -108,9 +108,64 @@ impl Project {
 
         label_err.ok()
     }
+
+    pub fn register(&mut self, kind: ResourceKind) -> Option<ResourceId> {
+        let id = match kind {
+            ResourceKind::Shader => self.shaders.create().into(),
+            ResourceKind::Viewport => self.viewports.create().into(),
+            ResourceKind::Uniform => self.uniforms.create().into(),
+            ResourceKind::BindGroup => self.bind_groups.create().into(),
+            ResourceKind::Texture => todo!("not yet implemented"),
+            ResourceKind::TextureView => self.texture_views.create().into(),
+            ResourceKind::Sampler => self.samplers.create().into(),
+            ResourceKind::Dimension => self.dimensions.create().into(),
+            ResourceKind::Camera => self.cameras.create().into(),
+            ResourceKind::Model => todo!("not yet implemented"),
+            ResourceKind::RenderPass => self.render_passes.create().into(),
+            ResourceKind::RenderSchedule => return None,
+            ResourceKind::ComputePass => self.compute_passes.create().into(),
+        };
+        Some(id)
+    }
+
+    pub fn unregister(&mut self, id: ResourceId) {
+        match id {
+            ResourceId::Shader(id) => self.shaders.unregister(id),
+            ResourceId::Uniform(id) => self.uniforms.unregister(id),
+            ResourceId::BindGroup(id) => self.bind_groups.unregister(id),
+            ResourceId::Texture(id) => self.textures.unregister(id),
+            ResourceId::TextureView(id) => self.texture_views.unregister(id),
+            ResourceId::Sampler(id) => self.samplers.unregister(id),
+            ResourceId::Dimension(id) => self.dimensions.unregister(id),
+            ResourceId::Camera(id) => self.cameras.unregister(id),
+            ResourceId::Model(id) => self.models.unregister(id),
+            ResourceId::RenderSchedule(_) => {}
+            ResourceId::ComputePass(id) => self.compute_passes.unregister(id),
+            ResourceId::Viewport(id) => self.viewports.unregister(id),
+            ResourceId::RenderPass(id) => self.render_passes.unregister(id),
+        };
+    }
 }
 
 impl RuntimeProject {
+    pub fn unregister(&mut self, id: ResourceId) {
+        match id {
+            ResourceId::Shader(id) => self.shaders.unregister(id),
+            ResourceId::Uniform(id) => self.uniforms.unregister(id),
+            ResourceId::BindGroup(id) => self.bind_groups.unregister(id),
+            ResourceId::Texture(id) => self.textures.unregister(id),
+            ResourceId::TextureView(id) => self.texture_views.unregister(id),
+            ResourceId::Sampler(id) => self.samplers.unregister(id),
+            ResourceId::Dimension(id) => self.dimensions.unregister(id),
+            ResourceId::Camera(id) => self.cameras.unregister(id),
+            ResourceId::Model(id) => self.models.unregister(id),
+            ResourceId::RenderPass(id) => self.render_passes.unregister(id),
+            ResourceId::RenderSchedule(_) => self.render_schedule = sync::RuntimeCell::Empty,
+            ResourceId::ComputePass(id) => self.compute_passes.unregister(id),
+            ResourceId::Viewport(_) => {}
+        };
+    }
+
     pub fn iter_errors(&self) -> impl Iterator<Item = (ResourceId, &AppError)> {
         self.shaders
             .get_errors()
@@ -166,8 +221,31 @@ pub enum ResourceId {
     ComputePass(ComputePassId),
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum ResourceKind {
+    Shader,
+    Viewport,
+    Uniform,
+    BindGroup,
+    Texture,
+    TextureView,
+    Sampler,
+    Dimension,
+    Camera,
+    Model,
+    RenderPass,
+    RenderSchedule,
+    ComputePass,
+}
+
 pub trait ProjectResource {
     type Id: Into<ResourceId> + Copy + Eq + std::hash::Hash + std::fmt::Debug + Send + Sync;
 
     fn label(&self) -> &str;
+}
+
+pub trait Creatable: ProjectResource {
+    const DEFAULT_LABEL: &'static str;
+
+    fn create(label: String) -> Self;
 }

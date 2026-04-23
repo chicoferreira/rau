@@ -112,6 +112,10 @@ impl Model {
         &mut self.materials
     }
 
+    pub fn set_label(&mut self, label: String) {
+        self.label = label;
+    }
+
     pub fn set_mesh_material_selection(
         &mut self,
         mesh_index: usize,

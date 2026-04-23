@@ -59,6 +59,7 @@ impl StateSnapshot<'_> {
         };
 
         let (total_size, _) = uniform.layout();
+        let has_fields = !uniform.fields().is_empty();
         ui.horizontal(|ui| {
             ui.label("Total size");
             ui.strong(format!("{total_size} bytes"));
@@ -66,7 +67,9 @@ impl StateSnapshot<'_> {
 
         ui.add_space(6.0);
 
+        let mut edits = Vec::new();
         let mut ctx = UniformUiContext {
+            edits: &mut edits,
             pending_events: &mut self.pending_events,
             rename_state: &mut self.rename_state,
             cameras: &self.project.cameras,
@@ -88,7 +91,7 @@ impl StateSnapshot<'_> {
                                 ui_uniform_type_label(ui, field.source().get_value().kind());
                             });
 
-                            ui_uniform_field_entry(ui, &mut ctx, uniform_id, index, field);
+                            ui_uniform_field_entry(ui, &mut ctx, index, field);
                         })
                     });
                 });
@@ -96,8 +99,7 @@ impl StateSnapshot<'_> {
         });
 
         if let Some(update) = response.final_update() {
-            self.pending_events
-                .push(StateEvent::ReorderUniformField(uniform_id, update));
+            edits.push(UniformEdit::Reorder(update));
         }
 
         ui.add_space(6.0);
@@ -105,13 +107,14 @@ impl StateSnapshot<'_> {
         ui.menu_button("Add Uniform", |ui| {
             for kind in UniformFieldSourceKind::iter() {
                 if ui.button(kind.to_string()).clicked() {
-                    let event = StateEvent::CreateUniformField(uniform_id, kind.into_source());
-                    self.pending_events.push(event);
+                    edits.push(UniformEdit::AddField(kind.into_source()));
                 }
             }
         });
 
-        if !uniform.fields().is_empty() {
+        apply_uniform_edits(self, uniform_id, edits);
+
+        if has_fields {
             ui.add_space(6.0);
             ui.add(hint(|ui| {
                 ui.label("Right-click a");
@@ -123,6 +126,7 @@ impl StateSnapshot<'_> {
 }
 
 struct UniformUiContext<'a> {
+    edits: &'a mut Vec<UniformEdit>,
     pending_events: &'a mut Vec<StateEvent>,
     rename_state: &'a mut Option<RenameState>,
     cameras: &'a Storage<Camera>,
@@ -146,8 +150,7 @@ fn ui_uniform_field_title(
     ))
     .context_menu(|ui| {
         if ui.button("Delete Field").clicked() {
-            ctx.pending_events
-                .push(StateEvent::DeleteUniformField(uniform_id, index));
+            ctx.edits.push(UniformEdit::DeleteField(index));
             ui.close();
         }
         if ui.button("Rename Field").clicked() {
@@ -161,7 +164,6 @@ fn ui_uniform_field_title(
 fn ui_uniform_field_entry(
     ui: &mut Ui,
     ctx: &mut UniformUiContext,
-    uniform_id: UniformId,
     index: usize,
     field: &UniformField,
 ) {
@@ -169,11 +171,11 @@ fn ui_uniform_field_entry(
         let event = egui::Grid::new("entry_grid")
             .num_columns(2)
             .spacing([20.0, 4.0])
-            .show(ui, |ui| ui_field_entry(ui, ctx, uniform_id, index, field))
+            .show(ui, |ui| ui_field_entry(ui, ctx, index, field))
             .inner;
 
         if let Some(event) = event {
-            ctx.pending_events.push(event);
+            ctx.edits.push(event);
         }
 
         ui.collapsing("Current Values", |ui| {
@@ -185,10 +187,9 @@ fn ui_uniform_field_entry(
 fn ui_field_entry(
     ui: &mut Ui,
     ctx: &mut UniformUiContext,
-    uniform_id: UniformId,
     index: usize,
     field: &UniformField,
-) -> Option<StateEvent> {
+) -> Option<UniformEdit> {
     let mut source_kind = UniformFieldSourceKind::from_source(field.source());
     let source_kind_before = source_kind;
     ui.label("Source");
@@ -220,8 +221,7 @@ fn ui_field_entry(
             });
             ui.end_row();
 
-            changed.then_some(StateEvent::UpdateUniformFieldSource(
-                uniform_id,
+            changed.then_some(UniformEdit::UpdateFieldSource(
                 index,
                 UniformFieldSource::UserDefined(data),
             ))
@@ -245,8 +245,7 @@ fn ui_field_entry(
             ui.end_row();
 
             (camera_id != camera_id_before || field != field_before).then_some(
-                StateEvent::UpdateUniformFieldSource(
-                    uniform_id,
+                UniformEdit::UpdateFieldSource(
                     index,
                     UniformFieldSource::new_camera_sourced(camera_id, field),
                 ),
@@ -255,12 +254,56 @@ fn ui_field_entry(
     };
 
     (source_kind != source_kind_before)
-        .then_some(StateEvent::UpdateUniformFieldSource(
-            uniform_id,
+        .then_some(UniformEdit::UpdateFieldSource(
             index,
             source_kind.into_source(),
         ))
         .or(source_specific_event)
+}
+
+#[derive(Debug)]
+enum UniformEdit {
+    AddField(UniformFieldSource),
+    DeleteField(usize),
+    UpdateFieldSource(usize, UniformFieldSource),
+    Reorder(egui_dnd::DragUpdate),
+}
+
+fn apply_uniform_edits(
+    state: &mut StateSnapshot<'_>,
+    uniform_id: UniformId,
+    edits: Vec<UniformEdit>,
+) {
+    if edits.is_empty() {
+        return;
+    }
+
+    const DEFAULT_NAME: &str = "Field";
+    let mut rename_index = None;
+
+    if let Ok(uniform) = state.project.uniforms.get_mut(uniform_id) {
+        for edit in edits {
+            match edit {
+                UniformEdit::AddField(source) => {
+                    let index = uniform.fields().len();
+                    uniform.add_field(UniformField::new(DEFAULT_NAME, source));
+                    rename_index = Some(index);
+                }
+                UniformEdit::DeleteField(index) => uniform.remove_field(index),
+                UniformEdit::UpdateFieldSource(index, source) => {
+                    uniform.set_field_source(index, source);
+                }
+                UniformEdit::Reorder(update) => uniform.reorder_field(update.from, update.to),
+            }
+        }
+    }
+
+    if let Some(index) = rename_index {
+        *state.rename_state = Some(RenameState {
+            target: RenameTarget::UniformField(uniform_id, index),
+            current_label: DEFAULT_NAME.to_string(),
+        });
+    }
 }
 
 fn ui_uniform_type_label(ui: &mut Ui, kind: UniformFieldDataKind) {

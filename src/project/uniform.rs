@@ -7,7 +7,7 @@ mod tests;
 use crate::{
     error::AppResult,
     project::{
-        CameraId, ProjectResource, UniformId,
+        CameraId, Creatable, ProjectResource, UniformId,
         camera::Camera,
         storage::Storage,
         sync::{Revision, SyncOutcome, SyncResource, SyncTracker},
@@ -151,6 +151,14 @@ impl Uniform {
 impl UniformRuntime {
     pub fn buffer(&self) -> &ResizableBuffer {
         &self.buffer
+    }
+}
+
+impl Creatable for Uniform {
+    const DEFAULT_LABEL: &'static str = "Uniform";
+
+    fn create(label: String) -> Self {
+        Uniform::new(label, vec![])
     }
 }
 

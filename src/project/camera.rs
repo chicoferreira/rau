@@ -5,7 +5,7 @@ use cgmath::{Deg, InnerSpace, Matrix4, Point3, Rad, SquareMatrix, Vector3, Zero}
 use crate::{
     error::AppResult,
     project::{
-        CameraId, DimensionId, ProjectResource,
+        CameraId, Creatable, DimensionId, ProjectResource,
         dimension::Dimension,
         storage::Storage,
         sync::{Revision, SyncOutcome, SyncResource, SyncTracker},
@@ -352,6 +352,14 @@ impl Camera {
         self.input.scroll = 0.0;
         self.input.mouse_h = 0.0;
         self.input.mouse_v = 0.0;
+    }
+}
+
+impl Creatable for Camera {
+    const DEFAULT_LABEL: &'static str = "Camera";
+
+    fn create(label: String) -> Self {
+        Self::new(label)
     }
 }
 
