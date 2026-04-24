@@ -117,7 +117,7 @@ impl StateSnapshot<'_> {
                             let dimensions = &self.project.dimensions;
                             egui::ComboBox::from_id_salt("camera_aspect_source")
                                 .selected_text_storage_opt(dimensions, current_dim_id)
-                                .show_ui_storage_opt(ui, dimensions, &mut current_dim_id);
+                                .show_ui_storage_opt_with_none(ui, dimensions, &mut current_dim_id);
                             if before != current_dim_id {
                                 camera.set_dimension_id(current_dim_id);
                             }

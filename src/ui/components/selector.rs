@@ -31,15 +31,6 @@ pub trait ComboBoxExt {
     where
         R::Id: slotmap::Key;
 
-    fn show_ui_storage_opt<R: ProjectResource>(
-        self,
-        ui: &mut egui::Ui,
-        storage: &Storage<R>,
-        current_value: &mut Option<R::Id>,
-    ) -> egui::InnerResponse<Option<()>>
-    where
-        R::Id: slotmap::Key;
-
     fn show_ui_iter<V: PartialEq>(
         self,
         ui: &mut egui::Ui,
@@ -89,22 +80,6 @@ impl ComboBoxExt for egui::ComboBox {
     {
         self.show_ui(ui, |ui| {
             ui.selectable_value(current_value, None, "None");
-            for (id, item) in storage.list() {
-                ui.selectable_value(current_value, Some(id), item.label());
-            }
-        })
-    }
-
-    fn show_ui_storage_opt<R: ProjectResource>(
-        self,
-        ui: &mut egui::Ui,
-        storage: &Storage<R>,
-        current_value: &mut Option<R::Id>,
-    ) -> egui::InnerResponse<Option<()>>
-    where
-        R::Id: slotmap::Key,
-    {
-        self.show_ui(ui, |ui| {
             for (id, item) in storage.list() {
                 ui.selectable_value(current_value, Some(id), item.label());
             }

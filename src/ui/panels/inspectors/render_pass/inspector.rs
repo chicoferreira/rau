@@ -218,7 +218,7 @@ where
             let mut selected_texture_view_id = *texture_view_id;
             egui::ComboBox::from_id_salt((id_salt, "tv"))
                 .selected_text_storage_opt(texture_views, selected_texture_view_id)
-                .show_ui_storage_opt(ui, texture_views, &mut selected_texture_view_id);
+                .show_ui_storage_opt_with_none(ui, texture_views, &mut selected_texture_view_id);
             *texture_view_id = selected_texture_view_id;
             ui.end_row();
 

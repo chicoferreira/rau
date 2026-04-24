@@ -3,7 +3,7 @@ use std::f32::consts::FRAC_PI_2;
 use cgmath::{Deg, InnerSpace, Matrix4, Point3, Rad, SquareMatrix, Vector3, Zero};
 
 use crate::{
-    error::AppResult,
+    error::{AppError, AppResult},
     project::{
         CameraId, Creatable, DimensionId, ProjectResource,
         dimension::Dimension,
@@ -289,14 +289,10 @@ impl Camera {
             .clamp(Rad::from(Deg(1.0_f32)).0, Rad::from(Deg(179.0_f32)).0))
     }
 
-    fn calculate_aspect(&self, dimensions: &Storage<Dimension>) -> f32 {
-        if let Some(dimension_id) = self.dimension_id {
-            if let Ok(dimension) = dimensions.get(dimension_id) {
-                return dimension.size().width() as f32 / dimension.size().height() as f32;
-            }
-        }
-
-        1.0
+    fn calculate_aspect(&self, dimensions: &Storage<Dimension>) -> AppResult<f32> {
+        let dimension_id = self.dimension_id.ok_or(AppError::UninitializedFields)?;
+        let dimension = dimensions.get(dimension_id)?;
+        Ok(dimension.size().width() as f32 / dimension.size().height() as f32)
     }
 
     fn update(&mut self, dt: instant::Duration) {
@@ -381,7 +377,7 @@ impl SyncResource for Camera {
         previous: Option<Self::Runtime>,
     ) -> AppResult<SyncOutcome<Self::Runtime>> {
         self.update(ctx.dt);
-        self.aspect = self.calculate_aspect(ctx.dimensions);
+        self.aspect = self.calculate_aspect(ctx.dimensions)?;
 
         let new_matrix = CameraMatrix::new(
             self.position,

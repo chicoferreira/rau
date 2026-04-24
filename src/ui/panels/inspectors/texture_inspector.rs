@@ -2,9 +2,7 @@ use egui::{Grid, Widget};
 use wgpu::TextureUsages;
 
 use crate::{
-    project::{
-        DimensionId, TextureId, dimension::Dimension, storage::Storage, texture::TextureSource,
-    },
+    project::{TextureId, dimension::Dimension, storage::Storage, texture::TextureSource},
     ui::{
         components::{
             flags_selector::flags_selector,
@@ -154,16 +152,7 @@ fn ui_texture_source(
 
         if selected_kind != current_kind {
             *source = match selected_kind {
-                // TODO: Make dimension optional
-                TextureSourceKind::Dimension => first_dimension_id(dimensions)
-                    .map(TextureSource::Dimension)
-                    .unwrap_or(TextureSource::Manual {
-                        size: wgpu::Extent3d {
-                            width: 1,
-                            height: 1,
-                            depth_or_array_layers: 1,
-                        },
-                    }),
+                TextureSourceKind::Dimension => TextureSource::Dimension(None),
                 TextureSourceKind::Manual => TextureSource::Manual {
                     size: wgpu::Extent3d {
                         width: 800,
@@ -177,14 +166,12 @@ fn ui_texture_source(
 
         match source {
             TextureSource::Dimension(dimension_id) => {
-                let mut selected_dimension = Some(*dimension_id);
+                let mut selected_dimension = *dimension_id;
                 egui::ComboBox::from_id_salt("texture_source_dimension")
                     .selected_text_storage_opt(dimensions, selected_dimension)
-                    .show_ui_storage_opt(ui, dimensions, &mut selected_dimension);
+                    .show_ui_storage_opt_with_none(ui, dimensions, &mut selected_dimension);
 
-                if let Some(new_dimension_id) = selected_dimension {
-                    *dimension_id = new_dimension_id;
-                }
+                *dimension_id = selected_dimension;
             }
             TextureSource::Manual { size } => {
                 ui.horizontal(|ui| {
@@ -212,8 +199,4 @@ fn ui_texture_source(
             }
         }
     });
-}
-
-fn first_dimension_id(dimensions: &Storage<Dimension>) -> Option<DimensionId> {
-    dimensions.list().next().map(|(id, _)| id)
 }

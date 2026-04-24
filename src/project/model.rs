@@ -168,13 +168,17 @@ impl Model {
     pub fn get_bind_group_layout<'a>(
         &self,
         runtime_bind_groups: &'a RuntimeStorage<BindGroup>,
-    ) -> Option<&'a BindGroupLayout> {
-        let mesh = self.meshes().first()?;
-        let material_index = mesh.material_index()?;
-        let material = self.get_material(material_index)?;
-        let bind_group_id = material.bind_group_id()?;
-        let bind_group = runtime_bind_groups.get_init(bind_group_id).ok()?;
-        Some(bind_group.inner_layout())
+    ) -> AppResult<&'a BindGroupLayout> {
+        let mesh = self.meshes().first().ok_or(AppError::UninitializedFields)?;
+        let m_index = mesh.material_index().ok_or(AppError::UninitializedFields)?;
+        let material = self
+            .get_material(m_index)
+            .ok_or(AppError::UninitializedFields)?;
+        let bind_group_id = material
+            .bind_group_id()
+            .ok_or(AppError::UninitializedFields)?;
+        let bind_group = runtime_bind_groups.get_init(bind_group_id)?;
+        Ok(bind_group.inner_layout())
     }
 }
 

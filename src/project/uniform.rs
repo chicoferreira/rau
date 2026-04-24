@@ -5,7 +5,7 @@ pub mod camera;
 mod tests;
 
 use crate::{
-    error::AppResult,
+    error::{AppError, AppResult},
     project::{
         CameraId, Creatable, ProjectResource, UniformId,
         camera::Camera,
@@ -280,10 +280,7 @@ impl UniformField {
                 field,
                 current_value,
             } => {
-                let Some(camera_id) = *camera_id else {
-                    return Ok(false);
-                };
-
+                let camera_id = (*camera_id).ok_or(AppError::UninitializedFields)?;
                 let camera = context.cameras.get(camera_id)?;
                 let new_value = field.compute(camera);
 

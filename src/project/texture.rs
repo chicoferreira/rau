@@ -1,7 +1,7 @@
 use image::GenericImageView;
 
 use crate::{
-    error::AppResult,
+    error::{AppError, AppResult},
     project::{
         DimensionId, ProjectResource, TextureId,
         dimension::Dimension,
@@ -32,7 +32,7 @@ pub struct TextureRuntime {
 #[derive(Clone, PartialEq)]
 pub enum TextureSource {
     // Grab size from dimension
-    Dimension(DimensionId),
+    Dimension(Option<DimensionId>),
     Image(image::DynamicImage), // TODO: change this to image_id once we have it in the project
     Manual { size: wgpu::Extent3d },
 }
@@ -103,7 +103,8 @@ impl Texture {
 
         let size = match source {
             TextureSource::Dimension(dimension_id) => {
-                let size = ctx.dimensions.get(*dimension_id)?.size();
+                let dimension_id = dimension_id.ok_or(AppError::UninitializedFields)?;
+                let size = ctx.dimensions.get(dimension_id)?.size();
 
                 wgpu::Extent3d {
                     width: size.width(),
@@ -186,7 +187,8 @@ impl SyncResource for Texture {
 
     fn needs_rebuild_from_others(&self, tracker: &super::sync::SyncTracker) -> bool {
         match self.source {
-            TextureSource::Dimension(dimension_id) => tracker.was_changed(dimension_id),
+            TextureSource::Dimension(Some(dimension_id)) => tracker.was_changed(dimension_id),
+            TextureSource::Dimension(None) => false,
             TextureSource::Image(_) | TextureSource::Manual { .. } => false,
         }
     }

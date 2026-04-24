@@ -174,7 +174,7 @@ pub async fn create_scene(
         "Hdr Texture".to_string(),
         wgpu::TextureFormat::Rgba16Float,
         wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::RENDER_ATTACHMENT,
-        TextureSource::Dimension(dimension_id),
+        TextureSource::Dimension(Some(dimension_id)),
     );
     let hdr_texture_id = project.textures.register(hdr_texture);
     let hdr_texture_view = TextureView::new(
@@ -255,7 +255,7 @@ pub async fn create_scene(
         "depth texture",
         wgpu::TextureFormat::Depth32Float,
         wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::RENDER_ATTACHMENT,
-        TextureSource::Dimension(dimension_id),
+        TextureSource::Dimension(Some(dimension_id)),
     );
     let depth_texture_id = project.textures.register(depth_texture);
     let depth_texture_view =
@@ -266,7 +266,7 @@ pub async fn create_scene(
         "Viewport Texture",
         viewport_texture_format,
         wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::RENDER_ATTACHMENT,
-        TextureSource::Dimension(dimension_id),
+        TextureSource::Dimension(Some(dimension_id)),
     );
     let viewport_texture_id = project.textures.register(viewport_texture);
     let output_viewport_view_id = project.texture_views.register(TextureView::new(
@@ -317,7 +317,10 @@ pub async fn create_scene(
         primitive_state.clone(),
         Some(light_shader_id),
         Some(light_shader_id),
-        vec![(0, camera_bind_group_id), (1, light_bind_group_id)],
+        vec![
+            (0, Some(camera_bind_group_id)),
+            (1, Some(light_bind_group_id)),
+        ],
         RenderDraw::Model {
             model_id: Some(cube_model_id),
             instances: 0..1,
@@ -332,9 +335,9 @@ pub async fn create_scene(
         Some(main_shader_id),
         Some(main_shader_id),
         vec![
-            (1, camera_bind_group_id),
-            (2, light_bind_group_id),
-            (3, environment_bind_group_id),
+            (1, Some(camera_bind_group_id)),
+            (2, Some(light_bind_group_id)),
+            (3, Some(environment_bind_group_id)),
         ],
         RenderDraw::Model {
             model_id: Some(cube_model_id),
@@ -349,7 +352,10 @@ pub async fn create_scene(
         primitive_state,
         Some(sky_shader_id),
         Some(sky_shader_id),
-        vec![(0, camera_bind_group_id), (1, environment_bind_group_id)],
+        vec![
+            (0, Some(camera_bind_group_id)),
+            (1, Some(environment_bind_group_id)),
+        ],
         RenderDraw::Direct {
             vertices: 0..3,
             instances: 0..1,
@@ -373,7 +379,7 @@ pub async fn create_scene(
         primitive_state,
         Some(hdr_shader_id),
         Some(hdr_shader_id),
-        vec![(0, hdr_bind_group_id)],
+        vec![(0, Some(hdr_bind_group_id))],
         RenderDraw::Direct {
             vertices: 0..3,
             instances: 0..1,

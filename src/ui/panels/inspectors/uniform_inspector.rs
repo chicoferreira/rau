@@ -234,7 +234,7 @@ fn ui_field_entry(
             ui.label("Camera");
             egui::ComboBox::from_id_salt("camera")
                 .selected_text_storage_opt(&ctx.cameras, camera_id)
-                .show_ui_storage_opt(ui, &ctx.cameras, &mut camera_id);
+                .show_ui_storage_opt_with_none(ui, &ctx.cameras, &mut camera_id);
             ui.end_row();
             ui.label("Field");
             let mut field = field.clone();

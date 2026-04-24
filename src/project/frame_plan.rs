@@ -1,7 +1,7 @@
 use egui_dnd::utils::shift_vec;
 
 use crate::{
-    error::AppResult,
+    error::{AppError, AppResult},
     project::{
         FramePlanId, Model, ProjectResource, RenderPassId, Shader, TextureView,
         bindgroup::BindGroup,
@@ -37,25 +37,11 @@ pub struct FramePlanContext<'a> {
 }
 
 impl FramePlan {
-    pub fn iter(&self) -> impl Iterator<Item = RenderPassId> {
-        self.entries.iter().filter_map(|entry| entry.render_pass_id)
-    }
-
     pub fn entries(&self) -> &[FramePlanStep] {
         &self.entries
     }
 
     pub fn add(&mut self, render_pass_id: Option<RenderPassId>) {
-        if let Some(render_pass_id) = render_pass_id
-            && self
-                .entries
-                .iter()
-                .filter_map(|entry| entry.render_pass_id)
-                .any(|entry| entry == render_pass_id)
-        {
-            return;
-        }
-
         self.entries.push(FramePlanStep::new(render_pass_id));
         self.revision.increase();
     }
@@ -150,7 +136,8 @@ impl SyncResource for FramePlan {
             runtime_bind_groups: ctx.runtime_bind_groups,
         };
 
-        for render_pass_id in self.iter() {
+        for entry in self.entries() {
+            let render_pass_id = entry.render_pass_id.ok_or(AppError::UninitializedFields)?;
             let render_pass = ctx.render_passes.get(render_pass_id)?;
             let render_pass_runtime = ctx.runtime_render_passes.get_init(render_pass_id)?;
 

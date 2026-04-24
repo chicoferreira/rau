@@ -227,7 +227,7 @@ fn ui_uniform_fields(
     ui.label("Uniform");
     egui::ComboBox::from_id_salt("uniform")
         .selected_text_storage_opt(ctx.uniforms, uniform_id)
-        .show_ui_storage_opt(ui, ctx.uniforms, &mut uniform_id);
+        .show_ui_storage_opt_with_none(ui, ctx.uniforms, &mut uniform_id);
     ui.end_row();
     (uniform_id != before).then_some(BindGroupResource::Uniform(uniform_id))
 }
@@ -244,7 +244,7 @@ fn ui_texture_fields(
     ui.label("Texture View");
     egui::ComboBox::from_id_salt("texture view")
         .selected_text_storage_opt(ctx.texture_views, texture_view_id)
-        .show_ui_storage_opt(ui, ctx.texture_views, &mut texture_view_id);
+        .show_ui_storage_opt_with_none(ui, ctx.texture_views, &mut texture_view_id);
 
     ui.end_row();
 
@@ -280,7 +280,7 @@ fn ui_sampler_fields(
     ui.label("Sampler");
     egui::ComboBox::from_id_salt("sampler")
         .selected_text_storage_opt(ctx.samplers, sampler_id)
-        .show_ui_storage_opt(ui, ctx.samplers, &mut sampler_id);
+        .show_ui_storage_opt_with_none(ui, ctx.samplers, &mut sampler_id);
     ui.end_row();
 
     ui.label("Binding Type");
@@ -309,7 +309,7 @@ fn ui_storage_texture_fields(
     ui.label("Texture View");
     egui::ComboBox::from_id_salt("storage_texture_view")
         .selected_text_storage_opt(ctx.texture_views, texture_view_id)
-        .show_ui_storage_opt(ui, ctx.texture_views, &mut texture_view_id);
+        .show_ui_storage_opt_with_none(ui, ctx.texture_views, &mut texture_view_id);
     ui.end_row();
 
     ui.label("Access");

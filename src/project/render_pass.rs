@@ -63,7 +63,7 @@ pub struct RenderPipeline {
     pub primitive_state: wgpu::PrimitiveState,
     pub vertex_shader: Option<ShaderId>,
     pub fragment_shader: Option<ShaderId>,
-    pub static_bind_groups: Vec<(u32, BindGroupId)>,
+    pub static_bind_groups: Vec<(u32, Option<BindGroupId>)>,
     pub draw: RenderDraw,
     dirty: bool,
 }
@@ -158,7 +158,7 @@ impl RenderPass {
         primitive_state: wgpu::PrimitiveState,
         vertex_shader: Option<ShaderId>,
         fragment_shader: Option<ShaderId>,
-        static_bind_groups: Vec<(u32, BindGroupId)>,
+        static_bind_groups: Vec<(u32, Option<BindGroupId>)>,
         draw: RenderDraw,
     ) {
         let pipeline = RenderPipeline::new(
@@ -268,7 +268,7 @@ impl RenderPipeline {
         primitive_state: wgpu::PrimitiveState,
         vertex_shader: Option<ShaderId>,
         fragment_shader: Option<ShaderId>,
-        static_bind_groups: Vec<(u32, BindGroupId)>,
+        static_bind_groups: Vec<(u32, Option<BindGroupId>)>,
         draw: RenderDraw,
     ) -> Self {
         Self {
@@ -308,7 +308,7 @@ impl RenderPipeline {
         self.dirty = true;
     }
 
-    pub fn set_static_bind_groups(&mut self, static_bind_groups: Vec<(u32, BindGroupId)>) {
+    pub fn set_static_bind_groups(&mut self, static_bind_groups: Vec<(u32, Option<BindGroupId>)>) {
         self.static_bind_groups = static_bind_groups;
         self.dirty = true;
     }
@@ -316,7 +316,7 @@ impl RenderPipeline {
     fn create_wgpu_pipeline(
         ctx: &Context,
         label: &str,
-        static_bind_groups: &[(u32, BindGroupId)],
+        static_bind_groups: &[(u32, Option<BindGroupId>)],
         draw: &RenderDraw,
         vertex_shader_id: Option<ShaderId>,
         fragment_shader_id: Option<ShaderId>,
@@ -327,7 +327,7 @@ impl RenderPipeline {
         let vertex_shader_id = vertex_shader_id.ok_or(AppError::UninitializedFields)?;
         let fragment_shader_id = fragment_shader_id.ok_or(AppError::UninitializedFields)?;
 
-        let bind_group_layouts = Self::resolved_bind_group_layout(ctx, &static_bind_groups, draw);
+        let bind_group_layouts = Self::resolved_bind_group_layout(ctx, &static_bind_groups, draw)?;
         let device = ctx.device;
 
         let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
@@ -396,21 +396,23 @@ impl RenderPipeline {
 
     fn resolved_bind_group_layout<'a>(
         ctx: &'a Context,
-        static_bind_groups: &[(u32, BindGroupId)],
+        static_bind_groups: &[(u32, Option<BindGroupId>)],
         draw: &RenderDraw,
-    ) -> Vec<Option<&'a wgpu::BindGroupLayout>> {
-        let layouts: Vec<(u32, &'a wgpu::BindGroupLayout)> = static_bind_groups
-            .iter()
-            .copied()
-            .filter_map(|(slot, bind_group_id)| {
-                let bind_group = ctx.runtime_bind_groups.get_init(bind_group_id).ok()?;
-                Some((slot, bind_group.inner_layout()))
-            })
-            .chain(draw.material_bind_group_slot_and_layout(ctx))
-            .collect();
+    ) -> AppResult<Vec<Option<&'a wgpu::BindGroupLayout>>> {
+        let mut layouts = Vec::with_capacity(static_bind_groups.len() + 1);
+
+        for (slot, bind_group_id) in static_bind_groups.iter().copied() {
+            let bind_group_id = bind_group_id.ok_or(AppError::UninitializedFields)?;
+            let bind_group = ctx.runtime_bind_groups.get_init(bind_group_id)?;
+            layouts.push((slot, bind_group.inner_layout()));
+        }
+
+        if let Some(material_layout) = draw.material_bind_group_slot_and_layout(ctx)? {
+            layouts.push(material_layout);
+        }
 
         if layouts.is_empty() {
-            return vec![];
+            return Ok(vec![]);
         }
 
         let max_slot = layouts.iter().map(|(slot, _)| *slot).max().unwrap_or(0);
@@ -418,7 +420,7 @@ impl RenderPipeline {
         for (slot, layout) in layouts {
             result[slot as usize] = Some(layout);
         }
-        result
+        Ok(result)
     }
 
     fn resolved_attributes_and_stride(
@@ -444,7 +446,8 @@ impl RenderPipeline {
             || self
                 .static_bind_groups
                 .iter()
-                .any(|(_, bind_group_id)| tracker.was_changed(*bind_group_id))
+                .flat_map(|(_, bind_group_id)| *bind_group_id)
+                .any(|bind_group_id| tracker.was_changed(bind_group_id))
             || self.draw.needs_rebuild_from_others(tracker)
     }
 }
@@ -459,6 +462,7 @@ impl RenderPipelineRuntime {
         render_pass.set_pipeline(&self.inner);
 
         for &(slot, id) in &pipeline.static_bind_groups {
+            let id = id.ok_or(AppError::UninitializedFields)?;
             let bind_group = ctx.runtime_bind_groups.get_init(id)?;
             render_pass.set_bind_group(slot, bind_group.inner(), &[]);
         }
@@ -478,15 +482,16 @@ impl RenderPipelineRuntime {
                     render_pass.set_vertex_buffer(*mesh_vertex_slot, vertex_buffer.slice(..));
 
                     if let Some(mat_slot) = material_bind_group_slot {
-                        if let Some(material_index) = mesh.material_index() {
-                            if let Some(material) = model.get_material(material_index) {
-                                if let Some(bind_group_id) = material.bind_group_id() {
-                                    let bind_group =
-                                        ctx.runtime_bind_groups.get_init(bind_group_id)?;
-                                    render_pass.set_bind_group(*mat_slot, bind_group.inner(), &[]);
-                                }
-                            }
-                        }
+                        let material_index =
+                            mesh.material_index().ok_or(AppError::UninitializedFields)?;
+                        let material = model
+                            .get_material(material_index)
+                            .ok_or(AppError::UninitializedFields)?;
+                        let bind_group_id = material
+                            .bind_group_id()
+                            .ok_or(AppError::UninitializedFields)?;
+                        let bind_group = ctx.runtime_bind_groups.get_init(bind_group_id)?;
+                        render_pass.set_bind_group(*mat_slot, bind_group.inner(), &[]);
                     }
 
                     let index_buffer = mesh.index_buffer().inner();
@@ -522,18 +527,24 @@ impl RenderDraw {
     pub fn material_bind_group_slot_and_layout<'a>(
         &self,
         ctx: &Context<'a>,
-    ) -> Option<(u32, &'a wgpu::BindGroupLayout)> {
+    ) -> AppResult<Option<(u32, &'a wgpu::BindGroupLayout)>> {
         let RenderDraw::Model {
-            model_id: Some(model_id),
-            material_bind_group_slot: Some(slot),
+            model_id,
+            material_bind_group_slot,
             ..
         } = self
         else {
-            return None;
+            return Ok(None);
         };
-        let model = ctx.models.get(*model_id).ok()?;
+
+        let Some(slot) = material_bind_group_slot else {
+            return Ok(None);
+        };
+
+        let model_id = (*model_id).ok_or(AppError::UninitializedFields)?;
+        let model = ctx.models.get(model_id)?;
         let layout = model.get_bind_group_layout(ctx.runtime_bind_groups)?;
-        Some((*slot, layout))
+        Ok(Some((*slot, layout)))
     }
 
     fn needs_rebuild_from_others(&self, tracker: &SyncTracker) -> bool {

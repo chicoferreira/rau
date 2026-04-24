@@ -33,6 +33,17 @@ impl AsWidgetText for DrawKind {
     }
 }
 
+#[derive(Clone, Copy)]
+enum UnifiedEntry {
+    Static {
+        slot: u32,
+        bg_id: Option<BindGroupId>,
+    },
+    Material {
+        slot: u32,
+    },
+}
+
 fn render_draw_kind(draw: &RenderDraw) -> DrawKind {
     match draw {
         RenderDraw::Model { .. } => DrawKind::Model,
@@ -76,12 +87,6 @@ fn combo_list<T: Copy + PartialEq + AsWidgetText, I: IntoIterator<Item = T>>(
     *value != before
 }
 
-#[derive(Clone, Copy)]
-enum UnifiedEntry {
-    Static { slot: u32, bg_id: BindGroupId },
-    Material { slot: u32 },
-}
-
 fn first_available_slot(used: impl IntoIterator<Item = u32>) -> u32 {
     let mut sorted: Vec<u32> = used.into_iter().collect();
     sorted.sort_unstable();
@@ -104,8 +109,40 @@ pub fn bind_groups_ui(
 ) {
     let static_before = pipeline.static_bind_groups.clone();
     let draw_before = pipeline.draw.clone();
+    let mut entries = collect_bind_group_entries(pipeline);
+    let mut actions = BindGroupEntryActions::default();
 
-    let mut entries: Vec<UnifiedEntry> = pipeline
+    CollapsingHeader::new(format!("Bind Groups ({})", entries.len()))
+        .default_open(true)
+        .show(ui, |ui| {
+            bind_group_entries_list_ui(
+                ui,
+                render_pass_id,
+                pipeline.id,
+                bind_groups,
+                &mut entries,
+                &mut actions,
+            );
+            bind_group_entries_footer_ui(ui, pipeline, &mut entries);
+
+            apply_bind_group_entry_actions(&mut entries, actions);
+
+            if !entries.is_empty() {
+                bind_group_entries_hint_ui(ui);
+            }
+        });
+
+    let (new_static, new_material_slot) = split_bind_group_entries(&entries);
+
+    if new_static != static_before {
+        pipeline.set_static_bind_groups(new_static);
+    }
+
+    apply_material_bind_group_slot(pipeline, draw_before, new_material_slot);
+}
+
+fn collect_bind_group_entries(pipeline: &RenderPipeline) -> Vec<UnifiedEntry> {
+    let mut entries: Vec<_> = pipeline
         .static_bind_groups
         .iter()
         .cloned()
@@ -123,200 +160,239 @@ pub fn bind_groups_ui(
     entries.sort_by_key(|entry| match entry {
         UnifiedEntry::Static { slot, .. } | UnifiedEntry::Material { slot } => *slot,
     });
+    entries
+}
 
-    let mut delete_index: Option<usize> = None;
-    let mut remove_material = false;
+#[derive(Default)]
+struct BindGroupEntryActions {
+    delete_index: Option<usize>,
+    remove_material: bool,
+}
 
-    CollapsingHeader::new(format!("Bind Groups ({})", entries.len()))
-        .default_open(true)
-        .show(ui, |ui| {
-            let response =
-                egui_dnd::dnd(ui, (render_pass_id, pipeline.id, "static_bind_groups")).show_custom(
-                    |ui, iter| {
-                        for (index, entry) in entries.iter_mut().enumerate() {
-                            if index != 0 {
-                                ui.add_space(5.0);
-                            }
-                            let item_id =
-                                egui::Id::new((render_pass_id, pipeline.id, "sbg", index));
-                            ui.push_id(index, |ui| {
-                                iter.next(ui, item_id, index, true, |ui, item_handle| {
-                                    item_handle.ui(ui, |ui, handle, _state| {
-                                        handle.ui(ui, |ui| {
-                                            ui.add(
-                                                Label::new(match entry {
-                                                    UnifiedEntry::Static { slot, .. } => {
-                                                        format!("Slot {}", slot)
-                                                    }
-                                                    UnifiedEntry::Material { slot } => {
-                                                        format!("Slot {} (Material)", slot)
-                                                    }
-                                                })
-                                                .selectable(false)
-                                                .sense(Sense::click()),
-                                            )
-                                            .context_menu(|ui| match entry {
-                                                UnifiedEntry::Static { .. } => {
-                                                    if ui.button("Delete Bind Group").clicked() {
-                                                        delete_index = Some(index);
-                                                        ui.close();
-                                                    }
-                                                }
-                                                UnifiedEntry::Material { .. } => {
-                                                    if ui
-                                                        .button("Remove Material Bind Group")
-                                                        .clicked()
-                                                    {
-                                                        remove_material = true;
-                                                        ui.close();
-                                                    }
-                                                }
-                                            });
-                                        });
-
-                                        ui.indent(
-                                            ("static_bind_group_fields", pipeline.id, index),
-                                            |ui| {
-                                                Grid::new((
-                                                    "pipeline_bind_groups_grid",
-                                                    render_pass_id,
-                                                    pipeline.id,
-                                                    index,
-                                                ))
-                                                .num_columns(2)
-                                                .show(ui, |ui| match entry {
-                                                    UnifiedEntry::Static { slot, bg_id } => {
-                                                        ui.label("Slot");
-                                                        ui.add(
-                                                            egui::DragValue::new(slot).speed(0.1),
-                                                        );
-                                                        ui.end_row();
-
-                                                        let bg_before = *bg_id;
-                                                        let mut selected = Some(*bg_id);
-                                                        ui.label("Bind Group");
-                                                        egui::ComboBox::from_id_salt((
-                                                            "static_bg",
-                                                            pipeline.id,
-                                                            index,
-                                                        ))
-                                                        .selected_text_storage_opt(
-                                                            bind_groups,
-                                                            selected,
-                                                        )
-                                                        .show_ui_storage_opt(
-                                                            ui,
-                                                            bind_groups,
-                                                            &mut selected,
-                                                        );
-                                                        ui.end_row();
-
-                                                        if let Some(new_id) = selected {
-                                                            *bg_id = new_id;
-                                                        } else {
-                                                            *bg_id = bg_before;
-                                                        }
-                                                    }
-                                                    UnifiedEntry::Material { slot } => {
-                                                        ui.label("Slot");
-                                                        ui.add(
-                                                            egui::DragValue::new(slot).speed(0.1),
-                                                        );
-                                                        ui.end_row();
-
-                                                        ui.label("");
-                                                        ui.label(
-                                                            RichText::new("From RenderDraw::Model")
-                                                                .italics(),
-                                                        );
-                                                        ui.end_row();
-                                                    }
-                                                });
-                                            },
-                                        );
-                                    })
-                                });
-                            });
-                        }
-                    },
-                );
-
-            if let Some(update) = response.final_update() {
-                egui_dnd::utils::shift_vec(update.from, update.to, &mut entries);
-                for (i, entry) in entries.iter_mut().enumerate() {
-                    match entry {
-                        UnifiedEntry::Static { slot, .. } | UnifiedEntry::Material { slot } => {
-                            *slot = i as u32;
-                        }
-                    }
+fn bind_group_entries_list_ui(
+    ui: &mut egui::Ui,
+    render_pass_id: RenderPassId,
+    pipeline_id: usize,
+    bind_groups: &Storage<BindGroup>,
+    entries: &mut Vec<UnifiedEntry>,
+    actions: &mut BindGroupEntryActions,
+) {
+    let response = egui_dnd::dnd(ui, (render_pass_id, pipeline_id, "static_bind_groups"))
+        .show_custom(|ui, iter| {
+            for (index, entry) in entries.iter_mut().enumerate() {
+                if index != 0 {
+                    ui.add_space(5.0);
                 }
-            }
 
-            ui.add_space(6.0);
-
-            let can_add = bind_groups.list().next().is_some();
-            if ui
-                .add_enabled(can_add, egui::Button::new("Add Bind Group"))
-                .clicked()
-            {
-                let next_slot = first_available_slot(entries.iter().map(|entry| match entry {
-                    UnifiedEntry::Static { slot, .. } | UnifiedEntry::Material { slot } => *slot,
-                }));
-
-                let first_bg = bind_groups
-                    .list()
-                    .next()
-                    .map(|(id, _)| id)
-                    .expect("can_add implies at least one bind group");
-
-                entries.push(UnifiedEntry::Static {
-                    slot: next_slot,
-                    bg_id: first_bg,
+                let item_id = egui::Id::new((render_pass_id, pipeline_id, "sbg", index));
+                ui.push_id(index, |ui| {
+                    iter.next(ui, item_id, index, true, |ui, item_handle| {
+                        item_handle.ui(ui, |ui, handle, _state| {
+                            bind_group_entry_row_ui(
+                                ui,
+                                handle,
+                                render_pass_id,
+                                pipeline_id,
+                                bind_groups,
+                                index,
+                                entry,
+                                actions,
+                            );
+                        })
+                    });
                 });
-            }
-
-            if let RenderDraw::Model {
-                material_bind_group_slot: None,
-                ..
-            } = pipeline.draw
-            {
-                ui.add_space(4.0);
-                if ui
-                    .button("Add Material Bind Group")
-                    .on_hover_text("Create a material bind group entry tied to the model draw")
-                    .clicked()
-                {
-                    let next_slot = first_available_slot(entries.iter().map(|entry| match entry {
-                        UnifiedEntry::Static { slot, .. } | UnifiedEntry::Material { slot } => {
-                            *slot
-                        }
-                    }));
-
-                    entries.push(UnifiedEntry::Material { slot: next_slot });
-                }
-            }
-
-            if let Some(index) = delete_index
-                && index < entries.len()
-            {
-                entries.remove(index);
-            }
-
-            if remove_material {
-                entries.retain(|entry| !matches!(entry, UnifiedEntry::Material { .. }));
-            }
-
-            if !entries.is_empty() {
-                ui.add_space(6.0);
-                ui.add(hint(|ui| {
-                    ui.label("Right-click a");
-                    ui.label(RichText::new("Slot").strong());
-                    ui.label("to delete it, or drag to reorder.");
-                }));
             }
         });
 
-    let new_static: Vec<(u32, BindGroupId)> = entries
+    if let Some(update) = response.final_update() {
+        egui_dnd::utils::shift_vec(update.from, update.to, entries);
+        normalize_entry_slots(entries);
+    }
+}
+
+fn bind_group_entry_row_ui(
+    ui: &mut egui::Ui,
+    handle: egui_dnd::Handle<'_>,
+    render_pass_id: RenderPassId,
+    pipeline_id: usize,
+    bind_groups: &Storage<BindGroup>,
+    index: usize,
+    entry: &mut UnifiedEntry,
+    actions: &mut BindGroupEntryActions,
+) {
+    handle.ui(ui, |ui| {
+        bind_group_entry_title_ui(ui, entry, index, actions);
+
+        ui.indent(("static_bind_group_fields", pipeline_id, index), |ui| {
+            bind_group_entry_fields_ui(ui, render_pass_id, pipeline_id, bind_groups, index, entry);
+        });
+    });
+}
+
+fn bind_group_entry_title_ui(
+    ui: &mut egui::Ui,
+    entry: &UnifiedEntry,
+    index: usize,
+    actions: &mut BindGroupEntryActions,
+) {
+    ui.add(
+        Label::new(bind_group_entry_title(entry))
+            .selectable(false)
+            .sense(Sense::click()),
+    )
+    .context_menu(|ui| match entry {
+        UnifiedEntry::Static { .. } => {
+            if ui.button("Delete Bind Group").clicked() {
+                actions.delete_index = Some(index);
+                ui.close();
+            }
+        }
+        UnifiedEntry::Material { .. } => {
+            if ui.button("Remove Material Bind Group").clicked() {
+                actions.remove_material = true;
+                ui.close();
+            }
+        }
+    });
+}
+
+fn bind_group_entry_title(entry: &UnifiedEntry) -> String {
+    match entry {
+        UnifiedEntry::Static { slot, .. } => format!("Slot {}", slot),
+        UnifiedEntry::Material { slot } => format!("Slot {} (Material)", slot),
+    }
+}
+
+fn bind_group_entry_fields_ui(
+    ui: &mut egui::Ui,
+    render_pass_id: RenderPassId,
+    pipeline_id: usize,
+    bind_groups: &Storage<BindGroup>,
+    index: usize,
+    entry: &mut UnifiedEntry,
+) {
+    Grid::new((
+        "pipeline_bind_groups_grid",
+        render_pass_id,
+        pipeline_id,
+        index,
+    ))
+    .num_columns(2)
+    .show(ui, |ui| match entry {
+        UnifiedEntry::Static { slot, bg_id } => {
+            static_bind_group_fields_ui(ui, pipeline_id, index, bind_groups, slot, bg_id);
+        }
+        UnifiedEntry::Material { slot } => {
+            material_bind_group_fields_ui(ui, slot);
+        }
+    });
+}
+
+fn static_bind_group_fields_ui(
+    ui: &mut egui::Ui,
+    pipeline_id: usize,
+    index: usize,
+    bind_groups: &Storage<BindGroup>,
+    slot: &mut u32,
+    bg_id: &mut Option<BindGroupId>,
+) {
+    ui.label("Slot");
+    ui.add(egui::DragValue::new(slot).speed(0.1));
+    ui.end_row();
+
+    let mut selected = *bg_id;
+    ui.label("Bind Group");
+    egui::ComboBox::from_id_salt(("static_bg", pipeline_id, index))
+        .selected_text_storage_opt(bind_groups, selected)
+        .show_ui_storage_opt_with_none(ui, bind_groups, &mut selected);
+    ui.end_row();
+
+    *bg_id = selected;
+}
+
+fn material_bind_group_fields_ui(ui: &mut egui::Ui, slot: &mut u32) {
+    ui.label("Slot");
+    ui.add(egui::DragValue::new(slot).speed(0.1));
+    ui.end_row();
+
+    ui.label("");
+    ui.label(RichText::new("From RenderDraw::Model").italics());
+    ui.end_row();
+}
+
+fn normalize_entry_slots(entries: &mut [UnifiedEntry]) {
+    for (index, entry) in entries.iter_mut().enumerate() {
+        match entry {
+            UnifiedEntry::Static { slot, .. } | UnifiedEntry::Material { slot } => {
+                *slot = index as u32;
+            }
+        }
+    }
+}
+
+fn bind_group_entries_footer_ui(
+    ui: &mut egui::Ui,
+    pipeline: &RenderPipeline,
+    entries: &mut Vec<UnifiedEntry>,
+) {
+    ui.add_space(6.0);
+
+    if ui.add(egui::Button::new("Add Bind Group")).clicked() {
+        entries.push(UnifiedEntry::Static {
+            slot: next_entry_slot(entries),
+            bg_id: None,
+        });
+    }
+
+    if let RenderDraw::Model {
+        material_bind_group_slot: None,
+        ..
+    } = pipeline.draw
+    {
+        ui.add_space(4.0);
+        if ui
+            .button("Add Material Bind Group")
+            .on_hover_text("Create a material bind group entry tied to the model draw")
+            .clicked()
+        {
+            entries.push(UnifiedEntry::Material {
+                slot: next_entry_slot(entries),
+            });
+        }
+    }
+}
+
+fn next_entry_slot(entries: &[UnifiedEntry]) -> u32 {
+    first_available_slot(entries.iter().map(|entry| match entry {
+        UnifiedEntry::Static { slot, .. } | UnifiedEntry::Material { slot } => *slot,
+    }))
+}
+
+fn apply_bind_group_entry_actions(entries: &mut Vec<UnifiedEntry>, actions: BindGroupEntryActions) {
+    if let Some(index) = actions.delete_index
+        && index < entries.len()
+    {
+        entries.remove(index);
+    }
+
+    if actions.remove_material {
+        entries.retain(|entry| !matches!(entry, UnifiedEntry::Material { .. }));
+    }
+}
+
+fn bind_group_entries_hint_ui(ui: &mut egui::Ui) {
+    ui.add_space(6.0);
+    ui.add(hint(|ui| {
+        ui.label("Right-click a");
+        ui.label(RichText::new("Slot").strong());
+        ui.label("to delete it, or drag to reorder.");
+    }));
+}
+
+fn split_bind_group_entries(
+    entries: &[UnifiedEntry],
+) -> (Vec<(u32, Option<BindGroupId>)>, Option<u32>) {
+    let static_bind_groups = entries
         .iter()
         .filter_map(|entry| match entry {
             UnifiedEntry::Static { slot, bg_id } => Some((*slot, *bg_id)),
@@ -324,31 +400,34 @@ pub fn bind_groups_ui(
         })
         .collect();
 
-    let new_material_slot: Option<u32> = entries.iter().find_map(|entry| match entry {
+    let material_bind_group_slot = entries.iter().find_map(|entry| match entry {
         UnifiedEntry::Material { slot } => Some(*slot),
-        _ => None,
+        UnifiedEntry::Static { .. } => None,
     });
 
-    if new_static != static_before {
-        pipeline.set_static_bind_groups(new_static);
-    }
+    (static_bind_groups, material_bind_group_slot)
+}
 
+fn apply_material_bind_group_slot(
+    pipeline: &mut RenderPipeline,
+    draw_before: RenderDraw,
+    new_material_slot: Option<u32>,
+) {
     if let RenderDraw::Model {
         material_bind_group_slot,
         ..
     } = &pipeline.draw
+        && *material_bind_group_slot != new_material_slot
     {
-        if *material_bind_group_slot != new_material_slot {
-            let mut edited = draw_before;
-            if let RenderDraw::Model {
-                material_bind_group_slot,
-                ..
-            } = &mut edited
-            {
-                *material_bind_group_slot = new_material_slot;
-            }
-            pipeline.set_draw(edited);
+        let mut edited = draw_before;
+        if let RenderDraw::Model {
+            material_bind_group_slot,
+            ..
+        } = &mut edited
+        {
+            *material_bind_group_slot = new_material_slot;
         }
+        pipeline.set_draw(edited);
     }
 }
 
@@ -359,10 +438,8 @@ pub fn draw_ui(
     models: &Storage<Model>,
 ) {
     let before = pipeline.draw.clone();
-
     let mut kind = render_draw_kind(&pipeline.draw);
     let kind_before = kind;
-
     let mut edited = before.clone();
 
     CollapsingHeader::new("Draw")
@@ -371,61 +448,97 @@ pub fn draw_ui(
             Grid::new(("pipeline_draw_model_grid", render_pass_id, pipeline.id))
                 .num_columns(2)
                 .show(ui, |ui| {
-                    ui.label("Draw Kind");
-                    combo_list(ui, ("draw_kind", pipeline.id), DrawKind::iter(), &mut kind);
-                    ui.end_row();
-
-                    if kind != kind_before {
-                        edited = draw_default(kind);
-                        if let RenderDraw::Model {
-                            material_bind_group_slot,
-                            ..
-                        } = &mut edited
-                        {
-                            *material_bind_group_slot = Some(first_available_slot(
-                                pipeline.static_bind_groups.iter().map(|(slot, _)| *slot),
-                            ));
-                        }
-                    }
-
-                    match &mut edited {
-                        RenderDraw::Model {
-                            model_id,
-                            instances,
-                            mesh_vertex_slot,
-                            material_bind_group_slot: _,
-                        } => {
-                            ui.label("Model");
-                            egui::ComboBox::from_id_salt(("draw_model_id", pipeline.id))
-                                .selected_text_storage_opt(models, *model_id)
-                                .show_ui_storage_opt_with_none(ui, models, model_id);
-                            ui.end_row();
-
-                            ui.label("Instances");
-                            range_u32_edit(ui, instances);
-                            ui.end_row();
-
-                            ui.label("Mesh Vertex Slot");
-                            ui.add(egui::DragValue::new(mesh_vertex_slot).speed(0.1));
-                            ui.end_row();
-                        }
-                        RenderDraw::Direct {
-                            vertices,
-                            instances,
-                        } => {
-                            ui.label("Vertices");
-                            range_u32_edit(ui, vertices);
-                            ui.end_row();
-
-                            ui.label("Instances");
-                            range_u32_edit(ui, instances);
-                            ui.end_row();
-                        }
-                    }
+                    draw_kind_fields_ui(ui, pipeline, &mut kind, kind_before, &mut edited);
+                    draw_fields_ui(ui, pipeline.id, models, &mut edited);
                 });
         });
 
     if edited != before {
         pipeline.set_draw(edited);
     }
+}
+
+fn draw_kind_fields_ui(
+    ui: &mut egui::Ui,
+    pipeline: &RenderPipeline,
+    kind: &mut DrawKind,
+    kind_before: DrawKind,
+    edited: &mut RenderDraw,
+) {
+    ui.label("Draw Kind");
+    combo_list(ui, ("draw_kind", pipeline.id), DrawKind::iter(), kind);
+    ui.end_row();
+
+    if *kind != kind_before {
+        *edited = draw_default(*kind);
+        if let RenderDraw::Model {
+            material_bind_group_slot,
+            ..
+        } = edited
+        {
+            *material_bind_group_slot = Some(first_available_slot(
+                pipeline.static_bind_groups.iter().map(|(slot, _)| *slot),
+            ));
+        }
+    }
+}
+
+fn draw_fields_ui(
+    ui: &mut egui::Ui,
+    pipeline_id: usize,
+    models: &Storage<Model>,
+    edited: &mut RenderDraw,
+) {
+    match edited {
+        RenderDraw::Model {
+            model_id,
+            instances,
+            mesh_vertex_slot,
+            material_bind_group_slot: _,
+        } => model_draw_fields_ui(
+            ui,
+            pipeline_id,
+            models,
+            model_id,
+            instances,
+            mesh_vertex_slot,
+        ),
+        RenderDraw::Direct {
+            vertices,
+            instances,
+        } => direct_draw_fields_ui(ui, vertices, instances),
+    }
+}
+
+fn model_draw_fields_ui(
+    ui: &mut egui::Ui,
+    pipeline_id: usize,
+    models: &Storage<Model>,
+    model_id: &mut Option<crate::project::ModelId>,
+    instances: &mut Range<u32>,
+    mesh_vertex_slot: &mut u32,
+) {
+    ui.label("Model");
+    egui::ComboBox::from_id_salt(("draw_model_id", pipeline_id))
+        .selected_text_storage_opt(models, *model_id)
+        .show_ui_storage_opt_with_none(ui, models, model_id);
+    ui.end_row();
+
+    ui.label("Instances");
+    range_u32_edit(ui, instances);
+    ui.end_row();
+
+    ui.label("Mesh Vertex Slot");
+    ui.add(egui::DragValue::new(mesh_vertex_slot).speed(0.1));
+    ui.end_row();
+}
+
+fn direct_draw_fields_ui(ui: &mut egui::Ui, vertices: &mut Range<u32>, instances: &mut Range<u32>) {
+    ui.label("Vertices");
+    range_u32_edit(ui, vertices);
+    ui.end_row();
+
+    ui.label("Instances");
+    range_u32_edit(ui, instances);
+    ui.end_row();
 }

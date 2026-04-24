@@ -24,7 +24,7 @@ impl StateSnapshot<'_> {
 
                 egui::ComboBox::from_id_salt("texture")
                     .selected_text_storage_opt(&self.project.textures, texture_id)
-                    .show_ui_storage_opt(ui, &self.project.textures, &mut texture_id);
+                    .show_ui_storage_opt_with_none(ui, &self.project.textures, &mut texture_id);
 
                 ui.end_row();
 
