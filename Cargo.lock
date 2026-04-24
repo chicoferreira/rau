@@ -2908,7 +2908,6 @@ dependencies = [
  "syntect",
  "thiserror 2.0.18",
  "tobj",
- "tokio",
  "wasm-bindgen",
  "wasm-bindgen-futures",
  "web-sys",
