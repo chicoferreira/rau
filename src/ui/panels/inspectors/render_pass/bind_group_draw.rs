@@ -8,7 +8,7 @@ use crate::{
         BindGroupId, RenderPassId,
         bindgroup::BindGroup,
         model::Model,
-        render_pass::{RenderDraw, RenderPipeline},
+        render_pass::{MAX_RENDER_PASS_BIND_GROUPS, RenderDraw, RenderPipeline},
         storage::Storage,
     },
     ui::components::{
@@ -337,7 +337,15 @@ fn bind_group_entries_footer_ui(
 ) {
     ui.add_space(6.0);
 
-    if ui.add(egui::Button::new("Add Bind Group")).clicked() {
+    let can_add_bind_group = entries.len() < MAX_RENDER_PASS_BIND_GROUPS;
+    let max_bind_groups_message =
+        format!("The maximum is {MAX_RENDER_PASS_BIND_GROUPS} bind groups.");
+
+    if ui
+        .add_enabled(can_add_bind_group, egui::Button::new("Add Bind Group"))
+        .on_disabled_hover_text(max_bind_groups_message.clone())
+        .clicked()
+    {
         entries.push(UnifiedEntry::Static {
             slot: next_entry_slot(entries),
             bg_id: None,
@@ -351,7 +359,11 @@ fn bind_group_entries_footer_ui(
     {
         ui.add_space(4.0);
         if ui
-            .button("Add Material Bind Group")
+            .add_enabled(
+                can_add_bind_group,
+                egui::Button::new("Add Material Bind Group"),
+            )
+            .on_disabled_hover_text(max_bind_groups_message)
             .on_hover_text("Create a material bind group entry tied to the model draw")
             .clicked()
         {

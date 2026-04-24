@@ -44,6 +44,8 @@ pub struct RenderPipelineRuntime {
     inner: wgpu::RenderPipeline,
 }
 
+pub const MAX_RENDER_PASS_BIND_GROUPS: usize = 8;
+
 pub type RenderPipelineId = usize;
 
 pub struct RenderPipeline {
@@ -399,27 +401,39 @@ impl RenderPipeline {
         static_bind_groups: &[(u32, Option<BindGroupId>)],
         draw: &RenderDraw,
     ) -> AppResult<Vec<Option<&'a wgpu::BindGroupLayout>>> {
-        let mut layouts = Vec::with_capacity(static_bind_groups.len() + 1);
+        let material_layout = draw.material_bind_group_slot_and_layout(ctx)?;
+        let max_slot = static_bind_groups
+            .iter()
+            .map(|(slot, _)| *slot)
+            .chain(material_layout.iter().map(|(slot, _)| *slot))
+            .max();
+
+        let Some(max_slot) = max_slot else {
+            return Ok(vec![]);
+        };
+
+        let layout_count = max_slot as usize + 1;
+        if layout_count > MAX_RENDER_PASS_BIND_GROUPS {
+            return Err(AppError::BindGroupLayoutLimitExceeded {
+                count: layout_count,
+                max: MAX_RENDER_PASS_BIND_GROUPS,
+            });
+        }
+
+        let mut result = vec![None; max_slot as usize + 1];
 
         for (slot, bind_group_id) in static_bind_groups.iter().copied() {
-            let bind_group_id = bind_group_id.ok_or(AppError::UninitializedFields)?;
+            let Some(bind_group_id) = bind_group_id else {
+                continue;
+            };
             let bind_group = ctx.runtime_bind_groups.get_init(bind_group_id)?;
-            layouts.push((slot, bind_group.inner_layout()));
+            result[slot as usize] = Some(bind_group.inner_layout());
         }
 
-        if let Some(material_layout) = draw.material_bind_group_slot_and_layout(ctx)? {
-            layouts.push(material_layout);
-        }
-
-        if layouts.is_empty() {
-            return Ok(vec![]);
-        }
-
-        let max_slot = layouts.iter().map(|(slot, _)| *slot).max().unwrap_or(0);
-        let mut result = vec![None; max_slot as usize + 1];
-        for (slot, layout) in layouts {
+        if let Some((slot, layout)) = material_layout {
             result[slot as usize] = Some(layout);
         }
+
         Ok(result)
     }
 
@@ -462,7 +476,9 @@ impl RenderPipelineRuntime {
         render_pass.set_pipeline(&self.inner);
 
         for &(slot, id) in &pipeline.static_bind_groups {
-            let id = id.ok_or(AppError::UninitializedFields)?;
+            let Some(id) = id else {
+                continue;
+            };
             let bind_group = ctx.runtime_bind_groups.get_init(id)?;
             render_pass.set_bind_group(slot, bind_group.inner(), &[]);
         }

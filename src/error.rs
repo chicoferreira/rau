@@ -10,6 +10,9 @@ pub enum AppError {
     /// The resource has uninitialized fields.
     #[error("resource has uninitialized fields")]
     UninitializedFields,
+    /// The render pipeline has more bind group layouts than wgpu supports.
+    #[error("bind group layout count {count} exceeds render pass bind group limit {max}")]
+    BindGroupLayoutLimitExceeded { count: usize, max: usize },
     /// The resource where this error occurred is not yet initialized.
     #[error("resource is not yet initialized: {0:?}")]
     WaitingForUninitResource(ResourceId),
