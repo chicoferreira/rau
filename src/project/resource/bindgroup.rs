@@ -4,11 +4,9 @@ use crate::{
     error::{AppError, AppResult},
     project::{
         BindGroupId, Creatable, ProjectResource, SamplerId, TextureViewId, UniformId,
-        sampler::Sampler,
+        resource::{sampler::Sampler, texture_view::TextureView, uniform::Uniform},
         storage::RuntimeStorage,
         sync::{Revision, SyncOutcome, SyncResource, SyncTracker},
-        texture_view::TextureView,
-        uniform::Uniform,
     },
 };
 

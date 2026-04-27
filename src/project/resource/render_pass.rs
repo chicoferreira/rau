@@ -4,12 +4,9 @@ use crate::{
     error::{AppError, AppResult},
     project::{
         BindGroupId, Creatable, ModelId, ProjectResource, RenderPassId, ShaderId, TextureViewId,
-        bindgroup::BindGroup,
-        model::Model,
-        shader::Shader,
+        resource::{bindgroup::BindGroup, model::Model, shader::Shader, texture_view::TextureView},
         storage::{RuntimeStorage, Storage},
         sync::{Revision, SyncOutcome, SyncResource, SyncTracker},
-        texture_view::TextureView,
     },
 };
 
@@ -615,7 +612,7 @@ impl SyncResource for RenderPass {
         }))
     }
 
-    fn revision(&self) -> super::sync::Revision {
+    fn revision(&self) -> Revision {
         self.revision
     }
 

@@ -5,10 +5,9 @@ use crate::{
     error::{AppError, AppResult},
     project::{
         BindGroupId, ComputePassId, Creatable, ProjectResource, ShaderId,
-        bindgroup::BindGroup,
-        shader::Shader,
+        resource::{bindgroup::BindGroup, shader::Shader},
         storage::RuntimeStorage,
-        sync::{Revision, SyncOutcome, SyncResource},
+        sync::{Revision, SyncOutcome, SyncResource, SyncTracker},
     },
 };
 
@@ -179,11 +178,11 @@ impl SyncResource for ComputePass {
     type Context<'a> = Context<'a>;
     type Runtime = ();
 
-    fn revision(&self) -> super::sync::Revision {
+    fn revision(&self) -> Revision {
         self.revision
     }
 
-    fn needs_rebuild_from_others(&self, tracker: &super::sync::SyncTracker) -> bool {
+    fn needs_rebuild_from_others(&self, tracker: &SyncTracker) -> bool {
         self.shader.is_some_and(|id| tracker.was_changed(id))
             || self
                 .bind_groups

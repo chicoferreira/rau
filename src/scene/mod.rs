@@ -2,16 +2,19 @@ use crate::{
     error::AppResult,
     project::{
         self, Project, ViewportId,
-        bindgroup::{BindGroup, BindGroupEntry, BindGroupResource},
-        camera::Camera,
-        dimension::Dimension,
-        model::Model,
-        render_pass::{LoadOperation, RenderDraw, RenderPass, RenderPassTarget},
-        sampler::{Sampler, SamplerSpec},
-        texture::{Texture, TextureSource},
-        texture_view::{TextureView, TextureViewFormat},
-        uniform::{
-            Uniform, UniformField, UniformFieldData, UniformFieldSource, camera::CameraField,
+        resource::{
+            bindgroup::{BindGroup, BindGroupEntry, BindGroupResource},
+            camera::Camera,
+            dimension::Dimension,
+            model::Model,
+            render_pass::{LoadOperation, RenderDraw, RenderPass, RenderPassTarget},
+            sampler::{Sampler, SamplerSpec},
+            texture::{Texture, TextureSource},
+            texture_view::{TextureView, TextureViewFormat},
+            uniform::{
+                Uniform, UniformField, UniformFieldData, UniformFieldSource, camera::CameraField,
+            },
+            viewport::Viewport,
         },
     },
     ui::{self},
@@ -185,7 +188,7 @@ pub async fn create_scene(
     );
     let hdr_texture_view_id = project.texture_views.register(hdr_texture_view);
 
-    let hdr_viewport = project::viewport::Viewport::new(
+    let hdr_viewport = Viewport::new(
         "HDR Buffer",
         Some(hdr_texture_view_id),
         Some(dimension_id),
@@ -282,7 +285,7 @@ pub async fn create_scene(
         None,
     );
     let viewport_texture_view_id = project.texture_views.register(viewport_texture_view);
-    let viewport = project::viewport::Viewport::new(
+    let viewport = Viewport::new(
         "Viewport Texture",
         Some(viewport_texture_view_id),
         Some(dimension_id),

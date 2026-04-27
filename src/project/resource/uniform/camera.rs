@@ -1,4 +1,5 @@
-use crate::project::{camera::Camera, uniform::UniformFieldData};
+use crate::project::resource::camera::Camera;
+use crate::project::resource::uniform::UniformFieldData;
 
 #[derive(Debug, Clone, Copy, PartialEq, strum::EnumIter, strum::Display)]
 pub enum CameraField {

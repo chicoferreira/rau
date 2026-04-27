@@ -6,7 +6,7 @@ use crate::{
     error::{AppError, AppResult},
     project::{
         CameraId, Creatable, DimensionId, ProjectResource,
-        dimension::Dimension,
+        resource::dimension::Dimension,
         storage::Storage,
         sync::{Revision, SyncOutcome, SyncResource, SyncTracker},
     },

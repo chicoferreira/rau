@@ -2,10 +2,12 @@ use crate::{
     error::AppResult,
     project::{
         Project, ShaderId, TextureId, TextureViewId,
-        bindgroup::{BindGroup, BindGroupEntry, BindGroupResource},
-        compute_pass::{ComputePass, ComputePassBindGroupEntry},
-        texture::{Texture, TextureSource},
-        texture_view::TextureView,
+        resource::{
+            bindgroup::{BindGroup, BindGroupEntry, BindGroupResource},
+            compute_pass::{ComputePass, ComputePassBindGroupEntry},
+            texture::{Texture, TextureSource},
+            texture_view::TextureView,
+        },
     },
 };
 

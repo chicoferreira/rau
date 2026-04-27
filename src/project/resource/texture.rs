@@ -4,8 +4,9 @@ use crate::{
     error::{AppError, AppResult},
     project::{
         DimensionId, ProjectResource, TextureId,
-        dimension::Dimension,
+        resource::dimension::Dimension,
         storage::Storage,
+        sync::SyncTracker,
         sync::{Revision, SyncOutcome, SyncResource},
     },
 };
@@ -185,7 +186,7 @@ impl SyncResource for Texture {
         self.revision
     }
 
-    fn needs_rebuild_from_others(&self, tracker: &super::sync::SyncTracker) -> bool {
+    fn needs_rebuild_from_others(&self, tracker: &SyncTracker) -> bool {
         match self.source {
             TextureSource::Dimension(Some(dimension_id)) => tracker.was_changed(dimension_id),
             TextureSource::Dimension(None) => false,

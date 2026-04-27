@@ -3,14 +3,18 @@ use egui_dnd::utils::shift_vec;
 use crate::{
     error::{AppError, AppResult},
     project::{
-        FramePlanId, Model, ProjectResource, RenderPassId, Shader, TextureView,
-        bindgroup::BindGroup,
-        render_pass::{self, RenderPass},
+        FramePlanId, ProjectResource, RenderPassId,
+        resource::{
+            bindgroup::BindGroup,
+            model::Model,
+            render_pass::{self, RenderPass},
+            shader::Shader,
+            texture_view::TextureView,
+        },
         storage::{RuntimeStorage, Storage},
         sync::{Revision, RuntimeCell, SyncOutcome, SyncResource, SyncTracker},
     },
 };
-
 #[derive(Default)]
 pub struct FramePlan {
     entries: Vec<FramePlanStep>,

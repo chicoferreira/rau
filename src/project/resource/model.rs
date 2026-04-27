@@ -6,8 +6,10 @@ use crate::{
     error::{AppError, AppResult},
     project::{
         BindGroupId, ModelId, ProjectResource,
-        bindgroup::BindGroup,
-        model::vertex_buffer::{VertexBufferField, VertexBufferSpec},
+        resource::{
+            bindgroup::BindGroup,
+            model::vertex_buffer::{VertexBufferField, VertexBufferSpec},
+        },
         storage::RuntimeStorage,
         sync::{Revision, SyncOutcome, SyncResource, SyncTracker},
     },

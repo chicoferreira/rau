@@ -8,10 +8,9 @@ use crate::{
     error::{AppError, AppResult},
     project::{
         CameraId, Creatable, ProjectResource, UniformId,
-        camera::Camera,
+        resource::{camera::Camera, uniform::camera::CameraField},
         storage::Storage,
         sync::{Revision, SyncOutcome, SyncResource, SyncTracker},
-        uniform::camera::CameraField,
     },
     utils::resizable_buffer::{ChangeResult, ResizableBuffer},
 };

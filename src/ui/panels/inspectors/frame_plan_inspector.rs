@@ -2,7 +2,8 @@ use egui::RichText;
 
 use crate::{
     project::{
-        FramePlanId, RenderPassId, frame_plan::FramePlanStepId, render_pass::RenderPass,
+        FramePlanId, RenderPassId,
+        resource::{frame_plan::FramePlanStepId, render_pass::RenderPass},
         storage::Storage,
     },
     ui::{

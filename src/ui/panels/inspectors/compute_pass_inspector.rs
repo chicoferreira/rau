@@ -2,7 +2,8 @@ use egui::{CollapsingHeader, Grid, RichText};
 
 use crate::{
     project::{
-        BindGroupId, ComputePassId, bindgroup::BindGroup, compute_pass::ComputePass,
+        BindGroupId, ComputePassId,
+        resource::{bindgroup::BindGroup, compute_pass::ComputePass},
         storage::Storage,
     },
     ui::{

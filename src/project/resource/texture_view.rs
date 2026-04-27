@@ -2,9 +2,9 @@ use crate::{
     error::{AppError, AppResult},
     project::{
         Creatable, ProjectResource, TextureId, TextureViewId,
+        resource::texture::{Texture, TextureRuntime},
         storage::{RuntimeStorage, Storage},
         sync::{Revision, SyncOutcome, SyncResource, SyncTracker},
-        texture::{Texture, TextureRuntime},
     },
     ui::renderer::EguiRenderer,
 };

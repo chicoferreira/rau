@@ -2,40 +2,19 @@ use slotmap::new_key_type;
 
 use crate::{
     error::{AppError, AppResult},
-    project::{
-        bindgroup::BindGroup,
-        camera::Camera,
-        compute_pass::ComputePass,
-        dimension::Dimension,
-        frame_plan::FramePlan,
-        model::Model,
-        render_pass::RenderPass,
-        sampler::Sampler,
-        shader::Shader,
-        storage::{RuntimeStorage, Storage},
-        texture::Texture,
-        texture_view::TextureView,
-        uniform::Uniform,
+    project::resource::{
+        bindgroup::BindGroup, camera::Camera, compute_pass::ComputePass, dimension::Dimension,
+        frame_plan::FramePlan, model::Model, render_pass::RenderPass, sampler::Sampler,
+        shader::Shader, texture::Texture, texture_view::TextureView, uniform::Uniform,
         viewport::Viewport,
     },
+    project::storage::{RuntimeStorage, Storage},
     utils::wgpu_error_scope::ErrorScopeResult,
 };
 
-pub mod bindgroup;
-pub mod camera;
-pub mod compute_pass;
-pub mod dimension;
-pub mod frame_plan;
-pub mod model;
-pub mod render_pass;
-pub mod sampler;
-pub mod shader;
+pub mod resource;
 pub mod storage;
 pub mod sync;
-pub mod texture;
-pub mod texture_view;
-pub mod uniform;
-pub mod viewport;
 
 new_key_type! {
     pub struct UniformId;

@@ -6,9 +6,11 @@ use strum::IntoEnumIterator;
 use crate::{
     project::{
         BindGroupId, RenderPassId,
-        bindgroup::BindGroup,
-        model::Model,
-        render_pass::{MAX_RENDER_PASS_BIND_GROUPS, RenderDraw, RenderPipeline},
+        resource::{
+            bindgroup::BindGroup,
+            model::Model,
+            render_pass::{MAX_RENDER_PASS_BIND_GROUPS, RenderDraw, RenderPipeline},
+        },
         storage::Storage,
     },
     ui::components::{

@@ -5,12 +5,12 @@ use strum::IntoEnumIterator;
 use crate::{
     project::{
         UniformId,
-        camera::Camera,
-        storage::Storage,
-        uniform::{
+        resource::camera::Camera,
+        resource::uniform::{
             self, UniformField, UniformFieldData, UniformFieldDataKind, UniformFieldSource,
             camera::CameraField,
         },
+        storage::Storage,
     },
     state::StateEvent,
     ui::{

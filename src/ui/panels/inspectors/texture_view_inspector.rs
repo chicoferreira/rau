@@ -1,7 +1,7 @@
 use egui::{CollapsingHeader, Grid, load::SizedTexture};
 
 use crate::{
-    project::{TextureViewId, texture_view::TextureViewFormat},
+    project::{TextureViewId, resource::texture_view::TextureViewFormat},
     ui::{
         components::selector::{AsWidgetText, ComboBoxExt},
         pane::StateSnapshot,

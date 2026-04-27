@@ -4,7 +4,9 @@ use strum::IntoEnumIterator;
 use crate::{
     project::{
         BindGroupId, ModelId,
-        model::{MeshMaterialSelection, Model, vertex_buffer::VertexBufferField},
+        resource::model::{
+            Material, Mesh, MeshMaterialSelection, Model, vertex_buffer::VertexBufferField,
+        },
     },
     ui::{
         components::{
@@ -326,7 +328,7 @@ fn apply_model_edits(state: &mut StateSnapshot<'_>, model_id: ModelId, edits: Ve
 }
 
 struct TriangleTableDelegate<'a> {
-    mesh: &'a crate::project::model::Mesh,
+    mesh: &'a Mesh,
 }
 
 impl egui_table::TableDelegate for TriangleTableDelegate<'_> {
@@ -383,7 +385,7 @@ impl AsWidgetText for VertexBufferField {
 fn material_selection_label(
     selection: &MeshMaterialSelection,
     source_index: Option<usize>,
-    materials: &[crate::project::model::Material],
+    materials: &[Material],
 ) -> String {
     match selection {
         MeshMaterialSelection::FromSource => match source_index {

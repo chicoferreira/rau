@@ -5,11 +5,13 @@ use strum::IntoEnumIterator;
 use crate::{
     project::{
         BindGroupId, SamplerId, TextureViewId, UniformId,
-        bindgroup::{BindGroupEntry, BindGroupResource},
-        sampler::Sampler,
+        resource::{
+            bindgroup::{BindGroupEntry, BindGroupResource},
+            sampler::Sampler,
+            texture_view::TextureView,
+            uniform::Uniform,
+        },
         storage::Storage,
-        texture_view::TextureView,
-        uniform::Uniform,
     },
     ui::{
         components::{

@@ -4,7 +4,7 @@ use anyhow::Context;
 
 use crate::{
     error::{AppError, AppResult},
-    project::texture::{Texture, TextureSource},
+    project::resource::texture::{Texture, TextureSource},
 };
 
 pub async fn load_string(file_name: impl AsRef<Path>) -> anyhow::Result<String> {

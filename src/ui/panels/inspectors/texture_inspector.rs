@@ -2,7 +2,11 @@ use egui::{Grid, Widget};
 use wgpu::TextureUsages;
 
 use crate::{
-    project::{TextureId, dimension::Dimension, storage::Storage, texture::TextureSource},
+    project::{
+        TextureId,
+        resource::{dimension::Dimension, texture::TextureSource},
+        storage::Storage,
+    },
     ui::{
         components::{
             flags_selector::flags_selector,
