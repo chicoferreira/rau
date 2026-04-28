@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{path::PathBuf, sync::Arc};
 
 use slotmap::SecondaryMap;
 use winit::{event::WindowEvent, window::Window};
@@ -7,6 +7,7 @@ use crate::{
     project::{
         self, DimensionId, FramePlanId, Project, ResourceId, ResourceKind, RuntimeProject,
         ViewportId,
+        file::{NativeFileSystem, ProjectFilePath},
         resource::{
             bindgroup::BindGroupCreationContext,
             camera::CameraCreationContext,
@@ -30,7 +31,6 @@ use crate::{
     },
     utils::{
         key::KeyboardState,
-        resources,
         wgpu_error_scope::{self, WgpuErrorScopeReceiver, WgpuErrorScopeWaiter},
     },
 };
@@ -75,6 +75,7 @@ pub struct State {
     error_waiter: WgpuErrorScopeWaiter,
     error_receiver: WgpuErrorScopeReceiver,
     tracker: SyncTracker,
+    file_system: NativeFileSystem,
 }
 
 impl State {
@@ -153,28 +154,30 @@ impl State {
 
         let equirectangular_shader = Shader::new(
             "Equirectengular Shader",
-            resources::load_string("equirectangular.wgsl").await?,
+            ProjectFilePath::new("equirectangular.wgsl"),
         );
         let equirectengular_shader_id = project.shaders.register(equirectangular_shader);
 
-        let hdr_shader = Shader::new("HDR Shader", resources::load_string("hdr.wgsl").await?);
+        let hdr_shader = Shader::new("HDR Shader", ProjectFilePath::new("hdr.wgsl"));
         let hdr_shader_id = project.shaders.register(hdr_shader);
 
-        let light_shader = Shader::new("Light Shader", resources::load_string("light.wgsl").await?);
+        let light_shader = Shader::new("Light Shader", ProjectFilePath::new("light.wgsl"));
         let light_shader_id = project.shaders.register(light_shader);
 
-        let main_shader = Shader::new("Main Shader", resources::load_string("shader.wgsl").await?);
+        let main_shader = Shader::new("Main Shader", ProjectFilePath::new("shader.wgsl"));
         let main_shader_id = project.shaders.register(main_shader);
 
-        let sky_shader = Shader::new("Sky Shader", resources::load_string("sky.wgsl").await?);
+        let sky_shader = Shader::new("Sky Shader", ProjectFilePath::new("sky.wgsl"));
         let sky_shader_id = project.shaders.register(sky_shader);
 
         let runtime_project = RuntimeProject::default();
+        let file_system = NativeFileSystem::new(PathBuf::from("res"));
 
         let viewport_id = scene::create_scene(
             &device,
             size,
             &mut project,
+            &file_system,
             equirectengular_shader_id,
             hdr_shader_id,
             light_shader_id,
@@ -209,6 +212,7 @@ impl State {
             error_waiter,
             error_receiver,
             tracker: SyncTracker::default(),
+            file_system,
         })
     }
 
@@ -356,6 +360,7 @@ impl State {
             dimensions: &self.project.dimensions,
             device: &self.device,
             queue: &self.queue,
+            file_system: &self.file_system,
         };
         self.tracker.sync_storage(
             &mut self.project.textures,
@@ -429,6 +434,7 @@ impl State {
         let view = &mut ModelCreationContext {
             device: &self.device,
             queue: &self.queue,
+            file_system: &self.file_system,
         };
         self.tracker.sync_storage(
             &mut self.project.models,
@@ -440,6 +446,7 @@ impl State {
 
         let view = &mut ShaderCreationContext {
             device: &self.device,
+            file_system: &self.file_system,
         };
         self.tracker.sync_storage(
             &mut self.project.shaders,
@@ -452,6 +459,7 @@ impl State {
         let view = &mut render_pass::Context {
             device: &self.device,
             models: &self.project.models,
+            runtime_models: &self.runtime_project.models,
             runtime_shaders: &mut self.runtime_project.shaders,
             runtime_texture_views: &mut self.runtime_project.texture_views,
             runtime_bind_groups: &mut self.runtime_project.bind_groups,
@@ -484,6 +492,7 @@ impl State {
             render_passes: &self.project.render_passes,
             runtime_render_passes: &self.runtime_project.render_passes,
             models: &self.project.models,
+            runtime_models: &self.runtime_project.models,
             runtime_shaders: &self.runtime_project.shaders,
             runtime_texture_views: &self.runtime_project.texture_views,
             runtime_bind_groups: &self.runtime_project.bind_groups,

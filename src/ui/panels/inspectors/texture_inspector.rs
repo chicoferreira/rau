@@ -196,10 +196,8 @@ fn ui_texture_source(
                         .ui(ui);
                 });
             }
-            TextureSource::Image(image) => {
-                let width = image.width();
-                let height = image.height();
-                ui.label(format!("{width} x {height}"));
+            TextureSource::Image(_path) => {
+                ui.label("TODO");
             }
         }
     });

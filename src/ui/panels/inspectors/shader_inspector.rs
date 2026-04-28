@@ -1,4 +1,3 @@
-use egui::TextEdit;
 use egui_extras::syntax_highlighting::SyntectSettings;
 use std::sync::OnceLock;
 use syntect::highlighting::ThemeSet;
@@ -27,13 +26,13 @@ fn wgsl_settings() -> &'static SyntectSettings {
 impl StateSnapshot<'_> {
     pub fn shader_inspector_ui(&mut self, ui: &mut egui::Ui, shader_id: ShaderId) {
         ui.take_available_space();
-        let Ok(shader) = self.project.shaders.get_mut(shader_id) else {
+        let Ok(_shader) = self.project.shaders.get_mut(shader_id) else {
             return;
         };
 
         let theme = egui_extras::syntax_highlighting::CodeTheme::from_memory(ui.ctx(), ui.style());
 
-        let mut layouter = |ui: &egui::Ui, text: &dyn egui::TextBuffer, _wrap_width: f32| {
+        let mut _layouter = |ui: &egui::Ui, text: &dyn egui::TextBuffer, _wrap_width: f32| {
             let mut layout_job = egui_extras::syntax_highlighting::highlight_with(
                 ui.ctx(),
                 ui.style(),
@@ -47,19 +46,19 @@ impl StateSnapshot<'_> {
             ui.fonts_mut(|f| f.layout_job(layout_job))
         };
 
-        let mut shader_source = shader.source().to_string(); // TODO: fix this clone??
+        // let mut shader_source = shader.source().to_string(); // TODO: fix this clone??
 
-        TextEdit::multiline(&mut shader_source)
-            .font(egui::TextStyle::Monospace)
-            .code_editor()
-            .desired_rows(10)
-            .lock_focus(true)
-            .desired_width(f32::INFINITY)
-            .layouter(&mut layouter)
-            .show(ui);
+        // egui::TextEdit::multiline(&mut shader_source)
+        //     .font(egui::TextStyle::Monospace)
+        //     .code_editor()
+        //     .desired_rows(10)
+        //     .lock_focus(true)
+        //     .desired_width(f32::INFINITY)
+        //     .layouter(&mut layouter)
+        //     .show(ui);
 
-        if shader_source != shader.source() {
-            shader.set_source(shader_source);
-        }
+        // if shader_source != shader.source() {
+        //     shader.set_source(shader_source);
+        // }
     }
 }

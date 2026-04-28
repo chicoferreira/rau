@@ -35,6 +35,7 @@ pub struct FramePlanContext<'a> {
     pub render_passes: &'a Storage<RenderPass>,
     pub runtime_render_passes: &'a RuntimeStorage<RenderPass>,
     pub models: &'a Storage<Model>,
+    pub runtime_models: &'a RuntimeStorage<Model>,
     pub runtime_shaders: &'a RuntimeStorage<Shader>,
     pub runtime_texture_views: &'a RuntimeStorage<TextureView>,
     pub runtime_bind_groups: &'a RuntimeStorage<BindGroup>,
@@ -123,7 +124,7 @@ impl SyncResource for FramePlan {
             | RuntimeCell::PendingValidation {
                 revision: at_revision,
                 ..
-            } => *at_revision != self.revision || tracker.has_changes(),
+            } => *at_revision != self.revision || tracker.has_resource_changes(),
         }
     }
 
@@ -135,6 +136,7 @@ impl SyncResource for FramePlan {
         let render_ctx = render_pass::Context {
             device: ctx.device,
             models: ctx.models,
+            runtime_models: ctx.runtime_models,
             runtime_shaders: ctx.runtime_shaders,
             runtime_texture_views: ctx.runtime_texture_views,
             runtime_bind_groups: ctx.runtime_bind_groups,

@@ -12,6 +12,7 @@ use crate::{
     utils::wgpu_error_scope::ErrorScopeResult,
 };
 
+pub mod file;
 pub mod resource;
 pub mod storage;
 pub mod sync;
@@ -90,7 +91,7 @@ impl Project {
 
     pub fn register(&mut self, kind: ResourceKind) -> Option<ResourceId> {
         let id = match kind {
-            ResourceKind::Shader => self.shaders.create().into(),
+            ResourceKind::Shader => todo!("not yet implemented"),
             ResourceKind::Viewport => self.viewports.create().into(),
             ResourceKind::Uniform => self.uniforms.create().into(),
             ResourceKind::BindGroup => self.bind_groups.create().into(),

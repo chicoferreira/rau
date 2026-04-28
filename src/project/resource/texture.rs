@@ -4,10 +4,10 @@ use crate::{
     error::{AppError, AppResult},
     project::{
         DimensionId, ProjectResource, TextureId,
+        file::{FileSystem, ProjectFilePath},
         resource::dimension::Dimension,
         storage::Storage,
-        sync::SyncTracker,
-        sync::{Revision, SyncOutcome, SyncResource},
+        sync::{Revision, SyncOutcome, SyncResource, SyncTracker},
     },
 };
 
@@ -16,6 +16,7 @@ pub struct TextureCreationContext<'a> {
     pub dimensions: &'a Storage<Dimension>,
     pub device: &'a wgpu::Device,
     pub queue: &'a wgpu::Queue,
+    pub file_system: &'a dyn FileSystem,
 }
 
 pub struct Texture {
@@ -34,7 +35,7 @@ pub struct TextureRuntime {
 pub enum TextureSource {
     // Grab size from dimension
     Dimension(Option<DimensionId>),
-    Image(image::DynamicImage), // TODO: change this to image_id once we have it in the project
+    Image(ProjectFilePath),
     Manual { size: wgpu::Extent3d },
 }
 
@@ -85,72 +86,6 @@ impl Texture {
         self.source = source;
         self.revision.increase();
     }
-
-    fn create_texture(
-        ctx: &TextureCreationContext,
-        label: &str,
-        format: wgpu::TextureFormat,
-        usage: wgpu::TextureUsages,
-        source: &TextureSource,
-    ) -> AppResult<wgpu::Texture> {
-        let non_srgb_format = format.remove_srgb_suffix();
-        let srgb_format = format.add_srgb_suffix();
-        let view_formats = if srgb_format != non_srgb_format {
-            // Automatically support both srgb-ness views
-            vec![non_srgb_format, srgb_format]
-        } else {
-            vec![]
-        };
-
-        let size = match source {
-            TextureSource::Dimension(dimension_id) => {
-                let dimension_id = dimension_id.ok_or(AppError::UninitializedFields)?;
-                let size = ctx.dimensions.get(dimension_id)?.size();
-
-                wgpu::Extent3d {
-                    width: size.width(),
-                    height: size.height(),
-                    depth_or_array_layers: 1,
-                }
-            }
-            TextureSource::Image(dynamic_image) => {
-                let (width, height) = dynamic_image.dimensions();
-                wgpu::Extent3d {
-                    width,
-                    height,
-                    depth_or_array_layers: 1,
-                }
-            }
-            TextureSource::Manual { size } => *size,
-        };
-
-        let texture = ctx.device.create_texture(&wgpu::TextureDescriptor {
-            label: Some(&label),
-            size,
-            mip_level_count: 1,
-            sample_count: 1,
-            dimension: wgpu::TextureDimension::D2,
-            format,
-            usage,
-            view_formats: &view_formats,
-        });
-
-        if let TextureSource::Image(image) = source {
-            // TODO: Change this format to an enum that we list all supported formats, instead of relying on all wgpu formats
-            match format {
-                wgpu::TextureFormat::Rgba32Float => {
-                    let rgba = image.to_rgba32f();
-                    write_image_to_texture(ctx.queue, &texture, &rgba, size);
-                }
-                _ => {
-                    let rgba = image.to_rgba8();
-                    write_image_to_texture(ctx.queue, &texture, &rgba, size);
-                }
-            }
-        }
-
-        Ok(texture)
-    }
 }
 
 impl TextureRuntime {
@@ -176,8 +111,69 @@ impl SyncResource for Texture {
         ctx: &mut Self::Context<'a>,
         _previous: Option<Self::Runtime>,
     ) -> AppResult<SyncOutcome<Self::Runtime>> {
-        let texture =
-            Self::create_texture(&ctx, &self.label, self.format, self.usage, &self.source)?;
+        let non_srgb_format = self.format.remove_srgb_suffix();
+        let srgb_format = self.format.add_srgb_suffix();
+        let view_formats = if srgb_format != non_srgb_format {
+            // Automatically support both srgb-ness views
+            vec![non_srgb_format, srgb_format]
+        } else {
+            vec![]
+        };
+
+        let mut image_to_write = None;
+
+        let size = match &self.source {
+            TextureSource::Dimension(dimension_id) => {
+                let dimension_id = dimension_id.ok_or(AppError::UninitializedFields)?;
+                let size = ctx.dimensions.get(dimension_id)?.size();
+
+                wgpu::Extent3d {
+                    width: size.width(),
+                    height: size.height(),
+                    depth_or_array_layers: 1,
+                }
+            }
+            TextureSource::Image(path) => {
+                let bytes = ctx.file_system.read(path)?;
+                let dynamic_image = image::load_from_memory(&bytes)?;
+
+                let (width, height) = dynamic_image.dimensions();
+
+                image_to_write = Some(dynamic_image);
+
+                wgpu::Extent3d {
+                    width,
+                    height,
+                    depth_or_array_layers: 1,
+                }
+            }
+            TextureSource::Manual { size } => *size,
+        };
+
+        let texture = ctx.device.create_texture(&wgpu::TextureDescriptor {
+            label: Some(&self.label),
+            size,
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: self.format,
+            usage: self.usage,
+            view_formats: &view_formats,
+        });
+
+        if let Some(image_to_write) = image_to_write {
+            // TODO: Change this format to an enum that we list all supported formats, instead of relying on all wgpu formats
+            match self.format {
+                wgpu::TextureFormat::Rgba32Float => {
+                    let rgba = image_to_write.to_rgba32f();
+                    write_image_to_texture(ctx.queue, &texture, &rgba, size);
+                }
+                _ => {
+                    let rgba = image_to_write.to_rgba8();
+                    write_image_to_texture(ctx.queue, &texture, &rgba, size);
+                }
+            }
+        }
 
         Ok(SyncOutcome::Changed(TextureRuntime { inner: texture }))
     }
