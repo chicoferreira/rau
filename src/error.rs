@@ -1,4 +1,4 @@
-use crate::project::ResourceId;
+use crate::project::{ResourceId, file::ProjectFilePath};
 
 pub type AppResult<T> = std::result::Result<T, AppError>;
 
@@ -33,7 +33,10 @@ pub enum AppError {
     ShaderCompilationError(#[from] naga::WithSpan<naga::valid::ValidationError>),
     /// A file load error occurred.
     #[error("file load error: {0}")]
-    FileLoadError(anyhow::Error), // TODO: change this from anyhow to a more concrete file error
+    FileLoadError(#[from] std::io::Error),
+    /// The file was not found.
+    #[error("file not found: {0:?}")]
+    FileNotFound(ProjectFilePath),
     /// An image parse error occurred.
     #[error(transparent)]
     ImageParseError(#[from] image::ImageError),

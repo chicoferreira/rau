@@ -2,6 +2,7 @@ use crate::{
     error::{AppError, AppResult},
     project::{
         ProjectResource, ResourceId,
+        file::ProjectFilePath,
         storage::{RuntimeStorage, Storage},
     },
     utils::wgpu_error_scope::{WgpuErrorScope, WgpuErrorScopeWaiter},
@@ -9,7 +10,8 @@ use crate::{
 
 #[derive(Default)]
 pub struct SyncTracker {
-    changes: Vec<ResourceId>,
+    resource_changes: Vec<ResourceId>,
+    file_changes: Vec<ProjectFilePath>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
@@ -115,7 +117,7 @@ impl<R> RuntimeCell<R> {
 
 impl SyncTracker {
     pub fn clear_changes(&mut self) {
-        self.changes.clear();
+        self.resource_changes.clear();
     }
 
     /// Creates the runtime variant of the resource tied with the given id.
@@ -184,7 +186,7 @@ impl SyncTracker {
             match sync_result {
                 Ok(SyncOutcome::Changed(runtime)) => {
                     log::debug!("Recreated: {:?}", id);
-                    self.changes.push(id.into());
+                    self.resource_changes.push(id.into());
                     *cell = RuntimeCell::PendingValidation {
                         runtime,
                         revision: current_revision,
@@ -200,7 +202,7 @@ impl SyncTracker {
                 }
                 Err(err) => {
                     log::error!("Error while syncing {id:?}: {:?}", err);
-                    self.changes.push(id.into());
+                    self.resource_changes.push(id.into());
                     *cell = RuntimeCell::Errored {
                         revision: current_revision,
                         error: err,
@@ -218,14 +220,18 @@ impl SyncTracker {
     }
 
     pub fn was_changed(&self, object_id: impl Into<ResourceId>) -> bool {
-        self.changes.contains(&object_id.into())
+        self.resource_changes.contains(&object_id.into())
     }
 
-    pub fn has_changes(&self) -> bool {
-        !self.changes.is_empty()
+    pub fn has_resource_changes(&self) -> bool {
+        !self.resource_changes.is_empty()
+    }
+
+    pub fn file_changed(&self, path: &ProjectFilePath) -> bool {
+        self.file_changes.contains(path)
     }
 
     pub(crate) fn push_change(&mut self, id: ResourceId) {
-        self.changes.push(id);
+        self.resource_changes.push(id);
     }
 }

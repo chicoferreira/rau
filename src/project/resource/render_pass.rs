@@ -108,6 +108,7 @@ impl Creatable for RenderPass {
 pub struct Context<'a> {
     pub device: &'a wgpu::Device,
     pub models: &'a Storage<Model>,
+    pub runtime_models: &'a RuntimeStorage<Model>,
     pub runtime_shaders: &'a RuntimeStorage<Shader>,
     pub runtime_texture_views: &'a RuntimeStorage<TextureView>,
     pub runtime_bind_groups: &'a RuntimeStorage<BindGroup>,
@@ -489,19 +490,21 @@ impl RenderPipelineRuntime {
             } => {
                 let model_id = model_id.ok_or(AppError::UninitializedFields)?;
                 let model = ctx.models.get(model_id)?;
+                let model_runtime = ctx.runtime_models.get_init(model_id)?;
 
-                for mesh in model.meshes() {
+                for (mesh_index, mesh) in model_runtime.meshes().iter().enumerate() {
                     let vertex_buffer = mesh.vertex_buffer().inner();
                     render_pass.set_vertex_buffer(*mesh_vertex_slot, vertex_buffer.slice(..));
 
                     if let Some(mat_slot) = material_bind_group_slot {
-                        let material_index =
-                            mesh.material_index().ok_or(AppError::UninitializedFields)?;
-                        let material = model
+                        let material_index = model
+                            .selected_material_index(mesh_index, mesh)
+                            .ok_or(AppError::UninitializedFields)?;
+                        model_runtime
                             .get_material(material_index)
                             .ok_or(AppError::UninitializedFields)?;
-                        let bind_group_id = material
-                            .bind_group_id()
+                        let bind_group_id = model
+                            .material_bind_group_id(material_index)
                             .ok_or(AppError::UninitializedFields)?;
                         let bind_group = ctx.runtime_bind_groups.get_init(bind_group_id)?;
                         render_pass.set_bind_group(*mat_slot, bind_group.inner(), &[]);
@@ -556,7 +559,8 @@ impl RenderDraw {
 
         let model_id = (*model_id).ok_or(AppError::UninitializedFields)?;
         let model = ctx.models.get(model_id)?;
-        let layout = model.get_bind_group_layout(ctx.runtime_bind_groups)?;
+        let model_runtime = ctx.runtime_models.get_init(model_id)?;
+        let layout = model_runtime.get_bind_group_layout(model, ctx.runtime_bind_groups)?;
         Ok(Some((*slot, layout)))
     }
 

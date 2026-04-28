@@ -1,4 +1,7 @@
-use std::{io::BufReader, path::Path};
+use std::{
+    io::{BufReader, Cursor},
+    path::{Path, PathBuf},
+};
 
 use wgpu::BindGroupLayout;
 
@@ -6,6 +9,7 @@ use crate::{
     error::{AppError, AppResult},
     project::{
         BindGroupId, ModelId, ProjectResource,
+        file::{FileSystem, ProjectFilePath},
         resource::{
             bindgroup::BindGroup,
             model::vertex_buffer::{VertexBufferField, VertexBufferSpec},
@@ -13,10 +17,7 @@ use crate::{
         storage::RuntimeStorage,
         sync::{Revision, SyncOutcome, SyncResource, SyncTracker},
     },
-    utils::{
-        resizable_buffer::{ChangeResult, ResizableBuffer},
-        resources::load_binary,
-    },
+    utils::resizable_buffer::ResizableBuffer,
 };
 
 pub mod vertex_buffer;
@@ -24,17 +25,23 @@ pub mod vertex_buffer;
 pub struct ModelCreationContext<'a> {
     pub device: &'a wgpu::Device,
     pub queue: &'a wgpu::Queue,
+    pub file_system: &'a dyn FileSystem,
 }
 
 pub struct Model {
     pub label: String,
-    meshes: Vec<Mesh>,
-    materials: Vec<Material>,
+    source: ProjectFilePath,
+    material_bind_group_ids: Vec<Option<BindGroupId>>,
+    mesh_material_selections: Vec<MeshMaterialSelection>,
     vertex_buffer_spec: VertexBufferSpec,
     revision: Revision,
 }
 
-// TODO: change this to a file handler and move everything to runtime
+pub struct ModelRuntime {
+    meshes: Vec<Mesh>,
+    materials: Vec<Material>,
+}
+
 pub struct Mesh {
     positions: Vec<[f32; 3]>,
     normals: Vec<[f32; 3]>,
@@ -43,7 +50,6 @@ pub struct Mesh {
     bitangents: Vec<[f32; 3]>,
     indices: Vec<u32>,
     material_index: Option<usize>,
-    material_selection: MeshMaterialSelection,
     vertex_buffer: ResizableBuffer,
     index_buffer: ResizableBuffer,
 }
@@ -54,68 +60,72 @@ pub enum MeshMaterialSelection {
     Material(Option<usize>),
 }
 
+impl Default for MeshMaterialSelection {
+    fn default() -> Self {
+        Self::FromSource
+    }
+}
+
 pub struct Material {
     label: String,
     texture_paths: Vec<String>,
-    bind_group_id: Option<BindGroupId>,
 }
 
 impl Model {
-    pub async fn load_from_obj_file(
-        label: String,
-        file: impl AsRef<Path>,
-        device: &wgpu::Device,
-    ) -> AppResult<Self> {
-        let obj_bytes = load_binary(file).await.map_err(AppError::FileLoadError)?;
-
-        let load_options = tobj::LoadOptions {
-            triangulate: true,
-            single_index: true,
-            ..Default::default()
-        };
-
-        let (models, obj_materials) =
-            tobj::futures::load_obj_buf(obj_bytes.as_ref(), &load_options, |p| async move {
-                let mat = load_binary(&p).await;
-                let mat = mat.map_err(|_| tobj::LoadError::OpenFileFailed)?;
-                let mat: &[u8] = mat.as_ref();
-                let mut reader = BufReader::new(mat);
-                tobj::load_mtl_buf(&mut reader)
-            })
-            .await?;
-
-        let vertex_buffer_spec = VertexBufferSpec::new();
-
-        let meshes = models
-            .into_iter()
-            .map(|m| Mesh::new_from_obj(m, &vertex_buffer_spec, device))
-            .collect::<AppResult<Vec<_>>>()?;
-
-        let materials = obj_materials?.into_iter().map(Into::into).collect();
-
-        Ok(Model {
-            label,
-            meshes,
-            materials,
-            vertex_buffer_spec,
+    pub fn new(label: impl Into<String>, source: ProjectFilePath) -> Self {
+        Self {
+            label: label.into(),
+            source,
+            material_bind_group_ids: Vec::new(),
+            mesh_material_selections: Vec::new(),
+            vertex_buffer_spec: VertexBufferSpec::new(),
             revision: Revision::default(),
-        })
+        }
     }
 
-    pub fn meshes(&self) -> &[Mesh] {
-        &self.meshes
+    pub fn source(&self) -> &ProjectFilePath {
+        &self.source
     }
 
-    pub fn materials(&self) -> &[Material] {
-        &self.materials
-    }
-
-    pub fn materials_mut(&mut self) -> &mut [Material] {
-        &mut self.materials
+    pub fn set_source(&mut self, source: ProjectFilePath) {
+        if self.source != source {
+            self.source = source;
+            self.revision.increase();
+        }
     }
 
     pub fn set_label(&mut self, label: String) {
         self.label = label;
+    }
+
+    pub fn material_bind_group_id(&self, material_index: usize) -> Option<BindGroupId> {
+        self.material_bind_group_ids
+            .get(material_index)
+            .copied()
+            .flatten()
+    }
+
+    pub fn set_material_bind_group_id(
+        &mut self,
+        material_index: usize,
+        bind_group_id: Option<BindGroupId>,
+    ) {
+        if self.material_bind_group_ids.len() <= material_index {
+            self.material_bind_group_ids
+                .resize(material_index + 1, None);
+        }
+
+        if self.material_bind_group_ids[material_index] != bind_group_id {
+            self.material_bind_group_ids[material_index] = bind_group_id;
+            self.revision.increase();
+        }
+    }
+
+    pub fn mesh_material_selection(&self, mesh_index: usize) -> MeshMaterialSelection {
+        self.mesh_material_selections
+            .get(mesh_index)
+            .cloned()
+            .unwrap_or_default()
     }
 
     pub fn set_mesh_material_selection(
@@ -123,13 +133,22 @@ impl Model {
         mesh_index: usize,
         selection: MeshMaterialSelection,
     ) {
-        if let Some(mesh) = self.meshes.get_mut(mesh_index) {
-            mesh.set_material_selection(selection);
+        if self.mesh_material_selections.len() <= mesh_index {
+            self.mesh_material_selections
+                .resize(mesh_index + 1, MeshMaterialSelection::default());
+        }
+
+        if self.mesh_material_selections[mesh_index] != selection {
+            self.mesh_material_selections[mesh_index] = selection;
+            self.revision.increase();
         }
     }
 
-    pub fn get_material(&self, material_id: usize) -> Option<&Material> {
-        self.materials.get(material_id)
+    pub fn selected_material_index(&self, mesh_index: usize, mesh: &Mesh) -> Option<usize> {
+        match self.mesh_material_selection(mesh_index) {
+            MeshMaterialSelection::FromSource => mesh.material_index(),
+            MeshMaterialSelection::Material(material_index) => material_index,
+        }
     }
 
     pub fn vertex_buffer_spec(&self) -> &VertexBufferSpec {
@@ -163,25 +182,6 @@ impl Model {
         self.vertex_buffer_spec.reorder_field(from, to);
         self.revision.increase();
     }
-
-    /// Returns the bind group layout of the first mesh.
-    /// This assumes all the meshes have the same bind group layout;
-    /// Otherwise the render pipeline will throw an error during rendering.
-    pub fn get_bind_group_layout<'a>(
-        &self,
-        runtime_bind_groups: &'a RuntimeStorage<BindGroup>,
-    ) -> AppResult<&'a BindGroupLayout> {
-        let mesh = self.meshes().first().ok_or(AppError::UninitializedFields)?;
-        let m_index = mesh.material_index().ok_or(AppError::UninitializedFields)?;
-        let material = self
-            .get_material(m_index)
-            .ok_or(AppError::UninitializedFields)?;
-        let bind_group_id = material
-            .bind_group_id()
-            .ok_or(AppError::UninitializedFields)?;
-        let bind_group = runtime_bind_groups.get_init(bind_group_id)?;
-        Ok(bind_group.inner_layout())
-    }
 }
 
 impl ProjectResource for Model {
@@ -194,36 +194,110 @@ impl ProjectResource for Model {
 
 impl SyncResource for Model {
     type Context<'a> = ModelCreationContext<'a>;
-    type Runtime = ();
+    type Runtime = ModelRuntime;
 
     fn sync<'a>(
         &mut self,
         ctx: &mut Self::Context<'a>,
-        previous: Option<Self::Runtime>,
+        _previous: Option<Self::Runtime>,
     ) -> AppResult<SyncOutcome<Self::Runtime>> {
-        let spec = &self.vertex_buffer_spec;
-        let mut recreated = previous.is_none();
-        for mesh in &mut self.meshes {
-            match mesh.write_vertex_buffer_from_spec(spec, ctx.device, ctx.queue) {
-                ChangeResult::Uploaded => {}
-                ChangeResult::Recreated => recreated = true,
-            }
-        }
+        let runtime = ModelRuntime::load_from_obj_file(
+            &self.source,
+            ctx.file_system,
+            &self.vertex_buffer_spec,
+            ctx.device,
+        )?;
 
-        if recreated {
-            Ok(SyncOutcome::Changed(()))
-        } else {
-            Ok(SyncOutcome::Unchanged(()))
-        }
+        Ok(SyncOutcome::Changed(runtime))
     }
 
     fn revision(&self) -> Revision {
         self.revision
     }
 
-    fn needs_rebuild_from_others(&self, _: &SyncTracker) -> bool {
-        false
+    fn needs_rebuild_from_others(&self, tracker: &SyncTracker) -> bool {
+        tracker.file_changed(&self.source)
     }
+}
+
+impl ModelRuntime {
+    pub fn load_from_obj_file(
+        source: &ProjectFilePath,
+        file_system: &dyn FileSystem,
+        vertex_buffer_spec: &VertexBufferSpec,
+        device: &wgpu::Device,
+    ) -> AppResult<Self> {
+        let obj_bytes = file_system.read(source)?;
+
+        let load_options = tobj::LoadOptions {
+            triangulate: true,
+            single_index: true,
+            ..Default::default()
+        };
+
+        let mut obj_reader = BufReader::new(Cursor::new(obj_bytes));
+        let (models, obj_materials) =
+            tobj::load_obj_buf(&mut obj_reader, &load_options, |material_path| {
+                let material_path = resolve_sibling_path(source, material_path);
+                let mat = file_system
+                    .read(&material_path)
+                    .map_err(|_| tobj::LoadError::OpenFileFailed)?;
+                let mut reader = BufReader::new(Cursor::new(mat));
+                tobj::load_mtl_buf(&mut reader)
+            })?;
+
+        let meshes = models
+            .into_iter()
+            .map(|m| Mesh::new_from_obj(m, vertex_buffer_spec, device))
+            .collect::<AppResult<Vec<_>>>()?;
+
+        let materials = obj_materials?.into_iter().map(Into::into).collect();
+
+        Ok(Self { meshes, materials })
+    }
+
+    pub fn meshes(&self) -> &[Mesh] {
+        &self.meshes
+    }
+
+    pub fn materials(&self) -> &[Material] {
+        &self.materials
+    }
+
+    pub fn get_material(&self, material_id: usize) -> Option<&Material> {
+        self.materials.get(material_id)
+    }
+
+    /// Returns the bind group layout of the first mesh.
+    /// This assumes all the meshes have the same bind group layout;
+    /// Otherwise the render pipeline will throw an error during rendering.
+    pub fn get_bind_group_layout<'a>(
+        &self,
+        model: &Model,
+        runtime_bind_groups: &'a RuntimeStorage<BindGroup>,
+    ) -> AppResult<&'a BindGroupLayout> {
+        let mesh = self.meshes().first().ok_or(AppError::UninitializedFields)?;
+        let m_index = model
+            .selected_material_index(0, mesh)
+            .ok_or(AppError::UninitializedFields)?;
+        self.get_material(m_index)
+            .ok_or(AppError::UninitializedFields)?;
+        let bind_group_id = model
+            .material_bind_group_id(m_index)
+            .ok_or(AppError::UninitializedFields)?;
+        let bind_group = runtime_bind_groups.get_init(bind_group_id)?;
+        Ok(bind_group.inner_layout())
+    }
+}
+
+fn resolve_sibling_path(source: &ProjectFilePath, sibling: &Path) -> ProjectFilePath {
+    let source = source.to_string();
+    let path = Path::new(&source)
+        .parent()
+        .map(|parent| parent.join(sibling))
+        .unwrap_or_else(|| PathBuf::from(sibling));
+
+    ProjectFilePath::new(path.to_string_lossy().replace('\\', "/"))
 }
 
 impl From<tobj::Material> for Material {
@@ -244,7 +318,6 @@ impl From<tobj::Material> for Material {
         Material {
             label,
             texture_paths,
-            bind_group_id: None,
         }
     }
 }
@@ -295,7 +368,6 @@ impl Mesh {
             bitangents,
             indices,
             material_index: model.mesh.material_id,
-            material_selection: MeshMaterialSelection::FromSource,
             vertex_buffer,
             index_buffer,
         })
@@ -448,43 +520,12 @@ impl Mesh {
         self.material_index
     }
 
-    pub fn material_selection(&self) -> &MeshMaterialSelection {
-        &self.material_selection
-    }
-
-    pub fn set_material_selection(&mut self, selection: MeshMaterialSelection) {
-        self.material_selection = selection;
-    }
-
     pub fn vertex_buffer(&self) -> &ResizableBuffer {
         &self.vertex_buffer
     }
 
     pub fn index_buffer(&self) -> &ResizableBuffer {
         &self.index_buffer
-    }
-
-    fn write_vertex_buffer_from_spec(
-        &mut self,
-        vertex_buffer_spec: &VertexBufferSpec,
-        device: &wgpu::Device,
-        queue: &wgpu::Queue,
-    ) -> ChangeResult {
-        let vertex_buffer_contents = Self::calculate_compute_vertex_contents(
-            &self.positions,
-            &self.normals,
-            &self.texture_coords,
-            &self.tangents,
-            &self.bitangents,
-            vertex_buffer_spec,
-        );
-        self.vertex_buffer.write(
-            device,
-            queue,
-            "TODO: add vertex buffer name",
-            bytemuck::cast_slice(&vertex_buffer_contents),
-            wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
-        )
     }
 }
 
@@ -495,13 +536,5 @@ impl Material {
 
     pub fn texture_paths(&self) -> &[String] {
         &self.texture_paths
-    }
-
-    pub fn bind_group_id(&self) -> Option<BindGroupId> {
-        self.bind_group_id
-    }
-
-    pub fn set_bind_group_id(&mut self, bind_group_id: Option<BindGroupId>) {
-        self.bind_group_id = bind_group_id;
     }
 }

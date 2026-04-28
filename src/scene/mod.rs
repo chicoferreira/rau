@@ -2,11 +2,12 @@ use crate::{
     error::AppResult,
     project::{
         self, Project, ViewportId,
+        file::{FileSystem, ProjectFilePath},
         resource::{
             bindgroup::{BindGroup, BindGroupEntry, BindGroupResource},
             camera::Camera,
             dimension::Dimension,
-            model::Model,
+            model::{Model, ModelRuntime},
             render_pass::{LoadOperation, RenderDraw, RenderPass, RenderPassTarget},
             sampler::{Sampler, SamplerSpec},
             texture::{Texture, TextureSource},
@@ -18,7 +19,6 @@ use crate::{
         },
     },
     ui::{self},
-    utils::resources::{self, load_texture},
 };
 
 mod loader;
@@ -27,6 +27,7 @@ pub async fn create_scene(
     device: &wgpu::Device,
     size: ui::Size2d,
     project: &mut Project,
+    file_system: &dyn FileSystem,
     equirectangular_shader_id: project::ShaderId,
     hdr_shader_id: project::ShaderId,
     light_shader_id: project::ShaderId,
@@ -128,18 +129,27 @@ pub async fn create_scene(
         },
     ));
 
-    let mut cube_model = Model::load_from_obj_file("cube".to_string(), "cube.obj", device).await?;
-    for material in cube_model.materials_mut() {
+    let mut cube_model = Model::new("cube", ProjectFilePath::new("cube.obj"));
+    let cube_model_runtime = ModelRuntime::load_from_obj_file(
+        cube_model.source(),
+        file_system,
+        cube_model.vertex_buffer_spec(),
+        device,
+    )?; // temporary so we can set the material selection
+    for (material_index, material) in cube_model_runtime.materials().iter().enumerate() {
         let texture_paths = material.texture_paths();
         let diffuse_path = texture_paths.get(0).cloned().unwrap_or_default();
         let normal_path = texture_paths.get(1).cloned().unwrap_or_default();
 
+        let diffuse_file_path = ProjectFilePath::new(diffuse_path.clone());
+        let normal_file_path = ProjectFilePath::new(normal_path.clone());
+
         let diffuse_format = wgpu::TextureFormat::Rgba8UnormSrgb;
-        let diffuse_texture = load_texture(&diffuse_path, diffuse_format).await?;
+        let diffuse_texture = create_texture(diffuse_file_path, diffuse_format)?;
         let diffuse_id = project.textures.register(diffuse_texture);
 
         let normal_format = wgpu::TextureFormat::Rgba8Unorm;
-        let normal_texture = load_texture(&normal_path, normal_format).await?;
+        let normal_texture = create_texture(normal_file_path, normal_format)?;
         let normal_id = project.textures.register(normal_texture);
 
         let diffuse_view = TextureView::new(diffuse_path, Some(diffuse_id), None, None);
@@ -168,7 +178,7 @@ pub async fn create_scene(
         let bind_group = BindGroup::new("cube bind group", entries);
         let bind_group_id = project.bind_groups.register(bind_group);
 
-        material.set_bind_group_id(Some(bind_group_id));
+        cube_model.set_material_bind_group_id(material_index, Some(bind_group_id));
     }
 
     let cube_model_id = project.models.register(cube_model);
@@ -215,8 +225,10 @@ pub async fn create_scene(
 
     let hdr_bind_group_id = project.bind_groups.register(hdr_bind_group);
 
-    let sky_texture =
-        resources::load_texture("pure-sky.hdr", wgpu::TextureFormat::Rgba32Float).await?;
+    let sky_texture = create_texture(
+        ProjectFilePath::new("pure-sky.hdr"),
+        wgpu::TextureFormat::Rgba32Float,
+    )?;
     let sky_texture_id = project.textures.register(sky_texture);
 
     let sky_texture_view = TextureView::new("label", Some(sky_texture_id), None, None);
@@ -393,4 +405,16 @@ pub async fn create_scene(
     project.frame_plan.add(Some(hdr_render_pass_id));
 
     Ok(viewport_id)
+}
+
+pub fn create_texture(path: ProjectFilePath, format: wgpu::TextureFormat) -> AppResult<Texture> {
+    let label = path.to_string();
+    let source = TextureSource::Image(path);
+
+    Ok(Texture::new(
+        label,
+        format,
+        wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+        source,
+    ))
 }

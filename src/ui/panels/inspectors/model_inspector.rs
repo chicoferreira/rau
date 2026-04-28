@@ -28,15 +28,21 @@ impl StateSnapshot<'_> {
 
         model_vertex_buffer_spec_inspector_ui(ui, &mut edits, model_id, &model);
 
-        egui::CollapsingHeader::new(format!("Meshes ({})", model.meshes().len()))
+        let Ok(model_runtime) = self.runtime_project.models.get_init(model_id) else {
+            ui.weak("Model runtime is not available.");
+            apply_model_edits(self, model_id, edits);
+            return;
+        };
+
+        egui::CollapsingHeader::new(format!("Meshes ({})", model_runtime.meshes().len()))
             .default_open(true)
             .show(ui, |ui| {
-                if model.meshes().is_empty() {
+                if model_runtime.meshes().is_empty() {
                     ui.weak("No meshes.");
                     return;
                 }
 
-                for (mesh_index, mesh) in model.meshes().iter().enumerate() {
+                for (mesh_index, mesh) in model_runtime.meshes().iter().enumerate() {
                     let id = format!("model_mesh_{model_id:?}_{mesh_index}");
                     ui.push_id(id, |ui| {
                         ui.collapsing(format!("Mesh {mesh_index}"), |ui| {
@@ -73,8 +79,10 @@ impl StateSnapshot<'_> {
                                     ui.end_row();
 
                                     ui.label("Material");
-                                    let mut selection = mesh.material_selection().clone();
-                                    let materials = model.materials();
+                                    let current_selection =
+                                        model.mesh_material_selection(mesh_index);
+                                    let mut selection = current_selection.clone();
+                                    let materials = model_runtime.materials();
                                     let source_index = mesh.material_index();
 
                                     let options = [
@@ -109,7 +117,7 @@ impl StateSnapshot<'_> {
                                         &mut selection,
                                     );
 
-                                    if selection != *mesh.material_selection() {
+                                    if selection != current_selection {
                                         edits.push(ModelEdit::SetMeshMaterialSelection(
                                             mesh_index, selection,
                                         ));
@@ -153,27 +161,28 @@ impl StateSnapshot<'_> {
                 }
             });
 
-        egui::CollapsingHeader::new(format!("Materials ({})", model.materials().len()))
+        egui::CollapsingHeader::new(format!("Materials ({})", model_runtime.materials().len()))
             .default_open(true)
             .show(ui, |ui| {
-                if model.materials().is_empty() {
+                if model_runtime.materials().is_empty() {
                     ui.weak("No materials.");
                     return;
                 }
 
-                for (mat_index, mat) in model.materials().iter().enumerate() {
+                for (mat_index, mat) in model_runtime.materials().iter().enumerate() {
                     let id = format!("model_material_{model_id:?}_{mat_index}");
                     ui.push_id(id, |ui| {
                         ui.collapsing(format!("Material {mat_index}: {}", mat.label()), |ui| {
                             ui.horizontal(|ui| {
                                 ui.label("Bind Group");
-                                let mut bind_group_id: Option<BindGroupId> = mat.bind_group_id();
+                                let mut bind_group_id: Option<BindGroupId> =
+                                    model.material_bind_group_id(mat_index);
 
                                 let storage = &self.project.bind_groups;
                                 egui::ComboBox::from_id_salt("model_material_bind_group")
                                     .selected_text_storage_opt(storage, bind_group_id)
                                     .show_ui_storage_opt_with_none(ui, storage, &mut bind_group_id);
-                                if bind_group_id != mat.bind_group_id() {
+                                if bind_group_id != model.material_bind_group_id(mat_index) {
                                     edits.push(ModelEdit::SetMaterialBindGroup(
                                         mat_index,
                                         bind_group_id,
@@ -315,9 +324,7 @@ fn apply_model_edits(state: &mut StateSnapshot<'_>, model_id: ModelId, edits: Ve
                     model.reorder_vertex_buffer_field(update.from, update.to)
                 }
                 ModelEdit::SetMaterialBindGroup(material_index, bind_group_id) => {
-                    if let Some(material) = model.materials_mut().get_mut(material_index) {
-                        material.set_bind_group_id(bind_group_id);
-                    }
+                    model.set_material_bind_group_id(material_index, bind_group_id);
                 }
                 ModelEdit::SetMeshMaterialSelection(mesh_index, selection) => {
                     model.set_mesh_material_selection(mesh_index, selection);
