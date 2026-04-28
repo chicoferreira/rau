@@ -50,6 +50,8 @@ itertools = "0.14.0"
 # Enable default features for egui-winit
 egui-winit = { version = "0.34.1", default-features = true }
 pollster = "0.4.0"
+notify = "8.2.0"
+notify-debouncer-mini = "0.7.0"
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 console_error_panic_hook = "0.1.6"

@@ -183,10 +183,11 @@ impl SyncResource for Texture {
     }
 
     fn needs_rebuild_from_others(&self, tracker: &SyncTracker) -> bool {
-        match self.source {
-            TextureSource::Dimension(Some(dimension_id)) => tracker.was_changed(dimension_id),
+        match &self.source {
+            TextureSource::Dimension(Some(dimension_id)) => tracker.was_changed(*dimension_id),
             TextureSource::Dimension(None) => false,
-            TextureSource::Image(_) | TextureSource::Manual { .. } => false,
+            TextureSource::Image(path) => tracker.file_changed(&path),
+            TextureSource::Manual { .. } => false,
         }
     }
 }
