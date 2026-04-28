@@ -1,13 +1,14 @@
-use std::{path::PathBuf, sync::Arc};
+use std::sync::Arc;
 
 use slotmap::SecondaryMap;
 use winit::{event::WindowEvent, window::Window};
 
 use crate::{
+    fs::absolute::AbsolutePathBuf,
     project::{
         self, DimensionId, FramePlanId, Project, ResourceId, ResourceKind, RuntimeProject,
         ViewportId,
-        file::{NativeFileSystem, ProjectFilePath},
+        file::{FileSystem, NativeFileSystem, ProjectFilePath},
         resource::{
             bindgroup::BindGroupCreationContext,
             camera::CameraCreationContext,
@@ -171,7 +172,7 @@ impl State {
         let sky_shader_id = project.shaders.register(sky_shader);
 
         let runtime_project = RuntimeProject::default();
-        let file_system = NativeFileSystem::new(PathBuf::from("res"));
+        let file_system = NativeFileSystem::new(AbsolutePathBuf::try_from("res")?)?;
 
         let viewport_id = scene::create_scene(
             &device,
@@ -291,7 +292,14 @@ impl State {
             } else {
                 log::info!("Validated resource: {:?}", id);
                 // TODO: This shouldn't be here
-                self.tracker.push_change(id)
+                self.tracker.push_resource_change(id)
+            }
+        }
+
+        while let Some(result) = self.file_system.file_watcher().try_next() {
+            match result {
+                Ok(paths) => self.tracker.push_file_changes(paths),
+                Err(e) => log::error!("File watcher error: {}", e),
             }
         }
 
@@ -549,7 +557,7 @@ impl State {
                 StateEvent::DeleteResource(id) => {
                     self.project.unregister(id);
                     self.runtime_project.unregister(id);
-                    self.tracker.push_change(id);
+                    self.tracker.push_resource_change(id);
                 }
                 StateEvent::OpenViewport(viewport_id) => {
                     self.viewport_tree_pane

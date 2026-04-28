@@ -43,4 +43,7 @@ pub enum AppError {
     /// An OBJ load error occurred.
     #[error(transparent)]
     ObjLoadError(#[from] tobj::LoadError),
+    #[cfg(not(target_arch = "wasm32"))]
+    #[error(transparent)]
+    NotifyError(#[from] notify::Error),
 }

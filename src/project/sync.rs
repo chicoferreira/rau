@@ -118,6 +118,7 @@ impl<R> RuntimeCell<R> {
 impl SyncTracker {
     pub fn clear_changes(&mut self) {
         self.resource_changes.clear();
+        self.file_changes.clear();
     }
 
     /// Creates the runtime variant of the resource tied with the given id.
@@ -231,7 +232,11 @@ impl SyncTracker {
         self.file_changes.contains(path)
     }
 
-    pub(crate) fn push_change(&mut self, id: ResourceId) {
+    pub(crate) fn push_resource_change(&mut self, id: ResourceId) {
         self.resource_changes.push(id);
+    }
+
+    pub(crate) fn push_file_changes(&mut self, paths: Vec<ProjectFilePath>) {
+        self.file_changes.extend(paths);
     }
 }

@@ -1,6 +1,9 @@
-use std::path::PathBuf;
+use std::{fmt::Display, path::PathBuf};
 
-use crate::error::{AppError, AppResult};
+use crate::{
+    error::{AppError, AppResult},
+    fs::{absolute::AbsolutePathBuf, file_watcher::FileWatcher},
+};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct ProjectFilePath {
@@ -13,28 +16,32 @@ impl ProjectFilePath {
     }
 }
 
-impl ToString for ProjectFilePath {
-    fn to_string(&self) -> String {
-        self.path.clone()
+impl Display for ProjectFilePath {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.path)
     }
 }
 
 pub trait FileSystem {
     fn read(&self, path: &ProjectFilePath) -> AppResult<Vec<u8>>;
     fn read_to_string(&self, path: &ProjectFilePath) -> AppResult<String>;
+    fn list_files(&self, path: &ProjectFilePath) -> AppResult<Vec<ProjectFilePath>>;
+    fn file_watcher(&mut self) -> &mut FileWatcher;
 }
 
 pub struct NativeFileSystem {
-    pub root: PathBuf,
+    pub root: AbsolutePathBuf,
+    file_watcher: FileWatcher,
 }
 
 impl NativeFileSystem {
-    pub fn new(root: PathBuf) -> Self {
-        Self { root }
+    pub fn new(root: AbsolutePathBuf) -> AppResult<Self> {
+        let file_watcher = FileWatcher::new(root.clone())?;
+        Ok(Self { root, file_watcher })
     }
 
     pub fn resolve(&self, path: &ProjectFilePath) -> AppResult<PathBuf> {
-        let path_buf = self.root.join(&path.path); // TODO: error if path is invalid
+        let path_buf = self.root.as_ref().join(&path.path); // TODO: error if path is invalid
 
         if !path_buf.exists() {
             return Err(AppError::FileNotFound(path.clone()));
@@ -53,5 +60,13 @@ impl FileSystem for NativeFileSystem {
     fn read_to_string(&self, file_path: &ProjectFilePath) -> AppResult<String> {
         let path = self.resolve(file_path)?;
         std::fs::read_to_string(&path).map_err(Into::into)
+    }
+
+    fn list_files(&self, _path: &ProjectFilePath) -> AppResult<Vec<ProjectFilePath>> {
+        todo!()
+    }
+
+    fn file_watcher(&mut self) -> &mut FileWatcher {
+        &mut self.file_watcher
     }
 }
