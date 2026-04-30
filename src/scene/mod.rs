@@ -27,7 +27,7 @@ pub async fn create_scene(
     device: &wgpu::Device,
     size: ui::Size2d,
     project: &mut Project,
-    file_system: &dyn FileSystem,
+    file_system: &FileSystem,
     equirectangular_shader_id: project::ShaderId,
     hdr_shader_id: project::ShaderId,
     light_shader_id: project::ShaderId,

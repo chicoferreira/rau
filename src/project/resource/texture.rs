@@ -16,7 +16,7 @@ pub struct TextureCreationContext<'a> {
     pub dimensions: &'a Storage<Dimension>,
     pub device: &'a wgpu::Device,
     pub queue: &'a wgpu::Queue,
-    pub file_system: &'a dyn FileSystem,
+    pub file_system: &'a FileSystem,
 }
 
 pub struct Texture {
