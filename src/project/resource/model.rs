@@ -25,7 +25,7 @@ pub mod vertex_buffer;
 pub struct ModelCreationContext<'a> {
     pub device: &'a wgpu::Device,
     pub queue: &'a wgpu::Queue,
-    pub file_system: &'a dyn FileSystem,
+    pub file_system: &'a FileSystem,
 }
 
 pub struct Model {
@@ -223,7 +223,7 @@ impl SyncResource for Model {
 impl ModelRuntime {
     pub fn load_from_obj_file(
         source: &ProjectFilePath,
-        file_system: &dyn FileSystem,
+        file_system: &FileSystem,
         vertex_buffer_spec: &VertexBufferSpec,
         device: &wgpu::Device,
     ) -> AppResult<Self> {

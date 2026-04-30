@@ -74,7 +74,7 @@ impl ProjectResource for Shader {
 
 pub struct ShaderCreationContext<'a> {
     pub device: &'a wgpu::Device,
-    pub file_system: &'a dyn FileSystem,
+    pub file_system: &'a FileSystem,
 }
 
 impl SyncResource for Shader {

@@ -8,7 +8,7 @@ use crate::{
     project::{
         self, DimensionId, FramePlanId, Project, ResourceId, ResourceKind, RuntimeProject,
         ViewportId,
-        file::{FileSystem, NativeFileSystem, ProjectFilePath},
+        file::{FileSystem, ProjectFilePath},
         resource::{
             bindgroup::BindGroupCreationContext,
             camera::CameraCreationContext,
@@ -76,7 +76,7 @@ pub struct State {
     error_waiter: WgpuErrorScopeWaiter,
     error_receiver: WgpuErrorScopeReceiver,
     tracker: SyncTracker,
-    file_system: NativeFileSystem,
+    file_system: FileSystem,
 }
 
 impl State {
@@ -172,7 +172,7 @@ impl State {
         let sky_shader_id = project.shaders.register(sky_shader);
 
         let runtime_project = RuntimeProject::default();
-        let file_system = NativeFileSystem::new(AbsolutePathBuf::try_from("res")?)?;
+        let file_system = FileSystem::new(AbsolutePathBuf::try_from("res")?)?;
 
         let viewport_id = scene::create_scene(
             &device,

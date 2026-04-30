@@ -1,9 +1,15 @@
-use std::{fmt::Display, path::PathBuf};
+use std::fmt::Display;
 
-use crate::{
-    error::{AppError, AppResult},
-    fs::{absolute::AbsolutePathBuf, file_watcher::FileWatcher},
-};
+#[cfg(not(target_arch = "wasm32"))]
+use std::path::PathBuf;
+
+use crate::error::AppResult;
+
+#[cfg(not(target_arch = "wasm32"))]
+pub use native::FileSystem;
+
+#[cfg(target_arch = "wasm32")]
+pub use wasm::FileSystem;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct ProjectFilePath {
@@ -14,6 +20,10 @@ impl ProjectFilePath {
     pub fn new(path: impl Into<String>) -> Self {
         Self { path: path.into() }
     }
+
+    pub fn as_str(&self) -> &str {
+        &self.path
+    }
 }
 
 impl Display for ProjectFilePath {
@@ -22,51 +32,83 @@ impl Display for ProjectFilePath {
     }
 }
 
-pub trait FileSystem {
-    fn read(&self, path: &ProjectFilePath) -> AppResult<Vec<u8>>;
-    fn read_to_string(&self, path: &ProjectFilePath) -> AppResult<String>;
-    fn list_files(&self, path: &ProjectFilePath) -> AppResult<Vec<ProjectFilePath>>;
-    fn file_watcher(&mut self) -> &mut FileWatcher;
-}
+#[cfg(not(target_arch = "wasm32"))]
+mod native {
+    use crate::error::AppError;
+    use crate::fs::{absolute::AbsolutePathBuf, file_watcher::FileWatcher};
 
-pub struct NativeFileSystem {
-    pub root: AbsolutePathBuf,
-    file_watcher: FileWatcher,
-}
+    use super::*;
 
-impl NativeFileSystem {
-    pub fn new(root: AbsolutePathBuf) -> AppResult<Self> {
-        let file_watcher = FileWatcher::new(root.clone())?;
-        Ok(Self { root, file_watcher })
+    pub struct FileSystem {
+        pub root: AbsolutePathBuf,
+        file_watcher: FileWatcher,
     }
 
-    pub fn resolve(&self, path: &ProjectFilePath) -> AppResult<PathBuf> {
-        let path_buf = self.root.as_ref().join(&path.path); // TODO: error if path is invalid
-
-        if !path_buf.exists() {
-            return Err(AppError::FileNotFound(path.clone()));
+    impl FileSystem {
+        pub fn new(root: AbsolutePathBuf) -> AppResult<Self> {
+            let file_watcher = FileWatcher::new(root.clone())?;
+            Ok(Self { root, file_watcher })
         }
 
-        Ok(path_buf)
+        pub fn resolve(&self, path: &ProjectFilePath) -> AppResult<PathBuf> {
+            let path_buf = self.root.as_ref().join(&path.path); // TODO: error if path is invalid
+
+            if !path_buf.exists() {
+                return Err(AppError::FileNotFound(path.clone()));
+            }
+
+            Ok(path_buf)
+        }
+
+        pub fn read(&self, file_path: &ProjectFilePath) -> AppResult<Vec<u8>> {
+            let path = self.resolve(file_path)?;
+            std::fs::read(&path).map_err(Into::into)
+        }
+
+        pub fn read_to_string(&self, file_path: &ProjectFilePath) -> AppResult<String> {
+            let path = self.resolve(file_path)?;
+            std::fs::read_to_string(&path).map_err(Into::into)
+        }
+
+        pub fn list_files(&self, _path: &ProjectFilePath) -> AppResult<Vec<ProjectFilePath>> {
+            todo!()
+        }
+
+        pub fn file_watcher(&mut self) -> &mut FileWatcher {
+            &mut self.file_watcher
+        }
     }
 }
 
-impl FileSystem for NativeFileSystem {
-    fn read(&self, file_path: &ProjectFilePath) -> AppResult<Vec<u8>> {
-        let path = self.resolve(file_path)?;
-        std::fs::read(&path).map_err(Into::into)
+#[cfg(target_arch = "wasm32")]
+mod wasm {
+    use crate::fs::file_watcher::FileWatcher;
+
+    use super::*;
+
+    pub struct FileSystem {
+        file_watcher: FileWatcher,
     }
 
-    fn read_to_string(&self, file_path: &ProjectFilePath) -> AppResult<String> {
-        let path = self.resolve(file_path)?;
-        std::fs::read_to_string(&path).map_err(Into::into)
-    }
+    impl FileSystem {
+        pub fn new() -> AppResult<Self> {
+            todo!()
+        }
 
-    fn list_files(&self, _path: &ProjectFilePath) -> AppResult<Vec<ProjectFilePath>> {
-        todo!()
-    }
+        pub fn read(&self, _file_path: &ProjectFilePath) -> AppResult<Vec<u8>> {
+            todo!()
+        }
 
-    fn file_watcher(&mut self) -> &mut FileWatcher {
-        &mut self.file_watcher
+        pub fn read_to_string(&self, _file_path: &ProjectFilePath) -> AppResult<String> {
+            todo!()
+        }
+
+        pub fn list_files(&self, _path: &ProjectFilePath) -> AppResult<Vec<ProjectFilePath>> {
+            todo!()
+        }
+
+        pub fn file_watcher(&mut self) -> &mut FileWatcher {
+            &mut self.file_watcher
+        }
     }
 }
