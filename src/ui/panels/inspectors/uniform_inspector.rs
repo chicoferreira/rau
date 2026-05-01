@@ -5,10 +5,12 @@ use strum::IntoEnumIterator;
 use crate::{
     project::{
         UniformId,
-        resource::camera::Camera,
-        resource::uniform::{
-            self, UniformField, UniformFieldData, UniformFieldDataKind, UniformFieldSource,
-            camera::CameraField,
+        resource::{
+            camera::Camera,
+            uniform::{
+                self, UniformField, UniformFieldData, UniformFieldDataKind, UniformFieldSource,
+                UniformRuntimeField, camera::CameraField,
+            },
         },
         storage::Storage,
     },
@@ -58,7 +60,12 @@ impl StateSnapshot<'_> {
             return;
         };
 
-        let (total_size, _) = uniform.layout();
+        let Ok(uniform_runtime) = self.runtime_project.uniforms.get_init(uniform_id) else {
+            ui.label("Uniform runtime couldn't be found.");
+            return;
+        };
+
+        let (total_size, _) = uniform_runtime.layout();
         let has_fields = !uniform.fields().is_empty();
         ui.horizontal(|ui| {
             ui.label("Total size");
@@ -76,7 +83,12 @@ impl StateSnapshot<'_> {
         };
 
         let response = egui_dnd::dnd(ui, "uniform").show_custom(|ui, iter| {
-            for (index, field) in uniform.fields().iter().enumerate() {
+            for ((index, field), runtime_field) in uniform
+                .fields()
+                .iter()
+                .enumerate()
+                .zip(uniform_runtime.fields().iter())
+            {
                 if index != 0 {
                     ui.add_space(5.0);
                 }
@@ -88,10 +100,10 @@ impl StateSnapshot<'_> {
                                 handle.ui(ui, |ui| {
                                     ui_uniform_field_title(ui, &mut ctx, uniform_id, index, field);
                                 });
-                                ui_uniform_type_label(ui, field.source().get_value().kind());
+                                ui_uniform_type_label(ui, runtime_field.data().kind());
                             });
 
-                            ui_uniform_field_entry(ui, &mut ctx, index, field);
+                            ui_uniform_field_entry(ui, &mut ctx, index, field, runtime_field);
                         })
                     });
                 });
@@ -166,6 +178,7 @@ fn ui_uniform_field_entry(
     ctx: &mut UniformUiContext,
     index: usize,
     field: &UniformField,
+    runtime_field: &UniformRuntimeField,
 ) {
     ui.indent("entry", |ui| {
         let event = egui::Grid::new("entry_grid")
@@ -179,7 +192,7 @@ fn ui_uniform_field_entry(
         }
 
         ui.collapsing("Current Values", |ui| {
-            ui.horizontal(|ui| ui_uniform_field_data(ui, field.source().get_value()))
+            ui.horizontal(|ui| ui_uniform_field_data(ui, runtime_field.data()))
         });
     });
 }

@@ -579,7 +579,7 @@ impl SyncResource for RenderPass {
     type Runtime = RenderPassRuntime;
 
     fn sync<'a>(
-        &mut self,
+        &self,
         ctx: &mut Self::Context<'a>,
         _previous: Option<Self::Runtime>,
     ) -> AppResult<SyncOutcome<Self::Runtime>> {
@@ -607,13 +607,15 @@ impl SyncResource for RenderPass {
 
         let runtime_pipelines = runtime_pipelines?;
 
-        for pipeline in &mut self.pipelines {
-            pipeline.dirty = false;
-        }
-
         Ok(SyncOutcome::Changed(RenderPassRuntime {
             runtime_pipelines,
         }))
+    }
+
+    fn after_sync(&mut self) {
+        for pipeline in &mut self.pipelines {
+            pipeline.dirty = false;
+        }
     }
 
     fn revision(&self) -> Revision {

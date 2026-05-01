@@ -150,7 +150,7 @@ impl SyncResource for TextureView {
     type Runtime = TextureViewRuntime;
 
     fn sync<'a>(
-        &mut self,
+        &self,
         ctx: &mut Self::Context<'a>,
         previous: Option<Self::Runtime>,
     ) -> AppResult<SyncOutcome<Self::Runtime>> {

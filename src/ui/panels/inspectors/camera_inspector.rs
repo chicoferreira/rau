@@ -16,6 +16,11 @@ impl StateSnapshot<'_> {
             return;
         };
 
+        let Ok(camera_runtime) = self.runtime_project.cameras.get_init(camera_id) else {
+            ui.label("Camera couldn't be found.");
+            return;
+        };
+
         CollapsingHeader::new("Transform")
             .default_open(true)
             .show(ui, |ui| {
@@ -110,7 +115,9 @@ impl StateSnapshot<'_> {
                         ui.label("Aspect");
 
                         ui.horizontal(|ui| {
-                            ui.label(RichText::new(format!("{:.4}", camera.aspect())).weak());
+                            ui.label(
+                                RichText::new(format!("{:.4}", camera_runtime.aspect())).weak(),
+                            );
                             ui.label("from");
                             let mut current_dim_id = camera.dimension_id();
                             let before = current_dim_id;
@@ -204,7 +211,7 @@ impl StateSnapshot<'_> {
 
         ui.add_space(4.0);
 
-        let matrix = *camera.matrix();
+        let matrix = *camera_runtime.matrix();
         CollapsingHeader::new("Matrices")
             .default_open(false)
             .show(ui, |ui| {
@@ -233,7 +240,7 @@ impl StateSnapshot<'_> {
                     .id_salt("mat_inv_projection")
                     .default_open(false)
                     .show(ui, |ui| {
-                        ui_mat4_grid(ui, &matrix.inverse_projection.into());
+                        ui_mat4_grid(ui, &matrix.inv_proj.into());
                     });
 
                 CollapsingHeader::new("Inverse View")

@@ -55,7 +55,7 @@ impl SyncResource for Dimension {
     type Runtime = ();
 
     fn sync<'a>(
-        &mut self,
+        &self,
         _ctx: &mut Self::Context<'a>,
         _previous: Option<Self::Runtime>,
     ) -> AppResult<SyncOutcome<Self::Runtime>> {

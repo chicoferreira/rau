@@ -293,7 +293,7 @@ impl SyncResource for BindGroup {
     type Runtime = BindGroupRuntime;
 
     fn sync<'a>(
-        &mut self,
+        &self,
         ctx: &mut Self::Context<'a>,
         _previous: Option<Self::Runtime>,
     ) -> AppResult<SyncOutcome<Self::Runtime>> {

@@ -9,7 +9,7 @@ use crate::{
     project::{
         CameraId, Creatable, ProjectResource, UniformId,
         resource::{camera::Camera, uniform::camera::CameraField},
-        storage::Storage,
+        storage::{RuntimeStorage, Storage},
         sync::{Revision, SyncOutcome, SyncResource, SyncTracker},
     },
     utils::resizable_buffer::{ChangeResult, ResizableBuffer},
@@ -17,6 +17,7 @@ use crate::{
 
 pub struct UniformCreationContext<'a> {
     pub cameras: &'a Storage<Camera>,
+    pub cameras_runtime: &'a RuntimeStorage<Camera>,
     pub device: &'a wgpu::Device,
     pub queue: &'a wgpu::Queue,
 }
@@ -28,7 +29,13 @@ pub struct Uniform {
 }
 
 pub struct UniformRuntime {
+    fields: Vec<UniformRuntimeField>,
     buffer: ResizableBuffer,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct UniformRuntimeField {
+    data: UniformFieldData,
 }
 
 type UniformFieldId = usize;
@@ -41,13 +48,11 @@ pub struct UniformField {
 }
 
 #[derive(Debug, Clone)]
-// TODO: move current_value out of the UniformFieldSource to
 pub enum UniformFieldSource {
     UserDefined(UniformFieldData),
     Camera {
         camera_id: Option<CameraId>,
         field: CameraField,
-        current_value: UniformFieldData,
     },
 }
 
@@ -123,12 +128,32 @@ impl Uniform {
         self.revision.increase();
     }
 
+    fn runtime_fields(
+        &self,
+        ctx: &UniformCreationContext<'_>,
+    ) -> AppResult<Vec<UniformRuntimeField>> {
+        self.fields
+            .iter()
+            .map(|field| {
+                Ok(UniformRuntimeField {
+                    data: field.runtime_data(ctx)?,
+                })
+            })
+            .collect()
+    }
+}
+
+impl UniformRuntime {
+    pub fn buffer(&self) -> &ResizableBuffer {
+        &self.buffer
+    }
+
     pub fn layout(&self) -> (usize, usize) {
         let mut size = 0usize;
         let mut struct_align = 1usize;
 
         for field in &self.fields {
-            let (align, field_size) = field.source.get_value().kind().layout();
+            let (align, field_size) = field.data.kind().layout();
             struct_align = struct_align.max(align);
             size = size.next_multiple_of(align);
             size += field_size;
@@ -137,19 +162,14 @@ impl Uniform {
         (size.next_multiple_of(struct_align), struct_align)
     }
 
-    fn refresh_fields(&mut self, ctx: &mut UniformCreationContext<'_>) -> AppResult<bool> {
-        let mut content_changed = false;
-        for field in &mut self.fields {
-            content_changed |= field.refresh(ctx)?;
-        }
-
-        Ok(content_changed)
+    pub fn fields(&self) -> &[UniformRuntimeField] {
+        &self.fields
     }
 }
 
-impl UniformRuntime {
-    pub fn buffer(&self) -> &ResizableBuffer {
-        &self.buffer
+impl UniformRuntimeField {
+    pub fn data(&self) -> &UniformFieldData {
+        &self.data
     }
 }
 
@@ -174,20 +194,23 @@ impl SyncResource for Uniform {
     type Runtime = UniformRuntime;
 
     fn sync<'a>(
-        &mut self,
+        &self,
         ctx: &mut Self::Context<'a>,
         previous: Option<Self::Runtime>,
     ) -> AppResult<SyncOutcome<Self::Runtime>> {
-        let content_changed = self.refresh_fields(ctx)?;
+        let fields = self.runtime_fields(ctx)?;
+        let content = cast_fields(&fields);
+        let usage = wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST;
+
         match previous {
             Some(mut runtime) => {
+                let content_changed = runtime.fields != fields;
+                runtime.fields = fields;
+
                 if !content_changed {
                     return Ok(SyncOutcome::Unchanged(runtime));
                 }
 
-                let content = cast_fields(&self.fields);
-
-                let usage = wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST;
                 match runtime
                     .buffer
                     .write(ctx.device, ctx.queue, &self.label, &content, usage)
@@ -197,10 +220,8 @@ impl SyncResource for Uniform {
                 }
             }
             None => {
-                let content = cast_fields(&self.fields);
-                let usage = wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST;
                 let buffer = ResizableBuffer::new(ctx.device, &self.label, usage, &content);
-                Ok(SyncOutcome::Changed(UniformRuntime { buffer }))
+                Ok(SyncOutcome::Changed(UniformRuntime { fields, buffer }))
             }
         }
     }
@@ -217,12 +238,12 @@ impl SyncResource for Uniform {
 }
 
 /// Casts all field data to a packed byte buffer respecting std140 alignment rules.
-fn cast_fields(fields: &[UniformField]) -> Vec<u8> {
+fn cast_fields(fields: &[UniformRuntimeField]) -> Vec<u8> {
     let mut buf = vec![];
     let mut struct_align = 1;
 
     for field in fields {
-        let value = field.source().get_value();
+        let value = &field.data;
 
         let (align, _) = value.kind().layout();
 
@@ -270,25 +291,14 @@ impl UniformField {
         }
     }
 
-    fn refresh(&mut self, context: &mut UniformCreationContext<'_>) -> AppResult<bool> {
-        match &mut self.source {
-            // TODO: change this to return true only if the value actually changed
-            UniformFieldSource::UserDefined(_) => Ok(true),
-            UniformFieldSource::Camera {
-                camera_id,
-                field,
-                current_value,
-            } => {
+    fn runtime_data(&self, context: &UniformCreationContext<'_>) -> AppResult<UniformFieldData> {
+        match &self.source {
+            UniformFieldSource::UserDefined(data) => Ok(data.clone()),
+            UniformFieldSource::Camera { camera_id, field } => {
                 let camera_id = (*camera_id).ok_or(AppError::UninitializedFields)?;
                 let camera = context.cameras.get(camera_id)?;
-                let new_value = field.compute(camera);
-
-                if new_value == *current_value {
-                    return Ok(false);
-                }
-
-                *current_value = new_value;
-                Ok(true)
+                let camera_runtime = context.cameras_runtime.get_init(camera_id)?;
+                Ok(field.compute(camera, camera_runtime))
             }
         }
     }
@@ -300,18 +310,7 @@ impl UniformFieldSource {
     }
 
     pub fn new_camera_sourced(camera_id: Option<CameraId>, field: CameraField) -> Self {
-        Self::Camera {
-            camera_id,
-            field,
-            current_value: field.default_data(),
-        }
-    }
-
-    pub fn get_value(&self) -> &UniformFieldData {
-        match self {
-            UniformFieldSource::UserDefined(data) => data,
-            UniformFieldSource::Camera { current_value, .. } => current_value,
-        }
+        Self::Camera { camera_id, field }
     }
 }
 
