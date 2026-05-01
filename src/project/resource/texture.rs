@@ -1,4 +1,5 @@
 use image::GenericImageView;
+use std::task::Poll;
 
 use crate::{
     error::{AppError, AppResult},
@@ -9,6 +10,7 @@ use crate::{
         storage::Storage,
         sync::{Revision, SyncOutcome, SyncResource, SyncTracker},
     },
+    utils::{pollable_future::PollableFuture, wgpu_error_scope::WgpuErrorScope},
 };
 
 #[derive(Clone, Copy)]
@@ -29,6 +31,14 @@ pub struct Texture {
 
 pub struct TextureRuntime {
     inner: wgpu::Texture,
+}
+
+#[derive(Default)]
+pub enum TextureJob {
+    #[default]
+    Start,
+    ReadingImage(PollableFuture<AppResult<Vec<u8>>>),
+    Validation(TextureRuntime, PollableFuture<AppResult<()>>),
 }
 
 #[derive(Clone, PartialEq)]
@@ -105,12 +115,32 @@ impl ProjectResource for Texture {
 impl SyncResource for Texture {
     type Context<'a> = TextureCreationContext<'a>;
     type Runtime = TextureRuntime;
+    type Job = TextureJob;
 
     fn sync<'a>(
         &self,
         ctx: &mut Self::Context<'a>,
         _previous: Option<Self::Runtime>,
-    ) -> AppResult<SyncOutcome<Self::Runtime>> {
+        job: Self::Job,
+    ) -> AppResult<SyncOutcome<Self::Runtime, Self::Job>> {
+        let image_bytes = match job {
+            TextureJob::Start => None,
+            TextureJob::ReadingImage(mut future) => match future.try_resolve() {
+                Poll::Ready(result) => Some(result?),
+                Poll::Pending => {
+                    return Ok(SyncOutcome::Pending(TextureJob::ReadingImage(future)));
+                }
+            },
+            TextureJob::Validation(runtime, mut future) => {
+                return match future.try_resolve() {
+                    Poll::Ready(result) => result.map(|()| SyncOutcome::Changed(runtime)),
+                    Poll::Pending => Ok(SyncOutcome::Pending(TextureJob::Validation(
+                        runtime, future,
+                    ))),
+                };
+            }
+        };
+
         let non_srgb_format = self.format.remove_srgb_suffix();
         let srgb_format = self.format.add_srgb_suffix();
         let view_formats = if srgb_format != non_srgb_format {
@@ -134,7 +164,14 @@ impl SyncResource for Texture {
                 }
             }
             TextureSource::Image(path) => {
-                let bytes = ctx.file_system.read(path)?;
+                let bytes = match image_bytes {
+                    Some(bytes) => bytes,
+                    None => {
+                        return Ok(SyncOutcome::Pending(TextureJob::ReadingImage(
+                            ctx.file_system.read(path),
+                        )));
+                    }
+                };
                 let dynamic_image = image::load_from_memory(&bytes)?;
 
                 let (width, height) = dynamic_image.dimensions();
@@ -149,6 +186,8 @@ impl SyncResource for Texture {
             }
             TextureSource::Manual { size } => *size,
         };
+
+        let scope = WgpuErrorScope::push(ctx.device);
 
         let texture = ctx.device.create_texture(&wgpu::TextureDescriptor {
             label: Some(&self.label),
@@ -175,7 +214,11 @@ impl SyncResource for Texture {
             }
         }
 
-        Ok(SyncOutcome::Changed(TextureRuntime { inner: texture }))
+        let runtime = TextureRuntime { inner: texture };
+        Ok(SyncOutcome::Pending(TextureJob::Validation(
+            runtime,
+            scope.pop(),
+        )))
     }
 
     fn revision(&self) -> Revision {

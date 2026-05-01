@@ -19,9 +19,9 @@ pub enum AppError {
     /// Access to a resource that is erroring
     #[error("resource is erroring: {0:?}")]
     WaitingForErroredResource(ResourceId),
-    /// The resource is waiting for validation.
-    #[error("resource is waiting for validation: {0:?}")]
-    WaitingForValidation(ResourceId),
+    /// The resource is waiting for a pending sync operation.
+    #[error("resource is waiting for pending sync: {0:?}")]
+    WaitingForPendingResource(ResourceId),
     /// A WGPU error occurred.
     #[error(transparent)]
     WgpuError(#[from] wgpu::Error),

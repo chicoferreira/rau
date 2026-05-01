@@ -1,8 +1,9 @@
 use std::{
-    io::{BufReader, Cursor},
     path::{Path, PathBuf},
+    task::Poll,
 };
 
+use futures_lite::io::{BufReader, Cursor};
 use wgpu::BindGroupLayout;
 
 use crate::{
@@ -17,7 +18,10 @@ use crate::{
         storage::RuntimeStorage,
         sync::{Revision, SyncOutcome, SyncResource, SyncTracker},
     },
-    utils::resizable_buffer::ResizableBuffer,
+    utils::{
+        pollable_future::PollableFuture, resizable_buffer::ResizableBuffer,
+        wgpu_error_scope::WgpuErrorScope,
+    },
 };
 
 pub mod vertex_buffer;
@@ -40,6 +44,13 @@ pub struct Model {
 pub struct ModelRuntime {
     meshes: Vec<Mesh>,
     materials: Vec<Material>,
+}
+
+#[derive(Default)]
+pub enum ModelJob {
+    #[default]
+    Start,
+    Loading(PollableFuture<AppResult<ModelRuntime>>),
 }
 
 pub struct Mesh {
@@ -195,20 +206,35 @@ impl ProjectResource for Model {
 impl SyncResource for Model {
     type Context<'a> = ModelCreationContext<'a>;
     type Runtime = ModelRuntime;
+    type Job = ModelJob;
 
     fn sync<'a>(
         &self,
         ctx: &mut Self::Context<'a>,
         _previous: Option<Self::Runtime>,
-    ) -> AppResult<SyncOutcome<Self::Runtime>> {
-        let runtime = ModelRuntime::load_from_obj_file(
-            &self.source,
-            ctx.file_system,
-            &self.vertex_buffer_spec,
-            ctx.device,
-        )?;
+        job: Self::Job,
+    ) -> AppResult<SyncOutcome<Self::Runtime, Self::Job>> {
+        match job {
+            ModelJob::Start => {
+                let source = self.source.clone();
+                let file_system = ctx.file_system.clone();
+                let vertex_buffer_spec = self.vertex_buffer_spec.clone();
+                let device = ctx.device.clone();
 
-        Ok(SyncOutcome::Changed(runtime))
+                Ok(SyncOutcome::Pending(ModelJob::Loading(
+                    PollableFuture::new(ModelRuntime::load_from_obj_file(
+                        source,
+                        file_system,
+                        vertex_buffer_spec,
+                        device,
+                    )),
+                )))
+            }
+            ModelJob::Loading(mut future) => match future.try_resolve() {
+                Poll::Ready(result) => result.map(SyncOutcome::Changed),
+                Poll::Pending => Ok(SyncOutcome::Pending(ModelJob::Loading(future))),
+            },
+        }
     }
 
     fn revision(&self) -> Revision {
@@ -221,13 +247,13 @@ impl SyncResource for Model {
 }
 
 impl ModelRuntime {
-    pub fn load_from_obj_file(
-        source: &ProjectFilePath,
-        file_system: &FileSystem,
-        vertex_buffer_spec: &VertexBufferSpec,
-        device: &wgpu::Device,
+    pub async fn load_from_obj_file(
+        source: ProjectFilePath,
+        file_system: FileSystem,
+        vertex_buffer_spec: VertexBufferSpec,
+        device: wgpu::Device,
     ) -> AppResult<Self> {
-        let obj_bytes = file_system.read(source)?;
+        let obj_bytes = file_system.read(&source).await?;
 
         let load_options = tobj::LoadOptions {
             triangulate: true,
@@ -235,25 +261,36 @@ impl ModelRuntime {
             ..Default::default()
         };
 
-        let mut obj_reader = BufReader::new(Cursor::new(obj_bytes));
+        let obj_reader = BufReader::new(Cursor::new(obj_bytes));
+        let source_for_materials = source.clone();
+        let file_system_for_materials = file_system.clone();
         let (models, obj_materials) =
-            tobj::load_obj_buf(&mut obj_reader, &load_options, |material_path| {
-                let material_path = resolve_sibling_path(source, material_path);
-                let mat = file_system
-                    .read(&material_path)
-                    .map_err(|_| tobj::LoadError::OpenFileFailed)?;
-                let mut reader = BufReader::new(Cursor::new(mat));
-                tobj::load_mtl_buf(&mut reader)
-            })?;
+            tobj::futures::load_obj_buf(obj_reader, &load_options, move |material_path| {
+                let material_path = resolve_sibling_path(&source_for_materials, &material_path);
+                let file_system = file_system_for_materials.clone();
 
+                async move {
+                    let mat = file_system
+                        .read(&material_path)
+                        .await
+                        .map_err(|_| tobj::LoadError::OpenFileFailed)?;
+                    let reader = BufReader::new(Cursor::new(mat));
+                    tobj::futures::load_mtl_buf(reader).await
+                }
+            })
+            .await?;
+
+        let scope = WgpuErrorScope::push(&device);
         let meshes = models
             .into_iter()
-            .map(|m| Mesh::new_from_obj(m, vertex_buffer_spec, device))
+            .map(|m| Mesh::new_from_obj(m, &vertex_buffer_spec, &device))
             .collect::<AppResult<Vec<_>>>()?;
 
         let materials = obj_materials?.into_iter().map(Into::into).collect();
+        let runtime = Self { meshes, materials };
+        scope.pop().await?;
 
-        Ok(Self { meshes, materials })
+        Ok(runtime)
     }
 
     pub fn meshes(&self) -> &[Mesh] {

@@ -1,4 +1,5 @@
 use egui_dnd::utils::shift_vec;
+use std::task::Poll;
 
 pub mod camera;
 #[cfg(test)]
@@ -12,7 +13,11 @@ use crate::{
         storage::{RuntimeStorage, Storage},
         sync::{Revision, SyncOutcome, SyncResource, SyncTracker},
     },
-    utils::resizable_buffer::{ChangeResult, ResizableBuffer},
+    utils::{
+        pollable_future::PollableFuture,
+        resizable_buffer::{ChangeResult, ResizableBuffer},
+        wgpu_error_scope::WgpuErrorScope,
+    },
 };
 
 pub struct UniformCreationContext<'a> {
@@ -31,6 +36,13 @@ pub struct Uniform {
 pub struct UniformRuntime {
     fields: Vec<UniformRuntimeField>,
     buffer: ResizableBuffer,
+}
+
+#[derive(Default)]
+pub enum UniformJob {
+    #[default]
+    Start,
+    Validation(UniformRuntime, PollableFuture<AppResult<()>>),
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -192,37 +204,60 @@ impl ProjectResource for Uniform {
 impl SyncResource for Uniform {
     type Context<'a> = UniformCreationContext<'a>;
     type Runtime = UniformRuntime;
+    type Job = UniformJob;
 
     fn sync<'a>(
         &self,
         ctx: &mut Self::Context<'a>,
         previous: Option<Self::Runtime>,
-    ) -> AppResult<SyncOutcome<Self::Runtime>> {
-        let fields = self.runtime_fields(ctx)?;
-        let content = cast_fields(&fields);
-        let usage = wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST;
+        job: Self::Job,
+    ) -> AppResult<SyncOutcome<Self::Runtime, Self::Job>> {
+        match job {
+            UniformJob::Start => {
+                let fields = self.runtime_fields(ctx)?;
+                let content = cast_fields(&fields);
+                let usage = wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST;
 
-        match previous {
-            Some(mut runtime) => {
-                let content_changed = runtime.fields != fields;
-                runtime.fields = fields;
+                match previous {
+                    Some(mut runtime) => {
+                        let content_changed = runtime.fields != fields;
+                        runtime.fields = fields;
 
-                if !content_changed {
-                    return Ok(SyncOutcome::Unchanged(runtime));
-                }
+                        if !content_changed {
+                            return Ok(SyncOutcome::Unchanged(runtime));
+                        }
 
-                match runtime
-                    .buffer
-                    .write(ctx.device, ctx.queue, &self.label, &content, usage)
-                {
-                    ChangeResult::Uploaded => Ok(SyncOutcome::Unchanged(runtime)),
-                    ChangeResult::Recreated => Ok(SyncOutcome::Changed(runtime)),
+                        let scope = WgpuErrorScope::push(ctx.device);
+                        match runtime.buffer.write(
+                            ctx.device,
+                            ctx.queue,
+                            &self.label,
+                            &content,
+                            usage,
+                        ) {
+                            ChangeResult::Uploaded => Ok(SyncOutcome::Unchanged(runtime)),
+                            ChangeResult::Recreated => Ok(SyncOutcome::Pending(
+                                UniformJob::Validation(runtime, scope.pop()),
+                            )),
+                        }
+                    }
+                    None => {
+                        let scope = WgpuErrorScope::push(ctx.device);
+                        let buffer = ResizableBuffer::new(ctx.device, &self.label, usage, &content);
+                        let runtime = UniformRuntime { fields, buffer };
+                        Ok(SyncOutcome::Pending(UniformJob::Validation(
+                            runtime,
+                            scope.pop(),
+                        )))
+                    }
                 }
             }
-            None => {
-                let buffer = ResizableBuffer::new(ctx.device, &self.label, usage, &content);
-                Ok(SyncOutcome::Changed(UniformRuntime { fields, buffer }))
-            }
+            UniformJob::Validation(runtime, mut future) => match future.try_resolve() {
+                Poll::Ready(result) => result.map(|()| SyncOutcome::Changed(runtime)),
+                Poll::Pending => Ok(SyncOutcome::Pending(UniformJob::Validation(
+                    runtime, future,
+                ))),
+            },
         }
     }
 

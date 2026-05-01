@@ -381,12 +381,14 @@ impl ProjectResource for Camera {
 impl SyncResource for Camera {
     type Context<'a> = CameraCreationContext<'a>;
     type Runtime = CameraRuntime;
+    type Job = ();
 
     fn sync<'a>(
         &self,
         ctx: &mut Self::Context<'a>,
         previous: Option<Self::Runtime>,
-    ) -> AppResult<SyncOutcome<Self::Runtime>> {
+        _job: Self::Job,
+    ) -> AppResult<SyncOutcome<Self::Runtime, Self::Job>> {
         let aspect = self.calculate_aspect(ctx.dimensions)?;
 
         let new_matrix = CameraMatrix::new(
@@ -419,10 +421,6 @@ impl SyncResource for Camera {
             .map_or(false, |id| tracker.was_changed(id))
             || self.current_speed.magnitude2() > 0.0
             || self.input != CameraFrameInput::default()
-    }
-
-    fn needs_wgpu_validation(&self) -> bool {
-        false
     }
 }
 

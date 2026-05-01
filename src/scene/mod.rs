@@ -131,11 +131,12 @@ pub async fn create_scene(
 
     let mut cube_model = Model::new("cube", ProjectFilePath::new("cube.obj"));
     let cube_model_runtime = ModelRuntime::load_from_obj_file(
-        cube_model.source(),
-        file_system,
-        cube_model.vertex_buffer_spec(),
-        device,
-    )?; // temporary so we can set the material selection
+        cube_model.source().clone(),
+        file_system.clone(),
+        cube_model.vertex_buffer_spec().clone(),
+        device.clone(),
+    )
+    .await?; // temporary so we can set the material selection
     for (material_index, material) in cube_model_runtime.materials().iter().enumerate() {
         let texture_paths = material.texture_paths();
         let diffuse_path = texture_paths.get(0).cloned().unwrap_or_default();

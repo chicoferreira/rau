@@ -53,12 +53,14 @@ impl ProjectResource for Dimension {
 impl SyncResource for Dimension {
     type Context<'a> = ();
     type Runtime = ();
+    type Job = ();
 
     fn sync<'a>(
         &self,
         _ctx: &mut Self::Context<'a>,
         _previous: Option<Self::Runtime>,
-    ) -> AppResult<SyncOutcome<Self::Runtime>> {
+        _job: Self::Job,
+    ) -> AppResult<SyncOutcome<Self::Runtime, Self::Job>> {
         Ok(SyncOutcome::Changed(()))
     }
 

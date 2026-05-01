@@ -1,3 +1,5 @@
+use std::task::Poll;
+
 use crate::{
     error::{AppError, AppResult},
     project::{
@@ -7,6 +9,7 @@ use crate::{
         sync::{Revision, SyncOutcome, SyncResource, SyncTracker},
     },
     ui::renderer::EguiRenderer,
+    utils::{pollable_future::PollableFuture, wgpu_error_scope::WgpuErrorScope},
 };
 
 pub struct TextureViewCreationContext<'a> {
@@ -27,6 +30,13 @@ pub struct TextureView {
 pub struct TextureViewRuntime {
     inner: wgpu::TextureView,
     egui_id: Option<egui::TextureId>,
+}
+
+#[derive(Default)]
+pub enum TextureViewJob {
+    #[default]
+    Start,
+    Validation(TextureViewRuntime, PollableFuture<AppResult<()>>),
 }
 
 /// As currently the texture view format is only allowed to change by srgb-ness
@@ -148,52 +158,70 @@ impl ProjectResource for TextureView {
 impl SyncResource for TextureView {
     type Context<'a> = TextureViewCreationContext<'a>;
     type Runtime = TextureViewRuntime;
+    type Job = TextureViewJob;
 
     fn sync<'a>(
         &self,
         ctx: &mut Self::Context<'a>,
         previous: Option<Self::Runtime>,
-    ) -> AppResult<SyncOutcome<Self::Runtime>> {
-        let previous_egui_id = previous.as_ref().and_then(|runtime| runtime.egui_id);
+        job: Self::Job,
+    ) -> AppResult<SyncOutcome<Self::Runtime, Self::Job>> {
+        match job {
+            TextureViewJob::Start => {
+                let previous_egui_id = previous.as_ref().and_then(|runtime| runtime.egui_id);
 
-        let texture_id = self.texture_id.ok_or(AppError::UninitializedFields)?;
+                let texture_id = self.texture_id.ok_or(AppError::UninitializedFields)?;
 
-        let texture = ctx.textures.get(texture_id)?;
-        let runtime_texture = ctx.textures_runtime.get_init(texture_id)?;
+                let texture = ctx.textures.get(texture_id)?;
+                let runtime_texture = ctx.textures_runtime.get_init(texture_id)?;
 
-        let inner = Self::create_view(
-            &self.label,
-            texture,
-            runtime_texture,
-            self.format,
-            self.dimension,
-        );
+                let scope = WgpuErrorScope::push(ctx.device);
 
-        let has_correct_format = ALLOWED_EGUI_FORMATS.contains(&texture.format());
-
-        let egui_id = match (previous_egui_id, has_correct_format) {
-            (Some(egui_id), true) => {
-                ctx.egui_renderer.update_egui_texture(
-                    ctx.device,
-                    &inner,
-                    wgpu::FilterMode::Linear,
-                    egui_id,
+                let inner = Self::create_view(
+                    &self.label,
+                    texture,
+                    runtime_texture,
+                    self.format,
+                    self.dimension,
                 );
-                Some(egui_id)
-            }
-            (Some(egui_id), false) => {
-                ctx.egui_renderer.remove_egui_texture(egui_id);
-                None
-            }
-            (None, true) => Some(ctx.egui_renderer.register_egui_texture(
-                ctx.device,
-                &inner,
-                wgpu::FilterMode::Linear,
-            )),
-            (None, false) => None,
-        };
 
-        Ok(SyncOutcome::Changed(TextureViewRuntime { inner, egui_id }))
+                let has_correct_format = ALLOWED_EGUI_FORMATS.contains(&texture.format());
+
+                let egui_id = match (previous_egui_id, has_correct_format) {
+                    (Some(egui_id), true) => {
+                        ctx.egui_renderer.update_egui_texture(
+                            ctx.device,
+                            &inner,
+                            wgpu::FilterMode::Linear,
+                            egui_id,
+                        );
+                        Some(egui_id)
+                    }
+                    (Some(egui_id), false) => {
+                        ctx.egui_renderer.remove_egui_texture(egui_id);
+                        None
+                    }
+                    (None, true) => Some(ctx.egui_renderer.register_egui_texture(
+                        ctx.device,
+                        &inner,
+                        wgpu::FilterMode::Linear,
+                    )),
+                    (None, false) => None,
+                };
+
+                let runtime = TextureViewRuntime { inner, egui_id };
+                Ok(SyncOutcome::Pending(TextureViewJob::Validation(
+                    runtime,
+                    scope.pop(),
+                )))
+            }
+            TextureViewJob::Validation(runtime, mut future) => match future.try_resolve() {
+                Poll::Ready(result) => result.map(|()| SyncOutcome::Changed(runtime)),
+                Poll::Pending => Ok(SyncOutcome::Pending(TextureViewJob::Validation(
+                    runtime, future,
+                ))),
+            },
+        }
     }
 
     fn revision(&self) -> Revision {

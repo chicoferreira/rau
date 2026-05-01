@@ -1,4 +1,5 @@
 use egui_dnd::utils::shift_vec;
+use std::task::Poll;
 
 use crate::{
     error::{AppError, AppResult},
@@ -14,6 +15,7 @@ use crate::{
         storage::{RuntimeStorage, Storage},
         sync::{Revision, RuntimeCell, SyncOutcome, SyncResource, SyncTracker},
     },
+    utils::{pollable_future::PollableFuture, wgpu_error_scope::WgpuErrorScope},
 };
 #[derive(Default)]
 pub struct FramePlan {
@@ -39,6 +41,13 @@ pub struct FramePlanContext<'a> {
     pub runtime_shaders: &'a RuntimeStorage<Shader>,
     pub runtime_texture_views: &'a RuntimeStorage<TextureView>,
     pub runtime_bind_groups: &'a RuntimeStorage<BindGroup>,
+}
+
+#[derive(Default)]
+pub enum FramePlanJob {
+    #[default]
+    Start,
+    Validation(PollableFuture<AppResult<()>>),
 }
 
 impl FramePlan {
@@ -105,6 +114,7 @@ impl FramePlanStep {
 impl SyncResource for FramePlan {
     type Context<'a> = FramePlanContext<'a>;
     type Runtime = ();
+    type Job = FramePlanJob;
 
     fn revision(&self) -> Revision {
         self.revision
@@ -114,17 +124,18 @@ impl SyncResource for FramePlan {
         false
     }
 
-    fn should_sync(&self, tracker: &SyncTracker, runtime: &RuntimeCell<Self::Runtime>) -> bool {
+    fn should_sync(
+        &self,
+        tracker: &SyncTracker,
+        runtime: &RuntimeCell<Self::Runtime, Self::Job>,
+    ) -> bool {
         match runtime {
             RuntimeCell::Empty | RuntimeCell::Created { .. } => true,
             RuntimeCell::Errored {
                 revision: at_revision,
                 ..
-            }
-            | RuntimeCell::PendingValidation {
-                revision: at_revision,
-                ..
             } => *at_revision != self.revision || tracker.has_resource_changes(),
+            RuntimeCell::Pending { .. } => false,
         }
     }
 
@@ -132,7 +143,20 @@ impl SyncResource for FramePlan {
         &self,
         ctx: &mut Self::Context<'a>,
         _previous: Option<Self::Runtime>,
-    ) -> AppResult<SyncOutcome<Self::Runtime>> {
+        job: Self::Job,
+    ) -> AppResult<SyncOutcome<Self::Runtime, Self::Job>> {
+        match job {
+            FramePlanJob::Start => {}
+            FramePlanJob::Validation(mut future) => match future.try_resolve() {
+                Poll::Ready(result) => result?,
+                Poll::Pending => {
+                    return Ok(SyncOutcome::Pending(FramePlanJob::Validation(future)));
+                }
+            },
+        }
+
+        let scope = WgpuErrorScope::push(ctx.device);
+
         let render_ctx = render_pass::Context {
             device: ctx.device,
             models: ctx.models,
@@ -150,6 +174,6 @@ impl SyncResource for FramePlan {
             render_pass.submit(ctx.encoder, &render_ctx, render_pass_runtime)?;
         }
 
-        Ok(SyncOutcome::Unchanged(()))
+        Ok(SyncOutcome::Pending(FramePlanJob::Validation(scope.pop())))
     }
 }

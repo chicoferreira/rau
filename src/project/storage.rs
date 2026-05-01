@@ -4,7 +4,7 @@ use crate::{
     error::{AppError, AppResult},
     project::{
         Creatable, ProjectResource, ResourceId,
-        sync::{Revision, RuntimeCell, SyncResource},
+        sync::{RuntimeCell, SyncResource},
     },
 };
 
@@ -101,7 +101,7 @@ where
     R: SyncResource,
     R::Id: slotmap::Key,
 {
-    map: SecondaryMap<R::Id, RuntimeCell<R::Runtime>>,
+    map: SecondaryMap<R::Id, RuntimeCell<R::Runtime, R::Job>>,
 }
 
 impl<R> Default for RuntimeStorage<R>
@@ -129,7 +129,7 @@ where
         let id = key.into();
         match self.map.get(key) {
             Some(RuntimeCell::Created { runtime, .. }) => Ok(runtime),
-            Some(RuntimeCell::PendingValidation { .. }) => Err(AppError::WaitingForValidation(id)),
+            Some(RuntimeCell::Pending { .. }) => Err(AppError::WaitingForPendingResource(id)),
             Some(RuntimeCell::Errored { .. }) => Err(AppError::WaitingForErroredResource(id)),
             Some(RuntimeCell::Empty) => Err(AppError::WaitingForUninitResource(id)),
             None => Err(AppError::InvalidResource(id)),
@@ -138,7 +138,10 @@ where
 
     /// Returns a mutable reference to the [`RuntimeCell`] for the given key.
     /// Returns `AppError::InvalidResource` if the key is not found.
-    pub(super) fn cell_mut(&mut self, key: R::Id) -> AppResult<&mut RuntimeCell<R::Runtime>> {
+    pub(super) fn cell_mut(
+        &mut self,
+        key: R::Id,
+    ) -> AppResult<&mut RuntimeCell<R::Runtime, R::Job>> {
         self.map
             .entry(key)
             .map(|entry| entry.or_insert(RuntimeCell::Empty))
@@ -153,16 +156,5 @@ where
                 None
             }
         })
-    }
-
-    pub fn handle_validation(
-        &mut self,
-        id: R::Id,
-        rev: Revision,
-        err: Option<wgpu::Error>,
-    ) -> AppResult<()> {
-        let cell = self.cell_mut(id)?;
-        cell.handle_validation(rev, err);
-        Ok(())
     }
 }

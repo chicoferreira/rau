@@ -2982,6 +2982,7 @@ dependencies = [
  "env_logger",
  "fastrand",
  "fs_extra",
+ "futures-lite",
  "glob",
  "image",
  "instant",

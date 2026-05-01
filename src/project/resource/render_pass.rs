@@ -1,4 +1,5 @@
 use egui_dnd::utils::shift_vec;
+use std::task::Poll;
 
 use crate::{
     error::{AppError, AppResult},
@@ -8,6 +9,7 @@ use crate::{
         storage::{RuntimeStorage, Storage},
         sync::{Revision, SyncOutcome, SyncResource, SyncTracker},
     },
+    utils::{pollable_future::PollableFuture, wgpu_error_scope::WgpuErrorScope},
 };
 
 pub struct RenderPass {
@@ -35,6 +37,13 @@ pub struct Color(pub [f32; 4]);
 
 pub struct RenderPassRuntime {
     pub runtime_pipelines: Vec<RenderPipelineRuntime>,
+}
+
+#[derive(Default)]
+pub enum RenderPassJob {
+    #[default]
+    Start,
+    Validation(RenderPassRuntime, PollableFuture<AppResult<()>>),
 }
 
 pub struct RenderPipelineRuntime {
@@ -577,39 +586,55 @@ impl RenderDraw {
 impl SyncResource for RenderPass {
     type Context<'a> = Context<'a>;
     type Runtime = RenderPassRuntime;
+    type Job = RenderPassJob;
 
     fn sync<'a>(
         &self,
         ctx: &mut Self::Context<'a>,
         _previous: Option<Self::Runtime>,
-    ) -> AppResult<SyncOutcome<Self::Runtime>> {
-        let color_format = self.get_color_format(ctx)?;
-        let depth_format = self.get_depth_format(ctx)?;
+        job: Self::Job,
+    ) -> AppResult<SyncOutcome<Self::Runtime, Self::Job>> {
+        match job {
+            RenderPassJob::Start => {
+                let scope = WgpuErrorScope::push(ctx.device);
+                let color_format = self.get_color_format(ctx)?;
+                let depth_format = self.get_depth_format(ctx)?;
 
-        let runtime_pipelines: AppResult<Vec<RenderPipelineRuntime>> = self
-            .pipelines
-            .iter()
-            .map(|pipeline| {
-                RenderPipeline::create_wgpu_pipeline(
-                    ctx,
-                    &pipeline.label,
-                    &pipeline.static_bind_groups,
-                    &pipeline.draw,
-                    pipeline.vertex_shader,
-                    pipeline.fragment_shader,
-                    pipeline.primitive_state,
-                    color_format,
-                    depth_format,
-                )
-            })
-            .map(|wgpu_pipeline| wgpu_pipeline.map(|inner| RenderPipelineRuntime { inner }))
-            .collect();
+                let runtime_pipelines: AppResult<Vec<RenderPipelineRuntime>> = self
+                    .pipelines
+                    .iter()
+                    .map(|pipeline| {
+                        RenderPipeline::create_wgpu_pipeline(
+                            ctx,
+                            &pipeline.label,
+                            &pipeline.static_bind_groups,
+                            &pipeline.draw,
+                            pipeline.vertex_shader,
+                            pipeline.fragment_shader,
+                            pipeline.primitive_state,
+                            color_format,
+                            depth_format,
+                        )
+                    })
+                    .map(|wgpu_pipeline| wgpu_pipeline.map(|inner| RenderPipelineRuntime { inner }))
+                    .collect();
 
-        let runtime_pipelines = runtime_pipelines?;
+                let runtime = RenderPassRuntime {
+                    runtime_pipelines: runtime_pipelines?,
+                };
 
-        Ok(SyncOutcome::Changed(RenderPassRuntime {
-            runtime_pipelines,
-        }))
+                Ok(SyncOutcome::Pending(RenderPassJob::Validation(
+                    runtime,
+                    scope.pop(),
+                )))
+            }
+            RenderPassJob::Validation(runtime, mut future) => match future.try_resolve() {
+                Poll::Ready(result) => result.map(|()| SyncOutcome::Changed(runtime)),
+                Poll::Pending => Ok(SyncOutcome::Pending(RenderPassJob::Validation(
+                    runtime, future,
+                ))),
+            },
+        }
     }
 
     fn after_sync(&mut self) {

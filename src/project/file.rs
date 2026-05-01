@@ -3,7 +3,7 @@ use std::fmt::Display;
 #[cfg(not(target_arch = "wasm32"))]
 use std::path::PathBuf;
 
-use crate::error::AppResult;
+use crate::{error::AppResult, utils::pollable_future::PollableFuture};
 
 #[cfg(not(target_arch = "wasm32"))]
 pub use native::FileSystem;
@@ -39,15 +39,18 @@ mod native {
 
     use super::*;
 
+    #[derive(Clone)]
     pub struct FileSystem {
-        pub root: AbsolutePathBuf,
-        file_watcher: FileWatcher,
+        root: AbsolutePathBuf,
     }
 
     impl FileSystem {
         pub fn new(root: AbsolutePathBuf) -> AppResult<Self> {
-            let file_watcher = FileWatcher::new(root.clone())?;
-            Ok(Self { root, file_watcher })
+            Ok(Self { root })
+        }
+
+        pub fn create_file_watcher(&self) -> AppResult<FileWatcher> {
+            FileWatcher::new(self.root.clone())
         }
 
         pub fn resolve(&self, path: &ProjectFilePath) -> AppResult<PathBuf> {
@@ -60,55 +63,71 @@ mod native {
             Ok(path_buf)
         }
 
-        pub fn read(&self, file_path: &ProjectFilePath) -> AppResult<Vec<u8>> {
-            let path = self.resolve(file_path)?;
-            std::fs::read(&path).map_err(Into::into)
+        pub fn read(&self, file_path: &ProjectFilePath) -> PollableFuture<AppResult<Vec<u8>>> {
+            let path = self.resolve(file_path);
+            PollableFuture::new(async move {
+                let path = path?;
+                std::fs::read(&path).map_err(Into::into)
+            })
         }
 
-        pub fn read_to_string(&self, file_path: &ProjectFilePath) -> AppResult<String> {
-            let path = self.resolve(file_path)?;
-            std::fs::read_to_string(&path).map_err(Into::into)
+        pub fn read_to_string(
+            &self,
+            file_path: &ProjectFilePath,
+        ) -> PollableFuture<AppResult<String>> {
+            let path = self.resolve(file_path);
+            PollableFuture::new(async move {
+                let path = path?;
+                std::fs::read_to_string(&path).map_err(Into::into)
+            })
         }
 
-        pub fn list_files(&self, _path: &ProjectFilePath) -> AppResult<Vec<ProjectFilePath>> {
-            todo!()
-        }
-
-        pub fn file_watcher(&mut self) -> &mut FileWatcher {
-            &mut self.file_watcher
+        pub fn list_files(
+            &self,
+            _path: &ProjectFilePath,
+        ) -> PollableFuture<AppResult<Vec<ProjectFilePath>>> {
+            PollableFuture::new(async move { todo!() })
         }
     }
 }
 
 #[cfg(target_arch = "wasm32")]
 mod wasm {
-    use crate::fs::file_watcher::FileWatcher;
+    use crate::fs::{absolute::AbsolutePathBuf, file_watcher::FileWatcher};
 
     use super::*;
 
+    #[derive(Clone)]
     pub struct FileSystem {
-        file_watcher: FileWatcher,
+        root: AbsolutePathBuf,
     }
 
     impl FileSystem {
-        pub fn new() -> AppResult<Self> {
-            todo!()
+        pub fn new(root: AbsolutePathBuf) -> AppResult<Self> {
+            Ok(Self { root })
         }
 
-        pub fn read(&self, _file_path: &ProjectFilePath) -> AppResult<Vec<u8>> {
-            todo!()
+        pub fn create_file_watcher(&self) -> AppResult<FileWatcher> {
+            FileWatcher::new(self.root.clone())
         }
 
-        pub fn read_to_string(&self, _file_path: &ProjectFilePath) -> AppResult<String> {
-            todo!()
+        pub fn read(&self, file_path: &ProjectFilePath) -> PollableFuture<AppResult<Vec<u8>>> {
+            let _ = file_path;
+            PollableFuture::new(async move { todo!() })
         }
 
-        pub fn list_files(&self, _path: &ProjectFilePath) -> AppResult<Vec<ProjectFilePath>> {
-            todo!()
+        pub fn read_to_string(
+            &self,
+            _file_path: &ProjectFilePath,
+        ) -> PollableFuture<AppResult<String>> {
+            PollableFuture::new(async move { todo!() })
         }
 
-        pub fn file_watcher(&mut self) -> &mut FileWatcher {
-            &mut self.file_watcher
+        pub fn list_files(
+            &self,
+            _path: &ProjectFilePath,
+        ) -> PollableFuture<AppResult<Vec<ProjectFilePath>>> {
+            PollableFuture::new(async move { todo!() })
         }
     }
 }

@@ -1,7 +1,7 @@
 use slotmap::new_key_type;
 
 use crate::{
-    error::{AppError, AppResult},
+    error::AppError,
     project::resource::{
         bindgroup::BindGroup, camera::Camera, compute_pass::ComputePass, dimension::Dimension,
         frame_plan::FramePlan, model::Model, render_pass::RenderPass, sampler::Sampler,
@@ -9,7 +9,6 @@ use crate::{
         viewport::Viewport,
     },
     project::storage::{RuntimeStorage, Storage},
-    utils::wgpu_error_scope::ErrorScopeResult,
 };
 
 pub mod file;
@@ -64,7 +63,7 @@ pub struct RuntimeProject {
     pub cameras: RuntimeStorage<Camera>,
     pub models: RuntimeStorage<Model>,
     pub render_passes: RuntimeStorage<RenderPass>,
-    pub frame_plan: sync::RuntimeCell<()>,
+    pub frame_plan: sync::RuntimeCell<(), <FramePlan as sync::SyncResource>::Job>,
     pub compute_passes: RuntimeStorage<ComputePass>,
 }
 
@@ -160,27 +159,6 @@ impl RuntimeProject {
             .chain(self.render_passes.get_errors())
             .chain(self.compute_passes.get_errors())
             .chain(self.frame_plan.get_error(FramePlanId))
-    }
-
-    pub fn handle_validation(&mut self, result: ErrorScopeResult) -> AppResult<()> {
-        let id = result.resource_id;
-        let rev = result.revision;
-        let error = result.error;
-        match id {
-            ResourceId::Shader(id) => self.shaders.handle_validation(id, rev, error),
-            ResourceId::Uniform(id) => self.uniforms.handle_validation(id, rev, error),
-            ResourceId::BindGroup(id) => self.bind_groups.handle_validation(id, rev, error),
-            ResourceId::Texture(id) => self.textures.handle_validation(id, rev, error),
-            ResourceId::TextureView(id) => self.texture_views.handle_validation(id, rev, error),
-            ResourceId::Sampler(id) => self.samplers.handle_validation(id, rev, error),
-            ResourceId::Dimension(id) => self.dimensions.handle_validation(id, rev, error),
-            ResourceId::Camera(id) => self.cameras.handle_validation(id, rev, error),
-            ResourceId::Model(id) => self.models.handle_validation(id, rev, error),
-            ResourceId::RenderPass(id) => self.render_passes.handle_validation(id, rev, error),
-            ResourceId::FramePlan(_) => Ok(self.frame_plan.handle_validation(rev, error)),
-            ResourceId::ComputePass(id) => self.compute_passes.handle_validation(id, rev, error),
-            ResourceId::Viewport(_) => Ok(()),
-        }
     }
 }
 
