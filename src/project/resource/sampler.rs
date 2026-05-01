@@ -1,9 +1,12 @@
+use std::task::Poll;
+
 use crate::{
     error::AppResult,
     project::{
         Creatable, ProjectResource, SamplerId,
         sync::{Revision, SyncOutcome, SyncResource, SyncTracker},
     },
+    utils::{pollable_future::PollableFuture, wgpu_error_scope::WgpuErrorScope},
 };
 
 #[derive(Debug, Clone, PartialEq)]
@@ -39,6 +42,13 @@ pub struct Sampler {
 
 pub struct SamplerRuntime {
     inner: wgpu::Sampler,
+}
+
+#[derive(Default)]
+pub enum SamplerJob {
+    #[default]
+    Start,
+    Validation(SamplerRuntime, PollableFuture<AppResult<()>>),
 }
 
 impl Sampler {
@@ -108,15 +118,32 @@ impl ProjectResource for Sampler {
 impl SyncResource for Sampler {
     type Context<'a> = &'a wgpu::Device;
     type Runtime = SamplerRuntime;
+    type Job = SamplerJob;
 
     fn sync<'a>(
         &self,
         ctx: &mut Self::Context<'a>,
         _previous: Option<Self::Runtime>,
-    ) -> AppResult<SyncOutcome<Self::Runtime>> {
-        let inner = Self::create_sampler(ctx, &self.label, &self.spec);
+        job: Self::Job,
+    ) -> AppResult<SyncOutcome<Self::Runtime, Self::Job>> {
+        match job {
+            SamplerJob::Start => {
+                let scope = WgpuErrorScope::push(ctx);
+                let inner = Self::create_sampler(ctx, &self.label, &self.spec);
 
-        Ok(SyncOutcome::Changed(SamplerRuntime { inner }))
+                let runtime = SamplerRuntime { inner };
+                Ok(SyncOutcome::Pending(SamplerJob::Validation(
+                    runtime,
+                    scope.pop(),
+                )))
+            }
+            SamplerJob::Validation(runtime, mut future) => match future.try_resolve() {
+                Poll::Ready(result) => result.map(|()| SyncOutcome::Changed(runtime)),
+                Poll::Pending => Ok(SyncOutcome::Pending(SamplerJob::Validation(
+                    runtime, future,
+                ))),
+            },
+        }
     }
 
     fn revision(&self) -> Revision {

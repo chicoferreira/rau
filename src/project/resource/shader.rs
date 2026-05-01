@@ -1,3 +1,5 @@
+use std::task::Poll;
+
 use crate::{
     error::AppResult,
     project::{
@@ -5,7 +7,7 @@ use crate::{
         file::{FileSystem, ProjectFilePath},
         sync::{Revision, SyncOutcome, SyncResource, SyncTracker},
     },
-    utils,
+    utils::{self, pollable_future::PollableFuture, wgpu_error_scope::WgpuErrorScope},
 };
 
 pub struct Shader {
@@ -16,6 +18,14 @@ pub struct Shader {
 
 pub struct ShaderRuntime {
     inner: wgpu::ShaderModule,
+}
+
+#[derive(Default)]
+pub enum ShaderJob {
+    #[default]
+    Start,
+    ReadingSource(PollableFuture<AppResult<String>>),
+    Validation(ShaderRuntime, PollableFuture<AppResult<()>>),
 }
 
 impl Shader {
@@ -80,16 +90,44 @@ pub struct ShaderCreationContext<'a> {
 impl SyncResource for Shader {
     type Context<'a> = ShaderCreationContext<'a>;
     type Runtime = ShaderRuntime;
+    type Job = ShaderJob;
 
     fn sync<'a>(
         &self,
         ctx: &mut Self::Context<'a>,
         _previous: Option<Self::Runtime>,
-    ) -> AppResult<SyncOutcome<Self::Runtime>> {
-        let source = ctx.file_system.read_to_string(&self.source)?;
+        job: Self::Job,
+    ) -> AppResult<SyncOutcome<Self::Runtime, Self::Job>> {
+        let source = match job {
+            ShaderJob::Start => None,
+            ShaderJob::ReadingSource(mut future) => match future.try_resolve() {
+                Poll::Ready(result) => Some(result?),
+                Poll::Pending => return Ok(SyncOutcome::Pending(ShaderJob::ReadingSource(future))),
+            },
+            ShaderJob::Validation(runtime, mut future) => {
+                return match future.try_resolve() {
+                    Poll::Ready(result) => result.map(|()| SyncOutcome::Changed(runtime)),
+                    Poll::Pending => {
+                        Ok(SyncOutcome::Pending(ShaderJob::Validation(runtime, future)))
+                    }
+                };
+            }
+        };
+
+        let Some(source) = source else {
+            return Ok(SyncOutcome::Pending(ShaderJob::ReadingSource(
+                ctx.file_system.read_to_string(&self.source),
+            )));
+        };
+
+        let scope = WgpuErrorScope::push(ctx.device);
         let inner = utils::shader::compile_wgsl_shader(ctx.device, &self.label, &source)?;
 
-        Ok(SyncOutcome::Changed(ShaderRuntime { inner }))
+        let runtime = ShaderRuntime { inner };
+        Ok(SyncOutcome::Pending(ShaderJob::Validation(
+            runtime,
+            scope.pop(),
+        )))
     }
 
     fn revision(&self) -> Revision {

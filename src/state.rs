@@ -4,7 +4,7 @@ use slotmap::SecondaryMap;
 use winit::{event::WindowEvent, window::Window};
 
 use crate::{
-    fs::absolute::AbsolutePathBuf,
+    fs::{absolute::AbsolutePathBuf, file_watcher::FileWatcher},
     project::{
         self, DimensionId, FramePlanId, Project, ResourceId, ResourceKind, RuntimeProject,
         ViewportId,
@@ -30,10 +30,7 @@ use crate::{
         panels::{inspector_pane::InspectorPane, viewport_pane::ViewportPane},
         rename::{RenameState, RenameTarget},
     },
-    utils::{
-        key::KeyboardState,
-        wgpu_error_scope::{self, WgpuErrorScopeReceiver, WgpuErrorScopeWaiter},
-    },
+    utils::key::KeyboardState,
 };
 
 #[derive(Debug, Clone)]
@@ -73,10 +70,9 @@ pub struct State {
     dimension_owners: SecondaryMap<DimensionId, ViewportId>,
     project: Project,
     runtime_project: RuntimeProject,
-    error_waiter: WgpuErrorScopeWaiter,
-    error_receiver: WgpuErrorScopeReceiver,
     tracker: SyncTracker,
     file_system: FileSystem,
+    file_watcher: FileWatcher,
 }
 
 impl State {
@@ -173,6 +169,7 @@ impl State {
 
         let runtime_project = RuntimeProject::default();
         let file_system = FileSystem::new(AbsolutePathBuf::try_from("res")?)?;
+        let file_watcher = file_system.create_file_watcher()?;
 
         let viewport_id = scene::create_scene(
             &device,
@@ -192,8 +189,6 @@ impl State {
 
         viewport_tree_pane.add_pane(ViewportPane { viewport_id });
 
-        let (error_waiter, error_receiver) = wgpu_error_scope::new_handler();
-
         Ok(Self {
             surface,
             device,
@@ -210,10 +205,9 @@ impl State {
             viewport_tree_pane,
             project,
             runtime_project,
-            error_waiter,
-            error_receiver,
             tracker: SyncTracker::default(),
             file_system,
+            file_watcher,
         })
     }
 
@@ -285,18 +279,7 @@ impl State {
 
         self.handle_events();
 
-        while let Some(result) = self.error_receiver.try_next() {
-            let id = result.resource_id;
-            if let Err(e) = self.runtime_project.handle_validation(result) {
-                log::error!("Couldn't handle validation result: {}", e);
-            } else {
-                log::info!("Validated resource: {:?}", id);
-                // TODO: This shouldn't be here
-                self.tracker.push_resource_change(id)
-            }
-        }
-
-        while let Some(result) = self.file_system.file_watcher().try_next() {
+        while let Some(result) = self.file_watcher.try_next() {
             match result {
                 Ok(paths) => self.tracker.push_file_changes(paths),
                 Err(e) => log::error!("File watcher error: {}", e),
@@ -364,8 +347,6 @@ impl State {
             &mut self.project.dimensions,
             &mut self.runtime_project.dimensions,
             &mut (),
-            &self.device,
-            &mut self.error_waiter,
         );
 
         let view = &mut TextureCreationContext {
@@ -378,8 +359,6 @@ impl State {
             &mut self.project.textures,
             &mut self.runtime_project.textures,
             view,
-            &self.device,
-            &self.error_waiter,
         );
 
         let view = &mut TextureViewCreationContext {
@@ -392,8 +371,6 @@ impl State {
             &mut self.project.texture_views,
             &mut self.runtime_project.texture_views,
             view,
-            &self.device,
-            &self.error_waiter,
         );
 
         let view = &mut CameraCreationContext {
@@ -404,16 +381,12 @@ impl State {
             &mut self.project.cameras,
             &mut self.runtime_project.cameras,
             view,
-            &self.device,
-            &self.error_waiter,
         );
 
         self.tracker.sync_storage(
             &mut self.project.samplers,
             &mut self.runtime_project.samplers,
             &mut &self.device,
-            &self.device,
-            &self.error_waiter,
         );
 
         let view = &mut UniformCreationContext {
@@ -426,8 +399,6 @@ impl State {
             &mut self.project.uniforms,
             &mut self.runtime_project.uniforms,
             view,
-            &self.device,
-            &self.error_waiter,
         );
 
         let view = &mut BindGroupCreationContext {
@@ -440,8 +411,6 @@ impl State {
             &mut self.project.bind_groups,
             &mut self.runtime_project.bind_groups,
             view,
-            &self.device,
-            &self.error_waiter,
         );
 
         let view = &mut ModelCreationContext {
@@ -453,8 +422,6 @@ impl State {
             &mut self.project.models,
             &mut self.runtime_project.models,
             view,
-            &self.device,
-            &self.error_waiter,
         );
 
         let view = &mut ShaderCreationContext {
@@ -465,8 +432,6 @@ impl State {
             &mut self.project.shaders,
             &mut self.runtime_project.shaders,
             view,
-            &self.device,
-            &self.error_waiter,
         );
 
         let view = &mut render_pass::Context {
@@ -481,8 +446,6 @@ impl State {
             &mut self.project.render_passes,
             &mut self.runtime_project.render_passes,
             view,
-            &self.device,
-            &self.error_waiter,
         );
 
         let view = &mut compute_pass::Context {
@@ -495,8 +458,6 @@ impl State {
             &mut self.project.compute_passes,
             &mut self.runtime_project.compute_passes,
             view,
-            &self.device,
-            &self.error_waiter,
         );
 
         let mut frame_plan_ctx = FramePlanContext {
@@ -515,8 +476,6 @@ impl State {
             &mut self.project.frame_plan,
             &mut self.runtime_project.frame_plan,
             &mut frame_plan_ctx,
-            &self.device,
-            &self.error_waiter,
         );
 
         self.tracker.clear_changes();

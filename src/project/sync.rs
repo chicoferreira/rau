@@ -5,7 +5,6 @@ use crate::{
         file::ProjectFilePath,
         storage::{RuntimeStorage, Storage},
     },
-    utils::wgpu_error_scope::{WgpuErrorScope, WgpuErrorScopeWaiter},
 };
 
 #[derive(Default)]
@@ -26,12 +25,17 @@ impl Revision {
 pub trait SyncResource: ProjectResource {
     type Context<'a>;
     type Runtime;
+    type Job: Default;
 
     fn revision(&self) -> Revision;
 
     fn needs_rebuild_from_others(&self, tracker: &SyncTracker) -> bool;
 
-    fn should_sync(&self, tracker: &SyncTracker, runtime: &RuntimeCell<Self::Runtime>) -> bool {
+    fn should_sync(
+        &self,
+        tracker: &SyncTracker,
+        runtime: &RuntimeCell<Self::Runtime, Self::Job>,
+    ) -> bool {
         let current_revision = self.revision();
         let should_rebuild_from_others = self.needs_rebuild_from_others(tracker);
 
@@ -41,7 +45,7 @@ pub trait SyncResource: ProjectResource {
                 revision: at_revision,
                 ..
             } => *at_revision != current_revision,
-            RuntimeCell::PendingValidation {
+            RuntimeCell::Pending {
                 revision: at_revision,
                 ..
             } => *at_revision != current_revision,
@@ -55,23 +59,21 @@ pub trait SyncResource: ProjectResource {
         &self,
         ctx: &mut Self::Context<'a>,
         previous: Option<Self::Runtime>,
-    ) -> AppResult<SyncOutcome<Self::Runtime>>;
-
-    fn needs_wgpu_validation(&self) -> bool {
-        true
-    }
+        job: Self::Job,
+    ) -> AppResult<SyncOutcome<Self::Runtime, Self::Job>>;
 
     // TODO: remove this once we separate the RenderPipeline from RenderPass.
     fn after_sync(&mut self) {}
 }
 
-pub enum SyncOutcome<T> {
-    Changed(T),
-    Unchanged(T),
+pub enum SyncOutcome<R, P> {
+    Changed(R),
+    Unchanged(R),
+    Pending(P),
 }
 
 #[derive(Debug, Default)]
-pub enum RuntimeCell<R> {
+pub enum RuntimeCell<R, P> {
     Created {
         runtime: R,
         revision: Revision,
@@ -80,45 +82,25 @@ pub enum RuntimeCell<R> {
         error: AppError,
         revision: Revision,
     },
-    PendingValidation {
-        runtime: R,
+    Pending {
+        job: P,
         revision: Revision,
     },
     #[default]
     Empty,
 }
 
-impl<R> RuntimeCell<R> {
+impl<R, P> RuntimeCell<R, P> {
+    pub fn take(&mut self) -> Self {
+        std::mem::take(self)
+    }
+
     pub fn get_error(&self, id: impl Into<ResourceId>) -> Option<(ResourceId, &AppError)> {
         if let RuntimeCell::Errored { error, .. } = self {
             Some((id.into(), error))
         } else {
             None
         }
-    }
-
-    pub fn handle_validation(&mut self, rev: Revision, error: Option<wgpu::Error>) {
-        let RuntimeCell::PendingValidation { revision, .. } = self else {
-            return;
-        };
-
-        if *revision != rev {
-            return;
-        }
-
-        let RuntimeCell::PendingValidation { runtime, revision } =
-            std::mem::replace(self, RuntimeCell::Empty)
-        else {
-            unreachable!();
-        };
-
-        *self = match error {
-            Some(error) => RuntimeCell::Errored {
-                revision,
-                error: error.into(),
-            },
-            None => RuntimeCell::Created { runtime, revision },
-        };
     }
 }
 
@@ -140,15 +122,13 @@ impl SyncTracker {
         storage: &mut Storage<R>,
         runtime_storage: &'a mut RuntimeStorage<R>,
         ctx: &mut R::Context<'_>,
-        device: &wgpu::Device,
-        error_waiter: &WgpuErrorScopeWaiter,
     ) -> AppResult<Option<&'a R::Runtime>>
     where
         R::Id: slotmap::Key,
     {
         let resource = storage.get_mut(id)?;
         let cell = runtime_storage.cell_mut(id)?;
-        self.sync_singleton(id, resource, cell, ctx, device, error_waiter)
+        self.sync_singleton(id, resource, cell, ctx)
     }
 
     pub fn sync_storage<'ctx, R: SyncResource>(
@@ -156,15 +136,13 @@ impl SyncTracker {
         storage: &mut Storage<R>,
         runtime_storage: &mut RuntimeStorage<R>,
         ctx: &mut R::Context<'ctx>,
-        device: &wgpu::Device,
-        error_waiter: &WgpuErrorScopeWaiter,
     ) where
         R::Id: slotmap::Key,
     {
         let ids = storage.list().map(|(id, _)| id).collect::<Vec<_>>();
 
         for id in ids {
-            let _ = self.sync(id, storage, runtime_storage, ctx, device, error_waiter);
+            let _ = self.sync(id, storage, runtime_storage, ctx);
         }
     }
 
@@ -172,69 +150,69 @@ impl SyncTracker {
         &mut self,
         id: R::Id,
         resource: &mut R,
-        cell: &'a mut RuntimeCell<R::Runtime>,
+        cell: &'a mut RuntimeCell<R::Runtime, R::Job>,
         ctx: &mut R::Context<'_>,
-        device: &wgpu::Device,
-        error_waiter: &WgpuErrorScopeWaiter,
     ) -> AppResult<Option<&'a R::Runtime>> {
         let current_revision = resource.revision();
+        let id = id.into();
 
         if resource.should_sync(self, cell) {
-            let previous = match std::mem::replace(cell, RuntimeCell::Empty) {
+            let previous = match cell.take() {
                 RuntimeCell::Created { runtime, .. } => Some(runtime),
-                RuntimeCell::Errored { .. }
-                | RuntimeCell::PendingValidation { .. }
-                | RuntimeCell::Empty => None,
+                RuntimeCell::Errored { .. } | RuntimeCell::Pending { .. } | RuntimeCell::Empty => {
+                    None
+                }
             };
 
-            let scope = resource
-                .needs_wgpu_validation()
-                .then(|| WgpuErrorScope::push(device));
-            let sync_result = resource.sync(ctx, previous);
+            let sync_result = resource.sync(ctx, previous, R::Job::default());
+            self.apply_sync_result(id, resource, cell, current_revision, sync_result);
+        } else if matches!(cell, RuntimeCell::Pending { .. }) {
+            let RuntimeCell::Pending { job, .. } = cell.take() else {
+                unreachable!();
+            };
 
-            let id = id.into();
-            match sync_result {
-                Ok(SyncOutcome::Changed(runtime)) => {
-                    resource.after_sync();
-                    log::debug!("Recreated: {:?}", id);
-                    self.resource_changes.push(id.into());
-                    if let Some(scope) = scope {
-                        *cell = RuntimeCell::PendingValidation {
-                            runtime,
-                            revision: current_revision,
-                        };
-                        // On the other variants the `Drop´ impl for the error scope will already pop the error by itself.
-                        error_waiter.pop_error(id, current_revision, scope);
-                    } else {
-                        *cell = RuntimeCell::Created {
-                            runtime,
-                            revision: current_revision,
-                        };
-                    }
-                }
-                Ok(SyncOutcome::Unchanged(runtime)) => {
-                    resource.after_sync();
-                    *cell = RuntimeCell::Created {
-                        runtime,
-                        revision: current_revision,
-                    };
-                }
-                Err(err) => {
-                    log::error!("Error while syncing {id:?}: {:?}", err);
-                    self.resource_changes.push(id.into());
-                    *cell = RuntimeCell::Errored {
-                        revision: current_revision,
-                        error: err,
-                    };
-                }
-            }
+            let sync_result = resource.sync(ctx, None, job);
+            self.apply_sync_result(id, resource, cell, current_revision, sync_result);
         }
 
         match cell {
             RuntimeCell::Created { runtime, .. } => Ok(Some(runtime)),
-            RuntimeCell::Errored { .. }
-            | RuntimeCell::PendingValidation { .. }
-            | RuntimeCell::Empty => Ok(None),
+            RuntimeCell::Errored { .. } | RuntimeCell::Pending { .. } | RuntimeCell::Empty => {
+                Ok(None)
+            }
+        }
+    }
+
+    fn apply_sync_result<R: SyncResource>(
+        &mut self,
+        id: ResourceId,
+        resource: &mut R,
+        cell: &mut RuntimeCell<R::Runtime, R::Job>,
+        revision: Revision,
+        sync_result: AppResult<SyncOutcome<R::Runtime, R::Job>>,
+    ) {
+        match sync_result {
+            Ok(SyncOutcome::Changed(runtime)) => {
+                *cell = RuntimeCell::Created { runtime, revision };
+                resource.after_sync();
+                log::debug!("Recreated: {:?}", id);
+                self.resource_changes.push(id);
+            }
+            Ok(SyncOutcome::Unchanged(runtime)) => {
+                *cell = RuntimeCell::Created { runtime, revision };
+                resource.after_sync();
+            }
+            Ok(SyncOutcome::Pending(job)) => {
+                *cell = RuntimeCell::Pending { job, revision };
+            }
+            Err(err) => {
+                log::error!("Error while syncing {id:?}: {:?}", err);
+                self.resource_changes.push(id);
+                *cell = RuntimeCell::Errored {
+                    revision,
+                    error: err,
+                };
+            }
         }
     }
 

@@ -1,4 +1,5 @@
 use egui_dnd::utils::shift_vec;
+use std::task::Poll;
 
 use crate::{
     error::{AppError, AppResult},
@@ -8,6 +9,7 @@ use crate::{
         storage::RuntimeStorage,
         sync::{Revision, SyncOutcome, SyncResource, SyncTracker},
     },
+    utils::{pollable_future::PollableFuture, wgpu_error_scope::WgpuErrorScope},
 };
 
 pub struct BindGroupCreationContext<'a> {
@@ -26,6 +28,13 @@ pub struct BindGroup {
 pub struct BindGroupRuntime {
     layout: wgpu::BindGroupLayout,
     inner: wgpu::BindGroup,
+}
+
+#[derive(Default)]
+pub enum BindGroupJob {
+    #[default]
+    Start,
+    Validation(BindGroupRuntime, PollableFuture<AppResult<()>>),
 }
 
 pub type BindGroupEntryId = usize;
@@ -291,17 +300,34 @@ impl BindGroupResource {
 impl SyncResource for BindGroup {
     type Context<'a> = BindGroupCreationContext<'a>;
     type Runtime = BindGroupRuntime;
+    type Job = BindGroupJob;
 
     fn sync<'a>(
         &self,
         ctx: &mut Self::Context<'a>,
         _previous: Option<Self::Runtime>,
-    ) -> AppResult<SyncOutcome<Self::Runtime>> {
-        let (layout, inner) = Self::create_layout_and_bind_group(ctx, &self.label, &self.entries)?;
+        job: Self::Job,
+    ) -> AppResult<SyncOutcome<Self::Runtime, Self::Job>> {
+        match job {
+            BindGroupJob::Start => {
+                let scope = WgpuErrorScope::push(ctx.device);
+                let (layout, inner) =
+                    Self::create_layout_and_bind_group(ctx, &self.label, &self.entries)?;
 
-        let new_runtime = Self::Runtime { layout, inner };
+                let runtime = Self::Runtime { layout, inner };
 
-        Ok(SyncOutcome::Changed(new_runtime))
+                Ok(SyncOutcome::Pending(BindGroupJob::Validation(
+                    runtime,
+                    scope.pop(),
+                )))
+            }
+            BindGroupJob::Validation(runtime, mut future) => match future.try_resolve() {
+                Poll::Ready(result) => result.map(|()| SyncOutcome::Changed(runtime)),
+                Poll::Pending => Ok(SyncOutcome::Pending(BindGroupJob::Validation(
+                    runtime, future,
+                ))),
+            },
+        }
     }
 
     fn revision(&self) -> Revision {

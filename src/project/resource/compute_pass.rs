@@ -1,5 +1,6 @@
 use egui_dnd::utils::shift_vec;
 use itertools::Itertools;
+use std::task::Poll;
 
 use crate::{
     error::{AppError, AppResult},
@@ -9,6 +10,7 @@ use crate::{
         storage::RuntimeStorage,
         sync::{Revision, SyncOutcome, SyncResource, SyncTracker},
     },
+    utils::{pollable_future::PollableFuture, wgpu_error_scope::WgpuErrorScope},
 };
 
 pub struct ComputePass {
@@ -34,6 +36,13 @@ pub struct Context<'a> {
     pub encoder: &'a mut wgpu::CommandEncoder,
     pub runtime_shaders: &'a RuntimeStorage<Shader>,
     pub runtime_bind_groups: &'a RuntimeStorage<BindGroup>,
+}
+
+#[derive(Default)]
+pub enum ComputePassJob {
+    #[default]
+    Start,
+    Validation(PollableFuture<AppResult<()>>),
 }
 
 impl Creatable for ComputePass {
@@ -177,6 +186,7 @@ impl ProjectResource for ComputePass {
 impl SyncResource for ComputePass {
     type Context<'a> = Context<'a>;
     type Runtime = ();
+    type Job = ComputePassJob;
 
     fn revision(&self) -> Revision {
         self.revision
@@ -195,57 +205,76 @@ impl SyncResource for ComputePass {
         &self,
         ctx: &mut Self::Context<'a>,
         _previous: Option<Self::Runtime>,
-    ) -> AppResult<SyncOutcome<Self::Runtime>> {
-        let mut bind_groups = vec![];
-        for entry in &self.bind_groups {
-            let id = entry.bind_group_id().ok_or(AppError::UninitializedFields)?;
-            let bind_group_runtime = ctx.runtime_bind_groups.get_init(id)?;
+        job: Self::Job,
+    ) -> AppResult<SyncOutcome<Self::Runtime, Self::Job>> {
+        match job {
+            ComputePassJob::Start => {
+                let scope = WgpuErrorScope::push(ctx.device);
 
-            bind_groups.push(bind_group_runtime);
+                let mut bind_groups = vec![];
+                for entry in &self.bind_groups {
+                    let id = entry.bind_group_id().ok_or(AppError::UninitializedFields)?;
+                    let bind_group_runtime = ctx.runtime_bind_groups.get_init(id)?;
+
+                    bind_groups.push(bind_group_runtime);
+                }
+
+                let bind_group_layouts = bind_groups
+                    .iter()
+                    .map(|bg| Some(bg.inner_layout()))
+                    .collect_vec();
+
+                let pipeline_layout =
+                    ctx.device
+                        .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                            label: Some(&format!("{} (Pipeline Layout)", self.label)),
+                            bind_group_layouts: &bind_group_layouts,
+                            immediate_size: 0,
+                        });
+
+                let shader_id = self.shader.ok_or(AppError::UninitializedFields)?;
+
+                let shader_runtime = ctx.runtime_shaders.get_init(shader_id)?;
+
+                let pipeline =
+                    ctx.device
+                        .create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+                            label: Some(&format!("{} (Compute Pipeline)", self.label)),
+                            layout: Some(&pipeline_layout),
+                            module: shader_runtime.inner(),
+                            entry_point: None,
+                            compilation_options: Default::default(),
+                            cache: None,
+                        });
+
+                let mut pass = ctx
+                    .encoder
+                    .begin_compute_pass(&wgpu::ComputePassDescriptor {
+                        label: Some(&format!("{} (Compute Pass)", self.label)),
+                        timestamp_writes: None,
+                    });
+
+                pass.set_pipeline(&pipeline);
+                for (index, bind_group_runtime) in bind_groups.into_iter().enumerate() {
+                    pass.set_bind_group(index as u32, bind_group_runtime.inner(), &[]);
+                }
+
+                pass.dispatch_workgroups(
+                    self.work_groups_x,
+                    self.work_groups_y,
+                    self.work_groups_z,
+                );
+
+                drop(pass);
+
+                Ok(SyncOutcome::Pending(ComputePassJob::Validation(
+                    scope.pop(),
+                )))
+            }
+            ComputePassJob::Validation(mut future) => match future.try_resolve() {
+                Poll::Ready(result) => result.map(|()| SyncOutcome::Changed(())),
+                Poll::Pending => Ok(SyncOutcome::Pending(ComputePassJob::Validation(future))),
+            },
         }
-
-        let bind_group_layouts = bind_groups
-            .iter()
-            .map(|bg| Some(bg.inner_layout()))
-            .collect_vec();
-
-        let pipeline_layout = ctx
-            .device
-            .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-                label: Some(&format!("{} (Pipeline Layout)", self.label)),
-                bind_group_layouts: &bind_group_layouts,
-                immediate_size: 0,
-            });
-
-        let shader_id = self.shader.ok_or(AppError::UninitializedFields)?;
-
-        let shader_runtime = ctx.runtime_shaders.get_init(shader_id)?;
-
-        let pipeline = ctx
-            .device
-            .create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
-                label: Some(&format!("{} (Compute Pipeline)", self.label)),
-                layout: Some(&pipeline_layout),
-                module: shader_runtime.inner(),
-                entry_point: None,
-                compilation_options: Default::default(),
-                cache: None,
-            });
-
-        let mut pass = ctx
-            .encoder
-            .begin_compute_pass(&wgpu::ComputePassDescriptor {
-                label: Some(&format!("{} (Compute Pass)", self.label)),
-                timestamp_writes: None,
-            });
-
-        pass.set_pipeline(&pipeline);
-        for (index, bind_group_runtime) in bind_groups.into_iter().enumerate() {
-            pass.set_bind_group(index as u32, bind_group_runtime.inner(), &[]);
-        }
-
-        pass.dispatch_workgroups(self.work_groups_x, self.work_groups_y, self.work_groups_z);
-
-        Ok(SyncOutcome::Changed(()))
     }
 }
