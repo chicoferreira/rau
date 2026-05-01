@@ -303,6 +303,10 @@ impl State {
             }
         }
 
+        for (_, camera) in self.project.cameras.list_mut() {
+            camera.update(dt);
+        }
+
         self.tick_objects(dt, &mut encoder);
 
         self.egui_renderer.render_egui_frame(
@@ -416,6 +420,7 @@ impl State {
             cameras: &self.project.cameras,
             device: &self.device,
             queue: &self.queue,
+            cameras_runtime: &mut self.runtime_project.cameras,
         };
         self.tracker.sync_storage(
             &mut self.project.uniforms,

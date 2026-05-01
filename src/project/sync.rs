@@ -52,10 +52,17 @@ pub trait SyncResource: ProjectResource {
     }
 
     fn sync<'a>(
-        &mut self,
+        &self,
         ctx: &mut Self::Context<'a>,
         previous: Option<Self::Runtime>,
     ) -> AppResult<SyncOutcome<Self::Runtime>>;
+
+    fn needs_wgpu_validation(&self) -> bool {
+        true
+    }
+
+    // TODO: remove this once we separate the RenderPipeline from RenderPass.
+    fn after_sync(&mut self) {}
 }
 
 pub enum SyncOutcome<T> {
@@ -180,22 +187,33 @@ impl SyncTracker {
                 | RuntimeCell::Empty => None,
             };
 
-            let scope = WgpuErrorScope::push(device);
+            let scope = resource
+                .needs_wgpu_validation()
+                .then(|| WgpuErrorScope::push(device));
             let sync_result = resource.sync(ctx, previous);
 
             let id = id.into();
             match sync_result {
                 Ok(SyncOutcome::Changed(runtime)) => {
+                    resource.after_sync();
                     log::debug!("Recreated: {:?}", id);
                     self.resource_changes.push(id.into());
-                    *cell = RuntimeCell::PendingValidation {
-                        runtime,
-                        revision: current_revision,
-                    };
-                    // On the other variants the `Drop´ impl for the error scope will already pop the error by itself.
-                    error_waiter.pop_error(id, current_revision, scope);
+                    if let Some(scope) = scope {
+                        *cell = RuntimeCell::PendingValidation {
+                            runtime,
+                            revision: current_revision,
+                        };
+                        // On the other variants the `Drop´ impl for the error scope will already pop the error by itself.
+                        error_waiter.pop_error(id, current_revision, scope);
+                    } else {
+                        *cell = RuntimeCell::Created {
+                            runtime,
+                            revision: current_revision,
+                        };
+                    }
                 }
                 Ok(SyncOutcome::Unchanged(runtime)) => {
+                    resource.after_sync();
                     *cell = RuntimeCell::Created {
                         runtime,
                         revision: current_revision,

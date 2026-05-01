@@ -44,25 +44,26 @@ pub struct Camera {
     drag: f32,
     sensitivity: f32,
     scroll_speed: f32,
-    aspect: f32,
-    matrix: CameraMatrix,
     input: CameraFrameInput,
     revision: Revision,
 }
 
-#[derive(Debug)]
-pub struct CameraRuntime;
+#[derive(Debug, PartialEq)]
+pub struct CameraRuntime {
+    aspect: f32,
+    matrix: CameraMatrix,
+}
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct CameraMatrix {
     pub projection: Matrix4<f32>,
     pub view: Matrix4<f32>,
     pub projection_view: Matrix4<f32>,
-    pub inverse_projection: Matrix4<f32>,
+    pub inv_proj: Matrix4<f32>,
     pub inverse_view: Matrix4<f32>,
 }
 
-#[derive(Debug, Default, Clone, PartialEq)]
+#[derive(Debug, Default, Clone, Copy, PartialEq)]
 pub struct CameraFrameInput {
     pub left: f32,
     pub right: f32,
@@ -83,8 +84,6 @@ impl Camera {
         let fovy = Rad::from(Deg(60.0));
         let znear = 0.1;
         let zfar = 100.0;
-        let aspect = 1.0;
-        let matrix = CameraMatrix::new(position, yaw, pitch, fovy, aspect, znear, zfar);
 
         Self {
             label,
@@ -101,8 +100,6 @@ impl Camera {
             current_speed: Vector3::zero(),
             sensitivity: 0.1,
             scroll_speed: 0.05,
-            aspect,
-            matrix,
             input: CameraFrameInput::default(),
             revision: Revision::default(),
         }
@@ -114,14 +111,6 @@ impl Camera {
 
     pub fn position(&self) -> Point3<f32> {
         self.position
-    }
-
-    pub fn matrix(&self) -> &CameraMatrix {
-        &self.matrix
-    }
-
-    pub fn aspect(&self) -> f32 {
-        self.aspect
     }
 
     pub fn current_speed(&self) -> Vector3<f32> {
@@ -295,8 +284,12 @@ impl Camera {
         Ok(dimension.size().width() as f32 / dimension.size().height() as f32)
     }
 
-    fn update(&mut self, dt: instant::Duration) {
+    pub fn update(&mut self, dt: instant::Duration) {
         let dt = dt.as_secs_f32();
+        let previous_position = self.position;
+        let previous_yaw = self.yaw;
+        let previous_pitch = self.pitch;
+        let previous_current_speed = self.current_speed;
 
         let (yaw_sin, yaw_cos) = self.yaw.0.sin_cos();
         let forward = Vector3::new(yaw_cos, 0.0, yaw_sin).normalize();
@@ -348,6 +341,24 @@ impl Camera {
         self.input.scroll = 0.0;
         self.input.mouse_h = 0.0;
         self.input.mouse_v = 0.0;
+
+        if self.position != previous_position
+            || self.yaw != previous_yaw
+            || self.pitch != previous_pitch
+            || self.current_speed != previous_current_speed
+        {
+            self.revision.increase();
+        }
+    }
+}
+
+impl CameraRuntime {
+    pub fn matrix(&self) -> &CameraMatrix {
+        &self.matrix
+    }
+
+    pub fn aspect(&self) -> f32 {
+        self.aspect
     }
 }
 
@@ -372,37 +383,31 @@ impl SyncResource for Camera {
     type Runtime = CameraRuntime;
 
     fn sync<'a>(
-        &mut self,
+        &self,
         ctx: &mut Self::Context<'a>,
         previous: Option<Self::Runtime>,
     ) -> AppResult<SyncOutcome<Self::Runtime>> {
-        self.update(ctx.dt);
-        self.aspect = self.calculate_aspect(ctx.dimensions)?;
+        let aspect = self.calculate_aspect(ctx.dimensions)?;
 
         let new_matrix = CameraMatrix::new(
-            self.position,
-            self.yaw,
-            self.pitch,
+            self.position(),
+            self.yaw(),
+            self.pitch(),
             self.fovy,
-            self.aspect,
+            aspect,
             self.znear,
             self.zfar,
         );
 
-        let matrix_changed = self.matrix != new_matrix;
-        if matrix_changed {
-            self.matrix = new_matrix;
-        }
-
-        let Some(runtime) = previous else {
-            return Ok(SyncOutcome::Changed(CameraRuntime));
+        let new_runtime = CameraRuntime {
+            aspect,
+            matrix: new_matrix,
         };
 
-        if matrix_changed {
-            return Ok(SyncOutcome::Changed(runtime));
+        match previous {
+            Some(runtime) if runtime == new_runtime => Ok(SyncOutcome::Unchanged(runtime)),
+            _ => Ok(SyncOutcome::Changed(new_runtime)),
         }
-
-        Ok(SyncOutcome::Unchanged(runtime))
     }
 
     fn revision(&self) -> Revision {
@@ -414,6 +419,10 @@ impl SyncResource for Camera {
             .map_or(false, |id| tracker.was_changed(id))
             || self.current_speed.magnitude2() > 0.0
             || self.input != CameraFrameInput::default()
+    }
+
+    fn needs_wgpu_validation(&self) -> bool {
+        false
     }
 }
 
@@ -438,14 +447,14 @@ impl CameraMatrix {
         );
 
         let projection_view = projection * view;
-        let inverse_projection = projection.invert().unwrap();
+        let inv_proj = projection.invert().unwrap();
         let inverse_view = view.invert().unwrap();
 
         Self {
             projection,
             view,
             projection_view,
-            inverse_projection,
+            inv_proj,
             inverse_view,
         }
     }

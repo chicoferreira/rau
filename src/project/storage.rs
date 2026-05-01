@@ -37,6 +37,10 @@ where
         self.map.iter()
     }
 
+    pub fn list_mut(&mut self) -> impl Iterator<Item = (R::Id, &mut R)> {
+        self.map.iter_mut()
+    }
+
     pub fn register(&mut self, value: R) -> R::Id {
         self.map.insert(value)
     }
