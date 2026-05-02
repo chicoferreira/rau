@@ -15,6 +15,8 @@ mod native {
 
     use notify_debouncer_mini::notify::RecursiveMode;
 
+    use crate::fs::absolute::AbsolutePathBuf;
+
     use super::*;
 
     const DEBOUNCE_DURATION: Duration = Duration::from_millis(200);
