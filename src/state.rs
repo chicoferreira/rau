@@ -4,7 +4,8 @@ use slotmap::SecondaryMap;
 use winit::{event::WindowEvent, window::Window};
 
 use crate::{
-    fs::{absolute::AbsolutePathBuf, file_watcher::FileWatcher},
+    error::AppResult,
+    fs::file_watcher::FileWatcher,
     project::{
         self, DimensionId, FramePlanId, Project, ResourceId, ResourceKind, RuntimeProject,
         ViewportId,
@@ -76,7 +77,7 @@ pub struct State {
 }
 
 impl State {
-    pub async fn new(window: Arc<Window>) -> anyhow::Result<Self> {
+    pub async fn new(window: Arc<Window>) -> AppResult<Self> {
         let size = window.inner_size();
 
         // The instance is used to create surfaces and adapters
@@ -127,7 +128,7 @@ impl State {
         {
             EGUI_PREFERRED_SURFACE_FORMAT
         } else {
-            anyhow::bail!("Surface capabilities does not include {EGUI_PREFERRED_SURFACE_FORMAT:?}")
+            panic!("Surface capabilities does not include {EGUI_PREFERRED_SURFACE_FORMAT:?}")
         };
 
         log::info!("Selected surface format: {:?}", surface_format);
@@ -168,7 +169,13 @@ impl State {
         let sky_shader_id = project.shaders.register(sky_shader);
 
         let runtime_project = RuntimeProject::default();
-        let file_system = FileSystem::new(AbsolutePathBuf::try_from("res")?)?;
+
+        #[cfg(not(target_arch = "wasm32"))]
+        let path = crate::fs::absolute::AbsolutePathBuf::try_from("res")?;
+        #[cfg(target_arch = "wasm32")]
+        let path = "res".to_string();
+
+        let file_system = FileSystem::new(path).await?;
         let file_watcher = file_system.create_file_watcher()?;
 
         let viewport_id = scene::create_scene(

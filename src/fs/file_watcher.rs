@@ -1,4 +1,4 @@
-use crate::{error::AppResult, fs::absolute::AbsolutePathBuf, project::file::ProjectFilePath};
+use crate::{error::AppResult, project::file::ProjectFilePath};
 
 #[cfg(not(target_arch = "wasm32"))]
 pub use native::FileWatcher;
@@ -85,7 +85,7 @@ mod wasm {
     pub struct FileWatcher;
 
     impl FileWatcher {
-        pub fn new(_root: AbsolutePathBuf) -> AppResult<Self> {
+        pub fn new() -> AppResult<Self> {
             Ok(Self)
         }
 
