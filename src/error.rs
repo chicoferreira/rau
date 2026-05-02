@@ -59,4 +59,8 @@ pub enum AppError {
     #[cfg(target_arch = "wasm32")]
     #[error("file not valid utf8: {0:?}")]
     FileNotValidUtf8(ProjectFilePath),
+    #[error("fetch error: {0}")]
+    FetchError(#[from] reqwest::Error),
+    #[error("url parse error: {0}")]
+    UrlParseError(#[from] url::ParseError),
 }

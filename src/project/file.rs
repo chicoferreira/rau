@@ -45,7 +45,7 @@ mod native {
     }
 
     impl FileSystem {
-        pub fn new(root: AbsolutePathBuf) -> AppResult<Self> {
+        pub async fn new(root: AbsolutePathBuf) -> AppResult<Self> {
             Ok(Self { root })
         }
 
@@ -182,6 +182,36 @@ mod wasm {
 
         pub fn create_file_watcher(&self) -> AppResult<FileWatcher> {
             FileWatcher::new()
+        }
+
+        pub fn save(
+            &self,
+            file_path: &ProjectFilePath,
+            content: Vec<u8>,
+        ) -> PollableFuture<AppResult<()>> {
+            let database = self.database.clone();
+            let project_name = self.project_name.clone();
+            let file_path = file_path.clone();
+
+            PollableFuture::new(async move {
+                let transaction = database
+                    .transaction(FILES_STORE)
+                    .with_mode(web_sys::IdbTransactionMode::Readwrite)
+                    .build()?;
+
+                let store = transaction.object_store(FILES_STORE)?;
+                let key = Self::file_key(&project_name, &file_path);
+
+                store
+                    .put(Uint8Array::from(content))
+                    .with_key(key)
+                    .build()?
+                    .await?;
+
+                transaction.commit().await?;
+
+                Ok(())
+            })
         }
 
         pub fn read(&self, file_path: &ProjectFilePath) -> PollableFuture<AppResult<Vec<u8>>> {
