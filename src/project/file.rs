@@ -96,10 +96,15 @@ mod wasm {
     use indexed_db_futures::{
         Build, BuildPrimitive, database::Database, prelude::QuerySource, typed_array::Uint8Array,
     };
+    use wasm_bindgen::JsValue;
+    use web_sys::js_sys::Array;
 
     use crate::{error::AppError, fs::file_watcher::FileWatcher};
 
     use super::*;
+
+    const DB_NAME: &str = "rau";
+    const FILES_STORE: &str = "files";
 
     #[derive(Clone)]
     pub struct FileSystem {
@@ -110,12 +115,69 @@ mod wasm {
     impl FileSystem {
         pub fn new(project_name: String) -> PollableFuture<AppResult<Self>> {
             PollableFuture::new(async move {
-                let database = Database::open("rau").await?;
+                let database = Self::open_database().await?;
+
                 Ok(Self {
                     project_name,
                     database,
                 })
             })
+        }
+
+        async fn open_database() -> AppResult<Database> {
+            let database = Database::open(DB_NAME).await?;
+
+            if Self::has_files_store(&database) {
+                return Ok(database);
+            }
+
+            let next_version = database.version() as u32 + 1;
+
+            database.close();
+
+            let database = Database::open(DB_NAME)
+                .with_version(next_version)
+                .with_on_upgrade_needed(|_event, database| {
+                    if !Self::has_files_store(&database) {
+                        database.create_object_store(FILES_STORE).build()?;
+                    }
+
+                    Ok(())
+                })
+                .await?;
+
+            Ok(database)
+        }
+
+        fn has_files_store(database: &Database) -> bool {
+            database
+                .object_store_names()
+                .any(|store_name| store_name == FILES_STORE)
+        }
+
+        fn file_key(project_name: &str, file_path: &ProjectFilePath) -> Array {
+            let key = Array::new();
+
+            key.push(&JsValue::from_str(project_name));
+            key.push(&JsValue::from_str(file_path.as_str()));
+
+            key
+        }
+
+        fn project_file_path_from_key(project_name: &str, key: Array) -> Option<ProjectFilePath> {
+            if key.length() != 2 {
+                return None;
+            }
+
+            let key_project_name = key.get(0).as_string()?;
+
+            if key_project_name != project_name {
+                return None;
+            }
+
+            let file_path = key.get(1).as_string()?;
+
+            Some(ProjectFilePath::new(file_path))
         }
 
         pub fn create_file_watcher(&self) -> AppResult<FileWatcher> {
@@ -140,10 +202,8 @@ mod wasm {
 
             PollableFuture::new(async move {
                 let bytes = Self::read_bytes(database, project_name, file_path.clone()).await?;
-                let text = String::from_utf8(bytes);
-                let text = text.map_err(|_| AppError::FileNotValidUtf8(file_path))?;
 
-                Ok(text)
+                String::from_utf8(bytes).map_err(|_| AppError::FileNotValidUtf8(file_path))
             })
         }
 
@@ -153,19 +213,19 @@ mod wasm {
 
             PollableFuture::new(async move {
                 let transaction = database
-                    .transaction(&project_name)
+                    .transaction(FILES_STORE)
                     .with_mode(web_sys::IdbTransactionMode::Readonly)
                     .build()?;
 
-                let store = transaction.object_store(&project_name)?;
+                let store = transaction.object_store(FILES_STORE)?;
 
-                let files: Vec<String> = store
-                    .get_all_keys()
-                    .primitive()?
-                    .await?
-                    .collect::<Result<Vec<String>, indexed_db_futures::error::Error>>()?;
+                let keys = store.get_all_keys().primitive()?.await?;
+                let keys: Vec<Array> = keys.collect::<indexed_db_futures::Result<Vec<Array>>>()?;
 
-                let files = files.into_iter().map(ProjectFilePath::new).collect();
+                let files = keys
+                    .into_iter()
+                    .filter_map(|key| Self::project_file_path_from_key(&project_name, key))
+                    .collect();
 
                 Ok(files)
             })
@@ -177,13 +237,14 @@ mod wasm {
             file_path: ProjectFilePath,
         ) -> AppResult<Vec<u8>> {
             let transaction = database
-                .transaction(&project_name)
+                .transaction(FILES_STORE)
                 .with_mode(web_sys::IdbTransactionMode::Readonly)
                 .build()?;
 
-            let store = transaction.object_store(&project_name)?;
+            let store = transaction.object_store(FILES_STORE)?;
+            let key = Self::file_key(&project_name, &file_path);
 
-            let file: Option<Uint8Array> = store.get(&file_path.path).primitive()?.await?;
+            let file: Option<Uint8Array> = store.get(key).primitive()?.await?;
 
             match file {
                 Some(data) => Ok(data.to_vec()),
