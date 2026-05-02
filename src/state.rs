@@ -9,18 +9,12 @@ use crate::{
     project::{
         self, DimensionId, FramePlanId, Project, ResourceId, ResourceKind, RuntimeProject,
         ViewportId,
-        file::{FileSystem, ProjectFilePath},
+        file::FileSystem,
         resource::{
-            bindgroup::BindGroupCreationContext,
-            camera::CameraCreationContext,
-            compute_pass,
-            frame_plan::FramePlanContext,
-            model::ModelCreationContext,
-            render_pass,
-            shader::{Shader, ShaderCreationContext},
-            texture::TextureCreationContext,
-            texture_view::TextureViewCreationContext,
-            uniform::UniformCreationContext,
+            bindgroup::BindGroupCreationContext, camera::CameraCreationContext, compute_pass,
+            frame_plan::FramePlanContext, model::ModelCreationContext, render_pass,
+            shader::ShaderCreationContext, texture::TextureCreationContext,
+            texture_view::TextureViewCreationContext, uniform::UniformCreationContext,
         },
         sync::SyncTracker,
     },
@@ -150,24 +144,6 @@ impl State {
 
         let mut project = project::Project::default();
 
-        let equirectangular_shader = Shader::new(
-            "Equirectengular Shader",
-            ProjectFilePath::new("equirectangular.wgsl"),
-        );
-        let equirectengular_shader_id = project.shaders.register(equirectangular_shader);
-
-        let hdr_shader = Shader::new("HDR Shader", ProjectFilePath::new("hdr.wgsl"));
-        let hdr_shader_id = project.shaders.register(hdr_shader);
-
-        let light_shader = Shader::new("Light Shader", ProjectFilePath::new("light.wgsl"));
-        let light_shader_id = project.shaders.register(light_shader);
-
-        let main_shader = Shader::new("Main Shader", ProjectFilePath::new("shader.wgsl"));
-        let main_shader_id = project.shaders.register(main_shader);
-
-        let sky_shader = Shader::new("Sky Shader", ProjectFilePath::new("sky.wgsl"));
-        let sky_shader_id = project.shaders.register(sky_shader);
-
         let runtime_project = RuntimeProject::default();
 
         #[cfg(not(target_arch = "wasm32"))]
@@ -178,18 +154,7 @@ impl State {
         let file_system = FileSystem::new(path).await?;
         let file_watcher = file_system.create_file_watcher()?;
 
-        let viewport_id = scene::create_scene(
-            &device,
-            size,
-            &mut project,
-            &file_system,
-            equirectengular_shader_id,
-            hdr_shader_id,
-            light_shader_id,
-            main_shader_id,
-            sky_shader_id,
-        )
-        .await?;
+        let viewport_id = scene::create_scene(&device, size, &mut project, &file_system).await?;
 
         let inspector_tree_pane = TreePane::new("inspector");
         let mut viewport_tree_pane = TreePane::new("viewport");

@@ -1,7 +1,7 @@
 use crate::{
     error::AppResult,
     project::{
-        self, Project, ViewportId,
+        Project, ViewportId,
         file::{FileSystem, ProjectFilePath},
         resource::{
             bindgroup::{BindGroup, BindGroupEntry, BindGroupResource},
@@ -10,6 +10,7 @@ use crate::{
             model::{Model, ModelRuntime},
             render_pass::{LoadOperation, RenderDraw, RenderPass, RenderPassTarget},
             sampler::{Sampler, SamplerSpec},
+            shader::Shader,
             texture::{Texture, TextureSource},
             texture_view::{TextureView, TextureViewFormat},
             uniform::{
@@ -23,17 +24,68 @@ use crate::{
 
 mod loader;
 
+#[cfg(target_arch = "wasm32")]
+async fn fetch_current_page_wasm_and_save(
+    file_system: &FileSystem,
+    file_path: &ProjectFilePath,
+) -> AppResult<()> {
+    use std::str::FromStr;
+
+    let origin = web_sys::window().unwrap().location().origin().unwrap();
+
+    let url = url::Url::from_str(origin.as_ref())?
+        .join("res/")?
+        .join(file_path.as_str())?;
+
+    log::info!("Fetching {}", url);
+
+    let data = reqwest::get(url).await?.bytes().await?.to_vec();
+
+    file_system.save(file_path, data).await?;
+
+    Ok(())
+}
+
 pub async fn create_scene(
     device: &wgpu::Device,
     size: ui::Size2d,
     project: &mut Project,
     file_system: &FileSystem,
-    equirectangular_shader_id: project::ShaderId,
-    hdr_shader_id: project::ShaderId,
-    light_shader_id: project::ShaderId,
-    main_shader_id: project::ShaderId,
-    sky_shader_id: project::ShaderId,
 ) -> AppResult<ViewportId> {
+    #[cfg(target_arch = "wasm32")]
+    for file in [
+        ProjectFilePath::new("cube.mtl"),
+        ProjectFilePath::new("cube.obj"),
+        ProjectFilePath::new("cube-diffuse.jpg"),
+        ProjectFilePath::new("cube-normal.png"),
+        ProjectFilePath::new("equirectangular.wgsl"),
+        ProjectFilePath::new("hdr.wgsl"),
+        ProjectFilePath::new("light.wgsl"),
+        ProjectFilePath::new("pure-sky.hdr"),
+        ProjectFilePath::new("shader.wgsl"),
+        ProjectFilePath::new("sky.wgsl"),
+    ] {
+        fetch_current_page_wasm_and_save(file_system, &file).await?;
+    }
+
+    let equirectangular_shader = Shader::new(
+        "Equirectengular Shader",
+        ProjectFilePath::new("equirectangular.wgsl"),
+    );
+    let equirectengular_shader_id = project.shaders.register(equirectangular_shader);
+
+    let hdr_shader = Shader::new("HDR Shader", ProjectFilePath::new("hdr.wgsl"));
+    let hdr_shader_id = project.shaders.register(hdr_shader);
+
+    let light_shader = Shader::new("Light Shader", ProjectFilePath::new("light.wgsl"));
+    let light_shader_id = project.shaders.register(light_shader);
+
+    let main_shader = Shader::new("Main Shader", ProjectFilePath::new("shader.wgsl"));
+    let main_shader_id = project.shaders.register(main_shader);
+
+    let sky_shader = Shader::new("Sky Shader", ProjectFilePath::new("sky.wgsl"));
+    let sky_shader_id = project.shaders.register(sky_shader);
+
     let dimension = Dimension::new("Main Dimension", size);
     let dimension_id = project.dimensions.register(dimension);
 
@@ -237,7 +289,7 @@ pub async fn create_scene(
 
     let sky_texture_id = loader::from_equirectangular_bytes(
         project,
-        equirectangular_shader_id,
+        equirectengular_shader_id,
         sky_texture_view_id,
         1080,
     )?;
