@@ -25,6 +25,10 @@ pub enum AppError {
     /// A WGPU error occurred.
     #[error(transparent)]
     WgpuError(#[from] wgpu::Error),
+    #[error(transparent)]
+    WgpuRequestAdapterError(#[from] wgpu::RequestAdapterError),
+    #[error(transparent)]
+    WgpuRequestDeviceError(#[from] wgpu::RequestDeviceError),
     /// A shader parse error occurred.
     #[error("shader parse error: {0}")]
     ShaderParseError(#[from] naga::front::wgsl::ParseError),
@@ -46,4 +50,13 @@ pub enum AppError {
     #[cfg(not(target_arch = "wasm32"))]
     #[error(transparent)]
     NotifyError(#[from] notify::Error),
+    #[cfg(target_arch = "wasm32")]
+    #[error(transparent)]
+    IndexedDbOpenDbError(#[from] indexed_db_futures::error::OpenDbError),
+    #[cfg(target_arch = "wasm32")]
+    #[error(transparent)]
+    IndexedDbError(#[from] indexed_db_futures::error::Error),
+    #[cfg(target_arch = "wasm32")]
+    #[error("file not valid utf8: {0:?}")]
+    FileNotValidUtf8(ProjectFilePath),
 }
