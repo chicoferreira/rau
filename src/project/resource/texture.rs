@@ -3,7 +3,7 @@ use std::task::Poll;
 
 use crate::{
     error::{AppError, AppResult},
-    fs::file_system::FileSystem,
+    file_storage::FileStorage,
     project::{
         DimensionId, ProjectResource, TextureId,
         file::ProjectFilePath,
@@ -19,7 +19,7 @@ pub struct TextureCreationContext<'a> {
     pub dimensions: &'a Storage<Dimension>,
     pub device: &'a wgpu::Device,
     pub queue: &'a wgpu::Queue,
-    pub file_system: &'a FileSystem,
+    pub file_storage: &'a FileStorage,
 }
 
 pub struct Texture {
@@ -169,7 +169,7 @@ impl SyncResource for Texture {
                     Some(bytes) => bytes,
                     None => {
                         return Ok(SyncOutcome::Pending(TextureJob::ReadingImage(
-                            ctx.file_system.read(path),
+                            ctx.file_storage.read(path),
                         )));
                     }
                 };

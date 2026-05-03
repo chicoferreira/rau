@@ -5,7 +5,8 @@ use wgpu::BindGroupLayout;
 
 use crate::{
     error::{AppError, AppResult},
-    fs::file_system::FileSystem,
+    file_storage::FileStorage,
+    fs::{file_system::FileSystem, identifier::ProjectIdentifier},
     project::{
         BindGroupId, ModelId, ProjectResource,
         file::ProjectFilePath,
@@ -27,7 +28,7 @@ pub mod vertex_buffer;
 pub struct ModelCreationContext<'a> {
     pub device: &'a wgpu::Device,
     pub queue: &'a wgpu::Queue,
-    pub file_system: &'a FileSystem,
+    pub file_storage: &'a FileStorage,
 }
 
 pub struct Model {
@@ -215,13 +216,15 @@ impl SyncResource for Model {
         match job {
             ModelJob::Start => {
                 let source = self.source.clone();
-                let file_system = ctx.file_system.clone();
+                let project_identifier = ctx.file_storage.project_identifier().clone();
+                let file_system = ctx.file_storage.file_system.clone();
                 let vertex_buffer_spec = self.vertex_buffer_spec.clone();
                 let device = ctx.device.clone();
 
                 Ok(SyncOutcome::Pending(ModelJob::Loading(
                     PollableFuture::new(ModelRuntime::load_from_obj_file(
                         source,
+                        project_identifier,
                         file_system,
                         vertex_buffer_spec,
                         device,
@@ -247,11 +250,12 @@ impl SyncResource for Model {
 impl ModelRuntime {
     pub async fn load_from_obj_file(
         source: ProjectFilePath,
+        project_identifier: ProjectIdentifier,
         file_system: FileSystem,
         vertex_buffer_spec: VertexBufferSpec,
         device: wgpu::Device,
     ) -> AppResult<Self> {
-        let obj_bytes = file_system.read(&source).await?;
+        let obj_bytes = file_system.read(&project_identifier, &source).await?;
 
         let load_options = tobj::LoadOptions {
             triangulate: true,
@@ -270,10 +274,11 @@ impl ModelRuntime {
                     .unwrap_or_else(|| material_path);
 
                 let file_system = file_system.clone();
+                let project_identifier = project_identifier.clone();
 
                 async move {
                     let mat = file_system
-                        .read(&material_path)
+                        .read(&project_identifier, &material_path)
                         .await
                         .map_err(|_| tobj::LoadError::OpenFileFailed)?;
                     let reader = BufReader::new(Cursor::new(mat));

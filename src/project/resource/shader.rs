@@ -2,7 +2,7 @@ use std::task::Poll;
 
 use crate::{
     error::AppResult,
-    fs::file_system::FileSystem,
+    file_storage::FileStorage,
     project::{
         ProjectResource, ShaderId,
         file::ProjectFilePath,
@@ -85,7 +85,7 @@ impl ProjectResource for Shader {
 
 pub struct ShaderCreationContext<'a> {
     pub device: &'a wgpu::Device,
-    pub file_system: &'a FileSystem,
+    pub file_storage: &'a FileStorage,
 }
 
 impl SyncResource for Shader {
@@ -117,7 +117,7 @@ impl SyncResource for Shader {
 
         let Some(source) = source else {
             return Ok(SyncOutcome::Pending(ShaderJob::ReadingSource(
-                ctx.file_system.read_to_string(&self.source),
+                ctx.file_storage.read_to_string(&self.source),
             )));
         };
 

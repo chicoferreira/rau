@@ -13,41 +13,50 @@ mod native {
 
     use crate::{
         error::AppError,
-        fs::{absolute::AbsolutePathBuf, file_watcher::FileWatcher},
+        fs::{file_watcher::FileWatcher, identifier::ProjectIdentifier},
         project::file::ProjectFilePath,
     };
 
     use super::*;
 
     #[derive(Clone)]
-    pub struct FileSystem {
-        root: AbsolutePathBuf,
-    }
+    pub struct FileSystem {}
 
     impl FileSystem {
-        pub async fn new(root: AbsolutePathBuf) -> AppResult<Self> {
-            Ok(Self { root })
+        pub async fn new() -> AppResult<Self> {
+            Ok(Self {})
         }
 
-        pub fn create_file_watcher(&self) -> AppResult<FileWatcher> {
-            FileWatcher::new(self.root.clone())
+        pub fn create_file_watcher(
+            &self,
+            identifier: &ProjectIdentifier,
+        ) -> AppResult<FileWatcher> {
+            FileWatcher::new(identifier.project_path().clone())
         }
 
-        pub fn resolve(&self, path: &ProjectFilePath) -> AppResult<PathBuf> {
-            let mut path_buf = self.root.as_path_buf();
-            for segment in path.segments() {
+        pub fn resolve(
+            &self,
+            identifier: &ProjectIdentifier,
+            file_path: &ProjectFilePath,
+        ) -> AppResult<PathBuf> {
+            let mut path_buf = identifier.project_path().as_path_buf();
+            for segment in file_path.segments() {
                 path_buf = path_buf.join(segment);
             }
 
             if !path_buf.try_exists()? {
-                return Err(AppError::FileNotFound(path.clone()));
+                return Err(AppError::FileNotFound(file_path.clone()));
             }
 
             Ok(path_buf)
         }
 
-        pub fn read(&self, file_path: &ProjectFilePath) -> PollableFuture<AppResult<Vec<u8>>> {
-            let path = self.resolve(file_path);
+        pub fn read(
+            &self,
+            identifier: &ProjectIdentifier,
+            file_path: &ProjectFilePath,
+        ) -> PollableFuture<AppResult<Vec<u8>>> {
+            let path = self.resolve(identifier, file_path);
             PollableFuture::new(async move {
                 let path = path?;
                 std::fs::read(&path).map_err(Into::into)
@@ -56,17 +65,21 @@ mod native {
 
         pub fn read_to_string(
             &self,
+            identifier: &ProjectIdentifier,
             file_path: &ProjectFilePath,
         ) -> PollableFuture<AppResult<String>> {
-            let path = self.resolve(file_path);
+            let path = self.resolve(identifier, file_path);
             PollableFuture::new(async move {
                 let path = path?;
                 std::fs::read_to_string(&path).map_err(Into::into)
             })
         }
 
-        pub fn list_files(&self) -> PollableFuture<AppResult<Vec<ProjectFilePath>>> {
-            let root = self.root.as_path_buf();
+        pub fn list_files(
+            &self,
+            identifier: &ProjectIdentifier,
+        ) -> PollableFuture<AppResult<Vec<ProjectFilePath>>> {
+            let root = identifier.project_path().as_path_buf();
 
             PollableFuture::new(async move {
                 let mut files = Vec::new();
@@ -111,7 +124,11 @@ mod wasm {
     use wasm_bindgen::JsValue;
     use web_sys::js_sys::Array;
 
-    use crate::{error::AppError, fs::file_watcher::FileWatcher, project::file::ProjectFilePath};
+    use crate::{
+        error::AppError,
+        fs::{file_watcher::FileWatcher, identifier::ProjectIdentifier},
+        project::file::ProjectFilePath,
+    };
 
     use super::*;
 
@@ -120,19 +137,15 @@ mod wasm {
 
     #[derive(Clone)]
     pub struct FileSystem {
-        project_name: String,
         database: Database,
     }
 
     impl FileSystem {
-        pub fn new(project_name: String) -> PollableFuture<AppResult<Self>> {
+        pub fn new() -> PollableFuture<AppResult<Self>> {
             PollableFuture::new(async move {
                 let database = Self::open_database().await?;
 
-                Ok(Self {
-                    project_name,
-                    database,
-                })
+                Ok(Self { database })
             })
         }
 
@@ -167,17 +180,20 @@ mod wasm {
                 .any(|store_name| store_name == FILES_STORE)
         }
 
-        fn file_key(project_name: &str, file_path: &ProjectFilePath) -> Array {
-            std::iter::once(project_name)
+        fn file_key(identifier: &ProjectIdentifier, file_path: &ProjectFilePath) -> Array {
+            std::iter::once(identifier.project_name())
                 .chain(file_path.segments().iter().map(String::as_str))
                 .map(JsValue::from_str)
                 .collect()
         }
 
-        fn project_file_path_from_key(project_name: &str, key: Array) -> Option<ProjectFilePath> {
+        fn project_file_path_from_key(
+            identifier: &ProjectIdentifier,
+            key: Array,
+        ) -> Option<ProjectFilePath> {
             let key_project_name = key.get(0).as_string()?;
 
-            if key_project_name != project_name {
+            if key_project_name != identifier.project_name() {
                 return None;
             }
 
@@ -188,17 +204,22 @@ mod wasm {
             Some(ProjectFilePath::new(segments))
         }
 
-        pub fn create_file_watcher(&self) -> AppResult<FileWatcher> {
+        pub fn create_file_watcher(
+            &self,
+            identifier: &ProjectIdentifier,
+        ) -> AppResult<FileWatcher> {
+            let _ = identifier;
             FileWatcher::new()
         }
 
         pub fn save(
             &self,
+            identifier: &ProjectIdentifier,
             file_path: &ProjectFilePath,
             content: Vec<u8>,
         ) -> PollableFuture<AppResult<()>> {
             let database = self.database.clone();
-            let project_name = self.project_name.clone();
+            let identifier = identifier.clone();
             let file_path = file_path.clone();
 
             PollableFuture::new(async move {
@@ -208,7 +229,7 @@ mod wasm {
                     .build()?;
 
                 let store = transaction.object_store(FILES_STORE)?;
-                let key = Self::file_key(&project_name, &file_path);
+                let key = Self::file_key(&identifier, &file_path);
 
                 store
                     .put(Uint8Array::from(content))
@@ -224,22 +245,30 @@ mod wasm {
 
         pub fn create_empty_file(
             &self,
+            identifier: &ProjectIdentifier,
             file_path: &ProjectFilePath,
         ) -> PollableFuture<AppResult<()>> {
-            self.save(file_path, vec![])
+            self.save(identifier, file_path, vec![])
         }
 
-        pub fn read(&self, file_path: &ProjectFilePath) -> PollableFuture<AppResult<Vec<u8>>> {
+        pub fn read(
+            &self,
+            identifier: &ProjectIdentifier,
+            file_path: &ProjectFilePath,
+        ) -> PollableFuture<AppResult<Vec<u8>>> {
+            let identifier = identifier.clone();
             let database = self.database.clone();
-            let project_name = self.project_name.clone();
             let file_path = file_path.clone();
 
-            PollableFuture::new(Self::read_bytes(database, project_name, file_path))
+            PollableFuture::new(Self::read_bytes(database, identifier, file_path))
         }
 
-        pub fn exists(&self, file_path: &ProjectFilePath) -> PollableFuture<AppResult<bool>> {
+        pub fn exists(
+            &self,
+            identifier: ProjectIdentifier,
+            file_path: &ProjectFilePath,
+        ) -> PollableFuture<AppResult<bool>> {
             let database = self.database.clone();
-            let project_name = self.project_name.clone();
             let file_path = file_path.clone();
 
             PollableFuture::new(async move {
@@ -249,7 +278,7 @@ mod wasm {
                     .build()?;
 
                 let store = transaction.object_store(FILES_STORE)?;
-                let key = Self::file_key(&project_name, &file_path);
+                let key = Self::file_key(&identifier, &file_path);
 
                 let file: Option<Uint8Array> = store.get(key).primitive()?.await?;
 
@@ -259,22 +288,26 @@ mod wasm {
 
         pub fn read_to_string(
             &self,
+            identifier: &ProjectIdentifier,
             file_path: &ProjectFilePath,
         ) -> PollableFuture<AppResult<String>> {
             let database = self.database.clone();
-            let project_name = self.project_name.clone();
+            let identifier = identifier.clone();
             let file_path = file_path.clone();
 
             PollableFuture::new(async move {
-                let bytes = Self::read_bytes(database, project_name, file_path.clone()).await?;
+                let bytes = Self::read_bytes(database, identifier, file_path.clone()).await?;
 
                 String::from_utf8(bytes).map_err(|_| AppError::FileNotValidUtf8(file_path))
             })
         }
 
-        pub fn list_files(&self) -> PollableFuture<AppResult<Vec<ProjectFilePath>>> {
+        pub fn list_files(
+            &self,
+            identifier: &ProjectIdentifier,
+        ) -> PollableFuture<AppResult<Vec<ProjectFilePath>>> {
             let database = self.database.clone();
-            let project_name = self.project_name.clone();
+            let identifier = identifier.clone();
 
             PollableFuture::new(async move {
                 let transaction = database
@@ -289,7 +322,7 @@ mod wasm {
 
                 let mut files: Vec<_> = keys
                     .into_iter()
-                    .filter_map(|key| Self::project_file_path_from_key(&project_name, key))
+                    .filter_map(|key| Self::project_file_path_from_key(&identifier, key))
                     .collect();
 
                 files.sort_by_key(|file| file.segments().to_vec());
@@ -300,7 +333,7 @@ mod wasm {
 
         async fn read_bytes(
             database: Database,
-            project_name: String,
+            identifier: ProjectIdentifier,
             file_path: ProjectFilePath,
         ) -> AppResult<Vec<u8>> {
             let transaction = database
@@ -309,7 +342,7 @@ mod wasm {
                 .build()?;
 
             let store = transaction.object_store(FILES_STORE)?;
-            let key = Self::file_key(&project_name, &file_path);
+            let key = Self::file_key(&identifier, &file_path);
 
             let file: Option<Uint8Array> = store.get(key).primitive()?.await?;
 

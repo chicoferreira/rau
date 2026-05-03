@@ -17,7 +17,7 @@ pub struct StateSnapshot<'a> {
     pub project: &'a mut Project,
     pub runtime_project: &'a mut RuntimeProject,
     pub rename_state: &'a mut Option<RenameState>,
-    pub file_storage: &'a FileStorage,
+    pub file_storage: &'a mut FileStorage,
 }
 
 impl StateSnapshot<'_> {
