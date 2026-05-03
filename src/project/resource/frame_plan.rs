@@ -15,7 +15,7 @@ use crate::{
         storage::{RuntimeStorage, Storage},
         sync::{Revision, RuntimeCell, SyncOutcome, SyncResource, SyncTracker},
     },
-    utils::{pollable_future::PollableFuture, wgpu_error_scope::WgpuErrorScope},
+    utils::{async_job::AsyncJob, wgpu_error_scope::WgpuErrorScope},
 };
 #[derive(Default)]
 pub struct FramePlan {
@@ -47,7 +47,7 @@ pub struct FramePlanContext<'a> {
 pub enum FramePlanJob {
     #[default]
     Start,
-    Validation(PollableFuture<AppResult<()>>),
+    Validation(AsyncJob<AppResult<()>>),
 }
 
 impl FramePlan {

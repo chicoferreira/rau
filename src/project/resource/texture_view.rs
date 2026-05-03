@@ -9,7 +9,7 @@ use crate::{
         sync::{Revision, SyncOutcome, SyncResource, SyncTracker},
     },
     ui::renderer::EguiRenderer,
-    utils::{pollable_future::PollableFuture, wgpu_error_scope::WgpuErrorScope},
+    utils::{async_job::AsyncJob, wgpu_error_scope::WgpuErrorScope},
 };
 
 pub struct TextureViewCreationContext<'a> {
@@ -36,7 +36,7 @@ pub struct TextureViewRuntime {
 pub enum TextureViewJob {
     #[default]
     Start,
-    Validation(TextureViewRuntime, PollableFuture<AppResult<()>>),
+    Validation(TextureViewRuntime, AsyncJob<AppResult<()>>),
 }
 
 /// As currently the texture view format is only allowed to change by srgb-ness

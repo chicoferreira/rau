@@ -6,12 +6,12 @@ use crate::{
     file_storage::FileStorage,
     project::{
         DimensionId, ProjectResource, TextureId,
-        file::ProjectFilePath,
+        paths::FilePath,
         resource::dimension::Dimension,
         storage::Storage,
         sync::{Revision, SyncOutcome, SyncResource, SyncTracker},
     },
-    utils::{pollable_future::PollableFuture, wgpu_error_scope::WgpuErrorScope},
+    utils::{async_job::AsyncJob, wgpu_error_scope::WgpuErrorScope},
 };
 
 #[derive(Clone, Copy)]
@@ -38,15 +38,15 @@ pub struct TextureRuntime {
 pub enum TextureJob {
     #[default]
     Start,
-    ReadingImage(PollableFuture<AppResult<Vec<u8>>>),
-    Validation(TextureRuntime, PollableFuture<AppResult<()>>),
+    ReadingImage(AsyncJob<AppResult<Vec<u8>>>),
+    Validation(TextureRuntime, AsyncJob<AppResult<()>>),
 }
 
 #[derive(Clone, PartialEq)]
 pub enum TextureSource {
     // Grab size from dimension
     Dimension(Option<DimensionId>),
-    Image(ProjectFilePath),
+    Image(FilePath),
     Manual { size: wgpu::Extent3d },
 }
 

@@ -6,7 +6,7 @@ use crate::{
         Creatable, ProjectResource, SamplerId,
         sync::{Revision, SyncOutcome, SyncResource, SyncTracker},
     },
-    utils::{pollable_future::PollableFuture, wgpu_error_scope::WgpuErrorScope},
+    utils::{async_job::AsyncJob, wgpu_error_scope::WgpuErrorScope},
 };
 
 #[derive(Debug, Clone, PartialEq)]
@@ -48,7 +48,7 @@ pub struct SamplerRuntime {
 pub enum SamplerJob {
     #[default]
     Start,
-    Validation(SamplerRuntime, PollableFuture<AppResult<()>>),
+    Validation(SamplerRuntime, AsyncJob<AppResult<()>>),
 }
 
 impl Sampler {

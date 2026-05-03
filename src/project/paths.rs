@@ -1,11 +1,11 @@
 use std::path::Path;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]
-pub struct ProjectFilePath {
+pub struct FilePath {
     segments: Vec<String>,
 }
 
-impl ProjectFilePath {
+impl FilePath {
     pub fn from_relative_path(s: impl AsRef<Path>) -> Self {
         Self::from_str(s.as_ref().to_string_lossy())
     }
@@ -43,7 +43,7 @@ impl ProjectFilePath {
         Self::new(segments)
     }
 
-    pub fn join_path(&self, path: &ProjectFilePath) -> Self {
+    pub fn join_path(&self, path: &FilePath) -> Self {
         let mut segments = self.segments.clone();
         segments.extend(path.segments().iter().cloned());
         Self::new(segments)
@@ -54,7 +54,7 @@ impl ProjectFilePath {
     }
 }
 
-impl std::fmt::Display for ProjectFilePath {
+impl std::fmt::Display for FilePath {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         for (i, segment) in self.segments.iter().enumerate() {
             if i > 0 {

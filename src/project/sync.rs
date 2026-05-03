@@ -2,7 +2,7 @@ use crate::{
     error::{AppError, AppResult},
     project::{
         ProjectResource, ResourceId,
-        file::ProjectFilePath,
+        paths::FilePath,
         storage::{RuntimeStorage, Storage},
     },
 };
@@ -10,7 +10,7 @@ use crate::{
 #[derive(Default)]
 pub struct SyncTracker {
     resource_changes: Vec<ResourceId>,
-    file_changes: Vec<ProjectFilePath>,
+    file_changes: Vec<FilePath>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
@@ -224,7 +224,7 @@ impl SyncTracker {
         !self.resource_changes.is_empty()
     }
 
-    pub fn file_changed(&self, path: &ProjectFilePath) -> bool {
+    pub fn file_changed(&self, path: &FilePath) -> bool {
         self.file_changes.contains(path)
     }
 
@@ -232,7 +232,7 @@ impl SyncTracker {
         self.resource_changes.push(id);
     }
 
-    pub(crate) fn push_file_changes(&mut self, paths: Vec<ProjectFilePath>) {
+    pub(crate) fn push_file_changes(&mut self, paths: Vec<FilePath>) {
         self.file_changes.extend(paths);
     }
 }

@@ -1,4 +1,4 @@
-use crate::{error::AppResult, project::file::ProjectFilePath};
+use crate::{error::AppResult, project::paths::FilePath};
 
 #[cfg(not(target_arch = "wasm32"))]
 pub use native::FileWatcher;
@@ -46,12 +46,12 @@ mod native {
             })
         }
 
-        pub fn try_next(&mut self) -> Option<AppResult<Vec<ProjectFilePath>>> {
+        pub fn try_next(&mut self) -> Option<AppResult<Vec<FilePath>>> {
             match self.rx.try_recv() {
                 Ok(Ok(events)) => {
                     let events = events
                         .into_iter()
-                        .filter_map(|event| self.project_path(event.path))
+                        .filter_map(|event| self.relative_path_from_notify(event.path))
                         .collect();
 
                     log::info!("Received file changes: {:?}", events);
@@ -64,7 +64,7 @@ mod native {
             }
         }
 
-        fn project_path(&self, path: std::path::PathBuf) -> Option<ProjectFilePath> {
+        fn relative_path_from_notify(&self, path: std::path::PathBuf) -> Option<FilePath> {
             let path = match path.strip_prefix(self.root.as_ref()) {
                 Ok(path) => path,
                 Err(err) => {
@@ -73,7 +73,7 @@ mod native {
                 }
             };
 
-            Some(ProjectFilePath::from_relative_path(path))
+            Some(FilePath::from_relative_path(path))
         }
     }
 }
@@ -89,7 +89,7 @@ mod wasm {
             Ok(Self)
         }
 
-        pub fn try_next(&mut self) -> Option<AppResult<Vec<ProjectFilePath>>> {
+        pub fn try_next(&mut self) -> Option<AppResult<Vec<FilePath>>> {
             None
         }
     }

@@ -5,15 +5,15 @@ use crate::{
     file_storage::FileStorage,
     project::{
         ProjectResource, ShaderId,
-        file::ProjectFilePath,
+        paths::FilePath,
         sync::{Revision, SyncOutcome, SyncResource, SyncTracker},
     },
-    utils::{self, pollable_future::PollableFuture, wgpu_error_scope::WgpuErrorScope},
+    utils::{self, async_job::AsyncJob, wgpu_error_scope::WgpuErrorScope},
 };
 
 pub struct Shader {
     pub label: String,
-    source: ProjectFilePath,
+    source: FilePath,
     revision: Revision,
 }
 
@@ -25,12 +25,12 @@ pub struct ShaderRuntime {
 pub enum ShaderJob {
     #[default]
     Start,
-    ReadingSource(PollableFuture<AppResult<String>>),
-    Validation(ShaderRuntime, PollableFuture<AppResult<()>>),
+    ReadingSource(AsyncJob<AppResult<String>>),
+    Validation(ShaderRuntime, AsyncJob<AppResult<()>>),
 }
 
 impl Shader {
-    pub fn new(label: impl Into<String>, source: ProjectFilePath) -> Self {
+    pub fn new(label: impl Into<String>, source: FilePath) -> Self {
         let label = label.into();
 
         Self {
@@ -40,11 +40,11 @@ impl Shader {
         }
     }
 
-    pub fn source(&self) -> &ProjectFilePath {
+    pub fn source(&self) -> &FilePath {
         &self.source
     }
 
-    pub fn set_source(&mut self, source: ProjectFilePath) {
+    pub fn set_source(&mut self, source: FilePath) {
         self.source = source;
         self.revision.increase();
     }

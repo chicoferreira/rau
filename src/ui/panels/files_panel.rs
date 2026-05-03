@@ -2,7 +2,7 @@ use egui::Response;
 use egui_ltreeview::{Action, TreeView};
 
 use crate::{
-    project::file::ProjectFilePath,
+    project::paths::FilePath,
     state::StateEvent,
     ui::{components::tree_node::TreeNode, pane::StateSnapshot, rename::RenameState},
     utils::dir_node::DirNode,
@@ -22,7 +22,7 @@ pub fn ui(state: &mut StateSnapshot, ui: &mut egui::Ui) -> Response {
     let (response, actions) = TreeView::new(ui.make_persistent_id("files_tree_view"))
         .allow_multi_selection(false)
         .show(ui, |builder| {
-            TreeNode::folder(ProjectFilePath::default(), &project_name).build_to(
+            TreeNode::folder(FilePath::default(), &project_name).build_to(
                 builder,
                 state.pending_events,
                 state.rename_state,
@@ -33,7 +33,7 @@ pub fn ui(state: &mut StateSnapshot, ui: &mut egui::Ui) -> Response {
                 &mut state.rename_state,
                 file_tree,
                 builder,
-                ProjectFilePath::default(),
+                FilePath::default(),
             );
 
             builder.close_dir();
@@ -50,8 +50,8 @@ fn render_dir_nodes(
     pending_events: &mut Vec<StateEvent>,
     rename_state: &mut Option<RenameState>,
     dir_node: &DirNode,
-    builder: &mut egui_ltreeview::TreeViewBuilder<'_, ProjectFilePath>,
-    path: ProjectFilePath,
+    builder: &mut egui_ltreeview::TreeViewBuilder<'_, FilePath>,
+    path: FilePath,
 ) {
     for (dir_name, dir_node) in dir_node.dirs() {
         let path = path.join(dir_name.clone());

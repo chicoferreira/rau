@@ -9,7 +9,7 @@ use crate::{
         storage::RuntimeStorage,
         sync::{Revision, SyncOutcome, SyncResource, SyncTracker},
     },
-    utils::{pollable_future::PollableFuture, wgpu_error_scope::WgpuErrorScope},
+    utils::{async_job::AsyncJob, wgpu_error_scope::WgpuErrorScope},
 };
 
 pub struct BindGroupCreationContext<'a> {
@@ -34,7 +34,7 @@ pub struct BindGroupRuntime {
 pub enum BindGroupJob {
     #[default]
     Start,
-    Validation(BindGroupRuntime, PollableFuture<AppResult<()>>),
+    Validation(BindGroupRuntime, AsyncJob<AppResult<()>>),
 }
 
 pub type BindGroupEntryId = usize;

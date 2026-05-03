@@ -1,4 +1,4 @@
-use crate::project::{ResourceId, file::ProjectFilePath};
+use crate::project::{ResourceId, paths::FilePath};
 
 pub type AppResult<T> = std::result::Result<T, AppError>;
 
@@ -40,7 +40,7 @@ pub enum AppError {
     FileLoadError(#[from] std::io::Error),
     /// The file was not found.
     #[error("file not found: {0:?}")]
-    FileNotFound(ProjectFilePath),
+    FileNotFound(FilePath),
     /// An image parse error occurred.
     #[error(transparent)]
     ImageParseError(#[from] image::ImageError),
@@ -58,7 +58,7 @@ pub enum AppError {
     IndexedDbError(#[from] indexed_db_futures::error::Error),
     #[cfg(target_arch = "wasm32")]
     #[error("file not valid utf8: {0:?}")]
-    FileNotValidUtf8(ProjectFilePath),
+    FileNotValidUtf8(FilePath),
     #[error("fetch error: {0}")]
     FetchError(#[from] reqwest::Error),
     #[error("url parse error: {0}")]

@@ -9,7 +9,7 @@ use crate::{
     fs::{file_system::FileSystem, identifier::ProjectIdentifier},
     project::{
         BindGroupId, ModelId, ProjectResource,
-        file::ProjectFilePath,
+        paths::FilePath,
         resource::{
             bindgroup::BindGroup,
             model::vertex_buffer::{VertexBufferField, VertexBufferSpec},
@@ -18,8 +18,7 @@ use crate::{
         sync::{Revision, SyncOutcome, SyncResource, SyncTracker},
     },
     utils::{
-        pollable_future::PollableFuture, resizable_buffer::ResizableBuffer,
-        wgpu_error_scope::WgpuErrorScope,
+        async_job::AsyncJob, resizable_buffer::ResizableBuffer, wgpu_error_scope::WgpuErrorScope,
     },
 };
 
@@ -33,7 +32,7 @@ pub struct ModelCreationContext<'a> {
 
 pub struct Model {
     pub label: String,
-    source: ProjectFilePath,
+    source: FilePath,
     material_bind_group_ids: Vec<Option<BindGroupId>>,
     mesh_material_selections: Vec<MeshMaterialSelection>,
     vertex_buffer_spec: VertexBufferSpec,
@@ -49,7 +48,7 @@ pub struct ModelRuntime {
 pub enum ModelJob {
     #[default]
     Start,
-    Loading(PollableFuture<AppResult<ModelRuntime>>),
+    Loading(AsyncJob<AppResult<ModelRuntime>>),
 }
 
 pub struct Mesh {
@@ -82,7 +81,7 @@ pub struct Material {
 }
 
 impl Model {
-    pub fn new(label: impl Into<String>, source: ProjectFilePath) -> Self {
+    pub fn new(label: impl Into<String>, source: FilePath) -> Self {
         Self {
             label: label.into(),
             source,
@@ -93,11 +92,11 @@ impl Model {
         }
     }
 
-    pub fn source(&self) -> &ProjectFilePath {
+    pub fn source(&self) -> &FilePath {
         &self.source
     }
 
-    pub fn set_source(&mut self, source: ProjectFilePath) {
+    pub fn set_source(&mut self, source: FilePath) {
         if self.source != source {
             self.source = source;
             self.revision.increase();
@@ -221,15 +220,15 @@ impl SyncResource for Model {
                 let vertex_buffer_spec = self.vertex_buffer_spec.clone();
                 let device = ctx.device.clone();
 
-                Ok(SyncOutcome::Pending(ModelJob::Loading(
-                    PollableFuture::new(ModelRuntime::load_from_obj_file(
+                Ok(SyncOutcome::Pending(ModelJob::Loading(AsyncJob::new(
+                    ModelRuntime::load_from_obj_file(
                         source,
                         project_identifier,
                         file_system,
                         vertex_buffer_spec,
                         device,
-                    )),
-                )))
+                    ),
+                ))))
             }
             ModelJob::Loading(mut future) => match future.try_resolve() {
                 Poll::Ready(result) => result.map(SyncOutcome::Changed),
@@ -249,7 +248,7 @@ impl SyncResource for Model {
 
 impl ModelRuntime {
     pub async fn load_from_obj_file(
-        source: ProjectFilePath,
+        source: FilePath,
         project_identifier: ProjectIdentifier,
         file_system: FileSystem,
         vertex_buffer_spec: VertexBufferSpec,
@@ -267,7 +266,7 @@ impl ModelRuntime {
         let (models, obj_materials) =
             tobj::futures::load_obj_buf(obj_reader, &load_options, move |material_path| {
                 let material_path = material_path.to_string_lossy().to_string();
-                let material_path = ProjectFilePath::new(vec![material_path]); // TODO: split into segments
+                let material_path = FilePath::new(vec![material_path]); // TODO: split into segments
                 let material_path = source
                     .parent()
                     .map(|parent| parent.join_path(&material_path))

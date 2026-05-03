@@ -9,7 +9,7 @@ use crate::{
         storage::{RuntimeStorage, Storage},
         sync::{Revision, SyncOutcome, SyncResource, SyncTracker},
     },
-    utils::{pollable_future::PollableFuture, wgpu_error_scope::WgpuErrorScope},
+    utils::{async_job::AsyncJob, wgpu_error_scope::WgpuErrorScope},
 };
 
 pub struct RenderPass {
@@ -43,7 +43,7 @@ pub struct RenderPassRuntime {
 pub enum RenderPassJob {
     #[default]
     Start,
-    Validation(RenderPassRuntime, PollableFuture<AppResult<()>>),
+    Validation(RenderPassRuntime, AsyncJob<AppResult<()>>),
 }
 
 pub struct RenderPipelineRuntime {

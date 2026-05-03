@@ -11,7 +11,7 @@ use crate::{
     project::storage::{RuntimeStorage, Storage},
 };
 
-pub mod file;
+pub mod paths;
 pub mod resource;
 pub mod storage;
 pub mod sync;

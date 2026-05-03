@@ -3,7 +3,7 @@ use crate::{
     file_storage::FileStorage,
     project::{
         Project, ViewportId,
-        file::ProjectFilePath,
+        paths::FilePath,
         resource::{
             bindgroup::{BindGroup, BindGroupEntry, BindGroupResource},
             camera::Camera,
@@ -29,7 +29,7 @@ mod loader;
 async fn fetch_current_page_wasm_and_save(
     file_system: &crate::fs::file_system::FileSystem,
     project_id: &crate::fs::identifier::ProjectIdentifier,
-    file_path: &ProjectFilePath,
+    file_path: &FilePath,
 ) -> AppResult<()> {
     use std::str::FromStr;
 
@@ -56,16 +56,16 @@ pub async fn create_scene(
 ) -> AppResult<ViewportId> {
     #[cfg(target_arch = "wasm32")]
     for file in [
-        ProjectFilePath::from_str("cube.mtl"),
-        ProjectFilePath::from_str("cube.obj"),
-        ProjectFilePath::from_str("cube-diffuse.jpg"),
-        ProjectFilePath::from_str("cube-normal.png"),
-        ProjectFilePath::from_str("equirectangular.wgsl"),
-        ProjectFilePath::from_str("hdr.wgsl"),
-        ProjectFilePath::from_str("light.wgsl"),
-        ProjectFilePath::from_str("pure-sky.hdr"),
-        ProjectFilePath::from_str("shader.wgsl"),
-        ProjectFilePath::from_str("sky.wgsl"),
+        FilePath::from_str("cube.mtl"),
+        FilePath::from_str("cube.obj"),
+        FilePath::from_str("cube-diffuse.jpg"),
+        FilePath::from_str("cube-normal.png"),
+        FilePath::from_str("equirectangular.wgsl"),
+        FilePath::from_str("hdr.wgsl"),
+        FilePath::from_str("light.wgsl"),
+        FilePath::from_str("pure-sky.hdr"),
+        FilePath::from_str("shader.wgsl"),
+        FilePath::from_str("sky.wgsl"),
     ] {
         let project_id = file_storage.project_identifier();
         fetch_current_page_wasm_and_save(&file_storage.file_system, project_id, &file).await?;
@@ -73,20 +73,20 @@ pub async fn create_scene(
 
     let equirectangular_shader = Shader::new(
         "Equirectengular Shader",
-        ProjectFilePath::from_str("equirectangular.wgsl"),
+        FilePath::from_str("equirectangular.wgsl"),
     );
     let equirectengular_shader_id = project.shaders.register(equirectangular_shader);
 
-    let hdr_shader = Shader::new("HDR Shader", ProjectFilePath::from_str("hdr.wgsl"));
+    let hdr_shader = Shader::new("HDR Shader", FilePath::from_str("hdr.wgsl"));
     let hdr_shader_id = project.shaders.register(hdr_shader);
 
-    let light_shader = Shader::new("Light Shader", ProjectFilePath::from_str("light.wgsl"));
+    let light_shader = Shader::new("Light Shader", FilePath::from_str("light.wgsl"));
     let light_shader_id = project.shaders.register(light_shader);
 
-    let main_shader = Shader::new("Main Shader", ProjectFilePath::from_str("shader.wgsl"));
+    let main_shader = Shader::new("Main Shader", FilePath::from_str("shader.wgsl"));
     let main_shader_id = project.shaders.register(main_shader);
 
-    let sky_shader = Shader::new("Sky Shader", ProjectFilePath::from_str("sky.wgsl"));
+    let sky_shader = Shader::new("Sky Shader", FilePath::from_str("sky.wgsl"));
     let sky_shader_id = project.shaders.register(sky_shader);
 
     let dimension = Dimension::new("Main Dimension", size);
@@ -184,7 +184,7 @@ pub async fn create_scene(
         },
     ));
 
-    let mut cube_model = Model::new("cube", ProjectFilePath::from_str("cube.obj"));
+    let mut cube_model = Model::new("cube", FilePath::from_str("cube.obj"));
     let cube_model_runtime = ModelRuntime::load_from_obj_file(
         cube_model.source().clone(),
         file_storage.project_identifier().clone(),
@@ -198,8 +198,8 @@ pub async fn create_scene(
         let diffuse_path = texture_paths.get(0).cloned().unwrap_or_default();
         let normal_path = texture_paths.get(1).cloned().unwrap_or_default();
 
-        let diffuse_file_path = ProjectFilePath::from_str(diffuse_path.clone());
-        let normal_file_path = ProjectFilePath::from_str(normal_path.clone());
+        let diffuse_file_path = FilePath::from_str(diffuse_path.clone());
+        let normal_file_path = FilePath::from_str(normal_path.clone());
 
         let diffuse_format = wgpu::TextureFormat::Rgba8UnormSrgb;
         let diffuse_texture = create_texture(diffuse_file_path, diffuse_format)?;
@@ -283,7 +283,7 @@ pub async fn create_scene(
     let hdr_bind_group_id = project.bind_groups.register(hdr_bind_group);
 
     let sky_texture = create_texture(
-        ProjectFilePath::from_str("pure-sky.hdr"),
+        FilePath::from_str("pure-sky.hdr"),
         wgpu::TextureFormat::Rgba32Float,
     )?;
     let sky_texture_id = project.textures.register(sky_texture);
@@ -464,7 +464,7 @@ pub async fn create_scene(
     Ok(viewport_id)
 }
 
-pub fn create_texture(path: ProjectFilePath, format: wgpu::TextureFormat) -> AppResult<Texture> {
+pub fn create_texture(path: FilePath, format: wgpu::TextureFormat) -> AppResult<Texture> {
     let label = path.to_string();
     let source = TextureSource::Image(path);
 

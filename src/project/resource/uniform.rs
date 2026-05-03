@@ -14,7 +14,7 @@ use crate::{
         sync::{Revision, SyncOutcome, SyncResource, SyncTracker},
     },
     utils::{
-        pollable_future::PollableFuture,
+        async_job::AsyncJob,
         resizable_buffer::{ChangeResult, ResizableBuffer},
         wgpu_error_scope::WgpuErrorScope,
     },
@@ -42,7 +42,7 @@ pub struct UniformRuntime {
 pub enum UniformJob {
     #[default]
     Start,
-    Validation(UniformRuntime, PollableFuture<AppResult<()>>),
+    Validation(UniformRuntime, AsyncJob<AppResult<()>>),
 }
 
 #[derive(Clone, Debug, PartialEq)]

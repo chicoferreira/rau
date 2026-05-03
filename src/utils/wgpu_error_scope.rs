@@ -1,4 +1,4 @@
-use crate::{error::AppResult, utils::pollable_future::PollableFuture};
+use crate::{error::AppResult, utils::async_job::AsyncJob};
 
 pub struct WgpuErrorScope {
     inner: wgpu::ErrorScopeGuard,
@@ -11,9 +11,9 @@ impl WgpuErrorScope {
         }
     }
 
-    pub fn pop(self) -> PollableFuture<AppResult<()>> {
+    pub fn pop(self) -> AsyncJob<AppResult<()>> {
         let future = self.inner.pop();
-        PollableFuture::new(async move {
+        AsyncJob::new(async move {
             match future.await {
                 Some(error) => Err(error.into()),
                 None => Ok(()),

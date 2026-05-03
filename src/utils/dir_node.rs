@@ -1,12 +1,12 @@
 use std::collections::BTreeMap;
 
-use crate::project::file::ProjectFilePath;
+use crate::project::paths::FilePath;
 
 /// Accessory struct for showing the file tree in the UI easier
 #[derive(Debug, Default)]
 pub struct DirNode {
     dirs: BTreeMap<String, DirNode>,
-    files: BTreeMap<String, ProjectFilePath>,
+    files: BTreeMap<String, FilePath>,
 }
 
 impl DirNode {
@@ -14,11 +14,11 @@ impl DirNode {
         &self.dirs
     }
 
-    pub fn files(&self) -> &BTreeMap<String, ProjectFilePath> {
+    pub fn files(&self) -> &BTreeMap<String, FilePath> {
         &self.files
     }
 
-    pub fn from_files(files: &[ProjectFilePath]) -> Self {
+    pub fn from_files(files: &[FilePath]) -> Self {
         let mut root = Self::default();
 
         for file in files {
@@ -28,7 +28,7 @@ impl DirNode {
         root
     }
 
-    fn insert(&mut self, file: ProjectFilePath) {
+    fn insert(&mut self, file: FilePath) {
         let Some((file_name, dir_segments)) = file.segments().split_last() else {
             return;
         };

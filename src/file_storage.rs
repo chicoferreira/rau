@@ -3,8 +3,8 @@ use std::task::Poll;
 use crate::{
     error::AppResult,
     fs::{file_system::FileSystem, file_watcher::FileWatcher, identifier::ProjectIdentifier},
-    project::{file::ProjectFilePath, sync::SyncTracker},
-    utils::{dir_node::DirNode, pollable_future::PollableFuture},
+    project::{paths::FilePath, sync::SyncTracker},
+    utils::{async_job::AsyncJob, dir_node::DirNode},
 };
 
 /// A struct that holds files of the project for the UI
@@ -14,13 +14,13 @@ pub struct FileStorage {
     project_id: ProjectIdentifier,
     file_watcher: FileWatcher,
     current_tasks: Vec<FileStorageTask>,
-    cached_files: Option<Vec<ProjectFilePath>>,
+    cached_files: Option<Vec<FilePath>>,
     cached_file_tree: Option<DirNode>,
 }
 
 enum FileStorageTask {
     ListFiles {
-        task: PollableFuture<AppResult<Vec<ProjectFilePath>>>,
+        task: AsyncJob<AppResult<Vec<FilePath>>>,
     },
 }
 
@@ -61,17 +61,17 @@ impl FileStorage {
         });
     }
 
-    pub fn exists_file_cached(&self, path: &ProjectFilePath) -> bool {
+    pub fn exists_file_cached(&self, path: &FilePath) -> bool {
         self.cached_files
             .as_ref()
             .map_or(false, |files| files.iter().any(|f| f == path))
     }
 
-    pub fn read(&self, path: &ProjectFilePath) -> PollableFuture<AppResult<Vec<u8>>> {
+    pub fn read(&self, path: &FilePath) -> AsyncJob<AppResult<Vec<u8>>> {
         self.file_system.read(&self.project_id, path)
     }
 
-    pub fn read_to_string(&self, path: &ProjectFilePath) -> PollableFuture<AppResult<String>> {
+    pub fn read_to_string(&self, path: &FilePath) -> AsyncJob<AppResult<String>> {
         self.file_system.read_to_string(&self.project_id, path)
     }
 

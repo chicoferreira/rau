@@ -10,7 +10,7 @@ use crate::{
         storage::RuntimeStorage,
         sync::{Revision, SyncOutcome, SyncResource, SyncTracker},
     },
-    utils::{pollable_future::PollableFuture, wgpu_error_scope::WgpuErrorScope},
+    utils::{async_job::AsyncJob, wgpu_error_scope::WgpuErrorScope},
 };
 
 pub struct ComputePass {
@@ -42,7 +42,7 @@ pub struct Context<'a> {
 pub enum ComputePassJob {
     #[default]
     Start,
-    Validation(PollableFuture<AppResult<()>>),
+    Validation(AsyncJob<AppResult<()>>),
 }
 
 impl Creatable for ComputePass {
