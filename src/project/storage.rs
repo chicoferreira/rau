@@ -1,3 +1,4 @@
+use itertools::Itertools;
 use slotmap::{SecondaryMap, SlotMap};
 
 use crate::{
@@ -33,6 +34,12 @@ where
     R: ProjectResource,
     R::Id: slotmap::Key,
 {
+    pub fn list_sorted(&self) -> impl Iterator<Item = (R::Id, &R)> + '_ {
+        self.map
+            .iter()
+            .sorted_by_key(|(_, res)| res.label().to_lowercase())
+    }
+
     pub fn list(&self) -> impl Iterator<Item = (R::Id, &R)> {
         self.map.iter()
     }
