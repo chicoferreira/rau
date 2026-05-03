@@ -2,6 +2,7 @@ use winit::event_loop::EventLoop;
 
 mod app;
 mod error;
+mod file_storage;
 mod fs;
 mod project;
 mod scene;

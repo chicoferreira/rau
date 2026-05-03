@@ -73,9 +73,7 @@ mod native {
                 }
             };
 
-            Some(ProjectFilePath::new(
-                path.to_string_lossy().replace('\\', "/"), // TODO: use relative-path for cross-platform
-            ))
+            Some(ProjectFilePath::from_relative_path(path))
         }
     }
 }

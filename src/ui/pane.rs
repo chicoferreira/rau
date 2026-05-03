@@ -1,10 +1,11 @@
 use crate::{
+    file_storage::FileStorage,
     project::{Project, RuntimeProject},
     state,
     ui::{
         components::tiles::TreePane,
         panels::{
-            error_panel, inspector_pane::InspectorPane, project_tree_panel,
+            error_panel, files_panel, inspector_pane::InspectorPane, project_tree_panel,
             viewport_pane::ViewportPane,
         },
         rename::RenameState,
@@ -16,6 +17,7 @@ pub struct StateSnapshot<'a> {
     pub project: &'a mut Project,
     pub runtime_project: &'a mut RuntimeProject,
     pub rename_state: &'a mut Option<RenameState>,
+    pub file_storage: &'a FileStorage,
 }
 
 impl StateSnapshot<'_> {
@@ -38,13 +40,26 @@ impl StateSnapshot<'_> {
 
         error_panel::ui(self, ui);
 
-        egui::Panel::left("project_tree_panel")
+        egui::Panel::left("left_panel")
             .frame(egui::Frame::new().inner_margin(0))
             .resizable(true)
             .show_inside(ui, |ui| {
-                egui::ScrollArea::both().show(ui, |ui| {
-                    project_tree_panel::ui(self, ui);
-                });
+                // TODO: make them divided by the middle
+                egui::Panel::top("files_panel")
+                    .resizable(true)
+                    .show_inside(ui, |ui| {
+                        egui::ScrollArea::both().show(ui, |ui| {
+                            files_panel::ui(self, ui);
+                        });
+                    });
+
+                egui::Panel::top("project_tree_panel")
+                    .resizable(true)
+                    .show_inside(ui, |ui| {
+                        egui::ScrollArea::both().show(ui, |ui| {
+                            project_tree_panel::ui(self, ui);
+                        });
+                    });
             });
 
         egui::Panel::right("inspector_tree_panel")

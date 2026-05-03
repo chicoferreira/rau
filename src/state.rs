@@ -5,11 +5,11 @@ use winit::{event::WindowEvent, window::Window};
 
 use crate::{
     error::AppResult,
-    fs::file_watcher::FileWatcher,
+    file_storage::FileStorage,
+    fs::{file_system::FileSystem, file_watcher::FileWatcher},
     project::{
         self, DimensionId, FramePlanId, Project, ResourceId, ResourceKind, RuntimeProject,
         ViewportId,
-        file::FileSystem,
         resource::{
             bindgroup::BindGroupCreationContext, camera::CameraCreationContext, compute_pass,
             frame_plan::FramePlanContext, model::ModelCreationContext, render_pass,
@@ -68,6 +68,7 @@ pub struct State {
     tracker: SyncTracker,
     file_system: FileSystem,
     file_watcher: FileWatcher,
+    file_storage: FileStorage,
 }
 
 impl State {
@@ -153,6 +154,7 @@ impl State {
 
         let file_system = FileSystem::new(path).await?;
         let file_watcher = file_system.create_file_watcher()?;
+        let file_storage = FileStorage::new(file_system.clone());
 
         let viewport_id = scene::create_scene(&device, size, &mut project, &file_system).await?;
 
@@ -180,6 +182,7 @@ impl State {
             tracker: SyncTracker::default(),
             file_system,
             file_watcher,
+            file_storage,
         })
     }
 
@@ -234,12 +237,17 @@ impl State {
             pixels_per_point: self.window.scale_factor() as f32,
         };
 
+        if let Err(e) = self.file_storage.poll() {
+            log::error!("File storage poll error: {}", e);
+        }
+
         let frame = self.egui_renderer.handle(&self.window, |ui| {
             let mut snapshot = ui::pane::StateSnapshot {
                 pending_events: &mut self.pending_events,
                 project: &mut self.project,
                 runtime_project: &mut self.runtime_project,
                 rename_state: &mut self.rename_state,
+                file_storage: &self.file_storage,
             };
 
             snapshot.ui(
@@ -253,7 +261,10 @@ impl State {
 
         while let Some(result) = self.file_watcher.try_next() {
             match result {
-                Ok(paths) => self.tracker.push_file_changes(paths),
+                Ok(paths) => {
+                    self.tracker.push_file_changes(paths);
+                    self.file_storage.refresh(&self.file_system);
+                }
                 Err(e) => log::error!("File watcher error: {}", e),
             }
         }

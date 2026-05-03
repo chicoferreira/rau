@@ -8,6 +8,10 @@ impl AbsolutePathBuf {
         let path = std::path::absolute(path)?;
         Ok(Self(path))
     }
+
+    pub fn as_path_buf(&self) -> std::path::PathBuf {
+        self.0.clone()
+    }
 }
 
 impl AsRef<std::path::Path> for AbsolutePathBuf {

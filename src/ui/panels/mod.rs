@@ -1,4 +1,5 @@
 pub mod error_panel;
+pub mod files_panel;
 pub mod inspector_pane;
 pub mod inspectors;
 pub mod project_tree_panel;

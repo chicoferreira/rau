@@ -3,9 +3,10 @@ use std::task::Poll;
 
 use crate::{
     error::{AppError, AppResult},
+    fs::file_system::FileSystem,
     project::{
         DimensionId, ProjectResource, TextureId,
-        file::{FileSystem, ProjectFilePath},
+        file::ProjectFilePath,
         resource::dimension::Dimension,
         storage::Storage,
         sync::{Revision, SyncOutcome, SyncResource, SyncTracker},

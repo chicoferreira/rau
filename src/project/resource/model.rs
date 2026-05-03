@@ -1,16 +1,14 @@
-use std::{
-    path::{Path, PathBuf},
-    task::Poll,
-};
+use std::task::Poll;
 
 use futures_lite::io::{BufReader, Cursor};
 use wgpu::BindGroupLayout;
 
 use crate::{
     error::{AppError, AppResult},
+    fs::file_system::FileSystem,
     project::{
         BindGroupId, ModelId, ProjectResource,
-        file::{FileSystem, ProjectFilePath},
+        file::ProjectFilePath,
         resource::{
             bindgroup::BindGroup,
             model::vertex_buffer::{VertexBufferField, VertexBufferSpec},
@@ -262,12 +260,16 @@ impl ModelRuntime {
         };
 
         let obj_reader = BufReader::new(Cursor::new(obj_bytes));
-        let source_for_materials = source.clone();
-        let file_system_for_materials = file_system.clone();
         let (models, obj_materials) =
             tobj::futures::load_obj_buf(obj_reader, &load_options, move |material_path| {
-                let material_path = resolve_sibling_path(&source_for_materials, &material_path);
-                let file_system = file_system_for_materials.clone();
+                let material_path = material_path.to_string_lossy().to_string();
+                let material_path = ProjectFilePath::new(vec![material_path]); // TODO: split into segments
+                let material_path = source
+                    .parent()
+                    .map(|parent| parent.join_path(&material_path))
+                    .unwrap_or_else(|| material_path);
+
+                let file_system = file_system.clone();
 
                 async move {
                     let mat = file_system
@@ -325,16 +327,6 @@ impl ModelRuntime {
         let bind_group = runtime_bind_groups.get_init(bind_group_id)?;
         Ok(bind_group.inner_layout())
     }
-}
-
-fn resolve_sibling_path(source: &ProjectFilePath, sibling: &Path) -> ProjectFilePath {
-    let source = source.to_string();
-    let path = Path::new(&source)
-        .parent()
-        .map(|parent| parent.join(sibling))
-        .unwrap_or_else(|| PathBuf::from(sibling));
-
-    ProjectFilePath::new(path.to_string_lossy().replace('\\', "/"))
 }
 
 impl From<tobj::Material> for Material {

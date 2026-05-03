@@ -2,9 +2,10 @@ use std::task::Poll;
 
 use crate::{
     error::AppResult,
+    fs::file_system::FileSystem,
     project::{
         ProjectResource, ShaderId,
-        file::{FileSystem, ProjectFilePath},
+        file::ProjectFilePath,
         sync::{Revision, SyncOutcome, SyncResource, SyncTracker},
     },
     utils::{self, pollable_future::PollableFuture, wgpu_error_scope::WgpuErrorScope},
