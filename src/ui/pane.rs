@@ -44,21 +44,31 @@ impl StateSnapshot<'_> {
             .frame(egui::Frame::new().inner_margin(0))
             .resizable(true)
             .show_inside(ui, |ui| {
-                // TODO: make them divided by the middle
+                let half_height = ui.available_height() * 0.5;
+
                 egui::Panel::top("files_panel")
                     .resizable(true)
+                    .default_size(half_height)
                     .show_inside(ui, |ui| {
-                        egui::ScrollArea::both().show(ui, |ui| {
-                            files_panel::ui(self, ui);
-                        });
+                        ui.take_available_height();
+
+                        egui::ScrollArea::both()
+                            .auto_shrink([false, false])
+                            .show(ui, |ui| {
+                                files_panel::ui(self, ui);
+                            });
                     });
 
-                egui::Panel::top("project_tree_panel")
-                    .resizable(true)
+                egui::CentralPanel::default()
+                    .frame(egui::Frame::new().inner_margin(0))
                     .show_inside(ui, |ui| {
-                        egui::ScrollArea::both().show(ui, |ui| {
-                            project_tree_panel::ui(self, ui);
-                        });
+                        ui.take_available_height();
+
+                        egui::ScrollArea::both()
+                            .auto_shrink([false, false])
+                            .show(ui, |ui| {
+                                project_tree_panel::ui(self, ui);
+                            });
                     });
             });
 
