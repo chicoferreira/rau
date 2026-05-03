@@ -1,4 +1,4 @@
-use std::{cell::RefCell, rc::Rc};
+use std::{cell::RefCell, hash::Hash, rc::Rc};
 
 use egui::Label;
 use egui_ltreeview::{NodeBuilder, NodeConfig, TreeViewBuilder};
@@ -7,13 +7,12 @@ use crate::{
     state::StateEvent,
     ui::{
         components::renameable_label::renameable_label,
-        panels::project_tree_panel::TreeNodeId,
         rename::{RenameState, RenameTarget},
     },
 };
 
-pub struct TreeNode<'a> {
-    tree_id: TreeNodeId,
+pub struct TreeNode<'a, T> {
+    tree_id: T,
     label: &'a str,
     events: Vec<ContextMenuEntity<'a>>,
     rename_target: Option<RenameTarget>,
@@ -25,8 +24,11 @@ enum ContextMenuEntity<'a> {
     Action { label: &'a str, event: StateEvent },
 }
 
-impl<'a> TreeNode<'a> {
-    pub fn new(tree_id: TreeNodeId, label: &'a str) -> Self {
+impl<'a, T> TreeNode<'a, T>
+where
+    T: Clone + Eq + Hash + 'a,
+{
+    pub fn new(tree_id: T, label: &'a str) -> Self {
         Self {
             tree_id,
             label,
@@ -36,7 +38,7 @@ impl<'a> TreeNode<'a> {
         }
     }
 
-    pub fn folder(tree_id: TreeNodeId, label: &'a str) -> Self {
+    pub fn folder(tree_id: T, label: &'a str) -> Self {
         Self {
             tree_id,
             label,
@@ -66,7 +68,7 @@ impl<'a> TreeNode<'a> {
         self,
         pending_events: &'a mut Vec<StateEvent>,
         rename_state: &'a mut Option<RenameState>,
-    ) -> impl NodeConfig<TreeNodeId> + 'a {
+    ) -> impl NodeConfig<T> + 'a {
         let pending_events = Rc::new(RefCell::new(pending_events));
         let context_pending_events = Rc::clone(&pending_events);
         let label_pending_events = Rc::clone(&pending_events);
@@ -115,7 +117,7 @@ impl<'a> TreeNode<'a> {
 
     pub fn build_to(
         self,
-        builder: &mut TreeViewBuilder<'_, TreeNodeId>,
+        builder: &mut TreeViewBuilder<'_, T>,
         pending_events: &'a mut Vec<StateEvent>,
         rename_state: &'a mut Option<RenameState>,
     ) -> bool {

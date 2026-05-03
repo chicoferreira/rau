@@ -222,12 +222,39 @@ mod wasm {
             })
         }
 
+        pub fn create_empty_file(
+            &self,
+            file_path: &ProjectFilePath,
+        ) -> PollableFuture<AppResult<()>> {
+            self.save(file_path, vec![])
+        }
+
         pub fn read(&self, file_path: &ProjectFilePath) -> PollableFuture<AppResult<Vec<u8>>> {
             let database = self.database.clone();
             let project_name = self.project_name.clone();
             let file_path = file_path.clone();
 
             PollableFuture::new(Self::read_bytes(database, project_name, file_path))
+        }
+
+        pub fn exists(&self, file_path: &ProjectFilePath) -> PollableFuture<AppResult<bool>> {
+            let database = self.database.clone();
+            let project_name = self.project_name.clone();
+            let file_path = file_path.clone();
+
+            PollableFuture::new(async move {
+                let transaction = database
+                    .transaction(FILES_STORE)
+                    .with_mode(web_sys::IdbTransactionMode::Readonly)
+                    .build()?;
+
+                let store = transaction.object_store(FILES_STORE)?;
+                let key = Self::file_key(&project_name, &file_path);
+
+                let file: Option<Uint8Array> = store.get(key).primitive()?.await?;
+
+                Ok(file.is_some())
+            })
         }
 
         pub fn read_to_string(
