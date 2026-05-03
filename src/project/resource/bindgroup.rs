@@ -161,8 +161,6 @@ impl BindGroupRuntime {
 }
 
 impl Creatable for BindGroup {
-    const DEFAULT_LABEL: &'static str = "Bind Group";
-
     fn create(label: String) -> Self {
         Self::new(label, vec![])
     }

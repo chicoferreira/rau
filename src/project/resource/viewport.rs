@@ -32,8 +32,6 @@ impl Viewport {
 }
 
 impl Creatable for Viewport {
-    const DEFAULT_LABEL: &'static str = "Viewport";
-
     fn create(label: String) -> Self {
         Viewport::new(label, None, None, None)
     }

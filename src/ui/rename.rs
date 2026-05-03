@@ -1,6 +1,6 @@
 use crate::project::{
     BindGroupId, CameraId, ComputePassId, DimensionId, ModelId, Project, RenderPassId, ResourceId,
-    SamplerId, ShaderId, TextureId, TextureViewId, UniformId, ViewportId,
+    ResourceKind, SamplerId, ShaderId, TextureId, TextureViewId, UniformId, ViewportId,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -11,6 +11,7 @@ pub struct RenameState {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum RenameTarget {
+    CreateResource(ResourceKind),
     Uniform(UniformId),
     BindGroup(BindGroupId),
     Viewport(ViewportId),
@@ -28,8 +29,10 @@ pub enum RenameTarget {
 }
 
 impl RenameTarget {
-    pub fn get_label<'a>(&self, project: &'a Project) -> Option<&'a str> {
+    /// Returns the label to use as the starting point for a rename operation.
+    pub fn get_rename_label<'a>(&self, project: &'a Project) -> Option<&'a str> {
         match *self {
+            RenameTarget::CreateResource(_) => Some(""),
             RenameTarget::BindGroup(id) => project.label(id),
             RenameTarget::Viewport(id) => project.label(id),
             RenameTarget::Shader(id) => project.label(id),
@@ -59,6 +62,11 @@ impl RenameTarget {
 
     pub fn apply(self, new_name: String, project: &mut Project) {
         match self {
+            RenameTarget::CreateResource(resource_kind) => {
+                if !new_name.is_empty() {
+                    project.register_with_label(resource_kind, new_name);
+                }
+            }
             RenameTarget::Uniform(id) => {
                 if let Ok(uniform) = project.uniforms.get_mut(id) {
                     uniform.label = new_name;

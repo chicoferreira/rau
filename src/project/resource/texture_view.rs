@@ -140,8 +140,6 @@ impl TextureViewRuntime {
 }
 
 impl Creatable for TextureView {
-    const DEFAULT_LABEL: &'static str = "Texture View";
-
     fn create(label: String) -> Self {
         Self::new(label, None, None, None)
     }

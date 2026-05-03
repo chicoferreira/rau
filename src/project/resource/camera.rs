@@ -363,8 +363,6 @@ impl CameraRuntime {
 }
 
 impl Creatable for Camera {
-    const DEFAULT_LABEL: &'static str = "Camera";
-
     fn create(label: String) -> Self {
         Self::new(label)
     }

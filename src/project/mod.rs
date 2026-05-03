@@ -88,21 +88,21 @@ impl Project {
         label_err.ok()
     }
 
-    pub fn register(&mut self, kind: ResourceKind) -> Option<ResourceId> {
+    pub fn register_with_label(&mut self, kind: ResourceKind, label: String) -> Option<ResourceId> {
         let id = match kind {
             ResourceKind::Shader => todo!("not yet implemented"),
-            ResourceKind::Viewport => self.viewports.create().into(),
-            ResourceKind::Uniform => self.uniforms.create().into(),
-            ResourceKind::BindGroup => self.bind_groups.create().into(),
+            ResourceKind::Viewport => self.viewports.create(label).into(),
+            ResourceKind::Uniform => self.uniforms.create(label).into(),
+            ResourceKind::BindGroup => self.bind_groups.create(label).into(),
             ResourceKind::Texture => todo!("not yet implemented"),
-            ResourceKind::TextureView => self.texture_views.create().into(),
-            ResourceKind::Sampler => self.samplers.create().into(),
-            ResourceKind::Dimension => self.dimensions.create().into(),
-            ResourceKind::Camera => self.cameras.create().into(),
+            ResourceKind::TextureView => self.texture_views.create(label).into(),
+            ResourceKind::Sampler => self.samplers.create(label).into(),
+            ResourceKind::Dimension => self.dimensions.create(label).into(),
+            ResourceKind::Camera => self.cameras.create(label).into(),
             ResourceKind::Model => todo!("not yet implemented"),
-            ResourceKind::RenderPass => self.render_passes.create().into(),
+            ResourceKind::RenderPass => self.render_passes.create(label).into(),
             ResourceKind::FramePlan => return None,
-            ResourceKind::ComputePass => self.compute_passes.create().into(),
+            ResourceKind::ComputePass => self.compute_passes.create(label).into(),
         };
         Some(id)
     }
@@ -203,7 +203,5 @@ pub trait ProjectResource {
 }
 
 pub trait Creatable: ProjectResource {
-    const DEFAULT_LABEL: &'static str;
-
     fn create(label: String) -> Self;
 }

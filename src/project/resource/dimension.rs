@@ -35,8 +35,6 @@ impl Dimension {
 }
 
 impl Creatable for Dimension {
-    const DEFAULT_LABEL: &'static str = "Dimension";
-
     fn create(label: String) -> Self {
         Self::new(label, Size2d::new(1920, 1080))
     }

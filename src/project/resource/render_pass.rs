@@ -101,8 +101,6 @@ impl Default for RenderDraw {
 }
 
 impl Creatable for RenderPass {
-    const DEFAULT_LABEL: &'static str = "Render Pass";
-
     fn create(label: String) -> Self {
         Self {
             label,

@@ -186,8 +186,6 @@ impl UniformRuntimeField {
 }
 
 impl Creatable for Uniform {
-    const DEFAULT_LABEL: &'static str = "Uniform";
-
     fn create(label: String) -> Self {
         Uniform::new(label, vec![])
     }

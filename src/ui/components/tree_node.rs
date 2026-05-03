@@ -64,6 +64,12 @@ where
         self.with_event(label, event)
     }
 
+    /// Inline rename UI without a context-menu entry (e.g. naming a resource before it exists).
+    pub fn with_rename_target_only(mut self, rename_target: RenameTarget) -> Self {
+        self.rename_target = Some(rename_target);
+        self
+    }
+
     fn into_node_config(
         self,
         pending_events: &'a mut Vec<StateEvent>,

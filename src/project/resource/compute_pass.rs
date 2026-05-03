@@ -46,8 +46,6 @@ pub enum ComputePassJob {
 }
 
 impl Creatable for ComputePass {
-    const DEFAULT_LABEL: &'static str = "Compute Pass";
-
     fn create(label: String) -> Self {
         Self {
             label,

@@ -488,16 +488,11 @@ impl State {
                     self.inspector_tree_pane.add_pane(pane);
                 }
                 StateEvent::CreateResource(kind) => {
-                    let Some(resource_id) = self.project.register(kind) else {
-                        continue;
-                    };
-
-                    if let Some(target) = Option::<RenameTarget>::from(resource_id)
-                        && let Some(current_label) = self.project.label(resource_id)
-                    {
+                    let rename_target = RenameTarget::CreateResource(kind);
+                    if let Some(label) = rename_target.get_rename_label(&self.project) {
                         self.rename_state = Some(RenameState {
-                            target,
-                            current_label: current_label.to_string(),
+                            target: rename_target,
+                            current_label: label.to_string(),
                         });
                     }
                 }
@@ -511,7 +506,7 @@ impl State {
                         .add_pane(ViewportPane { viewport_id });
                 }
                 StateEvent::StartRename(rename_target) => {
-                    if let Some(current_name) = rename_target.get_label(&self.project) {
+                    if let Some(current_name) = rename_target.get_rename_label(&self.project) {
                         self.rename_state = Some(RenameState {
                             target: rename_target,
                             current_label: current_name.to_string(),

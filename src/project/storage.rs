@@ -90,8 +90,7 @@ where
     R: Creatable,
     R::Id: slotmap::Key,
 {
-    pub fn create(&mut self) -> R::Id {
-        let label = self.next_label(R::DEFAULT_LABEL);
+    pub fn create(&mut self, label: String) -> R::Id {
         self.register(R::create(label))
     }
 }
