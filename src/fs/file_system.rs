@@ -173,12 +173,33 @@ mod native {
             &self,
             identifier: &ProjectIdentifier,
             file_path: &FilePath,
-        ) -> AsyncJob<Result<(), AppError>> {
+        ) -> AsyncJob<AppResult<()>> {
             let path = self.resolve_exists(identifier, file_path);
 
             AsyncJob::new(async move {
                 let path = path?;
                 std::fs::remove_file(path).map_err(Into::into)
+            })
+        }
+
+        pub fn delete_directory(
+            &self,
+            identifier: &ProjectIdentifier,
+            file_path: &FilePath,
+        ) -> AsyncJob<AppResult<Vec<FilePath>>> {
+            let root = identifier.project_path().as_path_buf();
+            let path = self.resolve_exists(identifier, file_path);
+            let file_path = file_path.clone();
+
+            AsyncJob::new(async move {
+                let path = path?;
+                let mut files = Vec::new();
+                let mut directories = vec![file_path];
+                collect_entries(&root, &path, &mut files, &mut directories)?;
+
+                std::fs::remove_dir_all(path)?;
+
+                Ok(directories.into_iter().chain(files).collect())
             })
         }
 
@@ -573,7 +594,7 @@ mod wasm {
             &self,
             identifier: &ProjectIdentifier,
             file_path: &FilePath,
-        ) -> AsyncJob<Result<(), AppError>> {
+        ) -> AsyncJob<AppResult<()>> {
             let database = self.database.clone();
             let identifier = identifier.clone();
             let file_path = file_path.clone();
@@ -590,6 +611,80 @@ mod wasm {
                 transaction.commit().await?;
 
                 Ok(())
+            })
+        }
+
+        pub fn delete_directory(
+            &self,
+            identifier: &ProjectIdentifier,
+            path: &FilePath,
+        ) -> AsyncJob<AppResult<Vec<FilePath>>> {
+            let database = self.database.clone();
+            let identifier = identifier.clone();
+            let path = path.clone();
+
+            async fn get_entries_under_path(
+                identifier: &ProjectIdentifier,
+                path: &FilePath,
+                store: ObjectStore<'_>,
+            ) -> AppResult<(Vec<Array>, Vec<FilePath>)> {
+                Ok(store
+                    .get_all_keys()
+                    .primitive()?
+                    .await?
+                    .collect::<indexed_db_futures::Result<Vec<Array>>>()?
+                    .into_iter()
+                    .filter_map(|key| {
+                        FileSystem::project_file_path_from_key(&identifier, key.clone())
+                            .filter(|file_path| file_path.starts_with(&path))
+                            .map(|file_path| (key, file_path))
+                    })
+                    .collect())
+            }
+
+            AsyncJob::new(async move {
+                if !Self::entry_exists(&database, &identifier, &path).await? {
+                    return Err(AppError::FileNotFound(path));
+                }
+
+                let transaction = database
+                    .transaction([FILES_STORE, DIRECTORIES_STORE])
+                    .with_mode(web_sys::IdbTransactionMode::Readonly)
+                    .build()?;
+
+                let files_store = transaction.object_store(FILES_STORE)?;
+                let directories_store = transaction.object_store(DIRECTORIES_STORE)?;
+
+                let ((file_keys, file_paths), (directory_keys, directory_paths)) =
+                    futures_lite::future::try_zip(
+                        get_entries_under_path(&identifier, &path, files_store),
+                        get_entries_under_path(&identifier, &path, directories_store),
+                    )
+                    .await?;
+
+                let transaction = database
+                    .transaction([FILES_STORE, DIRECTORIES_STORE])
+                    .with_mode(web_sys::IdbTransactionMode::Readwrite)
+                    .build()?;
+
+                let files_store = transaction.object_store(FILES_STORE)?;
+                let directories_store = transaction.object_store(DIRECTORIES_STORE)?;
+
+                let mut changed_paths =
+                    Vec::with_capacity(file_paths.len() + directory_paths.len());
+                changed_paths.extend(file_paths);
+                changed_paths.extend(directory_paths);
+
+                for key in file_keys {
+                    files_store.delete(key).build()?;
+                }
+                for key in directory_keys {
+                    directories_store.delete(key).build()?;
+                }
+
+                transaction.commit().await?;
+
+                Ok(changed_paths)
             })
         }
 

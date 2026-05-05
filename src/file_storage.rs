@@ -36,6 +36,9 @@ enum FileStorageTask {
         path: FilePath,
         task: AsyncJob<AppResult<()>>,
     },
+    DeleteDirectory {
+        task: AsyncJob<AppResult<Vec<FilePath>>>,
+    },
     RenameFile {
         old_path: FilePath,
         new_path: FilePath,
@@ -136,6 +139,19 @@ impl FileStorage {
         });
     }
 
+    pub fn delete_file_in_background(&mut self, file_path: FilePath) {
+        self.current_tasks.push(FileStorageTask::DeleteFile {
+            task: self.file_system.delete_file(&self.project_id, &file_path),
+            path: file_path,
+        });
+    }
+
+    pub fn delete_folder_in_background(&mut self, path: FilePath) {
+        self.current_tasks.push(FileStorageTask::DeleteDirectory {
+            task: self.file_system.delete_directory(&self.project_id, &path),
+        });
+    }
+
     pub fn tick(&mut self, tracker: &mut SyncTracker) {
         // Handle file watcher events
         while let Some(result) = self.file_watcher.try_next() {
@@ -174,6 +190,12 @@ impl FileStorage {
                     tracker.push_file_change(path.clone()); // TODO: this should be triggered by the file watcher instead
                 })
             }
+            FileStorageTask::DeleteDirectory { task } => {
+                consume_if_ready(task, "delete directory", |changed_paths| {
+                    refresh_file_system = true;
+                    tracker.push_file_changes(changed_paths); // TODO: this should be triggered by the file watcher instead
+                })
+            }
             FileStorageTask::RenameFile {
                 task,
                 old_path,
@@ -188,13 +210,6 @@ impl FileStorage {
         if refresh_file_system && !self.has_list_file_files_pending() {
             self.refresh_file_system();
         }
-    }
-
-    pub fn delete_file_in_background(&mut self, file_path: FilePath) {
-        self.current_tasks.push(FileStorageTask::DeleteFile {
-            task: self.file_system.delete_file(&self.project_id, &file_path),
-            path: file_path,
-        });
     }
 }
 

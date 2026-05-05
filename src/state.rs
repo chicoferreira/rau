@@ -51,6 +51,7 @@ pub enum StateEvent {
     CreateFile(FilePath),
     CreateFolder(FilePath),
     DeleteFile(FilePath),
+    DeleteFolder(FilePath),
 }
 
 pub struct State {
@@ -513,6 +514,9 @@ impl State {
                 }
                 StateEvent::DeleteFile(file_path) => {
                     self.file_storage.delete_file_in_background(file_path);
+                }
+                StateEvent::DeleteFolder(file_path) => {
+                    self.file_storage.delete_folder_in_background(file_path);
                 }
                 StateEvent::OpenViewport(viewport_id) => {
                     self.viewport_tree_pane

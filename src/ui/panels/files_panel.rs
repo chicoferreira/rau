@@ -103,6 +103,8 @@ fn render_dir_nodes(
         TreeNode::folder(FileTreeNodeId::Path(path.clone()), dir_name)
             .with_event("Create File", StateEvent::CreateFile(path.clone()))
             .with_event("Create Folder", StateEvent::CreateFolder(path.clone()))
+            .with_separator()
+            .with_event("Delete Folder", StateEvent::DeleteFolder(path.clone()))
             .build_to(builder, pending_events, rename_state);
 
         pending_file_node(builder, pending_events, rename_state, path.clone());
@@ -119,8 +121,10 @@ fn render_dir_nodes(
         };
 
         TreeNode::new(FileTreeNodeId::Path(file_path.clone()), file_name)
-            .with_event("Create File", StateEvent::CreateFile(path))
+            .with_event("Create File", StateEvent::CreateFile(path.clone()))
+            .with_event("Create Folder", StateEvent::CreateFolder(path.clone()))
             .with_rename_event("Rename File", RenameTarget::File(file_path.clone()))
+            .with_separator()
             .with_event("Delete File", StateEvent::DeleteFile(file_path.clone()))
             .build_to(builder, pending_events, rename_state);
     }

@@ -46,6 +46,10 @@ impl FilePath {
             .collect()
     }
 
+    pub fn starts_with(&self, prefix: &Self) -> bool {
+        self.segments.starts_with(prefix.segments())
+    }
+
     pub fn join(&self, segment: String) -> Self {
         let mut segments = self.segments.clone();
         // TODO: make sure segments are valid paths and don't contain any slashes
