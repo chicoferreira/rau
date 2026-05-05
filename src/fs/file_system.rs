@@ -181,6 +181,30 @@ mod native {
                 std::fs::remove_file(path).map_err(Into::into)
             })
         }
+
+        pub fn rename_file(
+            &self,
+            identifier: &ProjectIdentifier,
+            old_path: &FilePath,
+            new_path: &FilePath,
+        ) -> AsyncJob<AppResult<()>> {
+            let old_resolved_path = self.resolve_exists(identifier, old_path);
+            let new_resolved_path = self.resolve(identifier, new_path);
+            let new_path = new_path.clone();
+
+            AsyncJob::new(async move {
+                let old_resolved_path = old_resolved_path?;
+                if new_resolved_path.try_exists()? {
+                    return Err(AppError::PathAlreadyExists(new_path));
+                }
+
+                if let Some(parent) = new_resolved_path.parent() {
+                    std::fs::create_dir_all(parent)?;
+                }
+
+                std::fs::rename(old_resolved_path, new_resolved_path).map_err(Into::into)
+            })
+        }
     }
 
     fn collect_entries(
@@ -520,12 +544,11 @@ mod wasm {
                 let keys = store.get_all_keys().primitive()?.await?;
                 let keys: Vec<Array> = keys.collect::<indexed_db_futures::Result<Vec<Array>>>()?;
 
-                let mut paths: Vec<_> = keys
+                let paths: Vec<_> = keys
                     .into_iter()
                     .filter_map(|key| FileSystem::project_file_path_from_key(identifier, key))
                     .filter(|path| !path.segments().is_empty())
                     .collect();
-                paths.sort_by_key(|path| path.segments().to_vec());
 
                 Ok(paths)
             }
@@ -564,6 +587,50 @@ mod wasm {
                 let key = Self::key(&identifier, &file_path);
 
                 store.delete(key).build()?;
+                transaction.commit().await?;
+
+                Ok(())
+            })
+        }
+
+        pub fn rename_file(
+            &self,
+            identifier: &ProjectIdentifier,
+            old_path: &FilePath,
+            new_path: &FilePath,
+        ) -> AsyncJob<AppResult<()>> {
+            let database = self.database.clone();
+            let identifier = identifier.clone();
+            let old_path = old_path.clone();
+            let new_path = new_path.clone();
+
+            AsyncJob::new(async move {
+                let bytes =
+                    Self::read_bytes(database.clone(), identifier.clone(), old_path.clone())
+                        .await?;
+
+                if Self::entry_exists(&database, &identifier, &new_path).await? {
+                    return Err(AppError::PathAlreadyExists(new_path));
+                }
+
+                let transaction = database
+                    .transaction([FILES_STORE, DIRECTORIES_STORE])
+                    .with_mode(web_sys::IdbTransactionMode::Readwrite)
+                    .build()?;
+
+                let files_store = transaction.object_store(FILES_STORE)?;
+                let directories_store = transaction.object_store(DIRECTORIES_STORE)?;
+
+                Self::ensure_parent_directories(&directories_store, &identifier, &new_path)?;
+
+                files_store
+                    .add(Uint8Array::from(bytes))
+                    .with_key(Self::key(&identifier, &new_path))
+                    .build()?;
+                files_store
+                    .delete(Self::key(&identifier, &old_path))
+                    .build()?;
+
                 transaction.commit().await?;
 
                 Ok(())
