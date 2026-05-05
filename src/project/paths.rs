@@ -36,6 +36,16 @@ impl FilePath {
         }
     }
 
+    /// Returns each non-root prefix of this path, including the path itself.
+    ///
+    /// For `a/b/c`, this returns `a`, `a/b`, and `a/b/c`.
+    /// For the root path, this returns an empty vector.
+    pub fn ancestors_inclusive(&self) -> Vec<Self> {
+        (1..=self.segments.len())
+            .map(|i| Self::new(self.segments[..i].to_vec()))
+            .collect()
+    }
+
     pub fn join(&self, segment: String) -> Self {
         let mut segments = self.segments.clone();
         // TODO: make sure segments are valid paths and don't contain any slashes

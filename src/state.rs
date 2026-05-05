@@ -49,6 +49,7 @@ pub enum StateEvent {
     ApplyRename(RenameTarget, String),
     DeleteResource(ResourceId),
     CreateFile(FilePath),
+    CreateFolder(FilePath),
     DeleteFile(FilePath),
 }
 
@@ -492,6 +493,16 @@ impl State {
                 }
                 StateEvent::CreateFile(parent_path) => {
                     let rename_target = RenameTarget::CreateFile(parent_path);
+                    if let Some(label) = rename_target.get_rename_label(&self.project) {
+                        let current_label = label.to_string();
+                        self.rename_state = Some(RenameState {
+                            target: rename_target,
+                            current_label,
+                        });
+                    }
+                }
+                StateEvent::CreateFolder(parent_path) => {
+                    let rename_target = RenameTarget::CreateFolder(parent_path);
                     if let Some(label) = rename_target.get_rename_label(&self.project) {
                         let current_label = label.to_string();
                         self.rename_state = Some(RenameState {

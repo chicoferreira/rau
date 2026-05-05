@@ -15,7 +15,8 @@ use crate::{
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
 enum FileTreeNodeId {
     Path(FilePath),
-    PendingCreate(FilePath),
+    PendingCreateFile(FilePath),
+    PendingCreateFolder(FilePath),
 }
 
 fn pending_file_node(
@@ -28,8 +29,23 @@ fn pending_file_node(
         builder,
         pending_events,
         rename_state,
-        FileTreeNodeId::PendingCreate(parent_path.clone()),
+        FileTreeNodeId::PendingCreateFile(parent_path.clone()),
         RenameTarget::CreateFile(parent_path),
+    );
+}
+
+fn pending_folder_node(
+    builder: &mut egui_ltreeview::TreeViewBuilder<'_, FileTreeNodeId>,
+    pending_events: &mut Vec<StateEvent>,
+    rename_state: &mut Option<RenameState>,
+    parent_path: FilePath,
+) {
+    pending_create_node(
+        builder,
+        pending_events,
+        rename_state,
+        FileTreeNodeId::PendingCreateFolder(parent_path.clone()),
+        RenameTarget::CreateFolder(parent_path),
     );
 }
 
@@ -53,9 +69,14 @@ pub fn ui(state: &mut StateSnapshot, ui: &mut egui::Ui) -> Response {
 
             TreeNode::folder(FileTreeNodeId::Path(root_path.clone()), &project_name)
                 .with_event("Create File", StateEvent::CreateFile(FilePath::default()))
+                .with_event(
+                    "Create Folder",
+                    StateEvent::CreateFolder(FilePath::default()),
+                )
                 .build_to(builder, pending_events, rename_state);
 
             pending_file_node(builder, pending_events, rename_state, root_path.clone());
+            pending_folder_node(builder, pending_events, rename_state, root_path.clone());
 
             render_dir_nodes(pending_events, rename_state, file_tree, builder, root_path);
 
@@ -81,10 +102,11 @@ fn render_dir_nodes(
 
         TreeNode::folder(FileTreeNodeId::Path(path.clone()), dir_name)
             .with_event("Create File", StateEvent::CreateFile(path.clone()))
-            .with_rename_event("Rename Folder", RenameTarget::File(path.clone())) // maybe we can create a new rename target for folders only if the code is easier
+            .with_event("Create Folder", StateEvent::CreateFolder(path.clone()))
             .build_to(builder, pending_events, rename_state);
 
         pending_file_node(builder, pending_events, rename_state, path.clone());
+        pending_folder_node(builder, pending_events, rename_state, path.clone());
 
         render_dir_nodes(pending_events, rename_state, dir_node, builder, path);
 

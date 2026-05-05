@@ -2,7 +2,11 @@ use std::task::Poll;
 
 use crate::{
     error::AppResult,
-    fs::{file_system::FileSystem, file_watcher::FileWatcher, identifier::ProjectIdentifier},
+    fs::{
+        file_system::{FileSystem, FileSystemEntries},
+        file_watcher::FileWatcher,
+        identifier::ProjectIdentifier,
+    },
     project::{paths::FilePath, sync::SyncTracker},
     utils::{async_job::AsyncJob, dir_node::DirNode},
 };
@@ -19,10 +23,13 @@ pub struct FileStorage {
 }
 
 enum FileStorageTask {
-    ListFiles {
-        task: AsyncJob<AppResult<Vec<FilePath>>>,
+    ListEntries {
+        task: AsyncJob<AppResult<FileSystemEntries>>,
     },
     CreateFile {
+        task: AsyncJob<AppResult<()>>,
+    },
+    CreateDirectory {
         task: AsyncJob<AppResult<()>>,
     },
     DeleteFile {
@@ -59,12 +66,12 @@ impl FileStorage {
     fn has_list_file_files_pending(&self) -> bool {
         self.current_tasks
             .iter()
-            .any(|task| matches!(task, FileStorageTask::ListFiles { .. }))
+            .any(|task| matches!(task, FileStorageTask::ListEntries { .. }))
     }
 
     fn refresh_file_system(&mut self) {
-        self.current_tasks.push(FileStorageTask::ListFiles {
-            task: self.file_system.list_files(&self.project_id),
+        self.current_tasks.push(FileStorageTask::ListEntries {
+            task: self.file_system.list_entries(&self.project_id),
         });
     }
 
@@ -93,6 +100,15 @@ impl FileStorage {
         self.current_tasks.push(task);
     }
 
+    pub fn create_folder_in_background(&mut self, parent_path: FilePath, new_name: String) {
+        let path = parent_path.join(new_name);
+
+        let task = self.file_system.create_directory(&self.project_id, &path);
+
+        let task = FileStorageTask::CreateDirectory { task };
+        self.current_tasks.push(task);
+    }
+
     pub fn rename_file_in_background(&self, _file_path: FilePath, _new_name: String) {
         todo!()
     }
@@ -112,20 +128,27 @@ impl FileStorage {
         let mut refresh_file_system = false;
 
         self.current_tasks.retain_mut(|task| match task {
-            FileStorageTask::ListFiles { task } => {
-                consume_if_ready(task, "list files", |mut files| {
-                    files.sort_by_key(|file| file.segments().to_vec());
-                    self.cached_file_tree = Some(DirNode::from_files(&files));
-                    self.cached_files = Some(files);
+            FileStorageTask::ListEntries { task } => {
+                consume_if_ready(task, "list entries", |mut entries| {
+                    entries.files.sort_by_key(|file| file.segments().to_vec());
+                    entries
+                        .directories
+                        .sort_by_key(|directory| directory.segments().to_vec());
+                    self.cached_file_tree =
+                        Some(DirNode::from_entries(&entries.files, &entries.directories));
+                    self.cached_files = Some(entries.files);
                 })
             }
             FileStorageTask::CreateFile { task } => {
                 consume_if_ready(task, "create file", |_| refresh_file_system = true)
             }
+            FileStorageTask::CreateDirectory { task } => {
+                consume_if_ready(task, "create directory", |_| refresh_file_system = true)
+            }
             FileStorageTask::DeleteFile { task, path } => {
                 consume_if_ready(task, "delete file", |_| {
                     refresh_file_system = true;
-                    tracker.push_file_change(path.clone());
+                    tracker.push_file_change(path.clone()); // TODO: this should be triggered by the file watcher instead
                 })
             }
         });

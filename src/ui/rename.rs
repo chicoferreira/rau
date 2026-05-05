@@ -17,6 +17,7 @@ pub struct RenameState {
 pub enum RenameTarget {
     CreateResource(ResourceKind),
     CreateFile(FilePath),
+    CreateFolder(FilePath),
     File(FilePath),
     Uniform(UniformId),
     BindGroup(BindGroupId),
@@ -39,6 +40,7 @@ impl RenameTarget {
     pub fn get_rename_label<'a>(&'a self, project: &'a Project) -> Option<&'a str> {
         match self {
             RenameTarget::CreateFile(_) => Some(""),
+            RenameTarget::CreateFolder(_) => Some(""),
             RenameTarget::File(file_path) => file_path.file_name(),
             RenameTarget::CreateResource(_) => Some(""),
             RenameTarget::BindGroup(id) => project.label(*id),
@@ -78,6 +80,11 @@ impl RenameTarget {
             RenameTarget::CreateFile(file_path) => {
                 if !new_name.is_empty() {
                     file_storage.create_file_in_background(file_path, new_name);
+                }
+            }
+            RenameTarget::CreateFolder(file_path) => {
+                if !new_name.is_empty() {
+                    file_storage.create_folder_in_background(file_path, new_name);
                 }
             }
             RenameTarget::File(file_path) => {

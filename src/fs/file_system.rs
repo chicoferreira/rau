@@ -1,6 +1,12 @@
 use crate::error::AppResult;
 use crate::utils::async_job::AsyncJob;
 
+#[derive(Debug, Clone, Default)]
+pub struct FileSystemEntries {
+    pub files: Vec<crate::project::paths::FilePath>,
+    pub directories: Vec<crate::project::paths::FilePath>,
+}
+
 #[cfg(not(target_arch = "wasm32"))]
 pub use native::FileSystem;
 
@@ -80,19 +86,38 @@ mod native {
             })
         }
 
-        pub fn list_files(
+        pub fn list_entries(
             &self,
             identifier: &ProjectIdentifier,
-        ) -> AsyncJob<AppResult<Vec<FilePath>>> {
+        ) -> AsyncJob<AppResult<FileSystemEntries>> {
             let root = identifier.project_path().as_path_buf();
 
             AsyncJob::new(async move {
                 let mut files = Vec::new();
+                let mut directories = Vec::new();
 
-                collect_files(&root, &root, &mut files)?;
+                collect_entries(&root, &root, &mut files, &mut directories)?;
                 files.sort_by_key(|file| file.segments().to_vec());
+                directories.sort_by_key(|directory| directory.segments().to_vec());
 
-                Ok(files)
+                Ok(FileSystemEntries { files, directories })
+            })
+        }
+
+        pub fn create_directory(
+            &self,
+            identifier: &ProjectIdentifier,
+            file_path: &FilePath,
+        ) -> AsyncJob<AppResult<()>> {
+            let path = self.resolve(identifier, file_path);
+            let file_path = file_path.clone();
+
+            AsyncJob::new(async move {
+                if path.try_exists()? {
+                    return Err(AppError::PathAlreadyExists(file_path));
+                }
+
+                std::fs::create_dir_all(path).map_err(Into::into)
             })
         }
 
@@ -118,7 +143,30 @@ mod native {
             identifier: &ProjectIdentifier,
             file_path: &FilePath,
         ) -> AsyncJob<AppResult<()>> {
-            self.save(identifier, file_path, vec![])
+            let path = self.resolve(identifier, file_path);
+            let file_path = file_path.clone();
+
+            AsyncJob::new(async move {
+                if path.try_exists()? {
+                    return Err(AppError::PathAlreadyExists(file_path));
+                }
+
+                if let Some(parent) = path.parent() {
+                    std::fs::create_dir_all(parent)?;
+                }
+
+                match std::fs::OpenOptions::new()
+                    .write(true)
+                    .create_new(true)
+                    .open(path)
+                {
+                    Ok(_) => Ok(()),
+                    Err(err) if err.kind() == std::io::ErrorKind::AlreadyExists => {
+                        Err(AppError::PathAlreadyExists(file_path))
+                    }
+                    Err(err) => Err(err.into()),
+                }
+            })
         }
 
         pub fn delete_file(
@@ -135,10 +183,11 @@ mod native {
         }
     }
 
-    fn collect_files(
+    fn collect_entries(
         root: &std::path::Path,
         current: &std::path::Path,
         files: &mut Vec<FilePath>,
+        directories: &mut Vec<FilePath>,
     ) -> std::io::Result<()> {
         for entry in std::fs::read_dir(current)? {
             let entry = entry?;
@@ -146,7 +195,11 @@ mod native {
             let file_type = entry.file_type()?;
 
             if file_type.is_dir() {
-                collect_files(root, &path, files)?;
+                let relative_path = path.strip_prefix(root).unwrap_or(&path);
+                let relative_path = relative_path.to_string_lossy().replace('\\', "/");
+
+                directories.push(FilePath::from_relative_path(relative_path));
+                collect_entries(root, &path, files, directories)?;
             } else if file_type.is_file() {
                 let relative_path = path.strip_prefix(root).unwrap_or(&path);
                 let relative_path = relative_path.to_string_lossy().replace('\\', "/");
@@ -177,6 +230,12 @@ mod wasm {
 
     const DB_NAME: &str = "rau";
     const FILES_STORE: &str = "files";
+    const DIRECTORIES_STORE: &str = "directories";
+
+    // Directory invariant for new writes:
+    // - the project root is implicit and is never stored;
+    // - every non-root parent directory of a newly saved file is materialized in DIRECTORIES_STORE;
+    // - creating a directory materializes that directory and its non-root ancestors;
 
     #[derive(Clone)]
     pub struct FileSystem {
@@ -195,7 +254,7 @@ mod wasm {
         async fn open_database() -> AppResult<Database> {
             let database = Database::open(DB_NAME).await?;
 
-            if Self::has_files_store(&database) {
+            if Self::has_files_store(&database) && Self::has_directories_store(&database) {
                 return Ok(database);
             }
 
@@ -208,6 +267,9 @@ mod wasm {
                 .with_on_upgrade_needed(|_event, database| {
                     if !Self::has_files_store(&database) {
                         database.create_object_store(FILES_STORE).build()?;
+                    }
+                    if !Self::has_directories_store(&database) {
+                        database.create_object_store(DIRECTORIES_STORE).build()?;
                     }
 
                     Ok(())
@@ -223,7 +285,13 @@ mod wasm {
                 .any(|store_name| store_name == FILES_STORE)
         }
 
-        fn file_key(identifier: &ProjectIdentifier, file_path: &FilePath) -> Array {
+        fn has_directories_store(database: &Database) -> bool {
+            database
+                .object_store_names()
+                .any(|store_name| store_name == DIRECTORIES_STORE)
+        }
+
+        fn key(identifier: &ProjectIdentifier, file_path: &FilePath) -> Array {
             std::iter::once(identifier.project_name())
                 .chain(file_path.segments().iter().map(String::as_str))
                 .map(JsValue::from_str)
@@ -247,6 +315,29 @@ mod wasm {
             Some(FilePath::new(segments))
         }
 
+        async fn entry_exists(
+            transaction: &indexed_db_futures::transaction::TransactionRef<'_>,
+            identifier: &ProjectIdentifier,
+            file_path: &FilePath,
+        ) -> AppResult<bool> {
+            let files_store = transaction.object_store(FILES_STORE)?;
+            let directories_store = transaction.object_store(DIRECTORIES_STORE)?;
+
+            let file_count = files_store
+                .count()
+                .with_query(Self::key(identifier, file_path))
+                .primitive()?;
+            let directory_count = directories_store
+                .count()
+                .with_query(Self::key(identifier, file_path))
+                .primitive()?;
+
+            let (file_count, directory_count) =
+                futures_lite::future::try_zip(file_count, directory_count).await?;
+
+            Ok(file_count > 0 || directory_count > 0)
+        }
+
         pub fn create_file_watcher(
             &self,
             identifier: &ProjectIdentifier,
@@ -267,17 +358,70 @@ mod wasm {
 
             AsyncJob::new(async move {
                 let transaction = database
-                    .transaction(FILES_STORE)
+                    .transaction([FILES_STORE, DIRECTORIES_STORE])
                     .with_mode(web_sys::IdbTransactionMode::Readwrite)
                     .build()?;
 
-                let store = transaction.object_store(FILES_STORE)?;
-                let key = Self::file_key(&identifier, &file_path);
+                let files_store = transaction.object_store(FILES_STORE)?;
+                let directories_store = transaction.object_store(DIRECTORIES_STORE)?;
 
-                let req = store.put(Uint8Array::from(content)).with_key(key).build()?;
+                let mut directory_requests = Vec::new();
+                if let Some(parent) = file_path.parent() {
+                    for directory in parent.ancestors_inclusive() {
+                        let key = Self::key(&identifier, &directory);
+                        directory_requests
+                            .push(directories_store.put(JsValue::TRUE).with_key(key).build()?);
+                    }
+                }
+
+                let key = Self::key(&identifier, &file_path);
+
+                let req = files_store
+                    .put(Uint8Array::from(content))
+                    .with_key(key)
+                    .build()?;
 
                 transaction.commit().await?;
+                for req in directory_requests {
+                    req.await?;
+                }
                 req.await?;
+
+                Ok(())
+            })
+        }
+
+        pub fn create_directory(
+            &self,
+            identifier: &ProjectIdentifier,
+            path: &FilePath,
+        ) -> AsyncJob<AppResult<()>> {
+            let database = self.database.clone();
+            let identifier = identifier.clone();
+            let path = path.clone();
+
+            AsyncJob::new(async move {
+                let transaction = database
+                    .transaction([FILES_STORE, DIRECTORIES_STORE])
+                    .with_mode(web_sys::IdbTransactionMode::Readwrite)
+                    .build()?;
+
+                if Self::entry_exists(&transaction, &identifier, &path).await? {
+                    return Err(AppError::PathAlreadyExists(path));
+                }
+
+                let store = transaction.object_store(DIRECTORIES_STORE)?;
+
+                let mut requests = Vec::new();
+                for directory in path.ancestors_inclusive() {
+                    let key = Self::key(&identifier, &directory);
+                    requests.push(store.put(JsValue::TRUE).with_key(key).build()?);
+                }
+
+                transaction.commit().await?;
+                for req in requests {
+                    req.await?;
+                }
 
                 Ok(())
             })
@@ -288,7 +432,46 @@ mod wasm {
             identifier: &ProjectIdentifier,
             file_path: &FilePath,
         ) -> AsyncJob<AppResult<()>> {
-            self.save(identifier, file_path, vec![])
+            let database = self.database.clone();
+            let identifier = identifier.clone();
+            let file_path = file_path.clone();
+
+            AsyncJob::new(async move {
+                let transaction = database
+                    .transaction([FILES_STORE, DIRECTORIES_STORE])
+                    .with_mode(web_sys::IdbTransactionMode::Readwrite)
+                    .build()?;
+
+                if Self::entry_exists(&transaction, &identifier, &file_path).await? {
+                    return Err(AppError::PathAlreadyExists(file_path));
+                }
+
+                let files_store = transaction.object_store(FILES_STORE)?;
+                let directories_store = transaction.object_store(DIRECTORIES_STORE)?;
+
+                let mut directory_requests = Vec::new();
+                if let Some(parent) = file_path.parent() {
+                    for directory in parent.ancestors_inclusive() {
+                        let key = Self::key(&identifier, &directory);
+                        directory_requests
+                            .push(directories_store.put(JsValue::TRUE).with_key(key).build()?);
+                    }
+                }
+
+                let key = Self::key(&identifier, &file_path);
+                let req = files_store
+                    .add(Uint8Array::from(Vec::new()))
+                    .with_key(key)
+                    .build()?;
+
+                transaction.commit().await?;
+                for req in directory_requests {
+                    req.await?;
+                }
+                req.await?;
+
+                Ok(())
+            })
         }
 
         pub fn read(
@@ -318,7 +501,7 @@ mod wasm {
                     .build()?;
 
                 let store = transaction.object_store(FILES_STORE)?;
-                let key = Self::file_key(&identifier, &file_path);
+                let key = Self::key(&identifier, &file_path);
 
                 let file: Option<Uint8Array> = store.get(key).primitive()?.await?;
 
@@ -342,32 +525,45 @@ mod wasm {
             })
         }
 
-        pub fn list_files(
+        pub fn list_entries(
             &self,
             identifier: &ProjectIdentifier,
-        ) -> AsyncJob<AppResult<Vec<FilePath>>> {
+        ) -> AsyncJob<AppResult<FileSystemEntries>> {
             let database = self.database.clone();
-            let identifier = identifier.clone();
+            let id = identifier.clone();
 
-            AsyncJob::new(async move {
-                let transaction = database
-                    .transaction(FILES_STORE)
-                    .with_mode(web_sys::IdbTransactionMode::Readonly)
-                    .build()?;
-
-                let store = transaction.object_store(FILES_STORE)?;
-
+            async fn list_file_paths(
+                transaction: &indexed_db_futures::transaction::TransactionRef<'_>,
+                identifier: &ProjectIdentifier,
+                store_name: &str,
+            ) -> AppResult<Vec<FilePath>> {
+                let store = transaction.object_store(store_name)?;
                 let keys = store.get_all_keys().primitive()?.await?;
                 let keys: Vec<Array> = keys.collect::<indexed_db_futures::Result<Vec<Array>>>()?;
 
-                let mut files: Vec<_> = keys
+                let mut paths: Vec<_> = keys
                     .into_iter()
-                    .filter_map(|key| Self::project_file_path_from_key(&identifier, key))
+                    .filter_map(|key| FileSystem::project_file_path_from_key(identifier, key))
+                    .filter(|path| !path.segments().is_empty())
                     .collect();
+                paths.sort_by_key(|path| path.segments().to_vec());
 
-                files.sort_by_key(|file| file.segments().to_vec());
+                Ok(paths)
+            }
 
-                Ok(files)
+            AsyncJob::new(async move {
+                let transaction = database
+                    .transaction([FILES_STORE, DIRECTORIES_STORE])
+                    .with_mode(web_sys::IdbTransactionMode::Readonly)
+                    .build()?;
+
+                let (files, directories) = futures_lite::future::try_zip(
+                    list_file_paths(&transaction, &id, FILES_STORE),
+                    list_file_paths(&transaction, &id, DIRECTORIES_STORE),
+                )
+                .await?;
+
+                Ok(FileSystemEntries { files, directories })
             })
         }
 
@@ -386,7 +582,7 @@ mod wasm {
                     .build()?;
 
                 let store = transaction.object_store(FILES_STORE)?;
-                let key = Self::file_key(&identifier, &file_path);
+                let key = Self::key(&identifier, &file_path);
 
                 let delete_request = store.delete(key).build()?;
                 transaction.commit().await?;
@@ -407,7 +603,7 @@ mod wasm {
                 .build()?;
 
             let store = transaction.object_store(FILES_STORE)?;
-            let key = Self::file_key(&identifier, &file_path);
+            let key = Self::key(&identifier, &file_path);
 
             let file: Option<Uint8Array> = store.get(key).primitive()?.await?;
 

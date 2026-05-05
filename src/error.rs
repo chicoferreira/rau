@@ -41,6 +41,9 @@ pub enum AppError {
     /// The file was not found.
     #[error("file not found: {0:?}")]
     FileNotFound(FilePath),
+    /// The file or directory already exists.
+    #[error("path already exists: {0:?}")]
+    PathAlreadyExists(FilePath),
     /// An image parse error occurred.
     #[error(transparent)]
     ImageParseError(#[from] image::ImageError),
