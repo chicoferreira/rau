@@ -49,6 +49,10 @@ impl FilePath {
         Self::new(segments)
     }
 
+    pub fn file_name(&self) -> Option<&str> {
+        self.segments.last().map(|s| s.as_ref())
+    }
+
     pub fn to_string(&self) -> String {
         self.segments.join("/")
     }

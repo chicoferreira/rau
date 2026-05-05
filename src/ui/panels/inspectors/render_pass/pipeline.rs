@@ -133,7 +133,7 @@ pub fn pipeline_entry_ui(
                     .sense(Sense::click()),
                 pending_events,
                 rename_state,
-                rename_target,
+                rename_target.clone(),
             ))
             .context_menu(|ui| {
                 if ui.button("Rename Pipeline").clicked() {

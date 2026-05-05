@@ -27,7 +27,7 @@ pub fn renameable_label<'a>(
 
             let enter_pressed = ui.input(|i| i.key_pressed(egui::Key::Enter));
             let escape_pressed = ui.input(|i| i.key_pressed(egui::Key::Escape));
-            
+
             if response.lost_focus() && enter_pressed {
                 pending_events.push(StateEvent::ApplyRename(
                     rename_state.target.clone(),
@@ -36,7 +36,7 @@ pub fn renameable_label<'a>(
             } else if escape_pressed || response.lost_focus() {
                 pending_events.push(StateEvent::CancelRename);
             }
-            
+
             response
         } else {
             ui.add(default_label)

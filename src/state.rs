@@ -10,6 +10,7 @@ use crate::{
     project::{
         self, DimensionId, FramePlanId, Project, ResourceId, ResourceKind, RuntimeProject,
         ViewportId,
+        paths::FilePath,
         resource::{
             bindgroup::BindGroupCreationContext, camera::CameraCreationContext, compute_pass,
             frame_plan::FramePlanContext, model::ModelCreationContext, render_pass,
@@ -47,6 +48,8 @@ pub enum StateEvent {
     CancelRename,
     ApplyRename(RenameTarget, String),
     DeleteResource(ResourceId),
+    CreateFile(FilePath),
+    DeleteFile(FilePath),
 }
 
 pub struct State {
@@ -475,9 +478,10 @@ impl State {
                 StateEvent::CreateResource(kind) => {
                     let rename_target = RenameTarget::CreateResource(kind);
                     if let Some(label) = rename_target.get_rename_label(&self.project) {
+                        let current_label = label.to_string();
                         self.rename_state = Some(RenameState {
                             target: rename_target,
-                            current_label: label.to_string(),
+                            current_label,
                         });
                     }
                 }
@@ -486,15 +490,29 @@ impl State {
                     self.runtime_project.unregister(id);
                     self.tracker.push_resource_change(id);
                 }
+                StateEvent::CreateFile(parent_path) => {
+                    let rename_target = RenameTarget::CreateFile(parent_path);
+                    if let Some(label) = rename_target.get_rename_label(&self.project) {
+                        let current_label = label.to_string();
+                        self.rename_state = Some(RenameState {
+                            target: rename_target,
+                            current_label,
+                        });
+                    }
+                }
+                StateEvent::DeleteFile(file_path) => {
+                    self.file_storage.delete_file_in_background(file_path);
+                }
                 StateEvent::OpenViewport(viewport_id) => {
                     self.viewport_tree_pane
                         .add_pane(ViewportPane { viewport_id });
                 }
                 StateEvent::StartRename(rename_target) => {
                     if let Some(current_name) = rename_target.get_rename_label(&self.project) {
+                        let current_label = current_name.to_string();
                         self.rename_state = Some(RenameState {
                             target: rename_target,
-                            current_label: current_name.to_string(),
+                            current_label,
                         });
                     }
                 }
@@ -503,7 +521,7 @@ impl State {
                 }
                 StateEvent::ApplyRename(rename_target, new_name) => {
                     self.rename_state = None;
-                    rename_target.apply(new_name, &mut self.project);
+                    rename_target.apply(new_name, &mut self.project, &mut self.file_storage);
                 }
                 StateEvent::ViewportEvent(viewport_id, viewport_event) => {
                     if let Ok(viewport) = self.project.viewports.get_mut(viewport_id) {

@@ -34,16 +34,21 @@ mod native {
             FileWatcher::new(identifier.project_path().clone())
         }
 
-        pub fn resolve(
-            &self,
-            identifier: &ProjectIdentifier,
-            file_path: &FilePath,
-        ) -> AppResult<PathBuf> {
+        fn resolve(&self, identifier: &ProjectIdentifier, file_path: &FilePath) -> PathBuf {
             let mut path_buf = identifier.project_path().as_path_buf();
             for segment in file_path.segments() {
                 path_buf = path_buf.join(segment);
             }
 
+            path_buf
+        }
+
+        fn resolve_exists(
+            &self,
+            identifier: &ProjectIdentifier,
+            file_path: &FilePath,
+        ) -> AppResult<PathBuf> {
+            let path_buf = self.resolve(identifier, file_path);
             if !path_buf.try_exists()? {
                 return Err(AppError::FileNotFound(file_path.clone()));
             }
@@ -56,7 +61,7 @@ mod native {
             identifier: &ProjectIdentifier,
             file_path: &FilePath,
         ) -> AsyncJob<AppResult<Vec<u8>>> {
-            let path = self.resolve(identifier, file_path);
+            let path = self.resolve_exists(identifier, file_path);
             AsyncJob::new(async move {
                 let path = path?;
                 std::fs::read(&path).map_err(Into::into)
@@ -68,7 +73,7 @@ mod native {
             identifier: &ProjectIdentifier,
             file_path: &FilePath,
         ) -> AsyncJob<AppResult<String>> {
-            let path = self.resolve(identifier, file_path);
+            let path = self.resolve_exists(identifier, file_path);
             AsyncJob::new(async move {
                 let path = path?;
                 std::fs::read_to_string(&path).map_err(Into::into)
@@ -88,6 +93,44 @@ mod native {
                 files.sort_by_key(|file| file.segments().to_vec());
 
                 Ok(files)
+            })
+        }
+
+        pub fn save(
+            &self,
+            identifier: &ProjectIdentifier,
+            file_path: &FilePath,
+            content: Vec<u8>,
+        ) -> AsyncJob<AppResult<()>> {
+            let path = self.resolve(identifier, file_path);
+
+            AsyncJob::new(async move {
+                if let Some(parent) = path.parent() {
+                    std::fs::create_dir_all(parent)?;
+                }
+
+                std::fs::write(path, content).map_err(Into::into)
+            })
+        }
+
+        pub fn create_empty_file(
+            &self,
+            identifier: &ProjectIdentifier,
+            file_path: &FilePath,
+        ) -> AsyncJob<AppResult<()>> {
+            self.save(identifier, file_path, vec![])
+        }
+
+        pub fn delete_file(
+            &self,
+            identifier: &ProjectIdentifier,
+            file_path: &FilePath,
+        ) -> AsyncJob<Result<(), AppError>> {
+            let path = self.resolve_exists(identifier, file_path);
+
+            AsyncJob::new(async move {
+                let path = path?;
+                std::fs::remove_file(path).map_err(Into::into)
             })
         }
     }
@@ -231,13 +274,10 @@ mod wasm {
                 let store = transaction.object_store(FILES_STORE)?;
                 let key = Self::file_key(&identifier, &file_path);
 
-                store
-                    .put(Uint8Array::from(content))
-                    .with_key(key)
-                    .build()?
-                    .await?;
+                let req = store.put(Uint8Array::from(content)).with_key(key).build()?;
 
                 transaction.commit().await?;
+                req.await?;
 
                 Ok(())
             })
@@ -328,6 +368,31 @@ mod wasm {
                 files.sort_by_key(|file| file.segments().to_vec());
 
                 Ok(files)
+            })
+        }
+
+        pub fn delete_file(
+            &self,
+            identifier: &ProjectIdentifier,
+            file_path: &FilePath,
+        ) -> AsyncJob<Result<(), AppError>> {
+            let database = self.database.clone();
+            let identifier = identifier.clone();
+            let file_path = file_path.clone();
+            AsyncJob::new(async move {
+                let transaction = database
+                    .transaction(FILES_STORE)
+                    .with_mode(web_sys::IdbTransactionMode::Readwrite)
+                    .build()?;
+
+                let store = transaction.object_store(FILES_STORE)?;
+                let key = Self::file_key(&identifier, &file_path);
+
+                let delete_request = store.delete(key).build()?;
+                transaction.commit().await?;
+                delete_request.await?;
+
+                Ok(())
             })
         }
 

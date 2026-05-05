@@ -235,4 +235,8 @@ impl SyncTracker {
     pub(crate) fn push_file_changes(&mut self, paths: Vec<FilePath>) {
         self.file_changes.extend(paths);
     }
+
+    pub(crate) fn push_file_change(&mut self, path: FilePath) {
+        self.file_changes.push(path);
+    }
 }

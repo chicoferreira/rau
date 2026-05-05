@@ -19,6 +19,27 @@ pub struct TreeNode<'a, T> {
     is_folder: bool,
 }
 
+pub fn pending_create_node<T>(
+    builder: &mut TreeViewBuilder<'_, T>,
+    pending_events: &mut Vec<StateEvent>,
+    rename_state: &mut Option<RenameState>,
+    tree_id: T,
+    rename_target: RenameTarget,
+) where
+    T: Clone + Eq + Hash,
+{
+    let current_label = match rename_state.as_ref() {
+        Some(rename_state) if rename_state.target == rename_target => {
+            rename_state.current_label.clone()
+        }
+        _ => return,
+    };
+
+    TreeNode::new(tree_id, &current_label)
+        .with_rename_target_only(rename_target)
+        .build_to(builder, pending_events, rename_state);
+}
+
 enum ContextMenuEntity<'a> {
     Separator,
     Action { label: &'a str, event: StateEvent },

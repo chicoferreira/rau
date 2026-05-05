@@ -1,6 +1,10 @@
-use crate::project::{
-    BindGroupId, CameraId, ComputePassId, DimensionId, ModelId, Project, RenderPassId, ResourceId,
-    ResourceKind, SamplerId, ShaderId, TextureId, TextureViewId, UniformId, ViewportId,
+use crate::{
+    file_storage::FileStorage,
+    project::{
+        BindGroupId, CameraId, ComputePassId, DimensionId, ModelId, Project, RenderPassId,
+        ResourceId, ResourceKind, SamplerId, ShaderId, TextureId, TextureViewId, UniformId,
+        ViewportId, paths::FilePath,
+    },
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -9,9 +13,11 @@ pub struct RenameState {
     pub current_label: String,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum RenameTarget {
     CreateResource(ResourceKind),
+    CreateFile(FilePath),
+    File(FilePath),
     Uniform(UniformId),
     BindGroup(BindGroupId),
     Viewport(ViewportId),
@@ -30,41 +36,53 @@ pub enum RenameTarget {
 
 impl RenameTarget {
     /// Returns the label to use as the starting point for a rename operation.
-    pub fn get_rename_label<'a>(&self, project: &'a Project) -> Option<&'a str> {
-        match *self {
+    pub fn get_rename_label<'a>(&'a self, project: &'a Project) -> Option<&'a str> {
+        match self {
+            RenameTarget::CreateFile(_) => Some(""),
+            RenameTarget::File(file_path) => file_path.file_name(),
             RenameTarget::CreateResource(_) => Some(""),
-            RenameTarget::BindGroup(id) => project.label(id),
-            RenameTarget::Viewport(id) => project.label(id),
-            RenameTarget::Shader(id) => project.label(id),
-            RenameTarget::Camera(id) => project.label(id),
-            RenameTarget::Dimension(id) => project.label(id),
-            RenameTarget::Sampler(id) => project.label(id),
-            RenameTarget::Texture(id) => project.label(id),
-            RenameTarget::TextureView(id) => project.label(id),
-            RenameTarget::Uniform(id) => project.label(id),
-            RenameTarget::Model(id) => project.label(id),
-            RenameTarget::RenderPass(id) => project.label(id),
-            RenameTarget::ComputePass(id) => project.label(id),
+            RenameTarget::BindGroup(id) => project.label(*id),
+            RenameTarget::Viewport(id) => project.label(*id),
+            RenameTarget::Shader(id) => project.label(*id),
+            RenameTarget::Camera(id) => project.label(*id),
+            RenameTarget::Dimension(id) => project.label(*id),
+            RenameTarget::Sampler(id) => project.label(*id),
+            RenameTarget::Texture(id) => project.label(*id),
+            RenameTarget::TextureView(id) => project.label(*id),
+            RenameTarget::Uniform(id) => project.label(*id),
+            RenameTarget::Model(id) => project.label(*id),
+            RenameTarget::RenderPass(id) => project.label(*id),
+            RenameTarget::ComputePass(id) => project.label(*id),
             RenameTarget::UniformField(id, index) => project
                 .uniforms
-                .get(id)
+                .get(*id)
                 .ok()
-                .and_then(|uniform| uniform.get_field(index))
+                .and_then(|uniform| uniform.get_field(*index))
                 .map(|field| field.label()),
-            RenameTarget::RenderPipeline(render_pass_id, index) => project
+            RenameTarget::RenderPipeline(id, index) => project
                 .render_passes
-                .get(render_pass_id)
+                .get(*id)
                 .ok()
-                .and_then(|render_pass| render_pass.pipelines.get(index))
+                .and_then(|render_pass| render_pass.pipelines.get(*index))
                 .map(|pipeline| pipeline.label.as_str()),
         }
     }
 
-    pub fn apply(self, new_name: String, project: &mut Project) {
+    pub fn apply(self, new_name: String, project: &mut Project, file_storage: &mut FileStorage) {
         match self {
             RenameTarget::CreateResource(resource_kind) => {
                 if !new_name.is_empty() {
                     project.register_with_label(resource_kind, new_name);
+                }
+            }
+            RenameTarget::CreateFile(file_path) => {
+                if !new_name.is_empty() {
+                    file_storage.create_file_in_background(file_path, new_name);
+                }
+            }
+            RenameTarget::File(file_path) => {
+                if !new_name.is_empty() {
+                    file_storage.rename_file_in_background(file_path, new_name);
                 }
             }
             RenameTarget::Uniform(id) => {

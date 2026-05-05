@@ -22,6 +22,13 @@ enum FileStorageTask {
     ListFiles {
         task: AsyncJob<AppResult<Vec<FilePath>>>,
     },
+    CreateFile {
+        task: AsyncJob<AppResult<()>>,
+    },
+    DeleteFile {
+        path: FilePath,
+        task: AsyncJob<AppResult<()>>,
+    },
 }
 
 impl FileStorage {
@@ -75,6 +82,21 @@ impl FileStorage {
         self.file_system.read_to_string(&self.project_id, path)
     }
 
+    pub fn create_file_in_background(&mut self, parent_path: FilePath, new_name: String) {
+        let file_path = parent_path.join(new_name);
+
+        let task = self
+            .file_system
+            .create_empty_file(&self.project_id, &file_path);
+
+        let task = FileStorageTask::CreateFile { task };
+        self.current_tasks.push(task);
+    }
+
+    pub fn rename_file_in_background(&self, _file_path: FilePath, _new_name: String) {
+        todo!()
+    }
+
     pub fn tick(&mut self, tracker: &mut SyncTracker) {
         // Handle file watcher events
         while let Some(result) = self.file_watcher.try_next() {
@@ -87,22 +109,49 @@ impl FileStorage {
             }
         }
 
-        // Poll our pending tasks
+        let mut refresh_file_system = false;
+
         self.current_tasks.retain_mut(|task| match task {
-            FileStorageTask::ListFiles { task } => match task.try_resolve() {
-                Poll::Ready(result) => {
-                    match result {
-                        Ok(mut files) => {
-                            files.sort_by_key(|file| file.segments().to_vec());
-                            self.cached_file_tree = Some(DirNode::from_files(&files));
-                            self.cached_files = Some(files);
-                        }
-                        Err(e) => log::error!("Failed to list files: {}", e),
-                    }
-                    false
-                }
-                Poll::Pending => true,
-            },
+            FileStorageTask::ListFiles { task } => {
+                consume_if_ready(task, "list files", |mut files| {
+                    files.sort_by_key(|file| file.segments().to_vec());
+                    self.cached_file_tree = Some(DirNode::from_files(&files));
+                    self.cached_files = Some(files);
+                })
+            }
+            FileStorageTask::CreateFile { task } => {
+                consume_if_ready(task, "create file", |_| refresh_file_system = true)
+            }
+            FileStorageTask::DeleteFile { task, path } => {
+                consume_if_ready(task, "delete file", |_| {
+                    refresh_file_system = true;
+                    tracker.push_file_change(path.clone());
+                })
+            }
         });
+
+        if refresh_file_system && !self.has_list_file_files_pending() {
+            self.refresh_file_system();
+        }
+    }
+
+    pub fn delete_file_in_background(&mut self, file_path: FilePath) {
+        self.current_tasks.push(FileStorageTask::DeleteFile {
+            task: self.file_system.delete_file(&self.project_id, &file_path),
+            path: file_path,
+        });
+    }
+}
+
+fn consume_if_ready<T>(job: &mut AsyncJob<AppResult<T>>, name: &str, f: impl FnOnce(T)) -> bool {
+    match job.try_resolve() {
+        Poll::Ready(result) => {
+            match result {
+                Ok(value) => f(value),
+                Err(e) => log::error!("Failed to {name}: {}", e),
+            }
+            false
+        }
+        Poll::Pending => true,
     }
 }
