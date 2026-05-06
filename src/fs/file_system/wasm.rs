@@ -126,13 +126,14 @@ impl FileSystem {
             .map_err(Into::into)
     }
 
-    async fn entry_exists_in_transaction(
-        transaction: &TransactionRef<'_>,
+    async fn entry_exists(
+        database: &Database,
         identifier: &ProjectIdentifier,
         file_path: &FilePath,
     ) -> AppResult<bool> {
-        let files_store = Self::files_store(transaction)?;
-        let directories_store = Self::directories_store(transaction)?;
+        let transaction = Self::entries_transaction(database, TransactionMode::Readonly)?;
+        let files_store = Self::files_store(&transaction)?;
+        let directories_store = Self::directories_store(&transaction)?;
 
         let file_count = files_store
             .count()
@@ -174,20 +175,6 @@ impl FileSystem {
         Self::ensure_directories(directories_store, identifier, &parent)
     }
 
-    async fn read_bytes_from_store(
-        store: ObjectStore<'_>,
-        identifier: &ProjectIdentifier,
-        file_path: &FilePath,
-    ) -> AppResult<Vec<u8>> {
-        let key = Self::key(identifier, file_path);
-        let file: Option<Uint8Array> = store.get(key).primitive()?.await?;
-
-        match file {
-            Some(data) => Ok(data.to_vec()),
-            None => Err(AppError::FileNotFound(file_path.clone())),
-        }
-    }
-
     async fn list_store_paths(
         identifier: &ProjectIdentifier,
         store: ObjectStore<'_>,
@@ -223,15 +210,19 @@ impl FileSystem {
     }
 
     async fn file_entries_under_path(
+        database: &Database,
         identifier: &ProjectIdentifier,
         path: &FilePath,
-        store: ObjectStore<'_>,
     ) -> AppResult<Vec<(Array, FilePath, Vec<u8>)>> {
+        let transaction = Self::files_transaction(database, TransactionMode::Readonly)?;
+        let store = Self::files_store(&transaction)?;
         let keys = store
             .get_all_keys()
             .primitive()?
             .await?
             .collect::<indexed_db_futures::Result<Vec<Array>>>()?;
+        drop(transaction);
+
         let mut entries = Vec::new();
 
         for key in keys {
@@ -241,12 +232,9 @@ impl FileSystem {
                 continue;
             };
 
-            let file: Option<Uint8Array> = store.get(key.clone()).primitive()?.await?;
-            let Some(file) = file else {
-                return Err(AppError::FileNotFound(file_path));
-            };
-
-            entries.push((key, file_path, file.to_vec()));
+            let bytes =
+                Self::read_bytes(database.clone(), identifier.clone(), file_path.clone()).await?;
+            entries.push((key, file_path, bytes));
         }
 
         Ok(entries)
@@ -259,7 +247,13 @@ impl FileSystem {
     ) -> AppResult<Vec<u8>> {
         let transaction = Self::files_transaction(&database, TransactionMode::Readonly)?;
         let store = Self::files_store(&transaction)?;
-        Self::read_bytes_from_store(store, &identifier, &file_path).await
+        let key = Self::key(&identifier, &file_path);
+        let file: Option<Uint8Array> = store.get(key).primitive()?.await?;
+
+        match file {
+            Some(data) => Ok(data.to_vec()),
+            None => Err(AppError::FileNotFound(file_path)),
+        }
     }
 }
 
@@ -308,11 +302,11 @@ impl FileSystemTrait for FileSystem {
         let path = path.clone();
 
         AsyncJob::new(async move {
-            let transaction = Self::entries_transaction(&database, TransactionMode::Readwrite)?;
-            if Self::entry_exists_in_transaction(&transaction, &id, &path).await? {
+            if Self::entry_exists(&database, &id, &path).await? {
                 return Err(AppError::PathAlreadyExists(path));
             }
 
+            let transaction = Self::entries_transaction(&database, TransactionMode::Readwrite)?;
             let directories_store = Self::directories_store(&transaction)?;
 
             Self::ensure_directories(&directories_store, &id, &path)?;
@@ -329,11 +323,11 @@ impl FileSystemTrait for FileSystem {
         let path = path.clone();
 
         AsyncJob::new(async move {
-            let transaction = Self::entries_transaction(&database, TransactionMode::Readwrite)?;
-            if Self::entry_exists_in_transaction(&transaction, &id, &path).await? {
+            if Self::entry_exists(&database, &id, &path).await? {
                 return Err(AppError::PathAlreadyExists(path));
             }
 
+            let transaction = Self::entries_transaction(&database, TransactionMode::Readwrite)?;
             let files_store = Self::files_store(&transaction)?;
             let directories_store = Self::directories_store(&transaction)?;
 
@@ -417,10 +411,6 @@ impl FileSystemTrait for FileSystem {
 
         AsyncJob::new(async move {
             let transaction = Self::entries_transaction(&database, TransactionMode::Readonly)?;
-            if !Self::entry_exists_in_transaction(&transaction, &id, &path).await? {
-                return Err(AppError::FileNotFound(path));
-            }
-
             let files_store = Self::files_store(&transaction)?;
             let directories_store = Self::directories_store(&transaction)?;
 
@@ -429,8 +419,6 @@ impl FileSystemTrait for FileSystem {
                 Self::keyed_paths_under_path(&id, &path, directories_store),
             )
             .await?;
-
-            drop(transaction);
 
             let transaction = Self::entries_transaction(&database, TransactionMode::Readwrite)?;
             let files_store = Self::files_store(&transaction)?;
@@ -474,17 +462,12 @@ impl FileSystemTrait for FileSystem {
                 return Err(AppError::PathAlreadyExists(new));
             }
 
-            let transaction = Self::entries_transaction(&database, TransactionMode::Readonly)?;
-
-            if Self::entry_exists_in_transaction(&transaction, &id, &new).await? {
+            if Self::entry_exists(&database, &id, &new).await? {
                 return Err(AppError::PathAlreadyExists(new));
             }
 
-            let files_store = Self::files_store(&transaction)?;
-            match Self::read_bytes_from_store(files_store, &id, &old).await {
+            match Self::read_bytes(database.clone(), id.clone(), old.clone()).await {
                 Ok(bytes) => {
-                    drop(transaction);
-
                     let transaction =
                         Self::entries_transaction(&database, TransactionMode::Readwrite)?;
                     let files_store = Self::files_store(&transaction)?;
@@ -506,18 +489,17 @@ impl FileSystemTrait for FileSystem {
                 Err(error) => return Err(error),
             }
 
-            if !Self::entry_exists_in_transaction(&transaction, &id, &old).await? {
+            if !Self::entry_exists(&database, &id, &old).await? {
                 return Err(AppError::FileNotFound(old));
             }
 
-            let files_store = Self::files_store(&transaction)?;
+            let transaction = Self::entries_transaction(&database, TransactionMode::Readonly)?;
             let directories_store = Self::directories_store(&transaction)?;
 
-            let (file_entries, directory_entries) = futures_lite::future::try_zip(
-                Self::file_entries_under_path(&id, &old, files_store),
-                Self::keyed_paths_under_path(&id, &old, directories_store),
-            )
-            .await?;
+            let directory_entries =
+                Self::keyed_paths_under_path(&id, &old, directories_store).await?;
+            drop(transaction);
+            let file_entries = Self::file_entries_under_path(&database, &id, &old).await?;
 
             let mut changed_paths =
                 Vec::with_capacity((file_entries.len() + directory_entries.len()) * 2);
@@ -548,8 +530,6 @@ impl FileSystemTrait for FileSystem {
                 changed_paths.push(moved_path.clone());
                 moved_files.push((key, moved_path, bytes));
             }
-
-            drop(transaction);
 
             let transaction = Self::entries_transaction(&database, TransactionMode::Readwrite)?;
             let files_store = Self::files_store(&transaction)?;
