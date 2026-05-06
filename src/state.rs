@@ -52,6 +52,10 @@ pub enum StateEvent {
     CreateFolder(FilePath),
     DeleteFile(FilePath),
     DeleteFolder(FilePath),
+    MoveFileSystemEntry {
+        old_path: FilePath,
+        new_path: FilePath,
+    },
 }
 
 pub struct State {
@@ -517,6 +521,10 @@ impl State {
                 }
                 StateEvent::DeleteFolder(file_path) => {
                     self.file_storage.delete_folder_in_background(file_path);
+                }
+                StateEvent::MoveFileSystemEntry { old_path, new_path } => {
+                    self.file_storage
+                        .move_path_in_background(old_path, new_path);
                 }
                 StateEvent::OpenViewport(viewport_id) => {
                     self.viewport_tree_pane

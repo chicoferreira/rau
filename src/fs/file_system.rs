@@ -203,27 +203,58 @@ mod native {
             })
         }
 
-        pub fn rename_file(
+        pub fn move_path(
             &self,
             identifier: &ProjectIdentifier,
             old_path: &FilePath,
             new_path: &FilePath,
-        ) -> AsyncJob<AppResult<()>> {
+        ) -> AsyncJob<AppResult<Vec<FilePath>>> {
+            let root = identifier.project_path().as_path_buf();
             let old_resolved_path = self.resolve_exists(identifier, old_path);
             let new_resolved_path = self.resolve(identifier, new_path);
+            let old_path = old_path.clone();
             let new_path = new_path.clone();
 
             AsyncJob::new(async move {
+                if old_path == new_path {
+                    return Ok(Vec::new());
+                }
+
                 let old_resolved_path = old_resolved_path?;
                 if new_resolved_path.try_exists()? {
                     return Err(AppError::PathAlreadyExists(new_path));
+                }
+
+                let mut changed_paths = Vec::new();
+                if old_resolved_path.is_dir() {
+                    if new_path.starts_with(&old_path) {
+                        return Err(AppError::PathAlreadyExists(new_path));
+                    }
+
+                    let mut files = Vec::new();
+                    let mut directories = vec![old_path.clone()];
+                    collect_entries(&root, &old_resolved_path, &mut files, &mut directories)?;
+
+                    changed_paths.extend(directories.iter().cloned());
+                    changed_paths.extend(files.iter().cloned());
+                    changed_paths.extend(
+                        directories
+                            .iter()
+                            .chain(files.iter())
+                            .filter_map(|path| path.replace_prefix(&old_path, &new_path)),
+                    );
+                } else {
+                    changed_paths.push(old_path);
+                    changed_paths.push(new_path.clone());
                 }
 
                 if let Some(parent) = new_resolved_path.parent() {
                     std::fs::create_dir_all(parent)?;
                 }
 
-                std::fs::rename(old_resolved_path, new_resolved_path).map_err(Into::into)
+                std::fs::rename(old_resolved_path, new_resolved_path)?;
+
+                Ok(changed_paths)
             })
         }
     }
@@ -260,8 +291,13 @@ mod native {
 #[cfg(target_arch = "wasm32")]
 mod wasm {
     use indexed_db_futures::{
-        Build, BuildPrimitive, database::Database, future::BasicRequest, object_store::ObjectStore,
-        prelude::QuerySource, typed_array::Uint8Array,
+        Build, BuildPrimitive,
+        database::Database,
+        future::BasicRequest,
+        object_store::ObjectStore,
+        prelude::QuerySource,
+        transaction::{Transaction, TransactionMode, TransactionRef},
+        typed_array::Uint8Array,
     };
     use wasm_bindgen::JsValue;
     use web_sys::js_sys::Array;
@@ -361,18 +397,47 @@ mod wasm {
             Some(FilePath::new(segments))
         }
 
-        async fn entry_exists(
+        fn files_transaction(
             database: &Database,
+            mode: TransactionMode,
+        ) -> AppResult<Transaction<'_>> {
+            database
+                .transaction(FILES_STORE)
+                .with_mode(mode)
+                .build()
+                .map_err(Into::into)
+        }
+
+        fn entries_transaction(
+            database: &Database,
+            mode: TransactionMode,
+        ) -> AppResult<Transaction<'_>> {
+            database
+                .transaction([FILES_STORE, DIRECTORIES_STORE])
+                .with_mode(mode)
+                .build()
+                .map_err(Into::into)
+        }
+
+        fn files_store<'a>(transaction: &'a TransactionRef<'a>) -> AppResult<ObjectStore<'a>> {
+            transaction.object_store(FILES_STORE).map_err(Into::into)
+        }
+
+        fn directories_store<'a>(
+            transaction: &'a TransactionRef<'a>,
+        ) -> AppResult<ObjectStore<'a>> {
+            transaction
+                .object_store(DIRECTORIES_STORE)
+                .map_err(Into::into)
+        }
+
+        async fn entry_exists_in_transaction(
+            transaction: &TransactionRef<'_>,
             identifier: &ProjectIdentifier,
             file_path: &FilePath,
         ) -> AppResult<bool> {
-            let transaction = database
-                .transaction([FILES_STORE, DIRECTORIES_STORE])
-                .with_mode(web_sys::IdbTransactionMode::Readonly)
-                .build()?;
-
-            let files_store = transaction.object_store(FILES_STORE)?;
-            let directories_store = transaction.object_store(DIRECTORIES_STORE)?;
+            let files_store = Self::files_store(transaction)?;
+            let directories_store = Self::directories_store(transaction)?;
 
             let file_count = files_store
                 .count()
@@ -414,6 +479,84 @@ mod wasm {
             Self::ensure_directories(directories_store, identifier, &parent)
         }
 
+        async fn read_bytes_from_store(
+            store: ObjectStore<'_>,
+            identifier: &ProjectIdentifier,
+            file_path: &FilePath,
+        ) -> AppResult<Vec<u8>> {
+            let key = Self::key(identifier, file_path);
+            let file: Option<Uint8Array> = store.get(key).primitive()?.await?;
+
+            match file {
+                Some(data) => Ok(data.to_vec()),
+                None => Err(AppError::FileNotFound(file_path.clone())),
+            }
+        }
+
+        async fn list_store_paths(
+            identifier: &ProjectIdentifier,
+            store: ObjectStore<'_>,
+        ) -> AppResult<Vec<FilePath>> {
+            Ok(store
+                .get_all_keys()
+                .primitive()?
+                .await?
+                .collect::<indexed_db_futures::Result<Vec<Array>>>()?
+                .into_iter()
+                .filter_map(|key| Self::project_file_path_from_key(identifier, key))
+                .filter(|path| !path.segments().is_empty())
+                .collect())
+        }
+
+        async fn keyed_paths_under_path(
+            identifier: &ProjectIdentifier,
+            path: &FilePath,
+            store: ObjectStore<'_>,
+        ) -> AppResult<Vec<(Array, FilePath)>> {
+            Ok(store
+                .get_all_keys()
+                .primitive()?
+                .await?
+                .collect::<indexed_db_futures::Result<Vec<Array>>>()?
+                .into_iter()
+                .filter_map(|key| {
+                    Self::project_file_path_from_key(identifier, key.clone())
+                        .filter(|file_path| file_path.starts_with(path))
+                        .map(|file_path| (key, file_path))
+                })
+                .collect())
+        }
+
+        async fn file_entries_under_path(
+            identifier: &ProjectIdentifier,
+            path: &FilePath,
+            store: ObjectStore<'_>,
+        ) -> AppResult<Vec<(Array, FilePath, Vec<u8>)>> {
+            let keys = store
+                .get_all_keys()
+                .primitive()?
+                .await?
+                .collect::<indexed_db_futures::Result<Vec<Array>>>()?;
+            let mut entries = Vec::new();
+
+            for key in keys {
+                let Some(file_path) = Self::project_file_path_from_key(identifier, key.clone())
+                    .filter(|file_path| file_path.starts_with(path))
+                else {
+                    continue;
+                };
+
+                let file: Option<Uint8Array> = store.get(key.clone()).primitive()?.await?;
+                let Some(file) = file else {
+                    return Err(AppError::FileNotFound(file_path));
+                };
+
+                entries.push((key, file_path, file.to_vec()));
+            }
+
+            Ok(entries)
+        }
+
         pub fn create_file_watcher(
             &self,
             identifier: &ProjectIdentifier,
@@ -433,13 +576,9 @@ mod wasm {
             let file_path = file_path.clone();
 
             AsyncJob::new(async move {
-                let transaction = database
-                    .transaction([FILES_STORE, DIRECTORIES_STORE])
-                    .with_mode(web_sys::IdbTransactionMode::Readwrite)
-                    .build()?;
-
-                let files_store = transaction.object_store(FILES_STORE)?;
-                let directories_store = transaction.object_store(DIRECTORIES_STORE)?;
+                let transaction = Self::entries_transaction(&database, TransactionMode::Readwrite)?;
+                let files_store = Self::files_store(&transaction)?;
+                let directories_store = Self::directories_store(&transaction)?;
 
                 Self::ensure_parent_directories(&directories_store, &identifier, &file_path)?;
 
@@ -466,16 +605,12 @@ mod wasm {
             let path = path.clone();
 
             AsyncJob::new(async move {
-                if Self::entry_exists(&database, &identifier, &path).await? {
+                let transaction = Self::entries_transaction(&database, TransactionMode::Readwrite)?;
+                if Self::entry_exists_in_transaction(&transaction, &identifier, &path).await? {
                     return Err(AppError::PathAlreadyExists(path));
                 }
 
-                let transaction = database
-                    .transaction([FILES_STORE, DIRECTORIES_STORE])
-                    .with_mode(web_sys::IdbTransactionMode::Readwrite)
-                    .build()?;
-
-                let directories_store = transaction.object_store(DIRECTORIES_STORE)?;
+                let directories_store = Self::directories_store(&transaction)?;
 
                 Self::ensure_directories(&directories_store, &identifier, &path)?;
 
@@ -495,17 +630,13 @@ mod wasm {
             let file_path = file_path.clone();
 
             AsyncJob::new(async move {
-                if Self::entry_exists(&database, &identifier, &file_path).await? {
+                let transaction = Self::entries_transaction(&database, TransactionMode::Readwrite)?;
+                if Self::entry_exists_in_transaction(&transaction, &identifier, &file_path).await? {
                     return Err(AppError::PathAlreadyExists(file_path));
                 }
 
-                let transaction = database
-                    .transaction([FILES_STORE, DIRECTORIES_STORE])
-                    .with_mode(web_sys::IdbTransactionMode::Readwrite)
-                    .build()?;
-
-                let files_store = transaction.object_store(FILES_STORE)?;
-                let directories_store = transaction.object_store(DIRECTORIES_STORE)?;
+                let files_store = Self::files_store(&transaction)?;
+                let directories_store = Self::directories_store(&transaction)?;
 
                 Self::ensure_parent_directories(&directories_store, &identifier, &file_path)?;
 
@@ -556,33 +687,14 @@ mod wasm {
             let database = self.database.clone();
             let id = identifier.clone();
 
-            async fn list_file_paths(
-                transaction: &indexed_db_futures::transaction::TransactionRef<'_>,
-                identifier: &ProjectIdentifier,
-                store_name: &str,
-            ) -> AppResult<Vec<FilePath>> {
-                let store = transaction.object_store(store_name)?;
-                let keys = store.get_all_keys().primitive()?.await?;
-                let keys: Vec<Array> = keys.collect::<indexed_db_futures::Result<Vec<Array>>>()?;
-
-                let paths: Vec<_> = keys
-                    .into_iter()
-                    .filter_map(|key| FileSystem::project_file_path_from_key(identifier, key))
-                    .filter(|path| !path.segments().is_empty())
-                    .collect();
-
-                Ok(paths)
-            }
-
             AsyncJob::new(async move {
-                let transaction = database
-                    .transaction([FILES_STORE, DIRECTORIES_STORE])
-                    .with_mode(web_sys::IdbTransactionMode::Readonly)
-                    .build()?;
+                let transaction = Self::entries_transaction(&database, TransactionMode::Readonly)?;
+                let files_store = Self::files_store(&transaction)?;
+                let directories_store = Self::directories_store(&transaction)?;
 
                 let (files, directories) = futures_lite::future::try_zip(
-                    list_file_paths(&transaction, &id, FILES_STORE),
-                    list_file_paths(&transaction, &id, DIRECTORIES_STORE),
+                    Self::list_store_paths(&id, files_store),
+                    Self::list_store_paths(&id, directories_store),
                 )
                 .await?;
 
@@ -599,12 +711,8 @@ mod wasm {
             let identifier = identifier.clone();
             let file_path = file_path.clone();
             AsyncJob::new(async move {
-                let transaction = database
-                    .transaction(FILES_STORE)
-                    .with_mode(web_sys::IdbTransactionMode::Readwrite)
-                    .build()?;
-
-                let store = transaction.object_store(FILES_STORE)?;
+                let transaction = Self::files_transaction(&database, TransactionMode::Readwrite)?;
+                let store = Self::files_store(&transaction)?;
                 let key = Self::key(&identifier, &file_path);
 
                 store.delete(key).build()?;
@@ -623,62 +731,36 @@ mod wasm {
             let identifier = identifier.clone();
             let path = path.clone();
 
-            async fn get_entries_under_path(
-                identifier: &ProjectIdentifier,
-                path: &FilePath,
-                store: ObjectStore<'_>,
-            ) -> AppResult<(Vec<Array>, Vec<FilePath>)> {
-                Ok(store
-                    .get_all_keys()
-                    .primitive()?
-                    .await?
-                    .collect::<indexed_db_futures::Result<Vec<Array>>>()?
-                    .into_iter()
-                    .filter_map(|key| {
-                        FileSystem::project_file_path_from_key(&identifier, key.clone())
-                            .filter(|file_path| file_path.starts_with(&path))
-                            .map(|file_path| (key, file_path))
-                    })
-                    .collect())
-            }
-
             AsyncJob::new(async move {
-                if !Self::entry_exists(&database, &identifier, &path).await? {
+                let transaction = Self::entries_transaction(&database, TransactionMode::Readonly)?;
+                if !Self::entry_exists_in_transaction(&transaction, &identifier, &path).await? {
                     return Err(AppError::FileNotFound(path));
                 }
 
-                let transaction = database
-                    .transaction([FILES_STORE, DIRECTORIES_STORE])
-                    .with_mode(web_sys::IdbTransactionMode::Readonly)
-                    .build()?;
+                let files_store = Self::files_store(&transaction)?;
+                let directories_store = Self::directories_store(&transaction)?;
 
-                let files_store = transaction.object_store(FILES_STORE)?;
-                let directories_store = transaction.object_store(DIRECTORIES_STORE)?;
+                let (file_entries, directory_entries) = futures_lite::future::try_zip(
+                    Self::keyed_paths_under_path(&identifier, &path, files_store),
+                    Self::keyed_paths_under_path(&identifier, &path, directories_store),
+                )
+                .await?;
 
-                let ((file_keys, file_paths), (directory_keys, directory_paths)) =
-                    futures_lite::future::try_zip(
-                        get_entries_under_path(&identifier, &path, files_store),
-                        get_entries_under_path(&identifier, &path, directories_store),
-                    )
-                    .await?;
+                drop(transaction);
 
-                let transaction = database
-                    .transaction([FILES_STORE, DIRECTORIES_STORE])
-                    .with_mode(web_sys::IdbTransactionMode::Readwrite)
-                    .build()?;
-
-                let files_store = transaction.object_store(FILES_STORE)?;
-                let directories_store = transaction.object_store(DIRECTORIES_STORE)?;
+                let transaction = Self::entries_transaction(&database, TransactionMode::Readwrite)?;
+                let files_store = Self::files_store(&transaction)?;
+                let directories_store = Self::directories_store(&transaction)?;
 
                 let mut changed_paths =
-                    Vec::with_capacity(file_paths.len() + directory_paths.len());
-                changed_paths.extend(file_paths);
-                changed_paths.extend(directory_paths);
+                    Vec::with_capacity(file_entries.len() + directory_entries.len());
+                changed_paths.extend(file_entries.iter().map(|(_, path)| path.clone()));
+                changed_paths.extend(directory_entries.iter().map(|(_, path)| path.clone()));
 
-                for key in file_keys {
+                for (key, _) in file_entries {
                     files_store.delete(key).build()?;
                 }
-                for key in directory_keys {
+                for (key, _) in directory_entries {
                     directories_store.delete(key).build()?;
                 }
 
@@ -688,47 +770,137 @@ mod wasm {
             })
         }
 
-        pub fn rename_file(
+        pub fn move_path(
             &self,
             identifier: &ProjectIdentifier,
             old_path: &FilePath,
             new_path: &FilePath,
-        ) -> AsyncJob<AppResult<()>> {
+        ) -> AsyncJob<AppResult<Vec<FilePath>>> {
             let database = self.database.clone();
             let identifier = identifier.clone();
             let old_path = old_path.clone();
             let new_path = new_path.clone();
 
             AsyncJob::new(async move {
-                let bytes =
-                    Self::read_bytes(database.clone(), identifier.clone(), old_path.clone())
-                        .await?;
+                if old_path == new_path {
+                    return Ok(Vec::new());
+                }
 
-                if Self::entry_exists(&database, &identifier, &new_path).await? {
+                if new_path.starts_with(&old_path) {
                     return Err(AppError::PathAlreadyExists(new_path));
                 }
 
-                let transaction = database
-                    .transaction([FILES_STORE, DIRECTORIES_STORE])
-                    .with_mode(web_sys::IdbTransactionMode::Readwrite)
-                    .build()?;
+                let transaction = Self::entries_transaction(&database, TransactionMode::Readonly)?;
 
-                let files_store = transaction.object_store(FILES_STORE)?;
-                let directories_store = transaction.object_store(DIRECTORIES_STORE)?;
+                if Self::entry_exists_in_transaction(&transaction, &identifier, &new_path).await? {
+                    return Err(AppError::PathAlreadyExists(new_path));
+                }
+
+                let files_store = Self::files_store(&transaction)?;
+                match Self::read_bytes_from_store(files_store, &identifier, &old_path).await {
+                    Ok(bytes) => {
+                        drop(transaction);
+
+                        let transaction =
+                            Self::entries_transaction(&database, TransactionMode::Readwrite)?;
+                        let files_store = Self::files_store(&transaction)?;
+                        let directories_store = Self::directories_store(&transaction)?;
+
+                        Self::ensure_parent_directories(
+                            &directories_store,
+                            &identifier,
+                            &new_path,
+                        )?;
+
+                        files_store
+                            .add(Uint8Array::from(bytes))
+                            .with_key(Self::key(&identifier, &new_path))
+                            .build()?;
+                        files_store
+                            .delete(Self::key(&identifier, &old_path))
+                            .build()?;
+
+                        transaction.commit().await?;
+
+                        return Ok(vec![old_path, new_path]);
+                    }
+                    Err(AppError::FileNotFound(_)) => {}
+                    Err(error) => return Err(error),
+                }
+
+                if !Self::entry_exists_in_transaction(&transaction, &identifier, &old_path).await? {
+                    return Err(AppError::FileNotFound(old_path));
+                }
+
+                let files_store = Self::files_store(&transaction)?;
+                let directories_store = Self::directories_store(&transaction)?;
+
+                let (file_entries, directory_entries) = futures_lite::future::try_zip(
+                    Self::file_entries_under_path(&identifier, &old_path, files_store),
+                    Self::keyed_paths_under_path(&identifier, &old_path, directories_store),
+                )
+                .await?;
+
+                let mut changed_paths =
+                    Vec::with_capacity((file_entries.len() + directory_entries.len()) * 2);
+
+                for (_, directory_path) in &directory_entries {
+                    changed_paths.push(directory_path.clone());
+                }
+                for (_, file_path, _) in &file_entries {
+                    changed_paths.push(file_path.clone());
+                }
+
+                let mut moved_directories = Vec::with_capacity(directory_entries.len());
+                for (key, directory_path) in directory_entries {
+                    let moved_path = directory_path
+                        .replace_prefix(&old_path, &new_path)
+                        .expect("directory entry was collected from the old path");
+
+                    changed_paths.push(moved_path.clone());
+                    moved_directories.push((key, moved_path));
+                }
+
+                let mut moved_files = Vec::with_capacity(file_entries.len());
+                for (key, file_path, bytes) in file_entries {
+                    let moved_path = file_path
+                        .replace_prefix(&old_path, &new_path)
+                        .expect("file entry was collected from the old path");
+
+                    changed_paths.push(moved_path.clone());
+                    moved_files.push((key, moved_path, bytes));
+                }
+
+                drop(transaction);
+
+                let transaction = Self::entries_transaction(&database, TransactionMode::Readwrite)?;
+                let files_store = Self::files_store(&transaction)?;
+                let directories_store = Self::directories_store(&transaction)?;
 
                 Self::ensure_parent_directories(&directories_store, &identifier, &new_path)?;
 
-                files_store
-                    .add(Uint8Array::from(bytes))
-                    .with_key(Self::key(&identifier, &new_path))
-                    .build()?;
-                files_store
-                    .delete(Self::key(&identifier, &old_path))
-                    .build()?;
+                for (_, moved_path) in &moved_directories {
+                    directories_store
+                        .put(JsValue::TRUE)
+                        .with_key(Self::key(&identifier, moved_path))
+                        .build()?;
+                }
+                for (_, moved_path, bytes) in &moved_files {
+                    files_store
+                        .add(Uint8Array::from(bytes.clone()))
+                        .with_key(Self::key(&identifier, moved_path))
+                        .build()?;
+                }
+                for (key, _) in moved_directories {
+                    directories_store.delete(key).build()?;
+                }
+                for (key, _, _) in moved_files {
+                    files_store.delete(key).build()?;
+                }
 
                 transaction.commit().await?;
 
-                Ok(())
+                Ok(changed_paths)
             })
         }
 
@@ -737,20 +909,9 @@ mod wasm {
             identifier: ProjectIdentifier,
             file_path: FilePath,
         ) -> AppResult<Vec<u8>> {
-            let transaction = database
-                .transaction(FILES_STORE)
-                .with_mode(web_sys::IdbTransactionMode::Readonly)
-                .build()?;
-
-            let store = transaction.object_store(FILES_STORE)?;
-            let key = Self::key(&identifier, &file_path);
-
-            let file: Option<Uint8Array> = store.get(key).primitive()?.await?;
-
-            match file {
-                Some(data) => Ok(data.to_vec()),
-                None => Err(AppError::FileNotFound(file_path)),
-            }
+            let transaction = Self::files_transaction(&database, TransactionMode::Readonly)?;
+            let store = Self::files_store(&transaction)?;
+            Self::read_bytes_from_store(store, &identifier, &file_path).await
         }
     }
 }

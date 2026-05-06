@@ -39,10 +39,8 @@ enum FileStorageTask {
     DeleteDirectory {
         task: AsyncJob<AppResult<Vec<FilePath>>>,
     },
-    RenameFile {
-        old_path: FilePath,
-        new_path: FilePath,
-        task: AsyncJob<AppResult<()>>,
+    MovePath {
+        task: AsyncJob<AppResult<Vec<FilePath>>>,
     },
 }
 
@@ -117,26 +115,16 @@ impl FileStorage {
         self.current_tasks.push(task);
     }
 
-    pub fn rename_file_in_background(&mut self, file_path: FilePath, new_name: String) {
-        if file_path.file_name() == Some(new_name.as_str()) {
+    pub fn move_path_in_background(&mut self, old_path: FilePath, new_path: FilePath) {
+        if old_path == new_path || old_path.segments().is_empty() {
             return;
         }
 
-        let Some(parent_path) = file_path.parent() else {
-            return;
-        };
-
-        let new_path = parent_path.join(new_name);
-
         let task = self
             .file_system
-            .rename_file(&self.project_id, &file_path, &new_path);
+            .move_path(&self.project_id, &old_path, &new_path);
 
-        self.current_tasks.push(FileStorageTask::RenameFile {
-            task,
-            old_path: file_path,
-            new_path,
-        });
+        self.current_tasks.push(FileStorageTask::MovePath { task });
     }
 
     pub fn delete_file_in_background(&mut self, file_path: FilePath) {
@@ -196,14 +184,9 @@ impl FileStorage {
                     tracker.push_file_changes(changed_paths); // TODO: this should be triggered by the file watcher instead
                 })
             }
-            FileStorageTask::RenameFile {
-                task,
-                old_path,
-                new_path,
-            } => consume_if_ready(task, "rename file", |_| {
+            FileStorageTask::MovePath { task } => consume_if_ready(task, "move path", |paths| {
                 refresh_file_system = true;
-                tracker.push_file_change(old_path.clone()); // TODO: this should be triggered by the file watcher instead
-                tracker.push_file_change(new_path.clone()); // TODO: this should be triggered by the file watcher instead
+                tracker.push_file_changes(paths); // TODO: this should be triggered by the file watcher instead
             }),
         });
 

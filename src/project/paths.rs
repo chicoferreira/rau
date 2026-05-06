@@ -50,6 +50,17 @@ impl FilePath {
         self.segments.starts_with(prefix.segments())
     }
 
+    pub fn strip_prefix(&self, prefix: &Self) -> Option<Self> {
+        self.segments
+            .strip_prefix(prefix.segments())
+            .map(|a| Self::new(a.to_vec()))
+    }
+
+    pub fn replace_prefix(&self, old_prefix: &Self, new_prefix: &Self) -> Option<Self> {
+        let suffix = self.strip_prefix(old_prefix)?;
+        Some(new_prefix.join_path(&suffix))
+    }
+
     pub fn join(&self, segment: String) -> Self {
         let mut segments = self.segments.clone();
         // TODO: make sure segments are valid paths and don't contain any slashes

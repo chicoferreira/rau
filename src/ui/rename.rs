@@ -18,7 +18,7 @@ pub enum RenameTarget {
     CreateResource(ResourceKind),
     CreateFile(FilePath),
     CreateFolder(FilePath),
-    File(FilePath),
+    FileOrFolder(FilePath),
     Uniform(UniformId),
     BindGroup(BindGroupId),
     Viewport(ViewportId),
@@ -41,7 +41,7 @@ impl RenameTarget {
         match self {
             RenameTarget::CreateFile(_) => Some(""),
             RenameTarget::CreateFolder(_) => Some(""),
-            RenameTarget::File(file_path) => file_path.file_name(),
+            RenameTarget::FileOrFolder(file_path) => file_path.file_name(),
             RenameTarget::CreateResource(_) => Some(""),
             RenameTarget::BindGroup(id) => project.label(*id),
             RenameTarget::Viewport(id) => project.label(*id),
@@ -87,9 +87,17 @@ impl RenameTarget {
                     file_storage.create_folder_in_background(file_path, new_name);
                 }
             }
-            RenameTarget::File(file_path) => {
+            RenameTarget::FileOrFolder(file_path) => {
                 if !new_name.is_empty() {
-                    file_storage.rename_file_in_background(file_path, new_name);
+                    if file_path.file_name() == Some(new_name.as_str()) {
+                        return;
+                    }
+
+                    let Some(parent_path) = file_path.parent() else {
+                        return;
+                    };
+
+                    file_storage.move_path_in_background(file_path, parent_path.join(new_name));
                 }
             }
             RenameTarget::Uniform(id) => {
