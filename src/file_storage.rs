@@ -32,11 +32,7 @@ enum FileStorageTask {
     CreateDirectory {
         task: AsyncJob<AppResult<()>>,
     },
-    DeleteFile {
-        path: FilePath,
-        task: AsyncJob<AppResult<()>>,
-    },
-    DeleteDirectory {
+    DeletePath {
         task: AsyncJob<AppResult<Vec<FilePath>>>,
     },
     MovePath {
@@ -128,15 +124,16 @@ impl FileStorage {
     }
 
     pub fn delete_file_in_background(&mut self, file_path: FilePath) {
-        self.current_tasks.push(FileStorageTask::DeleteFile {
-            task: self.file_system.delete_file(&self.project_id, &file_path),
-            path: file_path,
-        });
+        self.delete_path_in_background(file_path);
     }
 
     pub fn delete_folder_in_background(&mut self, path: FilePath) {
-        self.current_tasks.push(FileStorageTask::DeleteDirectory {
-            task: self.file_system.delete_directory(&self.project_id, &path),
+        self.delete_path_in_background(path);
+    }
+
+    fn delete_path_in_background(&mut self, path: FilePath) {
+        self.current_tasks.push(FileStorageTask::DeletePath {
+            task: self.file_system.delete_path(&self.project_id, &path),
         });
     }
 
@@ -172,14 +169,8 @@ impl FileStorage {
             FileStorageTask::CreateDirectory { task } => {
                 consume_if_ready(task, "create directory", |_| refresh_file_system = true)
             }
-            FileStorageTask::DeleteFile { task, path } => {
-                consume_if_ready(task, "delete file", |_| {
-                    refresh_file_system = true;
-                    tracker.push_file_change(path.clone()); // TODO: this should be triggered by the file watcher instead
-                })
-            }
-            FileStorageTask::DeleteDirectory { task } => {
-                consume_if_ready(task, "delete directory", |changed_paths| {
+            FileStorageTask::DeletePath { task } => {
+                consume_if_ready(task, "delete path", |changed_paths| {
                     refresh_file_system = true;
                     tracker.push_file_changes(changed_paths); // TODO: this should be triggered by the file watcher instead
                 })

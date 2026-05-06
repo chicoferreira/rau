@@ -41,13 +41,7 @@ pub trait FileSystemTrait: Clone + Sized {
 
     fn create_empty_file(&self, id: &ProjectIdentifier, path: &FilePath) -> FutureResult<()>;
 
-    fn delete_file(&self, id: &ProjectIdentifier, path: &FilePath) -> FutureResult<()>;
-
-    fn delete_directory(
-        &self,
-        id: &ProjectIdentifier,
-        path: &FilePath,
-    ) -> FutureResult<Vec<FilePath>>;
+    fn delete_path(&self, id: &ProjectIdentifier, path: &FilePath) -> FutureResult<Vec<FilePath>>;
 
     fn move_path(
         &self,

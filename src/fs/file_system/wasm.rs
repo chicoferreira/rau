@@ -384,27 +384,7 @@ impl FileSystemTrait for FileSystem {
         })
     }
 
-    fn delete_file(&self, id: &ProjectIdentifier, path: &FilePath) -> FutureResult<()> {
-        let database = self.database.clone();
-        let id = id.clone();
-        let path = path.clone();
-        AsyncJob::new(async move {
-            let transaction = Self::files_transaction(&database, TransactionMode::Readwrite)?;
-            let store = Self::files_store(&transaction)?;
-            let key = Self::key(&id, &path);
-
-            store.delete(key).build()?;
-            transaction.commit().await?;
-
-            Ok(())
-        })
-    }
-
-    fn delete_directory(
-        &self,
-        id: &ProjectIdentifier,
-        path: &FilePath,
-    ) -> FutureResult<Vec<FilePath>> {
+    fn delete_path(&self, id: &ProjectIdentifier, path: &FilePath) -> FutureResult<Vec<FilePath>> {
         let database = self.database.clone();
         let id = id.clone();
         let path = path.clone();
@@ -428,6 +408,10 @@ impl FileSystemTrait for FileSystem {
                 Vec::with_capacity(file_entries.len() + directory_entries.len());
             changed_paths.extend(file_entries.iter().map(|(_, path)| path.clone()));
             changed_paths.extend(directory_entries.iter().map(|(_, path)| path.clone()));
+
+            if changed_paths.is_empty() {
+                return Err(AppError::FileNotFound(path));
+            }
 
             for (key, _) in file_entries {
                 files_store.delete(key).build()?;

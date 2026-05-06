@@ -130,33 +130,28 @@ impl FileSystemTrait for FileSystem {
         })
     }
 
-    fn delete_file(&self, id: &ProjectIdentifier, path: &FilePath) -> FutureResult<()> {
-        let path = self.resolve_exists(id, path);
-
-        AsyncJob::new(async move {
-            let path = path?;
-            std::fs::remove_file(path).map_err(Into::into)
-        })
-    }
-
-    fn delete_directory(
-        &self,
-        id: &ProjectIdentifier,
-        path: &FilePath,
-    ) -> FutureResult<Vec<FilePath>> {
+    fn delete_path(&self, id: &ProjectIdentifier, path: &FilePath) -> FutureResult<Vec<FilePath>> {
         let root = id.project_path().as_path_buf();
         let resolved_path = self.resolve_exists(id, path);
         let path = path.clone();
 
         AsyncJob::new(async move {
             let resolved_path = resolved_path?;
-            let mut files = Vec::new();
-            let mut directories = vec![path];
-            collect_entries(&root, &resolved_path, &mut files, &mut directories)?;
+            if resolved_path.is_dir() {
+                let mut files = Vec::new();
+                let mut directories = vec![path];
+                collect_entries(&root, &resolved_path, &mut files, &mut directories)?;
 
-            std::fs::remove_dir_all(resolved_path)?;
+                std::fs::remove_dir_all(resolved_path)?;
 
-            Ok(directories.into_iter().chain(files).collect())
+                Ok(directories.into_iter().chain(files).collect())
+            } else if resolved_path.is_file() {
+                std::fs::remove_file(resolved_path)?;
+
+                Ok(vec![path])
+            } else {
+                Err(AppError::FileNotFound(path))
+            }
         })
     }
 
