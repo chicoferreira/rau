@@ -265,7 +265,8 @@ impl ModelRuntime {
         let (models, obj_materials) =
             tobj::futures::load_obj_buf(obj_reader, &load_options, move |material_path| {
                 let material_path = material_path.to_string_lossy().to_string();
-                let material_path = FilePath::from_str(material_path);
+                // TODO: don't use this load_obj_buf function. load mtls manually so we can return errors and avoid the need to clone file_system
+                let material_path = FilePath::from_str(material_path).unwrap();
                 let material_path = source
                     .parent()
                     .map(|parent| parent.join_path(&material_path))

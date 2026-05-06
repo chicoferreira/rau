@@ -136,7 +136,9 @@ fn render_dir_nodes(
     path: FilePath,
 ) {
     for (dir_name, dir_node) in dir_node.dirs() {
-        let path = path.join(dir_name.clone());
+        let path = path
+            .join(dir_name.clone())
+            .expect("a dir from list_entries is be valid");
 
         TreeNode::folder(FileTreeNodeId::Folder(path.clone()), dir_name)
             .with_event("Create File", StateEvent::CreateFile(path.clone()))
@@ -182,7 +184,7 @@ fn file_move_event(action: &DragAndDrop<FileTreeNodeId>) -> Option<StateEvent> {
     }
 
     let file_name = old_path.file_name()?;
-    let new_path = target_parent.join(file_name.to_string());
+    let new_path = target_parent.join(file_name.to_string()).ok()?;
 
     Some(StateEvent::MoveFileSystemEntry { old_path, new_path })
 }

@@ -93,7 +93,7 @@ impl FileSystem {
             .map(|i| key.get(i).as_string())
             .collect::<Option<Vec<_>>>()?;
 
-        Some(FilePath::new(segments))
+        FilePath::new(segments).ok()
     }
 
     fn files_transaction(database: &Database, mode: TransactionMode) -> AppResult<Transaction<'_>> {

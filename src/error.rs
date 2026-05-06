@@ -66,4 +66,6 @@ pub enum AppError {
     FetchError(#[from] reqwest::Error),
     #[error("url parse error: {0}")]
     UrlParseError(#[from] url::ParseError),
+    #[error("invalid path segment: {0}")]
+    InvalidPathSegment(String),
 }

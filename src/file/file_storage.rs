@@ -90,19 +90,15 @@ impl FileStorage {
         self.file_system.read_to_string(path)
     }
 
-    pub fn create_file_in_background(&mut self, parent_path: FilePath, new_name: String) {
-        let file_path = parent_path.join(new_name);
-
+    pub fn create_file_in_background(&mut self, file_path: FilePath) {
         let task = self.file_system.create_empty_file(&file_path);
 
         let task = FileStorageTask::CreateFile { task };
         self.current_tasks.push(task);
     }
 
-    pub fn create_folder_in_background(&mut self, parent_path: FilePath, new_name: String) {
-        let path = parent_path.join(new_name);
-
-        let task = self.file_system.create_directory(&path);
+    pub fn create_folder_in_background(&mut self, folder_path: FilePath) {
+        let task = self.file_system.create_directory(&folder_path);
 
         let task = FileStorageTask::CreateDirectory { task };
         self.current_tasks.push(task);

@@ -65,7 +65,7 @@ mod native {
         }
 
         fn relative_path_from_notify(&self, path: std::path::PathBuf) -> Option<FilePath> {
-            let path = match path.strip_prefix(self.root.as_ref()) {
+            let std_path = match path.strip_prefix(self.root.as_ref()) {
                 Ok(path) => path,
                 Err(err) => {
                     log::error!("Failed to strip prefix: {:?}", err);
@@ -73,7 +73,15 @@ mod native {
                 }
             };
 
-            Some(FilePath::from_relative_path(path))
+            let path = match FilePath::from_relative_path(std_path) {
+                Ok(path) => path,
+                Err(err) => {
+                    log::error!("Failed to create file path from {:?}: {:?}", std_path, err);
+                    return None;
+                }
+            };
+
+            Some(path)
         }
     }
 }

@@ -81,7 +81,7 @@ mod tests {
 
     #[test]
     fn empty_explicit_folder_appears() {
-        let tree = DirNode::from_entries(&[], &[FilePath::from_str("shaders")]);
+        let tree = DirNode::from_entries(&[], &[FilePath::from_str("shaders").unwrap()]);
 
         assert!(tree.dirs().contains_key("shaders"));
         assert!(tree.dirs()["shaders"].files().is_empty());
@@ -90,7 +90,8 @@ mod tests {
 
     #[test]
     fn nested_explicit_folder_appears_without_files() {
-        let tree = DirNode::from_entries(&[], &[FilePath::from_str("shaders/environment")]);
+        let tree =
+            DirNode::from_entries(&[], &[FilePath::from_str("shaders/environment").unwrap()]);
 
         assert!(tree.dirs().contains_key("shaders"));
         assert!(tree.dirs()["shaders"].dirs().contains_key("environment"));
@@ -99,14 +100,14 @@ mod tests {
     #[test]
     fn files_and_directories_merge_into_one_tree() {
         let tree = DirNode::from_entries(
-            &[FilePath::from_str("shaders/environment/sky.wgsl")],
-            &[FilePath::from_str("shaders/environment")],
+            &[FilePath::from_str("shaders/environment/sky.wgsl").unwrap()],
+            &[FilePath::from_str("shaders/environment").unwrap()],
         );
 
         let environment = &tree.dirs()["shaders"].dirs()["environment"];
         assert_eq!(
             environment.files()["sky.wgsl"],
-            FilePath::from_str("shaders/environment/sky.wgsl")
+            FilePath::from_str("shaders/environment/sky.wgsl").unwrap()
         );
     }
 

@@ -1,4 +1,6 @@
-use std::path::Path;
+use std::path::{Component, Path};
+
+use crate::error::{AppError, AppResult};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]
 pub struct FilePath {
@@ -6,22 +8,57 @@ pub struct FilePath {
 }
 
 impl FilePath {
-    pub fn from_relative_path(s: impl AsRef<Path>) -> Self {
-        Self::from_str(s.as_ref().to_string_lossy())
+    pub fn from_relative_path(s: impl AsRef<Path>) -> AppResult<Self> {
+        let mut segments = Vec::new();
+
+        for component in s.as_ref().components() {
+            match component {
+                Component::Normal(segment) => {
+                    let segment = segment.to_str().ok_or_else(|| {
+                        AppError::InvalidPathSegment(segment.to_string_lossy().to_string())
+                    })?;
+                    let segment = normalize_segment(segment.to_string())?;
+                    segments.push(segment);
+                }
+                Component::CurDir => return Err(AppError::InvalidPathSegment(".".to_string())),
+                Component::ParentDir => {
+                    return Err(AppError::InvalidPathSegment("..".to_string()));
+                }
+                Component::RootDir | Component::Prefix(_) => {
+                    let segment = s.as_ref().to_string_lossy().to_string();
+                    return Err(AppError::InvalidPathSegment(segment));
+                }
+            }
+        }
+
+        Ok(Self { segments })
     }
 
-    pub fn from_str(s: impl AsRef<str>) -> Self {
-        let segments = s
-            .as_ref()
-            .split(&['/', '\\'][..])
-            .map(|s| s.to_string())
-            .collect();
-        Self::new(segments)
+    pub fn from_str(s: impl AsRef<str>) -> AppResult<Self> {
+        const SEPARATORS: &[char] = &['/', '\\'];
+
+        let path = s.as_ref();
+        if path.starts_with(SEPARATORS) {
+            return Err(AppError::InvalidPathSegment(path.to_string()));
+        }
+
+        Self::new(path.split(SEPARATORS).map(|a| a.to_string()))
     }
 
-    pub fn new(segments: Vec<String>) -> Self {
-        // TODO: make sure segments are valid paths and don't contain any slashes
-        Self { segments }
+    pub fn new(segments: impl IntoIterator<Item = String>) -> AppResult<Self> {
+        let mut normalized_segments = Vec::new();
+        for segment in segments.into_iter() {
+            if segment.is_empty() {
+                continue;
+            }
+
+            let segment = normalize_segment(segment)?;
+            normalized_segments.push(segment);
+        }
+
+        Ok(Self {
+            segments: normalized_segments,
+        })
     }
 
     pub fn segments(&self) -> &[String] {
@@ -30,10 +67,11 @@ impl FilePath {
 
     pub fn parent(&self) -> Option<Self> {
         if self.segments.is_empty() {
-            None
-        } else {
-            Some(Self::new(self.segments[..self.segments.len() - 1].to_vec()))
+            return None;
         }
+
+        let segments = self.segments[..self.segments.len() - 1].to_vec();
+        Some(Self { segments })
     }
 
     /// Returns each non-root prefix of this path, including the path itself.
@@ -42,7 +80,9 @@ impl FilePath {
     /// For the root path, this returns an empty vector.
     pub fn ancestors_inclusive(&self) -> Vec<Self> {
         (1..=self.segments.len())
-            .map(|i| Self::new(self.segments[..i].to_vec()))
+            .map(|i| Self {
+                segments: self.segments[..i].to_vec(),
+            })
             .collect()
     }
 
@@ -53,7 +93,9 @@ impl FilePath {
     pub fn strip_prefix(&self, prefix: &Self) -> Option<Self> {
         self.segments
             .strip_prefix(prefix.segments())
-            .map(|a| Self::new(a.to_vec()))
+            .map(|segments| Self {
+                segments: segments.to_vec(),
+            })
     }
 
     pub fn replace_prefix(&self, old_prefix: &Self, new_prefix: &Self) -> Option<Self> {
@@ -61,17 +103,15 @@ impl FilePath {
         Some(new_prefix.join_path(&suffix))
     }
 
-    pub fn join(&self, segment: String) -> Self {
-        let mut segments = self.segments.clone();
-        // TODO: make sure segments are valid paths and don't contain any slashes
-        segments.push(segment);
-        Self::new(segments)
+    pub fn join(&self, segment: String) -> AppResult<Self> {
+        let segment = Self::from_str(segment)?;
+        Ok(self.join_path(&segment))
     }
 
     pub fn join_path(&self, path: &FilePath) -> Self {
         let mut segments = self.segments.clone();
         segments.extend(path.segments().iter().cloned());
-        Self::new(segments)
+        Self { segments }
     }
 
     pub fn file_name(&self) -> Option<&str> {
@@ -81,6 +121,22 @@ impl FilePath {
     pub fn to_string(&self) -> String {
         self.segments.join("/")
     }
+}
+
+fn normalize_segment(segment: String) -> AppResult<String> {
+    match segment_invalid(&segment) {
+        true => Err(AppError::InvalidPathSegment(segment)),
+        false => Ok(segment.trim().to_string()),
+    }
+}
+
+fn segment_invalid(segment: &str) -> bool {
+    segment.is_empty()
+        || segment == "."
+        || segment == ".."
+        || segment.contains(['<', '>', ':', '"', '/', '\\', '|', '?', '*'])
+        || segment.chars().any(char::is_control)
+        || segment.ends_with([' ', '.'])
 }
 
 impl std::fmt::Display for FilePath {

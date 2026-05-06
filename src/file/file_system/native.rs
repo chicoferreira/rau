@@ -183,7 +183,7 @@ fn collect_entries(
     current: &std::path::Path,
     files: &mut Vec<FilePath>,
     directories: &mut Vec<FilePath>,
-) -> std::io::Result<()> {
+) -> AppResult<()> {
     for entry in std::fs::read_dir(current)? {
         let entry = entry?;
         let path = entry.path();
@@ -191,15 +191,17 @@ fn collect_entries(
 
         if file_type.is_dir() {
             let relative_path = path.strip_prefix(root).unwrap_or(&path);
-            let relative_path = relative_path.to_string_lossy().replace('\\', "/");
-
-            directories.push(FilePath::from_relative_path(relative_path));
+            match FilePath::from_relative_path(relative_path) {
+                Ok(path) => directories.push(path),
+                Err(err) => log::error!("Skipping invalid directory path {:?}: {}", path, err),
+            }
             collect_entries(root, &path, files, directories)?;
         } else if file_type.is_file() {
             let relative_path = path.strip_prefix(root).unwrap_or(&path);
-            let relative_path = relative_path.to_string_lossy().replace('\\', "/");
-
-            files.push(FilePath::from_relative_path(relative_path));
+            match FilePath::from_relative_path(relative_path) {
+                Ok(path) => files.push(path),
+                Err(err) => log::error!("Skipping invalid file path {:?}: {}", path, err),
+            }
         }
     }
 

@@ -79,12 +79,26 @@ impl RenameTarget {
             }
             RenameTarget::CreateFile(file_path) => {
                 if !new_name.is_empty() {
-                    file_storage.create_file_in_background(file_path, new_name);
+                    let file_path = match file_path.join(new_name) {
+                        Ok(path) => path,
+                        Err(e) => {
+                            log::error!("Failed to join path: {}", e);
+                            return;
+                        }
+                    };
+                    file_storage.create_file_in_background(file_path);
                 }
             }
             RenameTarget::CreateFolder(file_path) => {
                 if !new_name.is_empty() {
-                    file_storage.create_folder_in_background(file_path, new_name);
+                    let folder_path = match file_path.join(new_name) {
+                        Ok(path) => path,
+                        Err(e) => {
+                            log::error!("Failed to join path: {}", e);
+                            return;
+                        }
+                    };
+                    file_storage.create_folder_in_background(folder_path);
                 }
             }
             RenameTarget::FileOrFolder(file_path) => {
@@ -97,7 +111,15 @@ impl RenameTarget {
                         return;
                     };
 
-                    file_storage.move_path_in_background(file_path, parent_path.join(new_name));
+                    let new_path = match parent_path.join(new_name) {
+                        Ok(path) => path,
+                        Err(e) => {
+                            log::error!("Failed to join path: {}", e);
+                            return;
+                        }
+                    };
+
+                    file_storage.move_path_in_background(file_path, new_path);
                 }
             }
             RenameTarget::Uniform(id) => {
