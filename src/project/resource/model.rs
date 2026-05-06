@@ -6,7 +6,10 @@ use wgpu::BindGroupLayout;
 use crate::{
     error::{AppError, AppResult},
     file_storage::FileStorage,
-    fs::{file_system::FileSystem, identifier::ProjectIdentifier},
+    fs::{
+        file_system::{FileSystem, FileSystemTrait},
+        identifier::ProjectIdentifier,
+    },
     project::{
         BindGroupId, ModelId, ProjectResource,
         paths::FilePath,

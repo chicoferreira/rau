@@ -31,6 +31,7 @@ async fn fetch_current_page_wasm_and_save(
     project_id: &crate::fs::identifier::ProjectIdentifier,
     file_path: &FilePath,
 ) -> AppResult<()> {
+    use crate::fs::file_system::FileSystemTrait;
     use std::str::FromStr;
 
     let origin = web_sys::window().unwrap().location().origin().unwrap();
