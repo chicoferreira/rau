@@ -5,8 +5,8 @@ use winit::{event::WindowEvent, window::Window};
 
 use crate::{
     error::AppResult,
-    file_storage::FileStorage,
-    fs::identifier::ProjectIdentifier,
+    file::file_storage::FileStorage,
+    file::identifier::ProjectIdentifier,
     project::{
         self, DimensionId, FramePlanId, Project, ResourceId, ResourceKind, RuntimeProject,
         ViewportId,
@@ -156,7 +156,7 @@ impl State {
 
         #[cfg(not(target_arch = "wasm32"))]
         let project_identifier = {
-            let path = crate::fs::absolute::AbsolutePathBuf::try_from("res")?;
+            let path = crate::file::absolute::AbsolutePathBuf::try_from("res")?;
             ProjectIdentifier::new("res", path)
         };
         #[cfg(target_arch = "wasm32")]

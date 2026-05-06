@@ -1,5 +1,5 @@
 use crate::{
-    file_storage::FileStorage,
+    file::file_storage::FileStorage,
     project::{
         BindGroupId, CameraId, ComputePassId, DimensionId, ModelId, Project, RenderPassId,
         ResourceId, ResourceKind, SamplerId, ShaderId, TextureId, TextureViewId, UniformId,

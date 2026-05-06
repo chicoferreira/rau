@@ -3,7 +3,7 @@ use std::task::Poll;
 
 use crate::{
     error::{AppError, AppResult},
-    file_storage::FileStorage,
+    file::file_storage::FileStorage,
     project::{
         DimensionId, ProjectResource, TextureId,
         paths::FilePath,

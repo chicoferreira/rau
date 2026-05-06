@@ -2,7 +2,7 @@ use std::task::Poll;
 
 use crate::{
     error::AppResult,
-    fs::{
+    file::{
         file_system::{FileSystem, FileSystemEntries, FileSystemTrait},
         file_watcher::FileWatcher,
         identifier::ProjectIdentifier,

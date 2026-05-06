@@ -1,5 +1,5 @@
 #[cfg(not(target_arch = "wasm32"))]
-use crate::fs::absolute::AbsolutePathBuf;
+use crate::file::absolute::AbsolutePathBuf;
 
 #[derive(Clone, Debug)]
 pub struct ProjectIdentifier {

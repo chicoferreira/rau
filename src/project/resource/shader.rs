@@ -2,7 +2,7 @@ use std::task::Poll;
 
 use crate::{
     error::AppResult,
-    file_storage::FileStorage,
+    file::file_storage::FileStorage,
     project::{
         ProjectResource, ShaderId,
         paths::FilePath,

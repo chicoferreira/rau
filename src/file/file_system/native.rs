@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use crate::{
     error::{AppError, AppResult},
-    fs::{
+    file::{
         file_system::{FileSystemEntries, FileSystemTrait, FutureResult},
         file_watcher::FileWatcher,
         identifier::ProjectIdentifier,

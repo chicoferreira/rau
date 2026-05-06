@@ -15,7 +15,7 @@ mod native {
 
     use notify_debouncer_mini::notify::RecursiveMode;
 
-    use crate::fs::absolute::AbsolutePathBuf;
+    use crate::file::absolute::AbsolutePathBuf;
 
     use super::*;
 

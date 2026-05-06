@@ -12,7 +12,7 @@ use web_sys::js_sys::Array;
 
 use crate::{
     error::{AppError, AppResult},
-    fs::{
+    file::{
         file_system::{FileSystemEntries, FileSystemTrait, FutureResult},
         file_watcher::FileWatcher,
         identifier::ProjectIdentifier,

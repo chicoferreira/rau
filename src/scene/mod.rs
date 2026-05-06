@@ -1,6 +1,6 @@
 use crate::{
     error::AppResult,
-    file_storage::FileStorage,
+    file::file_storage::FileStorage,
     project::{
         Project, ViewportId,
         paths::FilePath,
@@ -27,11 +27,11 @@ mod loader;
 
 #[cfg(target_arch = "wasm32")]
 async fn fetch_current_page_wasm_and_save(
-    file_system: &crate::fs::file_system::FileSystem,
-    project_id: &crate::fs::identifier::ProjectIdentifier,
+    file_system: &crate::file::file_system::FileSystem,
+    project_id: &crate::file::identifier::ProjectIdentifier,
     file_path: &FilePath,
 ) -> AppResult<()> {
-    use crate::fs::file_system::FileSystemTrait;
+    use crate::file::file_system::FileSystemTrait;
     use std::str::FromStr;
 
     let origin = web_sys::window().unwrap().location().origin().unwrap();

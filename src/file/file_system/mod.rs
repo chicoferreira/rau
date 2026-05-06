@@ -5,7 +5,7 @@ mod wasm;
 
 use crate::{
     error::AppResult,
-    fs::{file_watcher::FileWatcher, identifier::ProjectIdentifier},
+    file::{file_watcher::FileWatcher, identifier::ProjectIdentifier},
     project::paths::FilePath,
     utils::async_job::AsyncJob,
 };

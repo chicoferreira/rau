@@ -5,8 +5,8 @@ use wgpu::BindGroupLayout;
 
 use crate::{
     error::{AppError, AppResult},
-    file_storage::FileStorage,
-    fs::{
+    file::{
+        file_storage::FileStorage,
         file_system::{FileSystem, FileSystemTrait},
         identifier::ProjectIdentifier,
     },
