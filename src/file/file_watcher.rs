@@ -54,7 +54,7 @@ mod native {
                         .filter_map(|event| self.relative_path_from_notify(event.path))
                         .collect();
 
-                    log::info!("Received file changes: {:?}", events);
+                    log::info!("Received file changes from file watcher: {:?}", events);
 
                     Some(Ok(events))
                 }
@@ -80,17 +80,37 @@ mod native {
 
 #[cfg(target_arch = "wasm32")]
 mod wasm {
+    use std::sync::mpsc::{Receiver, TryRecvError};
+
     use super::*;
 
-    pub struct FileWatcher;
+    // In the case of wasm, instead of being an actual operating system file watcher,
+    // we will send events through a sender when we modify the IndexedDB database.
+    pub struct FileWatcher {
+        rx: Receiver<FilePath>,
+    }
 
     impl FileWatcher {
-        pub fn new() -> AppResult<Self> {
-            Ok(Self)
+        pub fn new(rx: Receiver<FilePath>) -> Self {
+            Self { rx }
         }
 
         pub fn try_next(&mut self) -> Option<AppResult<Vec<FilePath>>> {
-            None
+            let mut result = vec![];
+
+            loop {
+                match self.rx.try_recv() {
+                    Ok(events) => result.push(events),
+                    Err(TryRecvError::Empty) => break,
+                    Err(TryRecvError::Disconnected) => panic!("Filewatcher channel closed"),
+                }
+            }
+
+            if result.is_empty() {
+                None
+            } else {
+                Some(Ok(result))
+            }
         }
     }
 }

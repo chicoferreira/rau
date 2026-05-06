@@ -8,7 +8,6 @@ use crate::{
     file::{
         file_storage::FileStorage,
         file_system::{FileSystem, FileSystemTrait},
-        identifier::ProjectIdentifier,
     },
     project::{
         BindGroupId, ModelId, ProjectResource,
@@ -218,7 +217,6 @@ impl SyncResource for Model {
         match job {
             ModelJob::Start => {
                 let source = self.source.clone();
-                let project_identifier = ctx.file_storage.project_identifier().clone();
                 let file_system = ctx.file_storage.file_system.clone();
                 let vertex_buffer_spec = self.vertex_buffer_spec.clone();
                 let device = ctx.device.clone();
@@ -226,7 +224,6 @@ impl SyncResource for Model {
                 Ok(SyncOutcome::Pending(ModelJob::Loading(AsyncJob::new(
                     ModelRuntime::load_from_obj_file(
                         source,
-                        project_identifier,
                         file_system,
                         vertex_buffer_spec,
                         device,
@@ -252,12 +249,11 @@ impl SyncResource for Model {
 impl ModelRuntime {
     pub async fn load_from_obj_file(
         source: FilePath,
-        project_identifier: ProjectIdentifier,
-        file_system: FileSystem,
+        file_system: FileSystem, // TODO: use file storage for read cache
         vertex_buffer_spec: VertexBufferSpec,
         device: wgpu::Device,
     ) -> AppResult<Self> {
-        let obj_bytes = file_system.read(&project_identifier, &source).await?;
+        let obj_bytes = file_system.read(&source).await?;
 
         let load_options = tobj::LoadOptions {
             triangulate: true,
@@ -269,18 +265,17 @@ impl ModelRuntime {
         let (models, obj_materials) =
             tobj::futures::load_obj_buf(obj_reader, &load_options, move |material_path| {
                 let material_path = material_path.to_string_lossy().to_string();
-                let material_path = FilePath::new(vec![material_path]); // TODO: split into segments
+                let material_path = FilePath::from_str(material_path);
                 let material_path = source
                     .parent()
                     .map(|parent| parent.join_path(&material_path))
                     .unwrap_or_else(|| material_path);
 
                 let file_system = file_system.clone();
-                let project_identifier = project_identifier.clone();
 
                 async move {
                     let mat = file_system
-                        .read(&project_identifier, &material_path)
+                        .read(&material_path)
                         .await
                         .map_err(|_| tobj::LoadError::OpenFileFailed)?;
                     let reader = BufReader::new(Cursor::new(mat));

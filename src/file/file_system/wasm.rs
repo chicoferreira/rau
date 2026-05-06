@@ -1,3 +1,5 @@
+use std::sync::mpsc::Sender;
+
 use indexed_db_futures::{
     Build, BuildPrimitive,
     database::Database,
@@ -25,14 +27,11 @@ const DB_NAME: &str = "rau";
 const FILES_STORE: &str = "files";
 const DIRECTORIES_STORE: &str = "directories";
 
-// Directory invariant for new writes:
-// - the project root is implicit and is never stored;
-// - every non-root parent directory of a newly saved file is materialized in DIRECTORIES_STORE;
-// - creating a directory materializes that directory and its non-root ancestors;
-
 #[derive(Clone)]
 pub struct FileSystem {
+    id: ProjectIdentifier,
     database: Database,
+    file_watcher_sender: Sender<FilePath>,
 }
 
 impl FileSystem {
@@ -258,22 +257,26 @@ impl FileSystem {
 }
 
 impl FileSystemTrait for FileSystem {
-    fn new() -> FutureResult<Self> {
+    fn mount(id: ProjectIdentifier) -> FutureResult<(Self, FileWatcher)> {
         AsyncJob::new(async move {
             let database = Self::open_database().await?;
+            let (sender, receiver) = std::sync::mpsc::channel();
 
-            Ok(Self { database })
+            let file_system = Self {
+                database,
+                id,
+                file_watcher_sender: sender,
+            };
+            let file_watcher = FileWatcher::new(receiver);
+
+            Ok((file_system, file_watcher))
         })
     }
 
-    fn create_file_watcher(&self, id: &ProjectIdentifier) -> AppResult<FileWatcher> {
-        let _ = id;
-        FileWatcher::new()
-    }
-
-    fn save(&self, id: &ProjectIdentifier, path: &FilePath, bytes: Vec<u8>) -> FutureResult<()> {
+    fn save(&self, path: &FilePath, bytes: Vec<u8>) -> FutureResult<()> {
         let database = self.database.clone();
-        let id = id.clone();
+        let id = self.id.clone();
+        let sender = self.file_watcher_sender.clone();
         let path = path.clone();
 
         AsyncJob::new(async move {
@@ -292,13 +295,15 @@ impl FileSystemTrait for FileSystem {
 
             transaction.commit().await?;
 
+            sender.send(path.clone()).expect("not disconnected");
+
             Ok(())
         })
     }
 
-    fn create_directory(&self, id: &ProjectIdentifier, path: &FilePath) -> FutureResult<()> {
+    fn create_directory(&self, path: &FilePath) -> FutureResult<()> {
         let database = self.database.clone();
-        let id = id.clone();
+        let id = self.id.clone();
         let path = path.clone();
 
         AsyncJob::new(async move {
@@ -317,9 +322,10 @@ impl FileSystemTrait for FileSystem {
         })
     }
 
-    fn create_empty_file(&self, id: &ProjectIdentifier, path: &FilePath) -> FutureResult<()> {
+    fn create_empty_file(&self, path: &FilePath) -> FutureResult<()> {
         let database = self.database.clone();
-        let id = id.clone();
+        let id = self.id.clone();
+        let sender = self.file_watcher_sender.clone();
         let path = path.clone();
 
         AsyncJob::new(async move {
@@ -341,21 +347,23 @@ impl FileSystemTrait for FileSystem {
 
             transaction.commit().await?;
 
+            sender.send(path.clone()).expect("not disconnected");
+
             Ok(())
         })
     }
 
-    fn read(&self, id: &ProjectIdentifier, path: &FilePath) -> FutureResult<Vec<u8>> {
-        let id = id.clone();
+    fn read(&self, path: &FilePath) -> FutureResult<Vec<u8>> {
+        let id = self.id.clone();
         let database = self.database.clone();
         let path = path.clone();
 
         AsyncJob::new(Self::read_bytes(database, id, path))
     }
 
-    fn read_to_string(&self, id: &ProjectIdentifier, path: &FilePath) -> FutureResult<String> {
+    fn read_to_string(&self, path: &FilePath) -> FutureResult<String> {
         let database = self.database.clone();
-        let id = id.clone();
+        let id = self.id.clone();
         let path = path.clone();
 
         AsyncJob::new(async move {
@@ -365,9 +373,9 @@ impl FileSystemTrait for FileSystem {
         })
     }
 
-    fn list_entries(&self, id: &ProjectIdentifier) -> FutureResult<FileSystemEntries> {
+    fn list_entries(&self) -> FutureResult<FileSystemEntries> {
         let database = self.database.clone();
-        let id = id.clone();
+        let id = self.id.clone();
 
         AsyncJob::new(async move {
             let transaction = Self::entries_transaction(&database, TransactionMode::Readonly)?;
@@ -384,9 +392,10 @@ impl FileSystemTrait for FileSystem {
         })
     }
 
-    fn delete_path(&self, id: &ProjectIdentifier, path: &FilePath) -> FutureResult<Vec<FilePath>> {
+    fn delete_path(&self, path: &FilePath) -> FutureResult<()> {
         let database = self.database.clone();
-        let id = id.clone();
+        let id = self.id.clone();
+        let sender = self.file_watcher_sender.clone();
         let path = path.clone();
 
         AsyncJob::new(async move {
@@ -404,12 +413,16 @@ impl FileSystemTrait for FileSystem {
             let files_store = Self::files_store(&transaction)?;
             let directories_store = Self::directories_store(&transaction)?;
 
-            let mut changed_paths =
-                Vec::with_capacity(file_entries.len() + directory_entries.len());
-            changed_paths.extend(file_entries.iter().map(|(_, path)| path.clone()));
-            changed_paths.extend(directory_entries.iter().map(|(_, path)| path.clone()));
+            let changed_path_files = file_entries.iter().map(|(_, path)| path.clone());
+            let changed_path_dirs = directory_entries.iter().map(|(_, path)| path.clone());
 
-            if changed_paths.is_empty() {
+            let mut files_found = false;
+            for path in changed_path_dirs.chain(changed_path_files) {
+                sender.send(path.clone()).expect("not disconnected");
+                files_found = true;
+            }
+
+            if !files_found {
                 return Err(AppError::FileNotFound(path));
             }
 
@@ -422,24 +435,20 @@ impl FileSystemTrait for FileSystem {
 
             transaction.commit().await?;
 
-            Ok(changed_paths)
+            Ok(())
         })
     }
 
-    fn move_path(
-        &self,
-        id: &ProjectIdentifier,
-        old: &FilePath,
-        new: &FilePath,
-    ) -> FutureResult<Vec<FilePath>> {
+    fn move_path(&self, old: &FilePath, new: &FilePath) -> FutureResult<()> {
         let database = self.database.clone();
-        let id = id.clone();
+        let id = self.id.clone();
+        let sender = self.file_watcher_sender.clone();
         let old = old.clone();
         let new = new.clone();
 
         AsyncJob::new(async move {
             if old == new {
-                return Ok(Vec::new());
+                return Ok(());
             }
 
             if new.starts_with(&old) {
@@ -467,7 +476,10 @@ impl FileSystemTrait for FileSystem {
 
                     transaction.commit().await?;
 
-                    return Ok(vec![old, new]);
+                    sender.send(old).expect("not disconnected");
+                    sender.send(new).expect("not disconnected");
+
+                    return Ok(());
                 }
                 Err(AppError::FileNotFound(_)) => {}
                 Err(error) => return Err(error),
@@ -485,14 +497,13 @@ impl FileSystemTrait for FileSystem {
             drop(transaction);
             let file_entries = Self::file_entries_under_path(&database, &id, &old).await?;
 
-            let mut changed_paths =
-                Vec::with_capacity((file_entries.len() + directory_entries.len()) * 2);
-
             for (_, directory_path) in &directory_entries {
-                changed_paths.push(directory_path.clone());
+                let path = directory_path.clone();
+                sender.send(path).expect("not disconnected");
             }
             for (_, file_path, _) in &file_entries {
-                changed_paths.push(file_path.clone());
+                let path = file_path.clone();
+                sender.send(path).expect("not disconnected");
             }
 
             let mut moved_directories = Vec::with_capacity(directory_entries.len());
@@ -501,7 +512,7 @@ impl FileSystemTrait for FileSystem {
                     .replace_prefix(&old, &new)
                     .expect("directory entry was collected from the old path");
 
-                changed_paths.push(moved_path.clone());
+                sender.send(moved_path.clone()).expect("not disconnected");
                 moved_directories.push((key, moved_path));
             }
 
@@ -511,7 +522,7 @@ impl FileSystemTrait for FileSystem {
                     .replace_prefix(&old, &new)
                     .expect("file entry was collected from the old path");
 
-                changed_paths.push(moved_path.clone());
+                sender.send(moved_path.clone()).expect("not disconnected");
                 moved_files.push((key, moved_path, bytes));
             }
 
@@ -542,7 +553,7 @@ impl FileSystemTrait for FileSystem {
 
             transaction.commit().await?;
 
-            Ok(changed_paths)
+            Ok(())
         })
     }
 }

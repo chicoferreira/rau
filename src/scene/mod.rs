@@ -28,7 +28,6 @@ mod loader;
 #[cfg(target_arch = "wasm32")]
 async fn fetch_current_page_wasm_and_save(
     file_system: &crate::file::file_system::FileSystem,
-    project_id: &crate::file::identifier::ProjectIdentifier,
     file_path: &FilePath,
 ) -> AppResult<()> {
     use crate::file::file_system::FileSystemTrait;
@@ -44,7 +43,7 @@ async fn fetch_current_page_wasm_and_save(
 
     let data = reqwest::get(url).await?.bytes().await?.to_vec();
 
-    file_system.save(project_id, file_path, data).await?;
+    file_system.save(file_path, data).await?;
 
     Ok(())
 }
@@ -68,8 +67,7 @@ pub async fn create_scene(
         FilePath::from_str("shader.wgsl"),
         FilePath::from_str("sky.wgsl"),
     ] {
-        let project_id = file_storage.project_identifier();
-        fetch_current_page_wasm_and_save(&file_storage.file_system, project_id, &file).await?;
+        fetch_current_page_wasm_and_save(&file_storage.file_system, &file).await?;
     }
 
     let equirectangular_shader = Shader::new(
@@ -188,7 +186,6 @@ pub async fn create_scene(
     let mut cube_model = Model::new("cube", FilePath::from_str("cube.obj"));
     let cube_model_runtime = ModelRuntime::load_from_obj_file(
         cube_model.source().clone(),
-        file_storage.project_identifier().clone(),
         file_storage.file_system.clone(),
         cube_model.vertex_buffer_spec().clone(),
         device.clone(),

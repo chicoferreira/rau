@@ -23,30 +23,23 @@ pub struct FileSystemEntries {
 
 type FutureResult<T> = AsyncJob<AppResult<T>>;
 
-#[allow(dead_code)]
 pub trait FileSystemTrait: Clone + Sized {
-    fn new() -> FutureResult<Self>;
+    fn mount(id: ProjectIdentifier) -> FutureResult<(Self, FileWatcher)>;
 
-    fn create_file_watcher(&self, id: &ProjectIdentifier) -> AppResult<FileWatcher>;
+    fn read(&self, path: &FilePath) -> FutureResult<Vec<u8>>;
 
-    fn read(&self, id: &ProjectIdentifier, path: &FilePath) -> FutureResult<Vec<u8>>;
+    fn read_to_string(&self, path: &FilePath) -> FutureResult<String>;
 
-    fn read_to_string(&self, id: &ProjectIdentifier, path: &FilePath) -> FutureResult<String>;
+    fn list_entries(&self) -> FutureResult<FileSystemEntries>;
 
-    fn list_entries(&self, id: &ProjectIdentifier) -> FutureResult<FileSystemEntries>;
+    fn create_directory(&self, path: &FilePath) -> FutureResult<()>;
 
-    fn create_directory(&self, id: &ProjectIdentifier, path: &FilePath) -> FutureResult<()>;
+    #[allow(dead_code)]
+    fn save(&self, path: &FilePath, bytes: Vec<u8>) -> FutureResult<()>;
 
-    fn save(&self, id: &ProjectIdentifier, path: &FilePath, bytes: Vec<u8>) -> FutureResult<()>;
+    fn create_empty_file(&self, path: &FilePath) -> FutureResult<()>;
 
-    fn create_empty_file(&self, id: &ProjectIdentifier, path: &FilePath) -> FutureResult<()>;
+    fn delete_path(&self, path: &FilePath) -> FutureResult<()>;
 
-    fn delete_path(&self, id: &ProjectIdentifier, path: &FilePath) -> FutureResult<Vec<FilePath>>;
-
-    fn move_path(
-        &self,
-        id: &ProjectIdentifier,
-        old: &FilePath,
-        new: &FilePath,
-    ) -> FutureResult<Vec<FilePath>>;
+    fn move_path(&self, old: &FilePath, new: &FilePath) -> FutureResult<()>;
 }

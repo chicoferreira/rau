@@ -33,17 +33,16 @@ enum FileStorageTask {
         task: AsyncJob<AppResult<()>>,
     },
     DeletePath {
-        task: AsyncJob<AppResult<Vec<FilePath>>>,
+        task: AsyncJob<AppResult<()>>,
     },
     MovePath {
-        task: AsyncJob<AppResult<Vec<FilePath>>>,
+        task: AsyncJob<AppResult<()>>,
     },
 }
 
 impl FileStorage {
     pub async fn new(project_identifier: ProjectIdentifier) -> AppResult<Self> {
-        let file_system = FileSystem::new().await?;
-        let file_watcher = file_system.create_file_watcher(&project_identifier)?;
+        let (file_system, file_watcher) = FileSystem::mount(project_identifier.clone()).await?;
         Ok(Self {
             file_system,
             project_id: project_identifier,
@@ -73,7 +72,7 @@ impl FileStorage {
 
     fn refresh_file_system(&mut self) {
         self.current_tasks.push(FileStorageTask::ListEntries {
-            task: self.file_system.list_entries(&self.project_id),
+            task: self.file_system.list_entries(),
         });
     }
 
@@ -84,19 +83,17 @@ impl FileStorage {
     }
 
     pub fn read(&self, path: &FilePath) -> AsyncJob<AppResult<Vec<u8>>> {
-        self.file_system.read(&self.project_id, path)
+        self.file_system.read(path)
     }
 
     pub fn read_to_string(&self, path: &FilePath) -> AsyncJob<AppResult<String>> {
-        self.file_system.read_to_string(&self.project_id, path)
+        self.file_system.read_to_string(path)
     }
 
     pub fn create_file_in_background(&mut self, parent_path: FilePath, new_name: String) {
         let file_path = parent_path.join(new_name);
 
-        let task = self
-            .file_system
-            .create_empty_file(&self.project_id, &file_path);
+        let task = self.file_system.create_empty_file(&file_path);
 
         let task = FileStorageTask::CreateFile { task };
         self.current_tasks.push(task);
@@ -105,7 +102,7 @@ impl FileStorage {
     pub fn create_folder_in_background(&mut self, parent_path: FilePath, new_name: String) {
         let path = parent_path.join(new_name);
 
-        let task = self.file_system.create_directory(&self.project_id, &path);
+        let task = self.file_system.create_directory(&path);
 
         let task = FileStorageTask::CreateDirectory { task };
         self.current_tasks.push(task);
@@ -116,9 +113,7 @@ impl FileStorage {
             return;
         }
 
-        let task = self
-            .file_system
-            .move_path(&self.project_id, &old_path, &new_path);
+        let task = self.file_system.move_path(&old_path, &new_path);
 
         self.current_tasks.push(FileStorageTask::MovePath { task });
     }
@@ -133,7 +128,7 @@ impl FileStorage {
 
     fn delete_path_in_background(&mut self, path: FilePath) {
         self.current_tasks.push(FileStorageTask::DeletePath {
-            task: self.file_system.delete_path(&self.project_id, &path),
+            task: self.file_system.delete_path(&path),
         });
     }
 
@@ -169,15 +164,11 @@ impl FileStorage {
             FileStorageTask::CreateDirectory { task } => {
                 consume_if_ready(task, "create directory", |_| refresh_file_system = true)
             }
-            FileStorageTask::DeletePath { task } => {
-                consume_if_ready(task, "delete path", |changed_paths| {
-                    refresh_file_system = true;
-                    tracker.push_file_changes(changed_paths); // TODO: this should be triggered by the file watcher instead
-                })
-            }
-            FileStorageTask::MovePath { task } => consume_if_ready(task, "move path", |paths| {
+            FileStorageTask::DeletePath { task } => consume_if_ready(task, "delete path", |_| {
                 refresh_file_system = true;
-                tracker.push_file_changes(paths); // TODO: this should be triggered by the file watcher instead
+            }),
+            FileStorageTask::MovePath { task } => consume_if_ready(task, "move path", |_| {
+                refresh_file_system = true;
             }),
         });
 

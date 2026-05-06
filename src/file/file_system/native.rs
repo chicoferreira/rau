@@ -12,11 +12,13 @@ use crate::{
 };
 
 #[derive(Clone)]
-pub struct FileSystem {}
+pub struct FileSystem {
+    id: ProjectIdentifier,
+}
 
 impl FileSystem {
-    fn resolve(&self, identifier: &ProjectIdentifier, file_path: &FilePath) -> PathBuf {
-        let mut path_buf = identifier.project_path().as_path_buf();
+    fn resolve(&self, file_path: &FilePath) -> PathBuf {
+        let mut path_buf = self.id.project_path().as_path_buf();
         for segment in file_path.segments() {
             path_buf = path_buf.join(segment);
         }
@@ -24,12 +26,8 @@ impl FileSystem {
         path_buf
     }
 
-    fn resolve_exists(
-        &self,
-        identifier: &ProjectIdentifier,
-        file_path: &FilePath,
-    ) -> AppResult<PathBuf> {
-        let path_buf = self.resolve(identifier, file_path);
+    fn resolve_exists(&self, file_path: &FilePath) -> AppResult<PathBuf> {
+        let path_buf = self.resolve(file_path);
         if !path_buf.try_exists()? {
             return Err(AppError::FileNotFound(file_path.clone()));
         }
@@ -39,33 +37,31 @@ impl FileSystem {
 }
 
 impl FileSystemTrait for FileSystem {
-    fn new() -> FutureResult<Self> {
-        AsyncJob::new(async move { Ok(Self {}) })
+    fn mount(id: ProjectIdentifier) -> FutureResult<(Self, FileWatcher)> {
+        AsyncJob::new(async move {
+            let file_watcher = FileWatcher::new(id.project_path().clone())?;
+            Ok((Self { id }, file_watcher))
+        })
     }
 
-    fn create_file_watcher(&self, id: &ProjectIdentifier) -> AppResult<FileWatcher> {
-        FileWatcher::new(id.project_path().clone())
-    }
-
-    fn read(&self, id: &ProjectIdentifier, path: &FilePath) -> FutureResult<Vec<u8>> {
-        let path = self.resolve_exists(id, path);
+    fn read(&self, path: &FilePath) -> FutureResult<Vec<u8>> {
+        let path = self.resolve_exists(path);
         AsyncJob::new(async move {
             let path = path?;
             std::fs::read(&path).map_err(Into::into)
         })
     }
 
-    fn read_to_string(&self, id: &ProjectIdentifier, path: &FilePath) -> FutureResult<String> {
-        let path = self.resolve_exists(id, path);
+    fn read_to_string(&self, path: &FilePath) -> FutureResult<String> {
+        let path = self.resolve_exists(path);
         AsyncJob::new(async move {
             let path = path?;
             std::fs::read_to_string(&path).map_err(Into::into)
         })
     }
 
-    fn list_entries(&self, id: &ProjectIdentifier) -> FutureResult<FileSystemEntries> {
-        let root = id.project_path().as_path_buf();
-
+    fn list_entries(&self) -> FutureResult<FileSystemEntries> {
+        let root = self.id.project_path().as_path_buf();
         AsyncJob::new(async move {
             let mut files = Vec::new();
             let mut directories = Vec::new();
@@ -78,8 +74,8 @@ impl FileSystemTrait for FileSystem {
         })
     }
 
-    fn create_directory(&self, id: &ProjectIdentifier, path: &FilePath) -> FutureResult<()> {
-        let resolved_path = self.resolve(id, path);
+    fn create_directory(&self, path: &FilePath) -> FutureResult<()> {
+        let resolved_path = self.resolve(path);
         let path = path.clone();
 
         AsyncJob::new(async move {
@@ -91,8 +87,8 @@ impl FileSystemTrait for FileSystem {
         })
     }
 
-    fn save(&self, id: &ProjectIdentifier, path: &FilePath, bytes: Vec<u8>) -> FutureResult<()> {
-        let path = self.resolve(id, path);
+    fn save(&self, path: &FilePath, bytes: Vec<u8>) -> FutureResult<()> {
+        let path = self.resolve(path);
 
         AsyncJob::new(async move {
             if let Some(parent) = path.parent() {
@@ -103,8 +99,8 @@ impl FileSystemTrait for FileSystem {
         })
     }
 
-    fn create_empty_file(&self, id: &ProjectIdentifier, path: &FilePath) -> FutureResult<()> {
-        let resolved_path = self.resolve(id, path);
+    fn create_empty_file(&self, path: &FilePath) -> FutureResult<()> {
+        let resolved_path = self.resolve(path);
         let path = path.clone();
 
         AsyncJob::new(async move {
@@ -130,9 +126,9 @@ impl FileSystemTrait for FileSystem {
         })
     }
 
-    fn delete_path(&self, id: &ProjectIdentifier, path: &FilePath) -> FutureResult<Vec<FilePath>> {
-        let root = id.project_path().as_path_buf();
-        let resolved_path = self.resolve_exists(id, path);
+    fn delete_path(&self, path: &FilePath) -> FutureResult<()> {
+        let root = self.id.project_path().as_path_buf();
+        let resolved_path = self.resolve_exists(path);
         let path = path.clone();
 
         AsyncJob::new(async move {
@@ -144,60 +140,31 @@ impl FileSystemTrait for FileSystem {
 
                 std::fs::remove_dir_all(resolved_path)?;
 
-                Ok(directories.into_iter().chain(files).collect())
+                Ok(())
             } else if resolved_path.is_file() {
                 std::fs::remove_file(resolved_path)?;
 
-                Ok(vec![path])
+                Ok(())
             } else {
                 Err(AppError::FileNotFound(path))
             }
         })
     }
 
-    fn move_path(
-        &self,
-        id: &ProjectIdentifier,
-        old: &FilePath,
-        new: &FilePath,
-    ) -> FutureResult<Vec<FilePath>> {
-        let root = id.project_path().as_path_buf();
-        let old_resolved_path = self.resolve_exists(id, old);
-        let new_resolved_path = self.resolve(id, new);
+    fn move_path(&self, old: &FilePath, new: &FilePath) -> FutureResult<()> {
+        let old_resolved_path = self.resolve_exists(old);
+        let new_resolved_path = self.resolve(new);
         let old = old.clone();
         let new = new.clone();
 
         AsyncJob::new(async move {
             if old == new {
-                return Ok(Vec::new());
+                return Ok(());
             }
 
             let old_resolved_path = old_resolved_path?;
             if new_resolved_path.try_exists()? {
                 return Err(AppError::PathAlreadyExists(new));
-            }
-
-            let mut changed_paths = Vec::new();
-            if old_resolved_path.is_dir() {
-                if new.starts_with(&old) {
-                    return Err(AppError::PathAlreadyExists(new));
-                }
-
-                let mut files = Vec::new();
-                let mut directories = vec![old.clone()];
-                collect_entries(&root, &old_resolved_path, &mut files, &mut directories)?;
-
-                changed_paths.extend(directories.iter().cloned());
-                changed_paths.extend(files.iter().cloned());
-                changed_paths.extend(
-                    directories
-                        .iter()
-                        .chain(files.iter())
-                        .filter_map(|path| path.replace_prefix(&old, &new)),
-                );
-            } else {
-                changed_paths.push(old);
-                changed_paths.push(new.clone());
             }
 
             if let Some(parent) = new_resolved_path.parent() {
@@ -206,7 +173,7 @@ impl FileSystemTrait for FileSystem {
 
             std::fs::rename(old_resolved_path, new_resolved_path)?;
 
-            Ok(changed_paths)
+            Ok(())
         })
     }
 }
