@@ -1,4 +1,4 @@
-use std::task::Poll;
+use std::{collections::HashMap, task::Poll};
 
 use crate::{
     error::AppResult,
@@ -20,6 +20,22 @@ pub struct FileStorage {
     current_tasks: Vec<FileStorageTask>,
     cached_files: Option<Vec<FilePath>>,
     cached_file_tree: Option<DirNode>,
+    open_files: HashMap<FilePath, OpenFileState>,
+}
+
+pub enum OpenFileState {
+    /// The file was just opened and has no text buffer to show yet.
+    Loading { task: AsyncJob<AppResult<String>> },
+    /// The file is reloading from disk while keeping the previous text buffer visible.
+    Reloading {
+        text: String,
+        saved_text: String,
+        task: AsyncJob<AppResult<String>>,
+    },
+    /// The file has an editable text buffer and the last disk-backed text.
+    Loaded { text: String, saved_text: String },
+    /// The file could not be loaded as text.
+    Errored { error: String },
 }
 
 enum FileStorageTask {
@@ -38,6 +54,9 @@ enum FileStorageTask {
     MovePath {
         task: AsyncJob<AppResult<()>>,
     },
+    SaveFile {
+        task: AsyncJob<AppResult<()>>,
+    },
 }
 
 impl FileStorage {
@@ -50,6 +69,7 @@ impl FileStorage {
             cached_file_tree: None,
             current_tasks: vec![],
             file_watcher,
+            open_files: HashMap::new(),
         })
     }
 
@@ -88,6 +108,23 @@ impl FileStorage {
 
     pub fn read_to_string(&self, path: &FilePath) -> AsyncJob<AppResult<String>> {
         self.file_system.read_to_string(path)
+    }
+
+    pub fn save_in_background(&mut self, path: &FilePath, bytes: Vec<u8>) {
+        let task = self.file_system.save(path, bytes);
+        self.current_tasks.push(FileStorageTask::SaveFile { task });
+    }
+
+    pub fn get_open_file(&self, path: &FilePath) -> Option<&OpenFileState> {
+        self.open_files.get(path)
+    }
+
+    pub fn open_file(&mut self, path: &FilePath) -> &mut OpenFileState {
+        self.open_files
+            .entry(path.clone())
+            .or_insert_with(|| OpenFileState::Loading {
+                task: self.file_system.read_to_string(path),
+            })
     }
 
     pub fn create_file_in_background(&mut self, file_path: FilePath) {
@@ -133,6 +170,7 @@ impl FileStorage {
         while let Some(result) = self.file_watcher.try_next() {
             match result {
                 Ok(paths) => {
+                    self.reload_open_files(&paths);
                     tracker.push_file_changes(paths);
                     self.refresh_file_system();
                 }
@@ -166,10 +204,67 @@ impl FileStorage {
             FileStorageTask::MovePath { task } => consume_if_ready(task, "move path", |_| {
                 refresh_file_system = true;
             }),
+            FileStorageTask::SaveFile { task } => {
+                consume_if_ready(task, "save file", |_| refresh_file_system = true)
+            }
         });
 
         if refresh_file_system && !self.has_list_file_files_pending() {
             self.refresh_file_system();
+        }
+
+        self.tick_open_files();
+    }
+
+    fn reload_open_files(&mut self, paths: &[FilePath]) {
+        for path in paths {
+            let Some(file) = self.open_files.get_mut(path) else {
+                continue;
+            };
+
+            let task = self.file_system.read_to_string(path);
+            match file {
+                OpenFileState::Loaded { text, saved_text }
+                | OpenFileState::Reloading {
+                    text, saved_text, ..
+                } => {
+                    let text = text.clone();
+                    let saved_text = saved_text.clone();
+                    *file = OpenFileState::Reloading {
+                        text,
+                        saved_text,
+                        task,
+                    };
+                }
+                OpenFileState::Loading { .. } | OpenFileState::Errored { .. } => {
+                    *file = OpenFileState::Loading { task };
+                }
+            }
+        }
+    }
+
+    fn tick_open_files(&mut self) {
+        for file in self.open_files.values_mut() {
+            let result = match file {
+                OpenFileState::Loading { task } | OpenFileState::Reloading { task, .. } => {
+                    task.try_resolve()
+                }
+                OpenFileState::Loaded { .. } | OpenFileState::Errored { .. } => continue,
+            };
+
+            let Poll::Ready(result) = result else {
+                continue;
+            };
+
+            *file = match result {
+                Ok(text) => OpenFileState::Loaded {
+                    saved_text: text.clone(),
+                    text,
+                },
+                Err(error) => OpenFileState::Errored {
+                    error: error.to_string(),
+                },
+            };
         }
     }
 }

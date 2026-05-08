@@ -5,8 +5,7 @@ use winit::{event::WindowEvent, window::Window};
 
 use crate::{
     error::AppResult,
-    file::file_storage::FileStorage,
-    file::identifier::ProjectIdentifier,
+    file::{file_storage::FileStorage, identifier::ProjectIdentifier},
     project::{
         self, DimensionId, FramePlanId, Project, ResourceId, ResourceKind, RuntimeProject,
         ViewportId,

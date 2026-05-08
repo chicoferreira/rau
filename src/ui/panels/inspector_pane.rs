@@ -1,6 +1,7 @@
 use std::fmt::Debug;
 
 use crate::{
+    file::file_storage::OpenFileState,
     project::{
         BindGroupId, CameraId, ComputePassId, DimensionId, FramePlanId, ModelId, RenderPassId,
         ResourceId, SamplerId, ShaderId, TextureId, TextureViewId, UniformId, ViewportId,
@@ -33,10 +34,25 @@ fn resource_tab_title(id: impl Into<ResourceId>, state: &StateSnapshot<'_>) -> S
     label_opt.unwrap_or_else(|| format!("Unknown {:?}", id))
 }
 
+fn file_tab_title(file_path: &FilePath, state: &StateSnapshot<'_>) -> String {
+    // TODO: add loading indicator in case of loading/reloading
+    match state.file_storage.get_open_file(file_path) {
+        Some(
+            OpenFileState::Loaded { text, saved_text }
+            | OpenFileState::Reloading {
+                text, saved_text, ..
+            },
+        ) if text != saved_text => {
+            format!("{} *", file_path)
+        }
+        _ => file_path.to_string(),
+    }
+}
+
 impl Pane for InspectorPane {
     fn tab_title(&self, state: &StateSnapshot<'_>) -> egui::WidgetText {
         match self {
-            InspectorPane::File(file_path) => file_path.to_string().into(),
+            InspectorPane::File(file_path) => file_tab_title(file_path, state).into(),
             InspectorPane::Uniform(id) => resource_tab_title(*id, state).into(),
             InspectorPane::BindGroup(id) => resource_tab_title(*id, state).into(),
             InspectorPane::Shader(id) => resource_tab_title(*id, state).into(),
@@ -63,7 +79,7 @@ impl Pane for InspectorPane {
                 ui.push_id(self.clone(), |ui| {
                     match self {
                         InspectorPane::File(file_path) => {
-                            todo!("{:?}", file_path);
+                            state.file_inspector_ui(ui, file_path);
                         }
                         InspectorPane::Uniform(uniform_id) => {
                             state.uniform_inspector_ui(*uniform_id, ui);

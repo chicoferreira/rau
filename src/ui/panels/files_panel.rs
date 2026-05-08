@@ -102,10 +102,18 @@ pub fn ui(state: &mut StateSnapshot, ui: &mut egui::Ui) -> Response {
                     state.pending_events.push(event);
                 }
             }
-            Action::SetSelected(_)
-            | Action::Activate(_)
-            | Action::DragExternal(_)
-            | Action::MoveExternal(_) => {}
+            Action::SetSelected(selected) => {
+                for node in selected {
+                    let path = match node {
+                        FileTreeNodeId::Root => continue,
+                        FileTreeNodeId::Folder(path) => path.clone(),
+                        FileTreeNodeId::File(path) => path.clone(),
+                        FileTreeNodeId::Pending(path) => path.clone(),
+                    };
+                    state.pending_events.push(StateEvent::OpenFile(path));
+                }
+            }
+            Action::Activate(_) | Action::DragExternal(_) | Action::MoveExternal(_) => {}
         }
     }
 
