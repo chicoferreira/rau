@@ -1,13 +1,17 @@
+use std::fmt::Debug;
+
 use crate::{
     project::{
         BindGroupId, CameraId, ComputePassId, DimensionId, FramePlanId, ModelId, RenderPassId,
         ResourceId, SamplerId, ShaderId, TextureId, TextureViewId, UniformId, ViewportId,
+        paths::FilePath,
     },
     ui::{components::tiles::Pane, pane::StateSnapshot},
 };
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum InspectorPane {
+    File(FilePath),
     Uniform(UniformId),
     BindGroup(BindGroupId),
     Shader(ShaderId),
@@ -23,36 +27,30 @@ pub enum InspectorPane {
     ComputePass(ComputePassId),
 }
 
-impl InspectorPane {
-    pub fn id(&self) -> ResourceId {
-        match *self {
-            InspectorPane::Uniform(id) => id.into(),
-            InspectorPane::BindGroup(id) => id.into(),
-            InspectorPane::Shader(id) => id.into(),
-            InspectorPane::Camera(id) => id.into(),
-            InspectorPane::Dimension(id) => id.into(),
-            InspectorPane::Sampler(id) => id.into(),
-            InspectorPane::Texture(id) => id.into(),
-            InspectorPane::TextureView(id) => id.into(),
-            InspectorPane::Viewport(id) => id.into(),
-            InspectorPane::Model(id) => id.into(),
-            InspectorPane::RenderPass(id) => id.into(),
-            InspectorPane::FramePlan(id) => id.into(),
-            InspectorPane::ComputePass(id) => id.into(),
-        }
-    }
+fn resource_tab_title(id: impl Into<ResourceId>, state: &StateSnapshot<'_>) -> String {
+    let id = id.into();
+    let label_opt = state.project.label(id).map(|l| l.to_string());
+    label_opt.unwrap_or_else(|| format!("Unknown {:?}", id))
 }
 
 impl Pane for InspectorPane {
     fn tab_title(&self, state: &StateSnapshot<'_>) -> egui::WidgetText {
-        let id = self.id();
-        let label = state
-            .project
-            .label(id)
-            .map(|l| l.to_string())
-            .unwrap_or_else(|| format!("Unknown {:?}", id));
-
-        label.into()
+        match self {
+            InspectorPane::File(file_path) => file_path.to_string().into(),
+            InspectorPane::Uniform(id) => resource_tab_title(*id, state).into(),
+            InspectorPane::BindGroup(id) => resource_tab_title(*id, state).into(),
+            InspectorPane::Shader(id) => resource_tab_title(*id, state).into(),
+            InspectorPane::Camera(id) => resource_tab_title(*id, state).into(),
+            InspectorPane::Dimension(id) => resource_tab_title(*id, state).into(),
+            InspectorPane::Sampler(id) => resource_tab_title(*id, state).into(),
+            InspectorPane::Texture(id) => resource_tab_title(*id, state).into(),
+            InspectorPane::TextureView(id) => resource_tab_title(*id, state).into(),
+            InspectorPane::Viewport(id) => resource_tab_title(*id, state).into(),
+            InspectorPane::Model(id) => resource_tab_title(*id, state).into(),
+            InspectorPane::RenderPass(id) => resource_tab_title(*id, state).into(),
+            InspectorPane::FramePlan(id) => resource_tab_title(*id, state).into(),
+            InspectorPane::ComputePass(id) => resource_tab_title(*id, state).into(),
+        }
     }
 
     fn pane_ui(
@@ -62,8 +60,11 @@ impl Pane for InspectorPane {
     ) -> egui_tiles::UiResponse {
         egui::CentralPanel::default().show_inside(ui, |ui| {
             egui::ScrollArea::both().auto_shrink(false).show(ui, |ui| {
-                ui.push_id(self.id(), |ui| {
+                ui.push_id(self.clone(), |ui| {
                     match self {
+                        InspectorPane::File(file_path) => {
+                            todo!("{:?}", file_path);
+                        }
                         InspectorPane::Uniform(uniform_id) => {
                             state.uniform_inspector_ui(*uniform_id, ui);
                         }

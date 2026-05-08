@@ -41,6 +41,7 @@ pub enum ViewportEvent {
 #[derive(Debug, Clone)]
 pub enum StateEvent {
     ViewportEvent(ViewportId, ViewportEvent),
+    OpenFile(FilePath),
     InspectResource(ResourceId),
     OpenViewport(ViewportId),
     CreateResource(ResourceKind),
@@ -462,6 +463,10 @@ impl State {
         for event in self.pending_events.drain(..) {
             log::debug!("Handling event {event:?}");
             match event {
+                StateEvent::OpenFile(file_path) => {
+                    let pane = InspectorPane::File(file_path);
+                    self.inspector_tree_pane.add_pane(pane);
+                }
                 StateEvent::InspectResource(resource_id) => {
                     let pane = match resource_id {
                         ResourceId::Uniform(id) => InspectorPane::Uniform(id),

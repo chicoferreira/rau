@@ -1,5 +1,6 @@
 pub mod color_edit;
 pub mod data_display;
+pub mod file_editor;
 pub mod flags_selector;
 pub mod hint;
 pub mod rename_text_edit;

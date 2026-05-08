@@ -162,6 +162,8 @@ fn render_dir_nodes(
         };
 
         TreeNode::new(FileTreeNodeId::File(file_path.clone()), file_name)
+            .with_event("Open File", StateEvent::OpenFile(file_path.clone()))
+            .with_separator()
             .with_event("Create File", StateEvent::CreateFile(path.clone()))
             .with_event("Create Folder", StateEvent::CreateFolder(path.clone()))
             .with_rename_event("Rename File", RenameTarget::FileOrFolder(file_path.clone()))
