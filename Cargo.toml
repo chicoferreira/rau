@@ -55,6 +55,7 @@ egui-winit = { version = "0.34.1", default-features = true }
 pollster = "0.4.0"
 notify = "8.2.0"
 notify-debouncer-mini = "0.7.0"
+tokio = { version = "1.52.3", features = ["sync"] }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 console_error_panic_hook = "0.1.6"

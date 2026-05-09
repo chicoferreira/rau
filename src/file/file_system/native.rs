@@ -11,9 +11,12 @@ use crate::{
     utils::async_job::AsyncJob,
 };
 
+type FileSystemJob = Box<dyn FnOnce() + Send + 'static>;
+
 #[derive(Clone)]
 pub struct FileSystem {
     id: ProjectIdentifier,
+    send_jobs: std::sync::mpsc::Sender<FileSystemJob>,
 }
 
 impl FileSystem {
@@ -34,19 +37,52 @@ impl FileSystem {
 
         Ok(path_buf)
     }
+
+    fn run_blocking<T: Send + 'static>(
+        &self,
+        function: impl FnOnce() -> T + Send + 'static,
+    ) -> AsyncJob<T> {
+        let (tx, rx) = tokio::sync::oneshot::channel();
+        let job = Box::new(move || {
+            let result = function();
+            tx.send(result).ok();
+        });
+
+        self.send_jobs.send(job).expect("the fs worker closed");
+
+        AsyncJob::new(async move {
+            rx.await
+                .expect("function must complete unless the fs worker panics")
+        })
+    }
+
+    fn spawn_worker_thread(rx: std::sync::mpsc::Receiver<FileSystemJob>) {
+        std::thread::Builder::new()
+            .name("native-fs-worker".to_string())
+            .spawn(move || {
+                while let Ok(job) = rx.recv() {
+                    (job)();
+                }
+            })
+            .expect("couldn't spawn thread");
+    }
 }
 
 impl FileSystemTrait for FileSystem {
     fn mount(id: ProjectIdentifier) -> FutureResult<(Self, FileWatcher)> {
         AsyncJob::new(async move {
             let file_watcher = FileWatcher::new(id.project_path().clone())?;
-            Ok((Self { id }, file_watcher))
+            let (send_jobs, receive_jobs) = std::sync::mpsc::channel();
+            Self::spawn_worker_thread(receive_jobs);
+
+            Ok((Self { id, send_jobs }, file_watcher))
         })
     }
 
     fn read(&self, path: &FilePath) -> FutureResult<Vec<u8>> {
         let path = self.resolve_exists(path);
-        AsyncJob::new(async move {
+
+        self.run_blocking(|| {
             let path = path?;
             std::fs::read(&path).map_err(Into::into)
         })
@@ -54,7 +90,7 @@ impl FileSystemTrait for FileSystem {
 
     fn read_to_string(&self, path: &FilePath) -> FutureResult<String> {
         let path = self.resolve_exists(path);
-        AsyncJob::new(async move {
+        self.run_blocking(|| {
             let path = path?;
             std::fs::read_to_string(&path).map_err(Into::into)
         })
@@ -62,7 +98,7 @@ impl FileSystemTrait for FileSystem {
 
     fn list_entries(&self) -> FutureResult<FileSystemEntries> {
         let root = self.id.project_path().as_path_buf();
-        AsyncJob::new(async move {
+        self.run_blocking(move || {
             let mut files = Vec::new();
             let mut directories = Vec::new();
 
@@ -78,7 +114,7 @@ impl FileSystemTrait for FileSystem {
         let resolved_path = self.resolve(path);
         let path = path.clone();
 
-        AsyncJob::new(async move {
+        self.run_blocking(|| {
             if resolved_path.try_exists()? {
                 return Err(AppError::PathAlreadyExists(path));
             }
@@ -90,7 +126,7 @@ impl FileSystemTrait for FileSystem {
     fn save(&self, path: &FilePath, bytes: Vec<u8>) -> FutureResult<()> {
         let path = self.resolve(path);
 
-        AsyncJob::new(async move {
+        self.run_blocking(|| {
             if let Some(parent) = path.parent() {
                 std::fs::create_dir_all(parent)?;
             }
@@ -103,7 +139,7 @@ impl FileSystemTrait for FileSystem {
         let resolved_path = self.resolve(path);
         let path = path.clone();
 
-        AsyncJob::new(async move {
+        self.run_blocking(|| {
             if resolved_path.try_exists()? {
                 return Err(AppError::PathAlreadyExists(path.clone()));
             }
@@ -131,7 +167,7 @@ impl FileSystemTrait for FileSystem {
         let resolved_path = self.resolve_exists(path);
         let path = path.clone();
 
-        AsyncJob::new(async move {
+        self.run_blocking(move || {
             let resolved_path = resolved_path?;
             if resolved_path.is_dir() {
                 let mut files = Vec::new();
@@ -157,7 +193,7 @@ impl FileSystemTrait for FileSystem {
         let old = old.clone();
         let new = new.clone();
 
-        AsyncJob::new(async move {
+        self.run_blocking(move || {
             if old == new {
                 return Ok(());
             }

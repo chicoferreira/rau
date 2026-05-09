@@ -204,9 +204,7 @@ impl FileStorage {
             FileStorageTask::MovePath { task } => consume_if_ready(task, "move path", |_| {
                 refresh_file_system = true;
             }),
-            FileStorageTask::SaveFile { task } => {
-                consume_if_ready(task, "save file", |_| refresh_file_system = true)
-            }
+            FileStorageTask::SaveFile { task } => consume_if_ready(task, "save file", |_| {}),
         });
 
         if refresh_file_system && !self.has_list_file_files_pending() {
@@ -245,26 +243,56 @@ impl FileStorage {
 
     fn tick_open_files(&mut self) {
         for file in self.open_files.values_mut() {
-            let result = match file {
-                OpenFileState::Loading { task } | OpenFileState::Reloading { task, .. } => {
-                    task.try_resolve()
+            match file {
+                OpenFileState::Loading { task } => {
+                    let Poll::Ready(result) = task.try_resolve() else {
+                        continue;
+                    };
+
+                    *file = match result {
+                        Ok(text) => OpenFileState::Loaded {
+                            saved_text: text.clone(),
+                            text,
+                        },
+                        Err(error) => OpenFileState::Errored {
+                            error: error.to_string(),
+                        },
+                    };
+                }
+                OpenFileState::Reloading {
+                    text,
+                    saved_text,
+                    task,
+                } => {
+                    let Poll::Ready(result) = task.try_resolve() else {
+                        continue;
+                    };
+
+                    *file = match result {
+                        Ok(disk_text) => {
+                            // A reload can finish after the user has already typed more text.
+                            // If the buffer is still clean, accept the disk version into the editor.
+                            if text == saved_text {
+                                OpenFileState::Loaded {
+                                    saved_text: disk_text.clone(),
+                                    text: disk_text,
+                                }
+                            } else {
+                                // If the buffer is dirty, keep the user's in-memory edits,
+                                // while a background reload should be in progress.
+                                OpenFileState::Loaded {
+                                    text: text.to_string(),
+                                    saved_text: disk_text,
+                                }
+                            }
+                        }
+                        Err(error) => OpenFileState::Errored {
+                            error: error.to_string(),
+                        },
+                    };
                 }
                 OpenFileState::Loaded { .. } | OpenFileState::Errored { .. } => continue,
-            };
-
-            let Poll::Ready(result) = result else {
-                continue;
-            };
-
-            *file = match result {
-                Ok(text) => OpenFileState::Loaded {
-                    saved_text: text.clone(),
-                    text,
-                },
-                Err(error) => OpenFileState::Errored {
-                    error: error.to_string(),
-                },
-            };
+            }
         }
     }
 }
