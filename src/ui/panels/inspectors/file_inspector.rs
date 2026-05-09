@@ -17,7 +17,8 @@ impl StateSnapshot<'_> {
             | OpenFileState::Reloading {
                 text, saved_text, ..
             } => {
-                if code_editor(ui, text).changed() && text != saved_text {
+                let extension = file_path.extension().unwrap_or("");
+                if code_editor(ui, text, extension).changed() && text != saved_text {
                     let bytes = text.clone().into_bytes();
                     self.file_storage.save_in_background(file_path, bytes);
                 }

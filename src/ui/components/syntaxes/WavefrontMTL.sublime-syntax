@@ -1,0 +1,23 @@
+%YAML 1.2
+---
+name: Wavefront MTL
+file_extensions:
+  - mtl
+scope: source.mtl
+
+contexts:
+  main:
+    - match: '^#.*$'
+      scope: comment.line.number-sign.mtl
+
+    - match: '^(newmtl|Ka|Kd|Ks|Ke|Ns|Ni|d|Tr|illum)\b'
+      scope: keyword.material.mtl
+
+    - match: '^(map_Ka|map_Kd|map_Ks|map_bump|bump|disp|decal|refl)\b'
+      scope: keyword.texture.mtl
+
+    - match: '\b-?\d+(\.\d+)?\b'
+      scope: constant.numeric.mtl
+
+    - match: '[A-Za-z_][\w./-]*'
+      scope: string.unquoted.mtl

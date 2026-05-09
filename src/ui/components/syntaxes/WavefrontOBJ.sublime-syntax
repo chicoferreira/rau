@@ -1,0 +1,26 @@
+%YAML 1.2
+---
+name: Wavefront OBJ
+file_extensions:
+  - obj
+scope: source.obj
+
+contexts:
+  main:
+    - match: '^#.*$'
+      scope: comment.line.number-sign.obj
+
+    - match: '^(v|vn|vt|vp)\b'
+      scope: keyword.geometry.obj
+
+    - match: '^(f|l|p)\b'
+      scope: keyword.face.obj
+
+    - match: '^(o|g|s|usemtl|mtllib)\b'
+      scope: keyword.meta.obj
+
+    - match: '\b-?\d+(\.\d+)?\b'
+      scope: constant.numeric.obj
+
+    - match: '[A-Za-z_][\w.-]*'
+      scope: entity.name.obj

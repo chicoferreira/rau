@@ -118,6 +118,12 @@ impl FilePath {
         self.segments.last().map(|s| s.as_ref())
     }
 
+    pub fn extension(&self) -> Option<&str> {
+        self.file_name()
+            .and_then(|s| s.rsplit_once('.'))
+            .map(|(_, ext)| ext)
+    }
+
     pub fn to_string(&self) -> String {
         self.segments.join("/")
     }
