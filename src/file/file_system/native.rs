@@ -96,6 +96,12 @@ impl FileSystemTrait for FileSystem {
         })
     }
 
+    fn exists(&self, path: &FilePath) -> FutureResult<bool> {
+        let path = self.resolve(path);
+
+        self.run_blocking(move || path.try_exists().map_err(Into::into))
+    }
+
     fn list_entries(&self) -> FutureResult<FileSystemEntries> {
         let root = self.id.project_path().as_path_buf();
         self.run_blocking(move || {

@@ -73,6 +73,8 @@ pub fn ui(state: &mut StateSnapshot, ui: &mut egui::Ui) -> Response {
             let rename_state = &mut *state.rename_state;
 
             TreeNode::folder(FileTreeNodeId::Root, &project_name)
+                .with_event("Import File", StateEvent::ImportFile(FilePath::default()))
+                .with_separator()
                 .with_event("Create File", StateEvent::CreateFile(FilePath::default()))
                 .with_event(
                     "Create Folder",
@@ -149,6 +151,8 @@ fn render_dir_nodes(
             .expect("a dir from list_entries is be valid");
 
         TreeNode::folder(FileTreeNodeId::Folder(path.clone()), dir_name)
+            .with_event("Import File", StateEvent::ImportFile(path.clone()))
+            .with_separator()
             .with_event("Create File", StateEvent::CreateFile(path.clone()))
             .with_event("Create Folder", StateEvent::CreateFolder(path.clone()))
             .with_rename_event("Rename Folder", RenameTarget::FileOrFolder(path.clone()))
@@ -171,6 +175,9 @@ fn render_dir_nodes(
 
         TreeNode::new(FileTreeNodeId::File(file_path.clone()), file_name)
             .with_event("Open File", StateEvent::OpenFile(file_path.clone()))
+            .with_separator()
+            .with_event("Import File", StateEvent::ImportFile(path.clone()))
+            .with_event("Replace File", StateEvent::ReplaceFile(file_path.clone()))
             .with_separator()
             .with_event("Create File", StateEvent::CreateFile(path.clone()))
             .with_event("Create Folder", StateEvent::CreateFolder(path.clone()))

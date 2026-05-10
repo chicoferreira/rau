@@ -373,6 +373,14 @@ impl FileSystemTrait for FileSystem {
         })
     }
 
+    fn exists(&self, path: &FilePath) -> FutureResult<bool> {
+        let database = self.database.clone();
+        let id = self.id.clone();
+        let path = path.clone();
+
+        AsyncJob::new(async move { Self::entry_exists(&database, &id, &path).await })
+    }
+
     fn list_entries(&self) -> FutureResult<FileSystemEntries> {
         let database = self.database.clone();
         let id = self.id.clone();

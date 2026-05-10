@@ -1,7 +1,7 @@
 use std::{collections::HashMap, task::Poll};
 
 use crate::{
-    error::AppResult,
+    error::{AppError, AppResult},
     file::{
         file_system::{FileSystem, FileSystemEntries, FileSystemTrait},
         file_watcher::FileWatcher,
@@ -56,6 +56,12 @@ enum FileStorageTask {
     },
     SaveFile {
         task: AsyncJob<AppResult<()>>,
+    },
+    ImportFile {
+        task: AsyncJob<AppResult<bool>>,
+    },
+    ReplaceFile {
+        task: AsyncJob<AppResult<bool>>,
     },
 }
 
@@ -113,6 +119,53 @@ impl FileStorage {
     pub fn save_in_background(&mut self, path: &FilePath, bytes: Vec<u8>) {
         let task = self.file_system.save(path, bytes);
         self.current_tasks.push(FileStorageTask::SaveFile { task });
+    }
+
+    pub fn import_file_in_background(&mut self, parent_path: FilePath) {
+        let file_system = self.file_system.clone();
+        let task = AsyncJob::new(async move {
+            let Some(file) = rfd::AsyncFileDialog::new()
+                .set_title("Import File")
+                .pick_file()
+                .await
+            else {
+                return Ok(false);
+            };
+
+            let file_path = parent_path.join(file.file_name())?;
+            if file_system.exists(&file_path).await? {
+                return Err(AppError::PathAlreadyExists(file_path));
+            }
+
+            let bytes = file.read().await;
+            file_system.save(&file_path, bytes).await?;
+
+            Ok(true)
+        });
+
+        self.current_tasks
+            .push(FileStorageTask::ImportFile { task });
+    }
+
+    pub fn replace_file_in_background(&mut self, file_path: FilePath) {
+        let file_system = self.file_system.clone();
+        let task = AsyncJob::new(async move {
+            let Some(file) = rfd::AsyncFileDialog::new()
+                .set_title("Replace File")
+                .pick_file()
+                .await
+            else {
+                return Ok(false);
+            };
+
+            let bytes = file.read().await;
+            file_system.save(&file_path, bytes).await?;
+
+            Ok(true)
+        });
+
+        self.current_tasks
+            .push(FileStorageTask::ReplaceFile { task });
     }
 
     pub fn get_open_file(&self, path: &FilePath) -> Option<&OpenFileState> {
@@ -205,6 +258,20 @@ impl FileStorage {
                 refresh_file_system = true;
             }),
             FileStorageTask::SaveFile { task } => consume_if_ready(task, "save file", |_| {}),
+            FileStorageTask::ImportFile { task } => {
+                consume_if_ready(task, "import file", |imported| {
+                    if imported {
+                        refresh_file_system = true;
+                    }
+                })
+            }
+            FileStorageTask::ReplaceFile { task } => {
+                consume_if_ready(task, "replace file", |replaced| {
+                    if replaced {
+                        refresh_file_system = true;
+                    }
+                })
+            }
         });
 
         if refresh_file_system && !self.has_list_file_files_pending() {

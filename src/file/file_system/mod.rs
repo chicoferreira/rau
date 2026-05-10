@@ -30,6 +30,8 @@ pub trait FileSystemTrait: Clone + Sized {
 
     fn read_to_string(&self, path: &FilePath) -> FutureResult<String>;
 
+    fn exists(&self, path: &FilePath) -> FutureResult<bool>;
+
     fn list_entries(&self) -> FutureResult<FileSystemEntries>;
 
     fn create_directory(&self, path: &FilePath) -> FutureResult<()>;

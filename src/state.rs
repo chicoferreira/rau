@@ -52,6 +52,8 @@ pub enum StateEvent {
     CreateFolder(FilePath),
     DeleteFile(FilePath),
     DeleteFolder(FilePath),
+    ImportFile(FilePath),
+    ReplaceFile(FilePath),
     MoveFileSystemEntry {
         old_path: FilePath,
         new_path: FilePath,
@@ -525,6 +527,12 @@ impl State {
                 }
                 StateEvent::DeleteFolder(file_path) => {
                     self.file_storage.delete_folder_in_background(file_path);
+                }
+                StateEvent::ImportFile(parent_path) => {
+                    self.file_storage.import_file_in_background(parent_path);
+                }
+                StateEvent::ReplaceFile(file_path) => {
+                    self.file_storage.replace_file_in_background(file_path);
                 }
                 StateEvent::MoveFileSystemEntry { old_path, new_path } => {
                     self.file_storage
