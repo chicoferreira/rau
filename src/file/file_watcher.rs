@@ -9,11 +9,12 @@ pub use wasm::FileWatcher;
 #[cfg(not(target_arch = "wasm32"))]
 mod native {
     use std::{
+        collections::HashMap,
         sync::mpsc::{self, TryRecvError},
-        time::Duration,
+        time::{Duration, Instant},
     };
 
-    use notify_debouncer_mini::notify::RecursiveMode;
+    use notify::{Event, RecommendedWatcher, RecursiveMode, Watcher};
 
     use crate::file::absolute::AbsolutePathBuf;
 
@@ -21,46 +22,76 @@ mod native {
 
     const DEBOUNCE_DURATION: Duration = Duration::from_millis(200);
 
-    type Debouncer =
-        notify_debouncer_mini::Debouncer<notify_debouncer_mini::notify::RecommendedWatcher>;
-
     pub struct FileWatcher {
-        rx: mpsc::Receiver<notify_debouncer_mini::DebounceEventResult>,
+        rx: mpsc::Receiver<notify::Result<Event>>,
         root: AbsolutePathBuf,
-        _debouncer: Debouncer,
+        pending_events: HashMap<FilePath, Instant>,
+        _watcher: RecommendedWatcher,
     }
 
     impl FileWatcher {
         pub fn new(root: AbsolutePathBuf) -> AppResult<Self> {
             let (tx, rx) = mpsc::channel();
 
-            let mut debouncer = notify_debouncer_mini::new_debouncer(DEBOUNCE_DURATION, tx)?;
-            debouncer
-                .watcher()
-                .watch(root.as_ref(), RecursiveMode::Recursive)?;
+            let mut watcher = notify::recommended_watcher(move |event| {
+                let _ = tx.send(event);
+            })?;
+            watcher.watch(root.as_ref(), RecursiveMode::Recursive)?;
 
             Ok(Self {
                 rx,
                 root,
-                _debouncer: debouncer,
+                pending_events: HashMap::new(),
+                _watcher: watcher,
             })
         }
 
         pub fn try_next(&mut self) -> Option<AppResult<Vec<FilePath>>> {
-            match self.rx.try_recv() {
-                Ok(Ok(events)) => {
-                    let events = events
-                        .into_iter()
-                        .filter_map(|event| self.relative_path_from_notify(event.path))
-                        .collect();
-
-                    log::info!("Received file changes from file watcher: {:?}", events);
-
-                    Some(Ok(events))
+            loop {
+                match self.rx.try_recv() {
+                    Ok(Ok(event)) => self.track_event(event),
+                    Ok(Err(err)) => return Some(Err(err.into())),
+                    Err(TryRecvError::Empty) => break,
+                    Err(TryRecvError::Disconnected) => panic!("Filewatcher channel closed"),
                 }
-                Ok(Err(err)) => Some(Err(err.into())),
-                Err(TryRecvError::Empty) => None,
-                Err(TryRecvError::Disconnected) => panic!("Filewatcher channel closed"),
+            }
+
+            let now = Instant::now();
+            let mut events = vec![];
+
+            self.pending_events.retain(|path, last_update| {
+                if now.duration_since(*last_update) >= DEBOUNCE_DURATION {
+                    events.push(path.clone());
+                    false
+                } else {
+                    true
+                }
+            });
+
+            if events.is_empty() {
+                None
+            } else {
+                let events_str: Vec<String> = events.iter().map(FilePath::to_string).collect();
+                log::info!("Received file changes from file watcher: {:?}", events_str);
+
+                Some(Ok(events))
+            }
+        }
+
+        fn track_event(&mut self, event: Event) {
+            if event.kind.is_access() {
+                // Ignore access events
+                return;
+            }
+
+            let now = Instant::now();
+            for path in event.paths {
+                let Some(path) = self.relative_path_from_notify(path) else {
+                    continue;
+                };
+
+                // Multiple events for the same path are coalesced into a single event via the hash map
+                self.pending_events.insert(path, now);
             }
         }
 
