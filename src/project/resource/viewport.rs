@@ -1,8 +1,12 @@
+use serde::{Deserialize, Serialize};
+
 use crate::{
     project::{CameraId, Creatable, DimensionId, ProjectResource, TextureViewId, ViewportId},
     ui::Size2d,
 };
 
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Viewport {
     pub label: String,
     pub texture_view_id: Option<TextureViewId>,

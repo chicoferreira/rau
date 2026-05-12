@@ -9,7 +9,9 @@ use crate::{
         resource::{
             bindgroup::BindGroup,
             model::Model,
-            render_pass::{MAX_RENDER_PASS_BIND_GROUPS, RenderDraw, RenderPipeline},
+            render_pass::{
+                MAX_RENDER_PASS_BIND_GROUPS, RenderDraw, RenderPipeline, RenderPipelineId,
+            },
         },
         storage::Storage,
     },
@@ -174,7 +176,7 @@ struct BindGroupEntryActions {
 fn bind_group_entries_list_ui(
     ui: &mut egui::Ui,
     render_pass_id: RenderPassId,
-    pipeline_id: usize,
+    pipeline_id: RenderPipelineId,
     bind_groups: &Storage<BindGroup>,
     entries: &mut Vec<UnifiedEntry>,
     actions: &mut BindGroupEntryActions,
@@ -216,7 +218,7 @@ fn bind_group_entry_row_ui(
     ui: &mut egui::Ui,
     handle: egui_dnd::Handle<'_>,
     render_pass_id: RenderPassId,
-    pipeline_id: usize,
+    pipeline_id: RenderPipelineId,
     bind_groups: &Storage<BindGroup>,
     index: usize,
     entry: &mut UnifiedEntry,
@@ -268,7 +270,7 @@ fn bind_group_entry_title(entry: &UnifiedEntry) -> String {
 fn bind_group_entry_fields_ui(
     ui: &mut egui::Ui,
     render_pass_id: RenderPassId,
-    pipeline_id: usize,
+    pipeline_id: RenderPipelineId,
     bind_groups: &Storage<BindGroup>,
     index: usize,
     entry: &mut UnifiedEntry,
@@ -292,7 +294,7 @@ fn bind_group_entry_fields_ui(
 
 fn static_bind_group_fields_ui(
     ui: &mut egui::Ui,
-    pipeline_id: usize,
+    pipeline_id: RenderPipelineId,
     index: usize,
     bind_groups: &Storage<BindGroup>,
     slot: &mut u32,
@@ -499,7 +501,7 @@ fn draw_kind_fields_ui(
 
 fn draw_fields_ui(
     ui: &mut egui::Ui,
-    pipeline_id: usize,
+    pipeline_id: RenderPipelineId,
     models: &Storage<Model>,
     edited: &mut RenderDraw,
 ) {
@@ -526,7 +528,7 @@ fn draw_fields_ui(
 
 fn model_draw_fields_ui(
     ui: &mut egui::Ui,
-    pipeline_id: usize,
+    pipeline_id: RenderPipelineId,
     models: &Storage<Model>,
     model_id: &mut Option<crate::project::ModelId>,
     instances: &mut Range<u32>,

@@ -1,6 +1,7 @@
 use std::f32::consts::FRAC_PI_2;
 
 use cgmath::{Deg, InnerSpace, Matrix4, Point3, Rad, SquareMatrix, Vector3, Zero};
+use serde::{Deserialize, Serialize};
 
 use crate::{
     error::{AppError, AppResult},
@@ -28,7 +29,8 @@ pub struct CameraCreationContext<'a> {
     pub dt: instant::Duration,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Camera {
     pub label: String,
     position: Point3<f32>,
@@ -44,7 +46,9 @@ pub struct Camera {
     drag: f32,
     sensitivity: f32,
     scroll_speed: f32,
+    #[serde(skip)]
     input: CameraFrameInput,
+    #[serde(skip)]
     revision: Revision,
 }
 

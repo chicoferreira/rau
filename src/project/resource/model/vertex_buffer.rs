@@ -1,11 +1,15 @@
 use egui_dnd::utils::shift_vec;
+use serde::{Deserialize, Serialize};
+use strum::{Display, EnumIter};
 
-#[derive(Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct VertexBufferSpec {
     pub fields: Vec<VertexBufferField>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, strum::EnumIter, strum::Display)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, EnumIter, Display, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub enum VertexBufferField {
     #[strum(to_string = "Position")]
     Position,

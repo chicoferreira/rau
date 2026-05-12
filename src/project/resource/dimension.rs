@@ -1,3 +1,5 @@
+use serde::{Deserialize, Serialize};
+
 use crate::{
     error::AppResult,
     project::{
@@ -7,9 +9,12 @@ use crate::{
     ui::Size2d,
 };
 
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Dimension {
     pub label: String,
     size: Size2d,
+    #[serde(skip)]
     revision: Revision,
 }
 

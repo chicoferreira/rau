@@ -1,4 +1,5 @@
 use egui_dnd::utils::shift_vec;
+use serde::{Deserialize, Serialize};
 use std::task::Poll;
 
 pub mod camera;
@@ -27,9 +28,12 @@ pub struct UniformCreationContext<'a> {
     pub queue: &'a wgpu::Queue,
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Uniform {
     pub label: String,
     fields: Vec<UniformField>,
+    #[serde(skip)]
     revision: Revision,
 }
 
@@ -50,16 +54,18 @@ pub struct UniformRuntimeField {
     data: UniformFieldData,
 }
 
-type UniformFieldId = usize;
+type UniformFieldId = u64;
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct UniformField {
     label: String,
     id: UniformFieldId, // Used for stability in reordering
     source: UniformFieldSource,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", tag = "type")]
 pub enum UniformFieldSource {
     UserDefined(UniformFieldData),
     Camera {
@@ -68,7 +74,8 @@ pub enum UniformFieldSource {
     },
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", tag = "data_type", content = "data")]
 pub enum UniformFieldData {
     Vec2f([f32; 2]),
     Vec3f([f32; 3]),
@@ -297,7 +304,7 @@ fn cast_fields(fields: &[UniformRuntimeField]) -> Vec<u8> {
 impl UniformField {
     pub fn new(label: impl Into<String>, source: UniformFieldSource) -> Self {
         Self {
-            id: fastrand::usize(..),
+            id: fastrand::u64(..),
             label: label.into(),
             source,
         }

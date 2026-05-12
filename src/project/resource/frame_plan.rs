@@ -1,4 +1,5 @@
 use egui_dnd::utils::shift_vec;
+use serde::{Deserialize, Serialize};
 use std::task::Poll;
 
 use crate::{
@@ -17,15 +18,18 @@ use crate::{
     },
     utils::{async_job::AsyncJob, wgpu_error_scope::WgpuErrorScope},
 };
-#[derive(Default)]
+#[derive(Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct FramePlan {
     entries: Vec<FramePlanStep>,
+    #[serde(skip)]
     revision: Revision,
 }
 
-pub type FramePlanStepId = usize;
+pub type FramePlanStepId = u64;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct FramePlanStep {
     id: FramePlanStepId,
     render_pass_id: Option<RenderPassId>,
@@ -97,7 +101,7 @@ impl ProjectResource for FramePlan {
 impl FramePlanStep {
     fn new(render_pass_id: Option<RenderPassId>) -> Self {
         Self {
-            id: fastrand::usize(..),
+            id: fastrand::u64(..),
             render_pass_id,
         }
     }

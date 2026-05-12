@@ -2,11 +2,12 @@ use crate::{
     error::AppResult,
     file::file_storage::FileStorage,
     project::{
-        Project, ViewportId,
+        Project,
         paths::FilePath,
         resource::{
             bindgroup::{BindGroup, BindGroupEntry, BindGroupResource},
             camera::Camera,
+            compute_pass::{ComputePass, ComputePassBindGroupEntry},
             dimension::Dimension,
             model::{Model, ModelRuntime},
             render_pass::{LoadOperation, RenderDraw, RenderPass, RenderPassTarget},
@@ -23,52 +24,13 @@ use crate::{
     ui::{self},
 };
 
-mod loader;
-
-#[cfg(target_arch = "wasm32")]
-async fn fetch_current_page_wasm_and_save(
-    file_system: &crate::file::file_system::FileSystem,
-    file_path: &FilePath,
-) -> AppResult<()> {
-    use crate::file::file_system::FileSystemTrait;
-    use std::str::FromStr;
-
-    let origin = web_sys::window().unwrap().location().origin().unwrap();
-
-    let url = url::Url::from_str(origin.as_ref())?
-        .join("res/")?
-        .join(file_path.segments().join("/").as_str())?;
-
-    log::info!("Fetching {}", url);
-
-    let data = reqwest::get(url).await?.bytes().await?.to_vec();
-
-    file_system.save(file_path, data).await?;
-
-    Ok(())
-}
-
+#[allow(dead_code)]
 pub async fn create_scene(
     device: &wgpu::Device,
     size: ui::Size2d,
-    project: &mut Project,
     file_storage: &FileStorage,
-) -> AppResult<ViewportId> {
-    #[cfg(target_arch = "wasm32")]
-    for file in [
-        FilePath::from_str("cube.mtl")?,
-        FilePath::from_str("cube.obj")?,
-        FilePath::from_str("cube-diffuse.jpg")?,
-        FilePath::from_str("cube-normal.png")?,
-        FilePath::from_str("equirectangular.wgsl")?,
-        FilePath::from_str("hdr.wgsl")?,
-        FilePath::from_str("light.wgsl")?,
-        FilePath::from_str("pure-sky.hdr")?,
-        FilePath::from_str("shader.wgsl")?,
-        FilePath::from_str("sky.wgsl")?,
-    ] {
-        fetch_current_page_wasm_and_save(&file_storage.file_system, &file).await?;
-    }
+) -> AppResult<Project> {
+    let mut project = Project::default();
 
     let equirectangular_shader = Shader::new(
         "Equirectengular Shader",
@@ -289,16 +251,68 @@ pub async fn create_scene(
     let sky_texture_view = TextureView::new("label", Some(sky_texture_id), None, None);
     let sky_texture_view_id = project.texture_views.register(sky_texture_view);
 
-    let sky_texture_id = loader::from_equirectangular_bytes(
-        project,
-        equirectengular_shader_id,
-        sky_texture_view_id,
-        1080,
-    )?;
+    let dst_size = 1080;
+
+    let texture_format = wgpu::TextureFormat::Rgba32Float;
+
+    let dst_texture = Texture::new(
+        "Sky Texture",
+        texture_format,
+        wgpu::TextureUsages::STORAGE_BINDING
+            | wgpu::TextureUsages::TEXTURE_BINDING
+            | wgpu::TextureUsages::COPY_DST,
+        TextureSource::Manual {
+            size: wgpu::Extent3d {
+                width: dst_size,
+                height: dst_size,
+                depth_or_array_layers: 6,
+            },
+        },
+    );
+
+    let dst_texture_id = project.textures.register(dst_texture);
+
+    let dst_texture_view = TextureView::new(
+        "compute shader destination texture view",
+        Some(dst_texture_id),
+        None,
+        Some(wgpu::TextureViewDimension::D2Array),
+    );
+    let dst_texture_view_id = project.texture_views.register(dst_texture_view);
+
+    let bind_group = BindGroup::new(
+        "compute shader bind group",
+        vec![
+            BindGroupEntry::new_compute(BindGroupResource::Texture {
+                texture_view_id: Some(sky_texture_view_id),
+                view_dimension: wgpu::TextureViewDimension::D2,
+                sample_type: wgpu::TextureSampleType::Float { filterable: false },
+            }),
+            BindGroupEntry::new_compute(BindGroupResource::StorageTexture {
+                texture_view_id: Some(dst_texture_view_id),
+                view_dimension: wgpu::TextureViewDimension::D2Array,
+                access: wgpu::StorageTextureAccess::WriteOnly,
+            }),
+        ],
+    );
+
+    let bind_group_id = project.bind_groups.register(bind_group);
+
+    let num_workgroups = (dst_size + 15) / 16;
+    let compute_pass = ComputePass::new(
+        "equirect_to_cube_map",
+        vec![ComputePassBindGroupEntry::new(Some(bind_group_id))],
+        Some(equirectengular_shader_id),
+        num_workgroups,
+        num_workgroups,
+        6,
+    );
+
+    project.compute_passes.register(compute_pass);
 
     let sky_texture_view = TextureView::new(
         "Sky Texture View",
-        Some(sky_texture_id),
+        Some(dst_texture_id),
         None,
         Some(wgpu::TextureViewDimension::Cube),
     );
@@ -459,7 +473,9 @@ pub async fn create_scene(
     let hdr_render_pass_id = project.render_passes.register(hdr_render_pass);
     project.frame_plan.add(Some(hdr_render_pass_id));
 
-    Ok(viewport_id)
+    project.main_viewport = Some(viewport_id);
+
+    Ok(project)
 }
 
 pub fn create_texture(path: FilePath, format: wgpu::TextureFormat) -> AppResult<Texture> {

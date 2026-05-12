@@ -1,5 +1,7 @@
 use std::path::{Component, Path};
 
+use serde::{Deserialize, Serialize};
+
 use crate::error::{AppError, AppResult};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]
@@ -8,6 +10,10 @@ pub struct FilePath {
 }
 
 impl FilePath {
+    pub fn project_json() -> Self {
+        Self::from_str("project.json").unwrap()
+    }
+
     pub fn from_relative_path(s: impl AsRef<Path>) -> AppResult<Self> {
         let mut segments = Vec::new();
 
@@ -154,5 +160,24 @@ impl std::fmt::Display for FilePath {
             write!(f, "{}", segment)?;
         }
         Ok(())
+    }
+}
+
+impl Serialize for FilePath {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serializer.serialize_str(&self.to_string())
+    }
+}
+
+impl<'de> Deserialize<'de> for FilePath {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let s = String::deserialize(deserializer)?;
+        Self::from_str(&s).map_err(serde::de::Error::custom)
     }
 }

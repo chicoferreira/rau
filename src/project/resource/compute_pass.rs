@@ -1,5 +1,6 @@
 use egui_dnd::utils::shift_vec;
 use itertools::Itertools;
+use serde::{Deserialize, Serialize};
 use std::task::Poll;
 
 use crate::{
@@ -13,6 +14,8 @@ use crate::{
     utils::{async_job::AsyncJob, wgpu_error_scope::WgpuErrorScope},
 };
 
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ComputePass {
     label: String,
     bind_groups: Vec<ComputePassBindGroupEntry>,
@@ -20,12 +23,14 @@ pub struct ComputePass {
     work_groups_x: u32,
     work_groups_y: u32,
     work_groups_z: u32,
+    #[serde(skip)]
     revision: Revision,
 }
 
-pub type ComputePassBindGroupEntryId = usize;
+pub type ComputePassBindGroupEntryId = u64;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ComputePassBindGroupEntry {
     id: ComputePassBindGroupEntryId,
     bind_group_id: Option<BindGroupId>,
@@ -155,7 +160,7 @@ impl ComputePass {
 impl ComputePassBindGroupEntry {
     pub fn new(bind_group_id: Option<BindGroupId>) -> Self {
         Self {
-            id: fastrand::usize(..),
+            id: fastrand::u64(..),
             bind_group_id,
         }
     }

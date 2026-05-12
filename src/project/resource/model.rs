@@ -1,6 +1,7 @@
 use std::task::Poll;
 
 use futures_lite::io::{BufReader, Cursor};
+use serde::{Deserialize, Serialize};
 use wgpu::BindGroupLayout;
 
 use crate::{
@@ -32,12 +33,15 @@ pub struct ModelCreationContext<'a> {
     pub file_storage: &'a FileStorage,
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Model {
     pub label: String,
     source: FilePath,
     material_bind_group_ids: Vec<Option<BindGroupId>>,
     mesh_material_selections: Vec<MeshMaterialSelection>,
     vertex_buffer_spec: VertexBufferSpec,
+    #[serde(skip)]
     revision: Revision,
 }
 
@@ -65,7 +69,8 @@ pub struct Mesh {
     index_buffer: ResizableBuffer,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "type", content = "value")]
 pub enum MeshMaterialSelection {
     FromSource,
     Material(Option<usize>),

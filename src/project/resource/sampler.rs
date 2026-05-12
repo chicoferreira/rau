@@ -1,5 +1,7 @@
 use std::task::Poll;
 
+use serde::{Deserialize, Serialize};
+
 use crate::{
     error::AppResult,
     project::{
@@ -9,7 +11,8 @@ use crate::{
     utils::{async_job::AsyncJob, wgpu_error_scope::WgpuErrorScope},
 };
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct SamplerSpec {
     pub address_mode: wgpu::AddressMode,
     pub mag_filter: wgpu::FilterMode,
@@ -34,9 +37,12 @@ impl Default for SamplerSpec {
     }
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Sampler {
     label: String,
     spec: SamplerSpec,
+    #[serde(skip)]
     revision: Revision,
 }
 

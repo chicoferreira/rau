@@ -1,4 +1,5 @@
 use image::GenericImageView;
+use serde::{Deserialize, Serialize};
 use std::task::Poll;
 
 use crate::{
@@ -22,11 +23,14 @@ pub struct TextureCreationContext<'a> {
     pub file_storage: &'a FileStorage,
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Texture {
     label: String,
     format: wgpu::TextureFormat,
     usage: wgpu::TextureUsages,
     source: TextureSource,
+    #[serde(skip)]
     revision: Revision,
 }
 
@@ -42,7 +46,8 @@ pub enum TextureJob {
     Validation(TextureRuntime, AsyncJob<AppResult<()>>),
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "type", content = "value")]
 pub enum TextureSource {
     // Grab size from dimension
     Dimension(Option<DimensionId>),

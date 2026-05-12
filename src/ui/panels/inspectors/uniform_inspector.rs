@@ -38,7 +38,7 @@ pub enum UniformFieldSourceKind {
 impl UniformFieldSourceKind {
     pub fn from_source(source: &UniformFieldSource) -> Self {
         match source {
-            UniformFieldSource::UserDefined(_) => Self::UserDefined,
+            UniformFieldSource::UserDefined { .. } => Self::UserDefined,
             UniformFieldSource::Camera { .. } => Self::Camera,
         }
     }

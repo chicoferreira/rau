@@ -1,5 +1,7 @@
 use std::task::Poll;
 
+use serde::{Deserialize, Serialize};
+
 use crate::{
     error::AppResult,
     file::file_storage::FileStorage,
@@ -11,9 +13,12 @@ use crate::{
     utils::{self, async_job::AsyncJob, wgpu_error_scope::WgpuErrorScope},
 };
 
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Shader {
     pub label: String,
     source: FilePath,
+    #[serde(skip)]
     revision: Revision,
 }
 

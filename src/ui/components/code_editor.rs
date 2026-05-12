@@ -23,6 +23,7 @@ fn syntax_settings() -> &'static SyntectSettings {
         register_syntax!(builder, "syntaxes/WGSL.sublime-syntax", "wgsl");
         register_syntax!(builder, "syntaxes/WavefrontOBJ.sublime-syntax", "obj");
         register_syntax!(builder, "syntaxes/WavefrontMTL.sublime-syntax", "mtl");
+        register_syntax!(builder, "syntaxes/JSON.sublime-syntax", "json");
         SyntectSettings {
             ps: builder.build(),
             ts: ThemeSet::load_defaults(),

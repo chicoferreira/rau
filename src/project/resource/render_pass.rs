@@ -1,4 +1,5 @@
 use egui_dnd::utils::shift_vec;
+use serde::{Deserialize, Serialize};
 use std::task::Poll;
 
 use crate::{
@@ -12,27 +13,33 @@ use crate::{
     utils::{async_job::AsyncJob, wgpu_error_scope::WgpuErrorScope},
 };
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct RenderPass {
     pub label: String,
     pub target: RenderPassTarget<Color>,
     pub depth_target: Option<RenderPassTarget<f32>>,
     pub pipelines: Vec<RenderPipeline>,
+    #[serde(skip)]
     revision: Revision,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct RenderPassTarget<T> {
     pub texture_view_id: Option<TextureViewId>,
     pub load_operation: LoadOperation<T>,
 }
 
-#[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
+#[derive(Copy, Clone, Debug, Hash, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "type", content = "value")]
 pub enum LoadOperation<T> {
     Clear(T),
     Load,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Color(pub [f32; 4]);
 
 pub struct RenderPassRuntime {
@@ -52,8 +59,10 @@ pub struct RenderPipelineRuntime {
 
 pub const MAX_RENDER_PASS_BIND_GROUPS: usize = 8;
 
-pub type RenderPipelineId = usize;
+pub type RenderPipelineId = u64;
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct RenderPipeline {
     // wgpu RenderPipeline creation requires:
     // - List of bind groups (layouts)
@@ -76,8 +85,9 @@ pub struct RenderPipeline {
     dirty: bool,
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 // TODO: rename this to RenderDrawStrategy
+#[serde(tag = "type")]
 pub enum RenderDraw {
     Model {
         model_id: Option<ModelId>,
@@ -279,7 +289,7 @@ impl RenderPipeline {
         draw: RenderDraw,
     ) -> Self {
         Self {
-            id: fastrand::usize(..),
+            id: fastrand::u64(..),
             label,
             primitive_state,
             vertex_shader,

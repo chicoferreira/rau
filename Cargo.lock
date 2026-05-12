@@ -458,6 +458,7 @@ checksum = "1a98d30140e3296250832bbaaff83b27dcd6fa3cc70fb6f1f3e5c9c0023b5317"
 dependencies = [
  "approx",
  "num-traits",
+ "serde",
 ]
 
 [[package]]
@@ -3185,6 +3186,7 @@ dependencies = [
  "pollster",
  "reqwest",
  "rfd",
+ "serde",
  "serde_json",
  "slotmap",
  "strum",
@@ -3691,6 +3693,7 @@ version = "1.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bdd58c3c93c3d278ca835519292445cb4b0d4dc59ccfdf7ceadaab3f8aeb4038"
 dependencies = [
+ "serde",
  "version_check",
 ]
 

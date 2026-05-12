@@ -1,4 +1,5 @@
 use itertools::Itertools;
+use serde::{Deserialize, Serialize};
 use slotmap::{SecondaryMap, SlotMap};
 
 use crate::{
@@ -99,6 +100,34 @@ where
 {
     pub fn create(&mut self, label: String) -> R::Id {
         self.register(R::create(label))
+    }
+}
+
+impl<R> Serialize for Storage<R>
+where
+    R: ProjectResource + Serialize,
+    R::Id: slotmap::Key,
+{
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        self.map.serialize(serializer)
+    }
+}
+
+impl<'a, R> Deserialize<'a> for Storage<R>
+where
+    R: ProjectResource + Deserialize<'a>,
+    R::Id: slotmap::Key,
+{
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'a>,
+    {
+        Ok(Self {
+            map: SlotMap::deserialize(deserializer)?,
+        })
     }
 }
 

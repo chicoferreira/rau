@@ -1,7 +1,11 @@
+use serde::{Deserialize, Serialize};
+use strum::{Display, EnumIter};
+
 use crate::project::resource::camera::{Camera, CameraRuntime};
 use crate::project::resource::uniform::UniformFieldData;
 
-#[derive(Debug, Clone, Copy, PartialEq, strum::EnumIter, strum::Display)]
+#[derive(Debug, Clone, Copy, PartialEq, EnumIter, Display, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub enum CameraField {
     Position,
     Projection,

@@ -1,5 +1,7 @@
 use std::task::Poll;
 
+use serde::{Deserialize, Serialize};
+
 use crate::{
     error::{AppError, AppResult},
     project::{
@@ -19,11 +21,14 @@ pub struct TextureViewCreationContext<'a> {
     pub device: &'a wgpu::Device,
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct TextureView {
     label: String,
     format: Option<TextureViewFormat>,
     dimension: Option<wgpu::TextureViewDimension>,
     texture_id: Option<TextureId>,
+    #[serde(skip)]
     revision: Revision,
 }
 
@@ -43,7 +48,8 @@ pub enum TextureViewJob {
 /// This will allow the user to easily specify it
 ///
 /// Check [`wgpu::wgt::TextureDescriptor::view_formats`]
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "type")]
 pub enum TextureViewFormat {
     Srgb,
     Linear,

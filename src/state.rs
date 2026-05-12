@@ -7,8 +7,7 @@ use crate::{
     error::AppResult,
     file::{file_storage::FileStorage, identifier::ProjectIdentifier},
     project::{
-        self, DimensionId, FramePlanId, Project, ResourceId, ResourceKind, RuntimeProject,
-        ViewportId,
+        DimensionId, FramePlanId, Project, ResourceId, ResourceKind, RuntimeProject, ViewportId,
         paths::FilePath,
         resource::{
             bindgroup::BindGroupCreationContext, camera::CameraCreationContext, compute_pass,
@@ -18,7 +17,6 @@ use crate::{
         },
         sync::SyncTracker,
     },
-    scene,
     ui::{
         self,
         components::tiles::TreePane,
@@ -150,12 +148,6 @@ impl State {
 
         let egui_renderer = ui::renderer::EguiRenderer::new(&device, config.format, &window);
 
-        let size = ui::Size2d::new(config.width, config.height);
-
-        let mut project = project::Project::default();
-
-        let runtime_project = RuntimeProject::default();
-
         #[cfg(not(target_arch = "wasm32"))]
         let project_identifier = {
             let path = crate::file::absolute::AbsolutePathBuf::try_from("res")?;
@@ -166,12 +158,37 @@ impl State {
 
         let file_storage = FileStorage::new(project_identifier).await?;
 
-        let viewport_id = scene::create_scene(&device, size, &mut project, &file_storage).await?;
+        #[cfg(target_arch = "wasm32")]
+        for file in [
+            FilePath::from_str("cube.mtl")?,
+            FilePath::from_str("cube.obj")?,
+            FilePath::from_str("cube-diffuse.jpg")?,
+            FilePath::from_str("cube-normal.png")?,
+            FilePath::from_str("equirectangular.wgsl")?,
+            FilePath::from_str("hdr.wgsl")?,
+            FilePath::from_str("light.wgsl")?,
+            FilePath::from_str("pure-sky.hdr")?,
+            FilePath::from_str("shader.wgsl")?,
+            FilePath::from_str("sky.wgsl")?,
+            FilePath::from_str("project.json")?,
+        ] {
+            fetch_current_page_wasm_and_save(&file_storage.file_system, &file).await?;
+        }
+
+        // let size = ui::Size2d::new(config.width, config.height);
+        // let project = crate::scene::create_scene(&device, size, &file_storage).await?;
+        // let project_str = serde_json::to_string(&project)?;
+        // std::fs::write("res/project.json", project_str)?;
+
+        let project_bytes = file_storage.read(&FilePath::project_json()).await?;
+        let project: Project = serde_json::from_slice(&project_bytes)?;
 
         let inspector_tree_pane = TreePane::new("inspector");
         let mut viewport_tree_pane = TreePane::new("viewport");
 
-        viewport_tree_pane.add_pane(ViewportPane { viewport_id });
+        if let Some(viewport_id) = project.main_viewport {
+            viewport_tree_pane.add_pane(ViewportPane { viewport_id });
+        }
 
         Ok(Self {
             surface,
@@ -188,7 +205,7 @@ impl State {
             inspector_tree_pane,
             viewport_tree_pane,
             project,
-            runtime_project,
+            runtime_project: RuntimeProject::default(),
             tracker: SyncTracker::default(),
             file_storage,
         })
@@ -629,4 +646,27 @@ impl State {
             }
         }
     }
+}
+
+#[cfg(target_arch = "wasm32")]
+async fn fetch_current_page_wasm_and_save(
+    file_system: &crate::file::file_system::FileSystem,
+    file_path: &FilePath,
+) -> AppResult<()> {
+    use crate::file::file_system::FileSystemTrait;
+    use std::str::FromStr;
+
+    let origin = web_sys::window().unwrap().location().origin().unwrap();
+
+    let url = url::Url::from_str(origin.as_ref())?
+        .join("res/")?
+        .join(file_path.segments().join("/").as_str())?;
+
+    log::info!("Fetching {}", url);
+
+    let data = reqwest::get(url).await?.bytes().await?.to_vec();
+
+    file_system.save(file_path, data).await?;
+
+    Ok(())
 }

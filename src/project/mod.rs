@@ -1,3 +1,4 @@
+use serde::{Deserialize, Serialize};
 use slotmap::new_key_type;
 
 use crate::{
@@ -34,8 +35,10 @@ new_key_type! {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub struct FramePlanId;
 
-#[derive(Default)]
+#[derive(Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Project {
+    pub frame_plan: FramePlan,
     pub shaders: Storage<Shader>,
     pub viewports: Storage<Viewport>,
     pub uniforms: Storage<Uniform>,
@@ -47,8 +50,8 @@ pub struct Project {
     pub cameras: Storage<Camera>,
     pub models: Storage<Model>,
     pub render_passes: Storage<RenderPass>,
-    pub frame_plan: FramePlan,
     pub compute_passes: Storage<ComputePass>,
+    pub main_viewport: Option<ViewportId>,
 }
 
 #[derive(Default)]

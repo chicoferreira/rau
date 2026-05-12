@@ -1,4 +1,5 @@
 use egui_dnd::utils::shift_vec;
+use serde::{Deserialize, Serialize};
 use std::task::Poll;
 
 use crate::{
@@ -19,9 +20,12 @@ pub struct BindGroupCreationContext<'a> {
     pub device: &'a wgpu::Device,
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct BindGroup {
     label: String,
     entries: Vec<BindGroupEntry>,
+    #[serde(skip)]
     revision: Revision,
 }
 
@@ -37,9 +41,10 @@ pub enum BindGroupJob {
     Validation(BindGroupRuntime, AsyncJob<AppResult<()>>),
 }
 
-pub type BindGroupEntryId = usize;
+pub type BindGroupEntryId = u64;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct BindGroupEntry {
     // Used for stability in bind group entry reordering
     pub id: BindGroupEntryId,
@@ -47,7 +52,8 @@ pub struct BindGroupEntry {
     pub resource: BindGroupResource,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(tag = "type", content = "value", rename_all = "camelCase")]
 pub enum BindGroupResource {
     Texture {
         texture_view_id: Option<TextureViewId>,
@@ -177,7 +183,7 @@ impl ProjectResource for BindGroup {
 impl BindGroupEntry {
     pub fn new(resource: BindGroupResource, visibility: wgpu::ShaderStages) -> Self {
         Self {
-            id: fastrand::usize(..),
+            id: fastrand::u64(..),
             visibility,
             resource,
         }
