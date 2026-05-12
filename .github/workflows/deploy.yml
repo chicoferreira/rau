@@ -39,7 +39,6 @@ jobs:
         run: |
           mkdir -p dist
           cp index.html dist/index.html
-          cp -R res dist/res
           cp -R pkg dist/pkg
 
       - name: Deploy
