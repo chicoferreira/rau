@@ -18,6 +18,7 @@ pub struct StateSnapshot<'a> {
     pub runtime_project: &'a mut RuntimeProject,
     pub rename_state: &'a mut Option<RenameState>,
     pub file_storage: &'a mut FileStorage,
+    pub renderer: wgpu::Backend,
 }
 
 impl StateSnapshot<'_> {

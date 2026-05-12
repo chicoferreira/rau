@@ -13,6 +13,9 @@ pub enum AppError {
     /// The render pipeline has more bind group layouts than wgpu supports.
     #[error("bind group layout count {count} exceeds render pass bind group limit {max}")]
     BindGroupLayoutLimitExceeded { count: usize, max: usize },
+    /// The current renderer does not support a feature required by the resource.
+    #[error("{feature} feature is not supported by the current renderer")]
+    UnsupportedRendererFeature { feature: &'static str },
     /// The resource where this error occurred is not yet initialized.
     #[error("resource is not yet initialized: {0:?}")]
     WaitingForUninitResource(ResourceId),

@@ -21,6 +21,7 @@ pub struct TextureCreationContext<'a> {
     pub device: &'a wgpu::Device,
     pub queue: &'a wgpu::Queue,
     pub file_storage: &'a FileStorage,
+    pub downlevel_flags: wgpu::DownlevelFlags,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -149,7 +150,10 @@ impl SyncResource for Texture {
 
         let non_srgb_format = self.format.remove_srgb_suffix();
         let srgb_format = self.format.add_srgb_suffix();
-        let view_formats = if srgb_format != non_srgb_format {
+        let supports_view_formats = ctx
+            .downlevel_flags
+            .contains(wgpu::DownlevelFlags::VIEW_FORMATS);
+        let view_formats = if supports_view_formats && srgb_format != non_srgb_format {
             // Automatically support both srgb-ness views
             vec![non_srgb_format, srgb_format]
         } else {

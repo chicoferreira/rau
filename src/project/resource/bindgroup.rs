@@ -18,6 +18,7 @@ pub struct BindGroupCreationContext<'a> {
     pub runtime_texture_views: &'a RuntimeStorage<TextureView>,
     pub runtime_samplers: &'a RuntimeStorage<Sampler>,
     pub device: &'a wgpu::Device,
+    pub limits: &'a wgpu::Limits,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -256,6 +257,10 @@ impl BindGroupEntry {
                 ..
             } => tracker.was_changed(sampler_id),
             BindGroupResource::Uniform(Some(uniform_id)) => tracker.was_changed(uniform_id),
+            BindGroupResource::StorageTexture {
+                texture_view_id: Some(texture_view_id),
+                ..
+            } => tracker.was_changed(texture_view_id),
             _ => false,
         }
     }
@@ -287,6 +292,12 @@ impl BindGroupResource {
                 access,
                 view_dimension,
             } => {
+                if ctx.limits.max_storage_textures_per_shader_stage == 0 {
+                    return Err(AppError::UnsupportedRendererFeature {
+                        feature: "Storage Textures",
+                    });
+                }
+
                 let texture_view_id = texture_view_id.ok_or(AppError::UninitializedFields)?;
                 let texture_view_runtime = ctx.runtime_texture_views.get_init(texture_view_id)?;
                 let format = texture_view_runtime.inner().texture().format();

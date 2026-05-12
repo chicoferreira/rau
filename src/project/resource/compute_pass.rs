@@ -41,6 +41,7 @@ pub struct Context<'a> {
     pub encoder: &'a mut wgpu::CommandEncoder,
     pub runtime_shaders: &'a RuntimeStorage<Shader>,
     pub runtime_bind_groups: &'a RuntimeStorage<BindGroup>,
+    pub limits: &'a wgpu::Limits,
 }
 
 #[derive(Default)]
@@ -212,6 +213,12 @@ impl SyncResource for ComputePass {
     ) -> AppResult<SyncOutcome<Self::Runtime, Self::Job>> {
         match job {
             ComputePassJob::Start => {
+                if ctx.limits.max_compute_workgroups_per_dimension == 0 {
+                    return Err(AppError::UnsupportedRendererFeature {
+                        feature: "Compute Passes",
+                    });
+                }
+
                 let scope = WgpuErrorScope::push(ctx.device);
 
                 let mut bind_groups = vec![];

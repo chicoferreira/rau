@@ -40,7 +40,7 @@ pub fn ui(state: &mut StateSnapshot, ui: &mut egui::Ui) {
     egui::Panel::bottom("status_panel")
         .resizable(false)
         .show_inside(ui, |ui| {
-            status_bar_content(ui, &errors);
+            status_bar_content(ui, &errors, state.renderer);
         });
 
     if show_error_list && !errors.is_empty() {
@@ -54,7 +54,11 @@ pub fn ui(state: &mut StateSnapshot, ui: &mut egui::Ui) {
     }
 }
 
-fn status_bar_content(ui: &mut egui::Ui, errors: &[(ResourceId, &AppError)]) {
+fn status_bar_content(
+    ui: &mut egui::Ui,
+    errors: &[(ResourceId, &AppError)],
+    renderer: wgpu::Backend,
+) {
     ui.horizontal(|ui| {
         if errors.is_empty() {
             ui.label(egui::RichText::new("No errors").color(ui.visuals().weak_text_color()));
@@ -77,7 +81,38 @@ fn status_bar_content(ui: &mut egui::Ui, errors: &[(ResourceId, &AppError)]) {
                 toggle_open(ui.ctx());
             }
         }
+
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            renderer_status_ui(ui, renderer);
+        });
     });
+}
+
+fn renderer_status_ui(ui: &mut egui::Ui, renderer: wgpu::Backend) {
+    let renderer_str = match renderer {
+        wgpu::Backend::Noop => "Noop",
+        wgpu::Backend::Vulkan => "Vulkan",
+        wgpu::Backend::Metal => "Metal",
+        wgpu::Backend::Dx12 => "DirectX 12",
+        wgpu::Backend::Gl => "GL (limited)",
+        wgpu::Backend::BrowserWebGpu => "WebGPU",
+    };
+
+    let text = format!("Renderer: {}", renderer_str);
+
+    if renderer == wgpu::Backend::Gl {
+        ui.colored_label(ui.visuals().warn_fg_color, text)
+            .on_hover_ui(|ui| {
+                let text = r#"GL support is limited.
+
+Some features, including compute shaders, will not work.
+Please enable WebGPU for the full renderer feature set."#;
+
+                ui.colored_label(ui.visuals().warn_fg_color, text);
+            });
+    } else {
+        ui.colored_label(ui.visuals().weak_text_color(), text);
+    }
 }
 
 fn error_list_content(

@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use slotmap::SecondaryMap;
+use wgpu::DownlevelFlags;
 use winit::{event::WindowEvent, window::Window};
 
 use crate::{
@@ -67,6 +68,9 @@ pub struct State {
     window: Arc<Window>,
     last_render_time: instant::Instant,
     egui_renderer: ui::renderer::EguiRenderer,
+    renderer: wgpu::Backend,
+    downlevel_flags: wgpu::DownlevelFlags,
+    limits: wgpu::Limits,
     rename_state: Option<ui::rename::RenameState>,
     pending_events: Vec<StateEvent>,
     inspector_tree_pane: TreePane<InspectorPane>,
@@ -82,22 +86,24 @@ impl State {
     pub async fn new(window: Arc<Window>) -> AppResult<Self> {
         let size = window.inner_size();
 
-        // The instance is used to create surfaces and adapters
-        let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
+        let instance_descriptor = wgpu::InstanceDescriptor {
             #[cfg(not(target_arch = "wasm32"))]
             backends: wgpu::Backends::PRIMARY,
             #[cfg(target_arch = "wasm32")]
-            backends: wgpu::Backends::BROWSER_WEBGPU,
+            backends: wgpu::Backends::BROWSER_WEBGPU | wgpu::Backends::GL,
             flags: Default::default(),
             memory_budget_thresholds: Default::default(),
             backend_options: Default::default(),
             display: None,
-        });
+        };
 
-        // The window we draw to
+        #[cfg(not(target_arch = "wasm32"))]
+        let instance = wgpu::Instance::new(instance_descriptor);
+        #[cfg(target_arch = "wasm32")]
+        let instance = wgpu::util::new_instance_with_webgpu_detection(instance_descriptor).await;
+
         let surface = instance.create_surface(window.clone()).unwrap();
 
-        // The handle to the GPU
         let adapter = instance
             .request_adapter(&wgpu::RequestAdapterOptions {
                 power_preference: wgpu::PowerPreference::default(),
@@ -105,6 +111,9 @@ impl State {
                 force_fallback_adapter: false,
             })
             .await?;
+
+        let renderer = adapter.get_info().backend;
+        log::info!("Selected renderer backend: {renderer:?}");
 
         let (device, queue) = adapter
             .request_device(&wgpu::DeviceDescriptor {
@@ -117,23 +126,34 @@ impl State {
             })
             .await?;
 
+        let downlevel_capabilities = adapter.get_downlevel_capabilities();
+        let downlevel_flags = downlevel_capabilities.flags;
         let surface_caps = surface.get_capabilities(&adapter);
 
         log::info!("Available surface formats: {:?}", surface_caps.formats);
 
-        pub const EGUI_PREFERRED_SURFACE_FORMAT: wgpu::TextureFormat =
-            wgpu::TextureFormat::Bgra8Unorm;
+        pub const SURFACE_FORMATS: &[wgpu::TextureFormat] = &[
+            wgpu::TextureFormat::Rgba8Unorm,
+            wgpu::TextureFormat::Bgra8Unorm,
+        ];
 
-        let surface_format = if surface_caps
+        let surface_format = surface_caps
             .formats
-            .contains(&EGUI_PREFERRED_SURFACE_FORMAT)
-        {
-            EGUI_PREFERRED_SURFACE_FORMAT
-        } else {
-            panic!("Surface capabilities does not include {EGUI_PREFERRED_SURFACE_FORMAT:?}")
+            .into_iter()
+            .find(|format| SURFACE_FORMATS.contains(format));
+
+        let Some(surface_format) = surface_format else {
+            panic!("Surface capabilities does not include any of {SURFACE_FORMATS:?}")
         };
 
         log::info!("Selected surface format: {:?}", surface_format);
+
+        let supports_view_formats = downlevel_flags.contains(DownlevelFlags::SURFACE_VIEW_FORMATS);
+        let surface_view_formats = if supports_view_formats {
+            vec![surface_format.add_srgb_suffix()]
+        } else {
+            vec![]
+        };
 
         let config = wgpu::SurfaceConfiguration {
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
@@ -142,7 +162,7 @@ impl State {
             height: size.height.max(1),
             present_mode: surface_caps.present_modes[0],
             alpha_mode: surface_caps.alpha_modes[0],
-            view_formats: vec![surface_format.add_srgb_suffix()],
+            view_formats: surface_view_formats,
             desired_maximum_frame_latency: 2,
         };
 
@@ -198,6 +218,9 @@ impl State {
             window,
             last_render_time: instant::Instant::now(),
             egui_renderer,
+            renderer,
+            downlevel_flags,
+            limits: adapter.limits(),
             dimension_owners: Default::default(),
             rename_state: None,
             pending_events: vec![],
@@ -268,6 +291,7 @@ impl State {
                 runtime_project: &mut self.runtime_project,
                 rename_state: &mut self.rename_state,
                 file_storage: &mut self.file_storage,
+                renderer: self.renderer,
             };
 
             snapshot.ui(
@@ -349,6 +373,7 @@ impl State {
             device: &self.device,
             queue: &self.queue,
             file_storage: &self.file_storage,
+            downlevel_flags: self.downlevel_flags,
         };
         self.tracker.sync_storage(
             &mut self.project.textures,
@@ -361,6 +386,7 @@ impl State {
             egui_renderer: &mut self.egui_renderer,
             device: &self.device,
             textures_runtime: &mut self.runtime_project.textures,
+            downlevel_flags: self.downlevel_flags,
         };
         self.tracker.sync_storage(
             &mut self.project.texture_views,
@@ -398,6 +424,7 @@ impl State {
 
         let view = &mut BindGroupCreationContext {
             device: &self.device,
+            limits: &self.limits,
             runtime_uniforms: &mut self.runtime_project.uniforms,
             runtime_texture_views: &mut self.runtime_project.texture_views,
             runtime_samplers: &mut self.runtime_project.samplers,
@@ -448,6 +475,7 @@ impl State {
             encoder,
             runtime_shaders: &mut self.runtime_project.shaders,
             runtime_bind_groups: &mut self.runtime_project.bind_groups,
+            limits: &self.limits,
         };
         self.tracker.sync_storage(
             &mut self.project.compute_passes,

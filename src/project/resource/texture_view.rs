@@ -19,6 +19,7 @@ pub struct TextureViewCreationContext<'a> {
     pub textures_runtime: &'a RuntimeStorage<Texture>,
     pub egui_renderer: &'a mut EguiRenderer,
     pub device: &'a wgpu::Device,
+    pub downlevel_flags: wgpu::DownlevelFlags,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -116,11 +117,15 @@ impl TextureView {
         runtime: &TextureRuntime,
         format: Option<TextureViewFormat>,
         dimension: Option<wgpu::TextureViewDimension>,
+        downlevel_flags: wgpu::DownlevelFlags,
     ) -> wgpu::TextureView {
-        let wgpu_format = format.as_ref().map(|format| match format {
-            TextureViewFormat::Srgb => texture.format().add_srgb_suffix(),
-            TextureViewFormat::Linear => texture.format().remove_srgb_suffix(),
-        });
+        let supports_view_formats = downlevel_flags.contains(wgpu::DownlevelFlags::VIEW_FORMATS);
+
+        let wgpu_format = match (supports_view_formats, format) {
+            (true, Some(TextureViewFormat::Srgb)) => Some(texture.format().add_srgb_suffix()),
+            (true, Some(TextureViewFormat::Linear)) => Some(texture.format().remove_srgb_suffix()),
+            _ => None,
+        };
 
         let view = runtime.inner().create_view(&wgpu::TextureViewDescriptor {
             label: Some(&label),
@@ -187,6 +192,7 @@ impl SyncResource for TextureView {
                     runtime_texture,
                     self.format,
                     self.dimension,
+                    ctx.downlevel_flags,
                 );
 
                 let has_correct_format = ALLOWED_EGUI_FORMATS.contains(&texture.format());
