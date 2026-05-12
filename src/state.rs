@@ -150,29 +150,28 @@ impl State {
 
         #[cfg(not(target_arch = "wasm32"))]
         let project_identifier = {
-            let path = crate::file::absolute::AbsolutePathBuf::try_from("res")?;
-            ProjectIdentifier::new("res", path)
+            let path = "projects/full-example";
+            let path = crate::file::absolute::AbsolutePathBuf::try_from(path)?;
+            ProjectIdentifier::new("full-example", path)
         };
         #[cfg(target_arch = "wasm32")]
-        let project_identifier = ProjectIdentifier::new("res");
+        let project_identifier = ProjectIdentifier::new("full-example");
 
         let file_storage = FileStorage::new(project_identifier).await?;
 
         #[cfg(target_arch = "wasm32")]
-        for file in [
-            FilePath::from_str("cube.mtl")?,
-            FilePath::from_str("cube.obj")?,
-            FilePath::from_str("cube-diffuse.jpg")?,
-            FilePath::from_str("cube-normal.png")?,
-            FilePath::from_str("equirectangular.wgsl")?,
-            FilePath::from_str("hdr.wgsl")?,
-            FilePath::from_str("light.wgsl")?,
-            FilePath::from_str("pure-sky.hdr")?,
-            FilePath::from_str("shader.wgsl")?,
-            FilePath::from_str("sky.wgsl")?,
-            FilePath::from_str("project.json")?,
-        ] {
-            fetch_current_page_wasm_and_save(&file_storage.file_system, &file).await?;
+        {
+            use crate::file::file_system::FileSystemTrait;
+            use crate::utils::github;
+
+            let github_repo = github::GitRepository::new("chicoferreira", "rau", "main");
+
+            let path = FilePath::from_str("projects/full-example")?;
+            let files = github::download_files_under_path(&github_repo, &path).await?;
+
+            for (file_path, data) in files {
+                file_storage.file_system.save(&file_path, data).await?;
+            }
         }
 
         // let size = ui::Size2d::new(config.width, config.height);
@@ -646,27 +645,4 @@ impl State {
             }
         }
     }
-}
-
-#[cfg(target_arch = "wasm32")]
-async fn fetch_current_page_wasm_and_save(
-    file_system: &crate::file::file_system::FileSystem,
-    file_path: &FilePath,
-) -> AppResult<()> {
-    use crate::file::file_system::FileSystemTrait;
-    use std::str::FromStr;
-
-    let origin = web_sys::window().unwrap().location().origin().unwrap();
-
-    let url = url::Url::from_str(origin.as_ref())?
-        .join("res/")?
-        .join(file_path.segments().join("/").as_str())?;
-
-    log::info!("Fetching {}", url);
-
-    let data = reqwest::get(url).await?.bytes().await?.to_vec();
-
-    file_system.save(file_path, data).await?;
-
-    Ok(())
 }
