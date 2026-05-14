@@ -1,3 +1,5 @@
+use crate::utils::winit_runner;
+
 use winit::event_loop::EventLoop;
 
 mod app;
@@ -5,7 +7,6 @@ mod error;
 mod file;
 mod project;
 mod scene;
-mod state;
 mod ui;
 mod utils;
 mod workspace;
@@ -19,7 +20,7 @@ pub fn run() -> anyhow::Result<()> {
             .init();
 
         let event_loop = EventLoop::with_user_event().build()?;
-        let mut app = app::App::new();
+        let mut app = winit_runner::WinitRunner::<app::App>::new();
 
         event_loop.run_app(&mut app)?;
     }
@@ -30,7 +31,7 @@ pub fn run() -> anyhow::Result<()> {
         console_log::init_with_level(log::Level::Info)?;
 
         let event_loop = EventLoop::with_user_event().build()?;
-        let app = app::App::new(&event_loop);
+        let app = winit_runner::WinitRunner::<app::App>::new(&event_loop);
 
         event_loop.spawn_app(app)
     }
