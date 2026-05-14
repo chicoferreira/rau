@@ -126,7 +126,7 @@ impl StateSnapshot<'_> {
         let shaders = &self.project.shaders;
         let bind_groups = &self.project.bind_groups;
         let models = &self.project.models;
-        let pending_events = &mut *self.pending_events;
+        let event_queue = &mut *self.event_queue;
         let rename_state = &mut *self.rename_state;
         let mut delete_pipeline = None;
 
@@ -152,7 +152,7 @@ impl StateSnapshot<'_> {
                                             shaders,
                                             bind_groups,
                                             models,
-                                            pending_events,
+                                            event_queue,
                                             rename_state,
                                             &mut delete_pipeline,
                                         );

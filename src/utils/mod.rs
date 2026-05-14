@@ -1,5 +1,6 @@
 pub mod async_job;
 pub mod dir_node;
+pub mod event_queue;
 pub mod github;
 pub mod key;
 pub mod resizable_buffer;

@@ -8,7 +8,7 @@ use crate::{
         pane::StateSnapshot,
         rename::{RenameState, RenameTarget},
     },
-    utils::dir_node::DirNode,
+    utils::{dir_node::DirNode, event_queue::EventQueue},
     workspace::StateEvent,
 };
 
@@ -22,13 +22,13 @@ enum FileTreeNodeId {
 
 fn pending_file_node(
     builder: &mut egui_ltreeview::TreeViewBuilder<'_, FileTreeNodeId>,
-    pending_events: &mut Vec<StateEvent>,
+    event_queue: &mut EventQueue<StateEvent>,
     rename_state: &mut Option<RenameState>,
     parent_path: FilePath,
 ) {
     pending_create_node(
         builder,
-        pending_events,
+        event_queue,
         rename_state,
         FileTreeNodeId::Pending(parent_path.clone()),
         RenameTarget::CreateFile(parent_path),
@@ -37,13 +37,13 @@ fn pending_file_node(
 
 fn pending_folder_node(
     builder: &mut egui_ltreeview::TreeViewBuilder<'_, FileTreeNodeId>,
-    pending_events: &mut Vec<StateEvent>,
+    event_queue: &mut EventQueue<StateEvent>,
     rename_state: &mut Option<RenameState>,
     parent_path: FilePath,
 ) {
     pending_create_node(
         builder,
-        pending_events,
+        event_queue,
         rename_state,
         FileTreeNodeId::Pending(parent_path.clone()),
         RenameTarget::CreateFolder(parent_path),
@@ -69,7 +69,7 @@ pub fn ui(state: &mut StateSnapshot, ui: &mut egui::Ui) -> Response {
         .allow_multi_selection(false)
         .show_state(ui, &mut tree_view_state, |builder| {
             let root_path = FilePath::default();
-            let pending_events = &mut *state.pending_events;
+            let event_queue = &mut *state.event_queue;
             let rename_state = &mut *state.rename_state;
 
             TreeNode::folder(FileTreeNodeId::Root, &project_name)
@@ -80,12 +80,12 @@ pub fn ui(state: &mut StateSnapshot, ui: &mut egui::Ui) -> Response {
                     "Create Folder",
                     StateEvent::CreateFolder(FilePath::default()),
                 )
-                .build_to(builder, pending_events, rename_state);
+                .build_to(builder, event_queue, rename_state);
 
-            pending_file_node(builder, pending_events, rename_state, root_path.clone());
-            pending_folder_node(builder, pending_events, rename_state, root_path.clone());
+            pending_file_node(builder, event_queue, rename_state, root_path.clone());
+            pending_folder_node(builder, event_queue, rename_state, root_path.clone());
 
-            render_dir_nodes(pending_events, rename_state, file_tree, builder, root_path);
+            render_dir_nodes(event_queue, rename_state, file_tree, builder, root_path);
 
             builder.close_dir();
         });
@@ -101,7 +101,7 @@ pub fn ui(state: &mut StateSnapshot, ui: &mut egui::Ui) -> Response {
             }
             Action::Move(action) => {
                 if let Some(event) = file_move_event(&action) {
-                    state.pending_events.push(event);
+                    state.event_queue.add(event);
                 }
             }
             Action::SetSelected(selected) => {
@@ -112,7 +112,7 @@ pub fn ui(state: &mut StateSnapshot, ui: &mut egui::Ui) -> Response {
                         FileTreeNodeId::File(path) => path.clone(),
                         FileTreeNodeId::Pending(path) => path.clone(),
                     };
-                    state.pending_events.push(StateEvent::OpenFile(path));
+                    state.event_queue.add(StateEvent::OpenFile(path));
                 }
             }
             Action::Activate(_) | Action::DragExternal(_) | Action::MoveExternal(_) => {}
@@ -139,7 +139,7 @@ fn open_pending_create_parent(
 }
 
 fn render_dir_nodes(
-    pending_events: &mut Vec<StateEvent>,
+    event_queue: &mut EventQueue<StateEvent>,
     rename_state: &mut Option<RenameState>,
     dir_node: &DirNode,
     builder: &mut egui_ltreeview::TreeViewBuilder<'_, FileTreeNodeId>,
@@ -158,12 +158,12 @@ fn render_dir_nodes(
             .with_rename_event("Rename Folder", RenameTarget::FileOrFolder(path.clone()))
             .with_separator()
             .with_event("Delete Folder", StateEvent::DeleteFolder(path.clone()))
-            .build_to(builder, pending_events, rename_state);
+            .build_to(builder, event_queue, rename_state);
 
-        pending_file_node(builder, pending_events, rename_state, path.clone());
-        pending_folder_node(builder, pending_events, rename_state, path.clone());
+        pending_file_node(builder, event_queue, rename_state, path.clone());
+        pending_folder_node(builder, event_queue, rename_state, path.clone());
 
-        render_dir_nodes(pending_events, rename_state, dir_node, builder, path);
+        render_dir_nodes(event_queue, rename_state, dir_node, builder, path);
 
         builder.close_dir();
     }
@@ -184,7 +184,7 @@ fn render_dir_nodes(
             .with_rename_event("Rename File", RenameTarget::FileOrFolder(file_path.clone()))
             .with_separator()
             .with_event("Delete File", StateEvent::DeleteFile(file_path.clone()))
-            .build_to(builder, pending_events, rename_state);
+            .build_to(builder, event_queue, rename_state);
     }
 }
 

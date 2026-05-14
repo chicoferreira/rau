@@ -25,6 +25,7 @@ use crate::{
         pane::StateSnapshot,
         rename::{RenameState, RenameTarget},
     },
+    utils::event_queue::EventQueue,
     workspace::StateEvent,
 };
 
@@ -77,7 +78,7 @@ impl StateSnapshot<'_> {
         let mut edits = Vec::new();
         let mut ctx = UniformUiContext {
             edits: &mut edits,
-            pending_events: &mut self.pending_events,
+            event_queue: &mut self.event_queue,
             rename_state: &mut self.rename_state,
             cameras: &self.project.cameras,
         };
@@ -139,7 +140,7 @@ impl StateSnapshot<'_> {
 
 struct UniformUiContext<'a> {
     edits: &'a mut Vec<UniformEdit>,
-    pending_events: &'a mut Vec<StateEvent>,
+    event_queue: &'a mut EventQueue<StateEvent>,
     rename_state: &'a mut Option<RenameState>,
     cameras: &'a Storage<Camera>,
 }
@@ -156,7 +157,7 @@ fn ui_uniform_field_title(
         Label::new(field.label())
             .selectable(false)
             .sense(Sense::click()),
-        ctx.pending_events,
+        ctx.event_queue,
         ctx.rename_state,
         rename_target.clone(),
     ))
@@ -166,8 +167,7 @@ fn ui_uniform_field_title(
             ui.close();
         }
         if ui.button("Rename Field").clicked() {
-            ctx.pending_events
-                .push(StateEvent::StartRename(rename_target));
+            ctx.event_queue.add(StateEvent::StartRename(rename_target));
             ui.close();
         }
     });

@@ -15,6 +15,7 @@ use crate::{
         },
         rename::{RenameState, RenameTarget},
     },
+    utils::event_queue::EventQueue,
     workspace::StateEvent,
 };
 
@@ -119,7 +120,7 @@ pub fn pipeline_entry_ui(
     shaders: &Storage<Shader>,
     bind_groups: &Storage<BindGroup>,
     models: &Storage<Model>,
-    pending_events: &mut Vec<StateEvent>,
+    event_queue: &mut EventQueue<StateEvent>,
     rename_state: &mut Option<RenameState>,
     delete_pipeline: &mut Option<usize>,
 ) {
@@ -131,13 +132,13 @@ pub fn pipeline_entry_ui(
                 Label::new(&pipeline.label)
                     .selectable(false)
                     .sense(Sense::click()),
-                pending_events,
+                event_queue,
                 rename_state,
                 rename_target.clone(),
             ))
             .context_menu(|ui| {
                 if ui.button("Rename Pipeline").clicked() {
-                    pending_events.push(StateEvent::StartRename(rename_target));
+                    event_queue.add(StateEvent::StartRename(rename_target));
                     ui.close();
                 }
                 if ui.button("Delete Pipeline").clicked() {

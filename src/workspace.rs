@@ -1,6 +1,7 @@
 use slotmap::SecondaryMap;
 
 use crate::{
+    app::AppEvent,
     error::AppResult,
     file::{file_storage::FileStorage, identifier::ProjectIdentifier},
     project::{
@@ -20,7 +21,7 @@ use crate::{
         panels::{inspector_pane::InspectorPane, viewport_pane::ViewportPane},
         rename::{RenameState, RenameTarget},
     },
-    utils::key::KeyboardState,
+    utils::{event_queue::EventQueue, key::KeyboardState},
 };
 
 pub struct Workspace {
@@ -29,7 +30,7 @@ pub struct Workspace {
     tracker: SyncTracker,
     file_storage: FileStorage,
     rename_state: Option<ui::rename::RenameState>,
-    pending_events: Vec<StateEvent>,
+    event_queue: EventQueue<StateEvent>,
     inspector_tree_pane: TreePane<InspectorPane>,
     viewport_tree_pane: TreePane<ViewportPane>,
     dimension_owners: SecondaryMap<DimensionId, ViewportId>,
@@ -122,7 +123,7 @@ impl Workspace {
 
         Ok(Self {
             rename_state: None,
-            pending_events: vec![],
+            event_queue: EventQueue::default(),
             inspector_tree_pane,
             viewport_tree_pane,
             project,
@@ -145,9 +146,15 @@ impl Workspace {
         self.tick_objects(ctx);
     }
 
-    pub fn render_ui(&mut self, ui: &mut egui::Ui, backend: wgpu::Backend) {
+    pub fn render_ui(
+        &mut self,
+        ui: &mut egui::Ui,
+        backend: wgpu::Backend,
+        app_event_queue: &mut EventQueue<AppEvent>,
+    ) {
         let mut snapshot = ui::pane::StateSnapshot {
-            pending_events: &mut self.pending_events,
+            event_queue: &mut self.event_queue,
+            app_event_queue,
             project: &mut self.project,
             runtime_project: &mut self.runtime_project,
             rename_state: &mut self.rename_state,
@@ -163,7 +170,7 @@ impl Workspace {
     }
 
     fn handle_events(&mut self) {
-        for event in self.pending_events.drain(..) {
+        for event in self.event_queue.drain() {
             log::debug!("Handling event {event:?}");
             match event {
                 StateEvent::OpenFile(file_path) => {

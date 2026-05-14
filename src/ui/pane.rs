@@ -1,5 +1,8 @@
 use crate::{
+    app::AppEvent,
+    app::State,
     file::file_storage::FileStorage,
+    main_menu::MainMenu,
     project::{Project, RuntimeProject},
     ui::{
         components::tiles::TreePane,
@@ -9,11 +12,13 @@ use crate::{
         },
         rename::RenameState,
     },
+    utils::event_queue::EventQueue,
     workspace,
 };
 
 pub struct StateSnapshot<'a> {
-    pub pending_events: &'a mut Vec<workspace::StateEvent>,
+    pub event_queue: &'a mut EventQueue<workspace::StateEvent>,
+    pub app_event_queue: &'a mut EventQueue<AppEvent>,
     pub project: &'a mut Project,
     pub runtime_project: &'a mut RuntimeProject,
     pub rename_state: &'a mut Option<RenameState>,
@@ -35,7 +40,13 @@ impl StateSnapshot<'_> {
                     if ui.button("Quit").clicked() {}
                 });
 
-                ui.menu_button("Project", |ui| if ui.button("New").clicked() {});
+                ui.menu_button("Project", |ui| {
+                    if ui.button("New").clicked() {}
+                    if ui.button("Close").clicked() {
+                        let state = State::MainMenu(MainMenu::default());
+                        self.app_event_queue.add(AppEvent::SetState(state));
+                    }
+                });
             });
         });
 

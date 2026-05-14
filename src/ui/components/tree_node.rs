@@ -8,6 +8,7 @@ use crate::{
         components::renameable_label::renameable_label,
         rename::{RenameState, RenameTarget},
     },
+    utils::event_queue::EventQueue,
     workspace::StateEvent,
 };
 
@@ -21,7 +22,7 @@ pub struct TreeNode<'a, T> {
 
 pub fn pending_create_node<T>(
     builder: &mut TreeViewBuilder<'_, T>,
-    pending_events: &mut Vec<StateEvent>,
+    event_queue: &mut EventQueue<StateEvent>,
     rename_state: &mut Option<RenameState>,
     tree_id: T,
     rename_target: RenameTarget,
@@ -37,7 +38,7 @@ pub fn pending_create_node<T>(
 
     TreeNode::new(tree_id, &current_label)
         .with_rename_target_only(rename_target)
-        .build_to(builder, pending_events, rename_state);
+        .build_to(builder, event_queue, rename_state);
 }
 
 enum ContextMenuEntity<'a> {
@@ -93,12 +94,12 @@ where
 
     fn into_node_config(
         self,
-        pending_events: &'a mut Vec<StateEvent>,
+        event_queue: &'a mut EventQueue<StateEvent>,
         rename_state: &'a mut Option<RenameState>,
     ) -> impl NodeConfig<T> + 'a {
-        let pending_events = Rc::new(RefCell::new(pending_events));
-        let context_pending_events = Rc::clone(&pending_events);
-        let label_pending_events = Rc::clone(&pending_events);
+        let event_queue = Rc::new(RefCell::new(event_queue));
+        let context_event_queue = Rc::clone(&event_queue);
+        let label_event_queue = Rc::clone(&event_queue);
         let node = if self.is_folder {
             NodeBuilder::dir(self.tree_id)
         } else {
@@ -109,9 +110,10 @@ where
             let default_label = Label::new(self.label).selectable(false);
 
             if let Some(rename_target) = self.rename_target.clone() {
+                let mut event_queue = label_event_queue.borrow_mut();
                 ui.add(renameable_label(
                     default_label,
-                    label_pending_events.borrow_mut().as_mut(),
+                    &mut **event_queue,
                     rename_state,
                     rename_target,
                 ));
@@ -122,7 +124,7 @@ where
 
         if !self.events.is_empty() {
             node = node.context_menu(move |ui| {
-                let mut pending_events = context_pending_events.borrow_mut();
+                let mut event_queue = context_event_queue.borrow_mut();
 
                 for event in self.events.iter() {
                     match event {
@@ -131,7 +133,7 @@ where
                         }
                         ContextMenuEntity::Action { label, event } => {
                             if ui.button(*label).clicked() {
-                                pending_events.push(event.clone());
+                                event_queue.add(event.clone());
                             }
                         }
                     }
@@ -145,9 +147,9 @@ where
     pub fn build_to(
         self,
         builder: &mut TreeViewBuilder<'_, T>,
-        pending_events: &'a mut Vec<StateEvent>,
+        event_queue: &'a mut EventQueue<StateEvent>,
         rename_state: &'a mut Option<RenameState>,
     ) -> bool {
-        builder.node(self.into_node_config(pending_events, rename_state))
+        builder.node(self.into_node_config(event_queue, rename_state))
     }
 }

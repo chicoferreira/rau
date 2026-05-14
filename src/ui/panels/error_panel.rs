@@ -5,6 +5,7 @@ use crate::{
     error::AppError,
     project::{Project, ResourceId},
     ui::pane::StateSnapshot,
+    utils::event_queue::EventQueue,
     workspace::StateEvent,
 };
 
@@ -49,7 +50,7 @@ pub fn ui(state: &mut StateSnapshot, ui: &mut egui::Ui) {
             .default_size(200.0)
             .min_size(80.0)
             .show_inside(ui, |ui| {
-                error_list_content(ui, state.project, state.pending_events, &errors);
+                error_list_content(ui, state.project, state.event_queue, &errors);
             });
     }
 }
@@ -118,7 +119,7 @@ Please enable WebGPU for the full renderer feature set."#;
 fn error_list_content(
     ui: &mut egui::Ui,
     project: &Project,
-    pending_events: &mut Vec<StateEvent>,
+    event_queue: &mut EventQueue<StateEvent>,
     errors: &[(ResourceId, &AppError)],
 ) {
     egui::ScrollArea::vertical()
@@ -140,7 +141,7 @@ fn error_list_content(
                         .on_hover_cursor(egui::CursorIcon::PointingHand)
                         .clicked()
                     {
-                        pending_events.push(StateEvent::InspectResource(id));
+                        event_queue.add(StateEvent::InspectResource(id));
                     }
 
                     ui.label(

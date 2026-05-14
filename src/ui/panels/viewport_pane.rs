@@ -44,7 +44,9 @@ impl Pane for ViewportPane {
             egui_id,
             viewport.requested_ui_size,
         );
-        state.pending_events.extend(events);
+        for event in events {
+            state.event_queue.add(event);
+        }
 
         egui_tiles::UiResponse::None
     }

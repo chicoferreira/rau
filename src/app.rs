@@ -5,8 +5,9 @@ use winit::{event::WindowEvent, window::Window};
 
 use crate::{
     error::AppResult,
+    main_menu::MainMenu,
     ui::{self},
-    utils::winit_runner::WindowApp,
+    utils::{event_queue::EventQueue, winit_runner::WindowApp},
     workspace::{AppContext, Workspace},
 };
 
@@ -22,7 +23,17 @@ pub struct App {
     backend: wgpu::Backend,
     downlevel_flags: wgpu::DownlevelFlags,
     limits: wgpu::Limits,
-    workspace: Workspace,
+    state: State,
+    event_queue: EventQueue<AppEvent>,
+}
+
+pub enum AppEvent {
+    SetState(State),
+}
+
+pub enum State {
+    MainMenu(MainMenu),
+    Workspace(Workspace),
 }
 
 impl WindowApp for App {
@@ -111,7 +122,7 @@ impl WindowApp for App {
 
         let egui_renderer = ui::renderer::EguiRenderer::new(&device, config.format, &window);
 
-        let workspace = Workspace::new().await?;
+        let state = State::MainMenu(MainMenu::default());
 
         Ok(Self {
             surface,
@@ -125,7 +136,8 @@ impl WindowApp for App {
             backend,
             downlevel_flags,
             limits: adapter.limits(),
-            workspace,
+            state,
+            event_queue: EventQueue::default(),
         })
     }
 
@@ -157,6 +169,16 @@ impl WindowApp for App {
 }
 
 impl App {
+    fn handle_events(&mut self) {
+        for event in self.event_queue.drain() {
+            match event {
+                AppEvent::SetState(state) => {
+                    self.state = state;
+                }
+            }
+        }
+    }
+
     pub fn resize(&mut self, width: u32, height: u32) {
         if width > 0 && height > 0 {
             self.config.width = width;
@@ -208,21 +230,30 @@ impl App {
             pixels_per_point: self.window.scale_factor() as f32,
         };
 
-        let frame = self.egui_renderer.handle(&self.window, |ui| {
-            self.workspace.render_ui(ui, self.backend)
+        self.handle_events();
+
+        let state = &mut self.state;
+        let app_event_queue = &mut self.event_queue;
+        let frame = self.egui_renderer.handle(&self.window, |ui| match state {
+            State::MainMenu(main_menu) => main_menu.render_ui(ui),
+            State::Workspace(workspace) => workspace.render_ui(ui, self.backend, app_event_queue),
         });
 
-        let mut ctx = AppContext {
-            device: &self.device,
-            queue: &self.queue,
-            egui_renderer: &mut self.egui_renderer,
-            encoder: &mut encoder,
-            downlevel_flags: self.downlevel_flags,
-            limits: &self.limits,
-            dt,
-        };
-
-        self.workspace.render(&mut ctx);
+        match &mut self.state {
+            State::MainMenu(main_menu) => main_menu.render(&mut self.event_queue),
+            State::Workspace(workspace) => {
+                let mut ctx = AppContext {
+                    device: &self.device,
+                    queue: &self.queue,
+                    egui_renderer: &mut self.egui_renderer,
+                    encoder: &mut encoder,
+                    downlevel_flags: self.downlevel_flags,
+                    limits: &self.limits,
+                    dt,
+                };
+                workspace.render(&mut ctx);
+            }
+        }
 
         self.egui_renderer.render_egui_frame(
             &frame,

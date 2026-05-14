@@ -5,12 +5,13 @@ use crate::{
         components::rename_text_edit::RenameTextEdit,
         rename::{RenameState, RenameTarget},
     },
+    utils::event_queue::EventQueue,
     workspace::StateEvent,
 };
 
 pub fn renameable_label<'a>(
     default_label: impl Widget + 'a,
-    pending_events: &'a mut Vec<StateEvent>,
+    event_queue: &'a mut EventQueue<StateEvent>,
     rename_state: &'a mut Option<RenameState>,
     rename_target: RenameTarget,
 ) -> impl Widget + 'a {
@@ -29,12 +30,12 @@ pub fn renameable_label<'a>(
             let escape_pressed = ui.input(|i| i.key_pressed(egui::Key::Escape));
 
             if response.lost_focus() && enter_pressed {
-                pending_events.push(StateEvent::ApplyRename(
+                event_queue.add(StateEvent::ApplyRename(
                     rename_state.target.clone(),
                     rename_state.current_label.clone(),
                 ));
             } else if escape_pressed || response.lost_focus() {
-                pending_events.push(StateEvent::CancelRename);
+                event_queue.add(StateEvent::CancelRename);
             }
 
             response
