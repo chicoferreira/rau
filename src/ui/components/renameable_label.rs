@@ -1,11 +1,11 @@
 use egui::Widget;
 
 use crate::{
-    state::StateEvent,
     ui::{
         components::rename_text_edit::RenameTextEdit,
         rename::{RenameState, RenameTarget},
     },
+    workspace::StateEvent,
 };
 
 pub fn renameable_label<'a>(

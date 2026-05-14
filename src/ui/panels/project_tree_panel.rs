@@ -7,12 +7,12 @@ use crate::{
         RenderPassId, ResourceKind, SamplerId, ShaderId, TextureId, TextureViewId, UniformId,
         ViewportId,
     },
-    state::StateEvent,
     ui::{
         components::tree_node::{TreeNode, pending_create_node},
         pane::StateSnapshot,
         rename::RenameTarget,
     },
+    workspace::StateEvent,
 };
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]

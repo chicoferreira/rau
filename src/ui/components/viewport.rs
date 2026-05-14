@@ -2,9 +2,9 @@ use egui::Ui;
 
 use crate::{
     project::ViewportId,
-    state::{self, StateEvent, ViewportEvent},
     ui,
     utils::key::KeyboardState,
+    workspace::{StateEvent, ViewportEvent},
 };
 
 pub fn ui(
@@ -12,7 +12,7 @@ pub fn ui(
     viewport_id: ViewportId,
     egui_texture_id: egui::TextureId,
     last_size: Option<ui::Size2d>,
-) -> Vec<state::StateEvent> {
+) -> Vec<StateEvent> {
     let mut events = Vec::new();
 
     let size_points = ui.available_size().max(egui::Vec2::new(1.0, 1.0));

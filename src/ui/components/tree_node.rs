@@ -4,11 +4,11 @@ use egui::Label;
 use egui_ltreeview::{NodeBuilder, NodeConfig, TreeViewBuilder};
 
 use crate::{
-    state::StateEvent,
     ui::{
         components::renameable_label::renameable_label,
         rename::{RenameState, RenameTarget},
     },
+    workspace::StateEvent,
 };
 
 pub struct TreeNode<'a, T> {

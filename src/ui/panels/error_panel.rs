@@ -4,8 +4,8 @@ use itertools::Itertools;
 use crate::{
     error::AppError,
     project::{Project, ResourceId},
-    state::StateEvent,
     ui::pane::StateSnapshot,
+    workspace::StateEvent,
 };
 
 const ERROR_PANEL_ID: &str = "error_panel_expanded";
@@ -40,7 +40,7 @@ pub fn ui(state: &mut StateSnapshot, ui: &mut egui::Ui) {
     egui::Panel::bottom("status_panel")
         .resizable(false)
         .show_inside(ui, |ui| {
-            status_bar_content(ui, &errors, state.renderer);
+            status_bar_content(ui, &errors, state.backend);
         });
 
     if show_error_list && !errors.is_empty() {
@@ -57,7 +57,7 @@ pub fn ui(state: &mut StateSnapshot, ui: &mut egui::Ui) {
 fn status_bar_content(
     ui: &mut egui::Ui,
     errors: &[(ResourceId, &AppError)],
-    renderer: wgpu::Backend,
+    backend: wgpu::Backend,
 ) {
     ui.horizontal(|ui| {
         if errors.is_empty() {
@@ -83,13 +83,13 @@ fn status_bar_content(
         }
 
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            renderer_status_ui(ui, renderer);
+            renderer_status_ui(ui, backend);
         });
     });
 }
 
-fn renderer_status_ui(ui: &mut egui::Ui, renderer: wgpu::Backend) {
-    let renderer_str = match renderer {
+fn renderer_status_ui(ui: &mut egui::Ui, backend: wgpu::Backend) {
+    let backend_str = match backend {
         wgpu::Backend::Noop => "Noop",
         wgpu::Backend::Vulkan => "Vulkan",
         wgpu::Backend::Metal => "Metal",
@@ -98,9 +98,9 @@ fn renderer_status_ui(ui: &mut egui::Ui, renderer: wgpu::Backend) {
         wgpu::Backend::BrowserWebGpu => "WebGPU",
     };
 
-    let text = format!("Renderer: {}", renderer_str);
+    let text = format!("Backend: {}", backend_str);
 
-    if renderer == wgpu::Backend::Gl {
+    if backend == wgpu::Backend::Gl {
         ui.colored_label(ui.visuals().warn_fg_color, text)
             .on_hover_ui(|ui| {
                 let text = r#"GL support is limited.

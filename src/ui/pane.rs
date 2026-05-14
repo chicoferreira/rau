@@ -1,7 +1,6 @@
 use crate::{
     file::file_storage::FileStorage,
     project::{Project, RuntimeProject},
-    state,
     ui::{
         components::tiles::TreePane,
         panels::{
@@ -10,15 +9,16 @@ use crate::{
         },
         rename::RenameState,
     },
+    workspace,
 };
 
 pub struct StateSnapshot<'a> {
-    pub pending_events: &'a mut Vec<state::StateEvent>,
+    pub pending_events: &'a mut Vec<workspace::StateEvent>,
     pub project: &'a mut Project,
     pub runtime_project: &'a mut RuntimeProject,
     pub rename_state: &'a mut Option<RenameState>,
     pub file_storage: &'a mut FileStorage,
-    pub renderer: wgpu::Backend,
+    pub backend: wgpu::Backend,
 }
 
 impl StateSnapshot<'_> {

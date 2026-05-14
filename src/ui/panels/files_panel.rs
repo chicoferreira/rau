@@ -3,13 +3,13 @@ use egui_ltreeview::{Action, DirPosition, DragAndDrop, TreeView, TreeViewState};
 
 use crate::{
     project::paths::FilePath,
-    state::StateEvent,
     ui::{
         components::tree_node::{TreeNode, pending_create_node},
         pane::StateSnapshot,
         rename::{RenameState, RenameTarget},
     },
     utils::dir_node::DirNode,
+    workspace::StateEvent,
 };
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]

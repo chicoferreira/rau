@@ -14,7 +14,6 @@ use crate::{
         },
         storage::Storage,
     },
-    state::StateEvent,
     ui::{
         components::{
             color_edit::color_edit_rgba,
@@ -26,6 +25,7 @@ use crate::{
         pane::StateSnapshot,
         rename::{RenameState, RenameTarget},
     },
+    workspace::StateEvent,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, strum::EnumIter, strum::Display)]

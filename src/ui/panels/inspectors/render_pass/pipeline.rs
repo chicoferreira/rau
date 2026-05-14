@@ -8,7 +8,6 @@ use crate::{
         },
         storage::Storage,
     },
-    state::StateEvent,
     ui::{
         components::{
             renameable_label::renameable_label,
@@ -16,6 +15,7 @@ use crate::{
         },
         rename::{RenameState, RenameTarget},
     },
+    workspace::StateEvent,
 };
 
 impl AsWidgetText for wgpu::PrimitiveTopology {
