@@ -30,7 +30,9 @@ pub struct TextureView {
     dimension: Option<wgpu::TextureViewDimension>,
     texture_id: Option<TextureId>,
     #[serde(skip)]
-    revision: Revision,
+    runtime_revision: Revision,
+    #[serde(skip)]
+    project_revision: Revision,
 }
 
 pub struct TextureViewRuntime {
@@ -75,7 +77,8 @@ impl TextureView {
             format,
             dimension,
             texture_id,
-            revision: Revision::default(),
+            runtime_revision: Revision::default(),
+            project_revision: Revision::default(),
         }
     }
 
@@ -93,22 +96,26 @@ impl TextureView {
 
     pub fn set_label(&mut self, label: String) {
         self.label = label;
-        self.revision.increase();
+        self.runtime_revision.increase();
+        self.project_revision.increase();
     }
 
     pub fn set_texture_id(&mut self, texture_id: Option<TextureId>) {
         self.texture_id = texture_id;
-        self.revision.increase();
+        self.runtime_revision.increase();
+        self.project_revision.increase();
     }
 
     pub fn set_format(&mut self, format: Option<TextureViewFormat>) {
         self.format = format;
-        self.revision.increase();
+        self.runtime_revision.increase();
+        self.project_revision.increase();
     }
 
     pub fn set_dimension(&mut self, dimension: Option<wgpu::TextureViewDimension>) {
         self.dimension = dimension;
-        self.revision.increase();
+        self.runtime_revision.increase();
+        self.project_revision.increase();
     }
 
     fn create_view(
@@ -162,12 +169,20 @@ impl ProjectResource for TextureView {
     fn label(&self) -> &str {
         &self.label
     }
+
+    fn project_revision(&self) -> Revision {
+        self.project_revision
+    }
 }
 
 impl SyncResource for TextureView {
     type Context<'a> = TextureViewCreationContext<'a>;
     type Runtime = TextureViewRuntime;
     type Job = TextureViewJob;
+
+    fn runtime_revision(&self) -> Revision {
+        self.runtime_revision
+    }
 
     fn sync<'a>(
         &self,
@@ -232,10 +247,6 @@ impl SyncResource for TextureView {
                 ))),
             },
         }
-    }
-
-    fn revision(&self) -> Revision {
-        self.revision
     }
 
     fn needs_rebuild_from_others(&self, tracker: &SyncTracker) -> bool {

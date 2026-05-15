@@ -123,13 +123,14 @@ pub fn pipeline_entry_ui(
     event_queue: &mut EventQueue<StateEvent>,
     rename_state: &mut Option<RenameState>,
     delete_pipeline: &mut Option<usize>,
-) {
+) -> bool {
     let rename_target = RenameTarget::RenderPipeline(render_pass_id, pipeline_index);
+    let mut changed = false;
 
     ui.indent("pipeline_body", |ui| {
         handle.ui(ui, |ui| {
             ui.add(renameable_label(
-                Label::new(&pipeline.label)
+                Label::new(pipeline.label())
                     .selectable(false)
                     .sense(Sense::click()),
                 event_queue,
@@ -148,8 +149,10 @@ pub fn pipeline_entry_ui(
             });
         });
 
-        pipeline_ui(ui, render_pass_id, pipeline, shaders, bind_groups, models);
+        changed |= pipeline_ui(ui, render_pass_id, pipeline, shaders, bind_groups, models);
     });
+
+    changed
 }
 
 fn pipeline_ui(
@@ -159,7 +162,9 @@ fn pipeline_ui(
     shaders: &Storage<Shader>,
     bind_groups: &Storage<BindGroup>,
     models: &Storage<Model>,
-) {
+) -> bool {
+    let mut changed = false;
+
     CollapsingHeader::new("Shaders")
         .default_open(true)
         .show(ui, |ui| {
@@ -167,22 +172,22 @@ fn pipeline_ui(
                 .num_columns(2)
                 .show(ui, |ui| {
                     ui.label("Vertex Shader");
-                    let mut vertex_shader = pipeline.vertex_shader;
+                    let mut vertex_shader = pipeline.vertex_shader();
                     if storage_combo_opt_with_none(ui, "vertex_shader", shaders, &mut vertex_shader)
                     {
-                        pipeline.set_vertex_shader(vertex_shader);
+                        changed |= pipeline.set_vertex_shader(vertex_shader);
                     }
                     ui.end_row();
 
                     ui.label("Fragment Shader");
-                    let mut fragment_shader = pipeline.fragment_shader;
+                    let mut fragment_shader = pipeline.fragment_shader();
                     if storage_combo_opt_with_none(
                         ui,
                         "fragment_shader",
                         shaders,
                         &mut fragment_shader,
                     ) {
-                        pipeline.set_fragment_shader(fragment_shader);
+                        changed |= pipeline.set_fragment_shader(fragment_shader);
                     }
                     ui.end_row();
                 });
@@ -193,7 +198,7 @@ fn pipeline_ui(
     CollapsingHeader::new("Primitive State")
         .default_open(true)
         .show(ui, |ui| {
-            let mut ps = pipeline.primitive_state;
+            let mut ps = pipeline.primitive_state();
             let before = ps;
 
             Grid::new(("pipeline_primitive_grid", render_pass_id))
@@ -217,15 +222,17 @@ fn pipeline_ui(
                 });
 
             if ps != before {
-                pipeline.set_primitive_state(ps);
+                changed |= pipeline.set_primitive_state(ps);
             }
         });
 
     ui.add_space(4.0);
 
-    super::bind_group_draw::bind_groups_ui(ui, render_pass_id, pipeline, bind_groups);
+    changed |= super::bind_group_draw::bind_groups_ui(ui, render_pass_id, pipeline, bind_groups);
 
     ui.add_space(4.0);
 
-    super::bind_group_draw::draw_ui(ui, render_pass_id, pipeline, models);
+    changed |= super::bind_group_draw::draw_ui(ui, render_pass_id, pipeline, models);
+
+    changed
 }

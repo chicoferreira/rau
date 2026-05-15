@@ -386,14 +386,11 @@ pub async fn create_scene(
 
     let mut main_render_pass = RenderPass::new(
         "Main Render Pass".to_string(),
-        RenderPassTarget {
-            texture_view_id: Some(hdr_texture_view_id),
-            load_operation: LoadOperation::default(),
-        },
-        Some(RenderPassTarget {
-            texture_view_id: Some(depth_texture_view_id),
-            load_operation: LoadOperation::default(),
-        }),
+        RenderPassTarget::new(Some(hdr_texture_view_id), LoadOperation::default()),
+        Some(RenderPassTarget::new(
+            Some(depth_texture_view_id),
+            LoadOperation::default(),
+        )),
     );
 
     main_render_pass.add_pipeline(
@@ -451,10 +448,7 @@ pub async fn create_scene(
 
     let mut hdr_render_pass = RenderPass::new(
         "HDR render pass",
-        RenderPassTarget {
-            texture_view_id: Some(output_viewport_view_id),
-            load_operation: LoadOperation::default(),
-        },
+        RenderPassTarget::new(Some(output_viewport_view_id), LoadOperation::default()),
         None,
     );
 

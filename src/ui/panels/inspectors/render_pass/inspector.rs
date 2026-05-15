@@ -55,8 +55,9 @@ impl StateSnapshot<'_> {
         CollapsingHeader::new("Color Target")
             .default_open(true)
             .show(ui, |ui| {
-                let mut texture_view_id = render_pass.target.texture_view_id;
-                let mut load_op = render_pass.target.load_operation;
+                let target = render_pass.target();
+                let mut texture_view_id = target.texture_view_id();
+                let mut load_op = target.load_operation();
 
                 let changed = render_pass_target_ui(
                     ui,
@@ -70,10 +71,7 @@ impl StateSnapshot<'_> {
                 );
 
                 if changed {
-                    render_pass.set_target(RenderPassTarget {
-                        texture_view_id,
-                        load_operation: load_op,
-                    });
+                    render_pass.set_target(RenderPassTarget::new(texture_view_id, load_op));
                 }
             });
 
@@ -81,7 +79,7 @@ impl StateSnapshot<'_> {
         CollapsingHeader::new("Depth Target")
             .default_open(true)
             .show(ui, |ui| {
-                let mut enabled = render_pass.depth_target.is_some();
+                let mut enabled = render_pass.depth_target().is_some();
                 if ui.checkbox(&mut enabled, "Enabled").changed() {
                     if enabled {
                         render_pass.set_depth_target(Some(RenderPassTarget::default()));
@@ -91,9 +89,9 @@ impl StateSnapshot<'_> {
                 }
 
                 let depth_snapshot = render_pass
-                    .depth_target
+                    .depth_target()
                     .as_ref()
-                    .map(|dt| (dt.texture_view_id, dt.load_operation));
+                    .map(|dt| (dt.texture_view_id(), dt.load_operation()));
 
                 if let Some((mut texture_view_id, mut load_op)) = depth_snapshot {
                     let changed = render_pass_target_ui(
@@ -112,38 +110,40 @@ impl StateSnapshot<'_> {
                     );
 
                     if changed {
-                        render_pass.set_depth_target(Some(RenderPassTarget {
+                        render_pass.set_depth_target(Some(RenderPassTarget::new(
                             texture_view_id,
-                            load_operation: load_op,
-                        }));
+                            load_op,
+                        )));
                     }
                 }
             });
 
         ui.add_space(4.0);
 
-        let pipeline_count = render_pass.pipelines.len();
+        let pipeline_count = render_pass.pipelines().len();
         let shaders = &self.project.shaders;
         let bind_groups = &self.project.bind_groups;
         let models = &self.project.models;
         let event_queue = &mut *self.event_queue;
         let rename_state = &mut *self.rename_state;
         let mut delete_pipeline = None;
+        let mut pipeline_changed = false;
 
         CollapsingHeader::new(format!("Pipelines ({})", pipeline_count))
             .default_open(true)
             .show(ui, |ui| {
                 let response =
                     egui_dnd::dnd(ui, (render_pass_id, "pipelines")).show_custom(|ui, iter| {
-                        for (index, pipeline) in render_pass.pipelines.iter_mut().enumerate() {
+                        for (index, pipeline) in render_pass.pipelines_mut().iter_mut().enumerate()
+                        {
                             if index != 0 {
                                 ui.add_space(5.0);
                             }
                             let item_id = pipeline.id();
-                            ui.push_id(pipeline.id, |ui| {
+                            ui.push_id(pipeline.id(), |ui| {
                                 iter.next(ui, item_id, index, true, |ui, item_handle| {
                                     item_handle.ui(ui, |ui, handle, _state| {
-                                        super::pipeline::pipeline_entry_ui(
+                                        pipeline_changed |= super::pipeline::pipeline_entry_ui(
                                             ui,
                                             handle,
                                             render_pass_id,
@@ -166,12 +166,16 @@ impl StateSnapshot<'_> {
                     render_pass.reorder_pipelines(update.from, update.to);
                 }
 
+                if pipeline_changed {
+                    render_pass.mark_pipeline_project_changed();
+                }
+
                 ui.add_space(6.0);
 
                 if ui.button("Add Pipeline").clicked() {
                     const DEFAULT_NAME: &str = "Pipeline";
 
-                    let index = render_pass.pipelines.len();
+                    let index = render_pass.pipelines().len();
                     render_pass.add_empty_pipeline(DEFAULT_NAME);
 
                     *rename_state = Some(crate::ui::rename::RenameState {

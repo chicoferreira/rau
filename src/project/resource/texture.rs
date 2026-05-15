@@ -32,7 +32,9 @@ pub struct Texture {
     usage: wgpu::TextureUsages,
     source: TextureSource,
     #[serde(skip)]
-    revision: Revision,
+    runtime_revision: Revision,
+    #[serde(skip)]
+    project_revision: Revision,
 }
 
 pub struct TextureRuntime {
@@ -68,7 +70,8 @@ impl Texture {
             format,
             usage,
             source,
-            revision: Revision::default(),
+            runtime_revision: Revision::default(),
+            project_revision: Revision::default(),
         }
     }
 
@@ -86,22 +89,26 @@ impl Texture {
 
     pub fn set_label(&mut self, label: String) {
         self.label = label;
-        self.revision.increase();
+        self.runtime_revision.increase();
+        self.project_revision.increase();
     }
 
     pub fn set_format(&mut self, format: wgpu::TextureFormat) {
         self.format = format;
-        self.revision.increase();
+        self.runtime_revision.increase();
+        self.project_revision.increase();
     }
 
     pub fn set_usage(&mut self, usage: wgpu::TextureUsages) {
         self.usage = usage;
-        self.revision.increase();
+        self.runtime_revision.increase();
+        self.project_revision.increase();
     }
 
     pub fn set_source(&mut self, source: TextureSource) {
         self.source = source;
-        self.revision.increase();
+        self.runtime_revision.increase();
+        self.project_revision.increase();
     }
 }
 
@@ -117,12 +124,20 @@ impl ProjectResource for Texture {
     fn label(&self) -> &str {
         &self.label
     }
+
+    fn project_revision(&self) -> Revision {
+        self.project_revision
+    }
 }
 
 impl SyncResource for Texture {
     type Context<'a> = TextureCreationContext<'a>;
     type Runtime = TextureRuntime;
     type Job = TextureJob;
+
+    fn runtime_revision(&self) -> Revision {
+        self.runtime_revision
+    }
 
     fn sync<'a>(
         &self,
@@ -229,10 +244,6 @@ impl SyncResource for Texture {
             runtime,
             scope.pop(),
         )))
-    }
-
-    fn revision(&self) -> Revision {
-        self.revision
     }
 
     fn needs_rebuild_from_others(&self, tracker: &SyncTracker) -> bool {

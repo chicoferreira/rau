@@ -3,13 +3,16 @@ use slotmap::new_key_type;
 
 use crate::{
     error::AppError,
-    project::resource::{
-        bindgroup::BindGroup, camera::Camera, compute_pass::ComputePass, dimension::Dimension,
-        frame_plan::FramePlan, model::Model, render_pass::RenderPass, sampler::Sampler,
-        shader::Shader, texture::Texture, texture_view::TextureView, uniform::Uniform,
-        viewport::Viewport,
+    project::{
+        resource::{
+            bindgroup::BindGroup, camera::Camera, compute_pass::ComputePass, dimension::Dimension,
+            frame_plan::FramePlan, model::Model, render_pass::RenderPass, sampler::Sampler,
+            shader::Shader, texture::Texture, texture_view::TextureView, uniform::Uniform,
+            viewport::Viewport,
+        },
+        storage::{RuntimeStorage, Storage},
+        sync::Revision,
     },
-    project::storage::{RuntimeStorage, Storage},
 };
 
 pub mod paths;
@@ -127,6 +130,26 @@ impl Project {
             ResourceId::RenderPass(id) => self.render_passes.unregister(id),
         };
     }
+
+    pub fn project_revisions(&self) -> impl Iterator<Item = (ResourceId, Revision)> {
+        self.shaders
+            .project_revisions()
+            .chain(self.viewports.project_revisions())
+            .chain(self.uniforms.project_revisions())
+            .chain(self.bind_groups.project_revisions())
+            .chain(self.textures.project_revisions())
+            .chain(self.texture_views.project_revisions())
+            .chain(self.samplers.project_revisions())
+            .chain(self.dimensions.project_revisions())
+            .chain(self.cameras.project_revisions())
+            .chain(self.models.project_revisions())
+            .chain(self.render_passes.project_revisions())
+            .chain(self.compute_passes.project_revisions())
+            .chain(std::iter::once((
+                ResourceId::FramePlan(FramePlanId),
+                self.frame_plan.project_revision(),
+            )))
+    }
 }
 
 impl RuntimeProject {
@@ -203,6 +226,8 @@ pub trait ProjectResource {
     type Id: Into<ResourceId> + Copy + Eq + std::hash::Hash + std::fmt::Debug + Send + Sync;
 
     fn label(&self) -> &str;
+
+    fn project_revision(&self) -> Revision;
 }
 
 pub trait Creatable: ProjectResource {

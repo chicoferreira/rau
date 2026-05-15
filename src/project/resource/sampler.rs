@@ -43,7 +43,9 @@ pub struct Sampler {
     label: String,
     spec: SamplerSpec,
     #[serde(skip)]
-    revision: Revision,
+    runtime_revision: Revision,
+    #[serde(skip)]
+    project_revision: Revision,
 }
 
 pub struct SamplerRuntime {
@@ -62,13 +64,15 @@ impl Sampler {
         Sampler {
             label: label.into(),
             spec,
-            revision: Revision::default(),
+            runtime_revision: Revision::default(),
+            project_revision: Revision::default(),
         }
     }
 
     pub fn set_label(&mut self, label: String) {
         self.label = label;
-        self.revision.increase();
+        self.runtime_revision.increase();
+        self.project_revision.increase();
     }
 
     pub fn spec(&self) -> &SamplerSpec {
@@ -78,7 +82,8 @@ impl Sampler {
     pub fn set_spec(&mut self, spec: SamplerSpec) {
         self.spec = spec;
         self.spec.lod_max_clamp = self.spec.lod_max_clamp.max(self.spec.lod_min_clamp);
-        self.revision.increase();
+        self.runtime_revision.increase();
+        self.project_revision.increase();
     }
 
     fn create_sampler(device: &wgpu::Device, label: &str, spec: &SamplerSpec) -> wgpu::Sampler {
@@ -117,12 +122,20 @@ impl ProjectResource for Sampler {
     fn label(&self) -> &str {
         &self.label
     }
+
+    fn project_revision(&self) -> Revision {
+        self.project_revision
+    }
 }
 
 impl SyncResource for Sampler {
     type Context<'a> = &'a wgpu::Device;
     type Runtime = SamplerRuntime;
     type Job = SamplerJob;
+
+    fn runtime_revision(&self) -> Revision {
+        self.runtime_revision
+    }
 
     fn sync<'a>(
         &self,
@@ -148,10 +161,6 @@ impl SyncResource for Sampler {
                 ))),
             },
         }
-    }
-
-    fn revision(&self) -> Revision {
-        self.revision
     }
 
     fn needs_rebuild_from_others(&self, _: &SyncTracker) -> bool {

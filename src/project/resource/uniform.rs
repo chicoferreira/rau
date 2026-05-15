@@ -31,10 +31,12 @@ pub struct UniformCreationContext<'a> {
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Uniform {
-    pub label: String,
+    label: String,
     fields: Vec<UniformField>,
     #[serde(skip)]
-    revision: Revision,
+    runtime_revision: Revision,
+    #[serde(skip)]
+    project_revision: Revision,
 }
 
 pub struct UniformRuntime {
@@ -101,7 +103,8 @@ impl Uniform {
         Uniform {
             label,
             fields,
-            revision: Revision::default(),
+            runtime_revision: Revision::default(),
+            project_revision: Revision::default(),
         }
     }
 
@@ -113,29 +116,40 @@ impl Uniform {
         self.fields.get(index)
     }
 
+    pub fn set_label(&mut self, label: String) {
+        if self.label != label {
+            self.label = label;
+            self.project_revision.increase();
+        }
+    }
+
     pub fn add_field(&mut self, field: UniformField) {
         self.fields.push(field);
-        self.revision.increase();
+        self.runtime_revision.increase();
+        self.project_revision.increase();
     }
 
     pub fn remove_field(&mut self, index: usize) {
         if index < self.fields.len() {
             self.fields.remove(index);
-            self.revision.increase();
+            self.runtime_revision.increase();
+            self.project_revision.increase();
         }
     }
 
     pub fn set_field_label(&mut self, index: usize, new_name: String) {
-        if index < self.fields.len() {
-            self.fields[index].label = new_name;
-            // changing the label does not affect the buffer
+        if let Some(field) = self.fields.get_mut(index) {
+            field.label = new_name;
+            self.runtime_revision.increase();
+            self.project_revision.increase();
         }
     }
 
     pub fn set_field_source(&mut self, index: usize, source: UniformFieldSource) {
         if let Some(field) = self.fields.get_mut(index) {
             field.source = source;
-            self.revision.increase();
+            self.runtime_revision.increase();
+            self.project_revision.increase();
         }
     }
 
@@ -144,7 +158,8 @@ impl Uniform {
             return;
         }
         shift_vec(from, to, &mut self.fields);
-        self.revision.increase();
+        self.runtime_revision.increase();
+        self.project_revision.increase();
     }
 
     fn runtime_fields(
@@ -204,12 +219,20 @@ impl ProjectResource for Uniform {
     fn label(&self) -> &str {
         &self.label
     }
+
+    fn project_revision(&self) -> Revision {
+        self.project_revision
+    }
 }
 
 impl SyncResource for Uniform {
     type Context<'a> = UniformCreationContext<'a>;
     type Runtime = UniformRuntime;
     type Job = UniformJob;
+
+    fn runtime_revision(&self) -> Revision {
+        self.runtime_revision
+    }
 
     fn sync<'a>(
         &self,
@@ -264,10 +287,6 @@ impl SyncResource for Uniform {
                 ))),
             },
         }
-    }
-
-    fn revision(&self) -> Revision {
-        self.revision
     }
 
     fn needs_rebuild_from_others(&self, tracker: &SyncTracker) -> bool {

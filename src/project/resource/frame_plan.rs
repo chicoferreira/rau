@@ -23,7 +23,9 @@ use crate::{
 pub struct FramePlan {
     entries: Vec<FramePlanStep>,
     #[serde(skip)]
-    revision: Revision,
+    runtime_revision: Revision,
+    #[serde(skip)]
+    project_revision: Revision,
 }
 
 pub type FramePlanStepId = u64;
@@ -61,7 +63,8 @@ impl FramePlan {
 
     pub fn add(&mut self, render_pass_id: Option<RenderPassId>) {
         self.entries.push(FramePlanStep::new(render_pass_id));
-        self.revision.increase();
+        self.runtime_revision.increase();
+        self.project_revision.increase();
     }
 
     pub fn update_entry(&mut self, index: usize, render_pass_id: Option<RenderPassId>) {
@@ -69,14 +72,16 @@ impl FramePlan {
             && entry.render_pass_id != render_pass_id
         {
             entry.render_pass_id = render_pass_id;
-            self.revision.increase();
+            self.runtime_revision.increase();
+            self.project_revision.increase();
         }
     }
 
     pub fn remove_entry(&mut self, index: usize) {
         if index < self.entries.len() {
             self.entries.remove(index);
-            self.revision.increase();
+            self.runtime_revision.increase();
+            self.project_revision.increase();
         }
     }
 
@@ -86,7 +91,8 @@ impl FramePlan {
         }
 
         shift_vec(from, to, &mut self.entries);
-        self.revision.increase();
+        self.runtime_revision.increase();
+        self.project_revision.increase();
     }
 }
 
@@ -95,6 +101,10 @@ impl ProjectResource for FramePlan {
 
     fn label(&self) -> &str {
         "Frame Plan"
+    }
+
+    fn project_revision(&self) -> Revision {
+        self.project_revision
     }
 }
 
@@ -120,8 +130,8 @@ impl SyncResource for FramePlan {
     type Runtime = ();
     type Job = FramePlanJob;
 
-    fn revision(&self) -> Revision {
-        self.revision
+    fn runtime_revision(&self) -> Revision {
+        self.runtime_revision
     }
 
     fn needs_rebuild_from_others(&self, _: &SyncTracker) -> bool {
@@ -138,7 +148,7 @@ impl SyncResource for FramePlan {
             RuntimeCell::Errored {
                 revision: at_revision,
                 ..
-            } => *at_revision != self.revision || tracker.has_resource_changes(),
+            } => *at_revision != self.runtime_revision || tracker.has_resource_changes(),
             RuntimeCell::Pending { .. } => false,
         }
     }

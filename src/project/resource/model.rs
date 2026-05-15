@@ -36,13 +36,15 @@ pub struct ModelCreationContext<'a> {
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Model {
-    pub label: String,
+    label: String,
     source: FilePath,
     material_bind_group_ids: Vec<Option<BindGroupId>>,
     mesh_material_selections: Vec<MeshMaterialSelection>,
     vertex_buffer_spec: VertexBufferSpec,
     #[serde(skip)]
-    revision: Revision,
+    runtime_revision: Revision,
+    #[serde(skip)]
+    project_revision: Revision,
 }
 
 pub struct ModelRuntime {
@@ -95,7 +97,8 @@ impl Model {
             material_bind_group_ids: Vec::new(),
             mesh_material_selections: Vec::new(),
             vertex_buffer_spec: VertexBufferSpec::new(),
-            revision: Revision::default(),
+            runtime_revision: Revision::default(),
+            project_revision: Revision::default(),
         }
     }
 
@@ -106,7 +109,8 @@ impl Model {
     pub fn set_source(&mut self, source: FilePath) {
         if self.source != source {
             self.source = source;
-            self.revision.increase();
+            self.runtime_revision.increase();
+            self.project_revision.increase();
         }
     }
 
@@ -133,7 +137,8 @@ impl Model {
 
         if self.material_bind_group_ids[material_index] != bind_group_id {
             self.material_bind_group_ids[material_index] = bind_group_id;
-            self.revision.increase();
+            self.runtime_revision.increase();
+            self.project_revision.increase();
         }
     }
 
@@ -156,7 +161,8 @@ impl Model {
 
         if self.mesh_material_selections[mesh_index] != selection {
             self.mesh_material_selections[mesh_index] = selection;
-            self.revision.increase();
+            self.runtime_revision.increase();
+            self.project_revision.increase();
         }
     }
 
@@ -173,21 +179,24 @@ impl Model {
 
     pub fn add_vertex_buffer_field(&mut self, field: VertexBufferField) {
         self.vertex_buffer_spec.fields.push(field);
-        self.revision.increase();
+        self.runtime_revision.increase();
+        self.project_revision.increase();
     }
 
     pub fn remove_vertex_buffer_field(&mut self, index: usize) {
         let fields = &mut self.vertex_buffer_spec.fields;
         if index < fields.len() {
             fields.remove(index);
-            self.revision.increase();
+            self.runtime_revision.increase();
+            self.project_revision.increase();
         }
     }
 
     pub fn set_vertex_buffer_field(&mut self, index: usize, field: VertexBufferField) {
         if let Some(f) = self.vertex_buffer_spec.fields.get_mut(index) {
             *f = field;
-            self.revision.increase();
+            self.runtime_revision.increase();
+            self.project_revision.increase();
         }
     }
 
@@ -196,7 +205,8 @@ impl Model {
             return;
         }
         self.vertex_buffer_spec.reorder_field(from, to);
-        self.revision.increase();
+        self.runtime_revision.increase();
+        self.project_revision.increase();
     }
 }
 
@@ -206,12 +216,20 @@ impl ProjectResource for Model {
     fn label(&self) -> &str {
         &self.label
     }
+
+    fn project_revision(&self) -> Revision {
+        self.project_revision
+    }
 }
 
 impl SyncResource for Model {
     type Context<'a> = ModelCreationContext<'a>;
     type Runtime = ModelRuntime;
     type Job = ModelJob;
+
+    fn runtime_revision(&self) -> Revision {
+        self.runtime_revision
+    }
 
     fn sync<'a>(
         &self,
@@ -240,10 +258,6 @@ impl SyncResource for Model {
                 Poll::Pending => Ok(SyncOutcome::Pending(ModelJob::Loading(future))),
             },
         }
-    }
-
-    fn revision(&self) -> Revision {
-        self.revision
     }
 
     fn needs_rebuild_from_others(&self, tracker: &SyncTracker) -> bool {

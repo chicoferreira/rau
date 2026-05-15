@@ -65,8 +65,8 @@ impl RenameTarget {
                 .render_passes
                 .get(*id)
                 .ok()
-                .and_then(|render_pass| render_pass.pipelines.get(*index))
-                .map(|pipeline| pipeline.label.as_str()),
+                .and_then(|render_pass| render_pass.pipelines().get(*index))
+                .map(|pipeline| pipeline.label()),
         }
     }
 
@@ -124,7 +124,7 @@ impl RenameTarget {
             }
             RenameTarget::Uniform(id) => {
                 if let Ok(uniform) = project.uniforms.get_mut(id) {
-                    uniform.label = new_name;
+                    uniform.set_label(new_name);
                 }
             }
             RenameTarget::UniformField(id, index) => {
@@ -139,22 +139,22 @@ impl RenameTarget {
             }
             RenameTarget::Viewport(id) => {
                 if let Ok(viewport) = project.viewports.get_mut(id) {
-                    viewport.label = new_name;
+                    viewport.set_label(new_name);
                 }
             }
             RenameTarget::Shader(id) => {
                 if let Ok(shader) = project.shaders.get_mut(id) {
-                    shader.label = new_name;
+                    shader.set_label(new_name);
                 }
             }
             RenameTarget::Camera(id) => {
                 if let Ok(camera) = project.cameras.get_mut(id) {
-                    camera.label = new_name;
+                    camera.set_label(new_name);
                 }
             }
             RenameTarget::Dimension(id) => {
                 if let Ok(dimension) = project.dimensions.get_mut(id) {
-                    dimension.label = new_name;
+                    dimension.set_label(new_name);
                 }
             }
             RenameTarget::Sampler(id) => {
@@ -184,8 +184,12 @@ impl RenameTarget {
             }
             RenameTarget::RenderPipeline(render_pass_id, index) => {
                 if let Ok(render_pass) = project.render_passes.get_mut(render_pass_id) {
-                    if let Some(pipeline) = render_pass.pipelines.get_mut(index) {
-                        pipeline.set_label(new_name);
+                    let changed = render_pass
+                        .pipelines_mut()
+                        .get_mut(index)
+                        .is_some_and(|pipeline| pipeline.set_label(new_name));
+                    if changed {
+                        render_pass.mark_pipeline_project_changed();
                     }
                 }
             }

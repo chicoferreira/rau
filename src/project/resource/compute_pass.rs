@@ -24,7 +24,9 @@ pub struct ComputePass {
     work_groups_y: u32,
     work_groups_z: u32,
     #[serde(skip)]
-    revision: Revision,
+    runtime_revision: Revision,
+    #[serde(skip)]
+    project_revision: Revision,
 }
 
 pub type ComputePassBindGroupEntryId = u64;
@@ -60,7 +62,8 @@ impl Creatable for ComputePass {
             work_groups_x: Default::default(),
             work_groups_y: Default::default(),
             work_groups_z: Default::default(),
-            revision: Default::default(),
+            runtime_revision: Default::default(),
+            project_revision: Default::default(),
         }
     }
 }
@@ -81,7 +84,8 @@ impl ComputePass {
             work_groups_x: work_groups_x.max(1),
             work_groups_y: work_groups_y.max(1),
             work_groups_z: work_groups_z.max(1),
-            revision: Revision::default(),
+            runtime_revision: Revision::default(),
+            project_revision: Revision::default(),
         }
     }
 
@@ -104,14 +108,16 @@ impl ComputePass {
     pub fn set_label(&mut self, label: String) {
         if self.label != label {
             self.label = label;
-            self.revision.increase();
+            self.runtime_revision.increase();
+            self.project_revision.increase();
         }
     }
 
     pub fn set_shader(&mut self, shader: Option<ShaderId>) {
         if self.shader != shader {
             self.shader = shader;
-            self.revision.increase();
+            self.runtime_revision.increase();
+            self.project_revision.increase();
         }
     }
 
@@ -122,7 +128,8 @@ impl ComputePass {
             self.work_groups_x = next.0;
             self.work_groups_y = next.1;
             self.work_groups_z = next.2;
-            self.revision.increase();
+            self.runtime_revision.increase();
+            self.project_revision.increase();
         }
     }
 
@@ -131,20 +138,23 @@ impl ComputePass {
             && current.bind_group_id() != bind_group
         {
             current.set_bind_group_id(bind_group);
-            self.revision.increase();
+            self.runtime_revision.increase();
+            self.project_revision.increase();
         }
     }
 
     pub fn add_bind_group(&mut self, bind_group: Option<BindGroupId>) {
         self.bind_groups
             .push(ComputePassBindGroupEntry::new(bind_group));
-        self.revision.increase();
+        self.runtime_revision.increase();
+        self.project_revision.increase();
     }
 
     pub fn remove_bind_group(&mut self, index: usize) {
         if index < self.bind_groups.len() {
             self.bind_groups.remove(index);
-            self.revision.increase();
+            self.runtime_revision.increase();
+            self.project_revision.increase();
         }
     }
 
@@ -154,7 +164,8 @@ impl ComputePass {
         }
 
         shift_vec(from, to, &mut self.bind_groups);
-        self.revision.increase();
+        self.runtime_revision.increase();
+        self.project_revision.increase();
     }
 }
 
@@ -185,6 +196,10 @@ impl ProjectResource for ComputePass {
     fn label(&self) -> &str {
         &self.label
     }
+
+    fn project_revision(&self) -> Revision {
+        self.project_revision
+    }
 }
 
 impl SyncResource for ComputePass {
@@ -192,8 +207,8 @@ impl SyncResource for ComputePass {
     type Runtime = ();
     type Job = ComputePassJob;
 
-    fn revision(&self) -> Revision {
-        self.revision
+    fn runtime_revision(&self) -> Revision {
+        self.runtime_revision
     }
 
     fn needs_rebuild_from_others(&self, tracker: &SyncTracker) -> bool {

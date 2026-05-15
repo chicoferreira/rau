@@ -16,19 +16,21 @@ use crate::{
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RenderPass {
-    pub label: String,
-    pub target: RenderPassTarget<Color>,
-    pub depth_target: Option<RenderPassTarget<f32>>,
-    pub pipelines: Vec<RenderPipeline>,
+    label: String,
+    target: RenderPassTarget<Color>,
+    depth_target: Option<RenderPassTarget<f32>>,
+    pipelines: Vec<RenderPipeline>,
     #[serde(skip)]
-    revision: Revision,
+    runtime_revision: Revision,
+    #[serde(skip)]
+    project_revision: Revision,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RenderPassTarget<T> {
-    pub texture_view_id: Option<TextureViewId>,
-    pub load_operation: LoadOperation<T>,
+    texture_view_id: Option<TextureViewId>,
+    load_operation: LoadOperation<T>,
 }
 
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq, Serialize, Deserialize)]
@@ -75,13 +77,13 @@ pub struct RenderPipeline {
     // - List of bind groups (to bind)
     // - The Index and Vertex buffer of the model
     /// Used for stability in pipeline reordering
-    pub id: RenderPipelineId,
-    pub label: String,
-    pub primitive_state: wgpu::PrimitiveState,
-    pub vertex_shader: Option<ShaderId>,
-    pub fragment_shader: Option<ShaderId>,
-    pub static_bind_groups: Vec<(u32, Option<BindGroupId>)>,
-    pub draw: RenderDraw,
+    id: RenderPipelineId,
+    label: String,
+    primitive_state: wgpu::PrimitiveState,
+    vertex_shader: Option<ShaderId>,
+    fragment_shader: Option<ShaderId>,
+    static_bind_groups: Vec<(u32, Option<BindGroupId>)>,
+    draw: RenderDraw,
     dirty: bool,
 }
 
@@ -117,7 +119,8 @@ impl Creatable for RenderPass {
             target: Default::default(),
             depth_target: Default::default(),
             pipelines: Default::default(),
-            revision: Default::default(),
+            runtime_revision: Default::default(),
+            project_revision: Default::default(),
         }
     }
 }
@@ -137,21 +140,46 @@ impl ProjectResource for RenderPass {
     fn label(&self) -> &str {
         &self.label
     }
+
+    fn project_revision(&self) -> Revision {
+        self.project_revision
+    }
 }
 
 impl RenderPass {
+    pub fn target(&self) -> RenderPassTarget<Color> {
+        self.target
+    }
+
+    pub fn depth_target(&self) -> Option<RenderPassTarget<f32>> {
+        self.depth_target
+    }
+
+    pub fn pipelines(&self) -> &[RenderPipeline] {
+        &self.pipelines
+    }
+
+    pub fn pipelines_mut(&mut self) -> &mut [RenderPipeline] {
+        &mut self.pipelines
+    }
+
     pub fn set_label(&mut self, label: String) {
-        self.label = label;
+        if self.label != label {
+            self.label = label;
+            self.project_revision.increase();
+        }
     }
 
     pub fn set_target(&mut self, target: RenderPassTarget<Color>) {
         self.target = target;
-        self.revision.increase();
+        self.runtime_revision.increase();
+        self.project_revision.increase();
     }
 
     pub fn set_depth_target(&mut self, target: Option<RenderPassTarget<f32>>) {
         self.depth_target = target;
-        self.revision.increase();
+        self.runtime_revision.increase();
+        self.project_revision.increase();
     }
 
     pub fn new(
@@ -165,7 +193,8 @@ impl RenderPass {
             target,
             depth_target,
             pipelines: vec![],
-            revision: Revision::default(),
+            runtime_revision: Revision::default(),
+            project_revision: Revision::default(),
         }
     }
 
@@ -187,7 +216,8 @@ impl RenderPass {
             draw,
         );
         self.pipelines.push(pipeline);
-        self.revision.increase();
+        self.runtime_revision.increase();
+        self.project_revision.increase();
     }
 
     pub fn add_empty_pipeline(&mut self, label: impl Into<String>) {
@@ -204,7 +234,8 @@ impl RenderPass {
     pub fn remove_pipeline(&mut self, index: usize) {
         if index < self.pipelines.len() {
             self.pipelines.remove(index);
-            self.revision.increase();
+            self.runtime_revision.increase();
+            self.project_revision.increase();
         }
     }
 
@@ -213,7 +244,12 @@ impl RenderPass {
             return;
         }
         shift_vec(from, to, &mut self.pipelines);
-        self.revision.increase();
+        self.runtime_revision.increase();
+        self.project_revision.increase();
+    }
+
+    pub fn mark_pipeline_project_changed(&mut self) {
+        self.project_revision.increase();
     }
 
     pub fn get_color_format(&self, ctx: &Context) -> AppResult<wgpu::TextureFormat> {
@@ -300,34 +336,89 @@ impl RenderPipeline {
         }
     }
 
-    pub fn set_vertex_shader(&mut self, id: Option<ShaderId>) {
+    pub fn id(&self) -> RenderPipelineId {
+        self.id
+    }
+
+    pub fn label(&self) -> &str {
+        &self.label
+    }
+
+    pub fn primitive_state(&self) -> wgpu::PrimitiveState {
+        self.primitive_state
+    }
+
+    pub fn vertex_shader(&self) -> Option<ShaderId> {
+        self.vertex_shader
+    }
+
+    pub fn fragment_shader(&self) -> Option<ShaderId> {
+        self.fragment_shader
+    }
+
+    pub fn static_bind_groups(&self) -> &[(u32, Option<BindGroupId>)] {
+        &self.static_bind_groups
+    }
+
+    pub fn draw(&self) -> &RenderDraw {
+        &self.draw
+    }
+
+    pub fn set_vertex_shader(&mut self, id: Option<ShaderId>) -> bool {
+        if self.vertex_shader == id {
+            return false;
+        }
         self.vertex_shader = id;
         self.dirty = true;
+        true
     }
 
-    pub fn set_fragment_shader(&mut self, id: Option<ShaderId>) {
+    pub fn set_fragment_shader(&mut self, id: Option<ShaderId>) -> bool {
+        if self.fragment_shader == id {
+            return false;
+        }
         self.fragment_shader = id;
         self.dirty = true;
+        true
     }
 
-    pub fn set_primitive_state(&mut self, primitive_state: wgpu::PrimitiveState) {
+    pub fn set_primitive_state(&mut self, primitive_state: wgpu::PrimitiveState) -> bool {
+        if self.primitive_state == primitive_state {
+            return false;
+        }
         self.primitive_state = primitive_state;
         self.dirty = true;
+        true
     }
 
-    pub fn set_draw(&mut self, draw: RenderDraw) {
+    pub fn set_draw(&mut self, draw: RenderDraw) -> bool {
+        if self.draw == draw {
+            return false;
+        }
         self.draw = draw;
         self.dirty = true;
+        true
     }
 
-    pub fn set_label(&mut self, label: String) {
+    pub fn set_label(&mut self, label: String) -> bool {
+        if self.label == label {
+            return false;
+        }
         self.label = label;
         self.dirty = true;
+        true
     }
 
-    pub fn set_static_bind_groups(&mut self, static_bind_groups: Vec<(u32, Option<BindGroupId>)>) {
+    pub fn set_static_bind_groups(
+        &mut self,
+        static_bind_groups: Vec<(u32, Option<BindGroupId>)>,
+    ) -> bool {
+        if self.static_bind_groups == static_bind_groups {
+            return false;
+        }
         self.static_bind_groups = static_bind_groups;
         self.dirty = true;
+        true
     }
 
     fn create_wgpu_pipeline(
@@ -546,6 +637,24 @@ impl RenderPipelineRuntime {
 }
 
 impl<T> RenderPassTarget<T> {
+    pub fn new(texture_view_id: Option<TextureViewId>, load_operation: LoadOperation<T>) -> Self {
+        Self {
+            texture_view_id,
+            load_operation,
+        }
+    }
+
+    pub fn texture_view_id(&self) -> Option<TextureViewId> {
+        self.texture_view_id
+    }
+
+    pub fn load_operation(&self) -> LoadOperation<T>
+    where
+        T: Copy,
+    {
+        self.load_operation
+    }
+
     pub fn get_target_inner<'a>(
         &self,
         runtime_texture_views: &'a RuntimeStorage<TextureView>,
@@ -595,6 +704,10 @@ impl SyncResource for RenderPass {
     type Context<'a> = Context<'a>;
     type Runtime = RenderPassRuntime;
     type Job = RenderPassJob;
+
+    fn runtime_revision(&self) -> Revision {
+        self.runtime_revision
+    }
 
     fn sync<'a>(
         &self,
@@ -649,10 +762,6 @@ impl SyncResource for RenderPass {
         for pipeline in &mut self.pipelines {
             pipeline.dirty = false;
         }
-    }
-
-    fn revision(&self) -> Revision {
-        self.revision
     }
 
     fn needs_rebuild_from_others(&self, tracker: &SyncTracker) -> bool {

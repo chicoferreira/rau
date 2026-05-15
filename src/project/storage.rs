@@ -6,7 +6,7 @@ use crate::{
     error::{AppError, AppResult},
     project::{
         Creatable, ProjectResource, ResourceId,
-        sync::{RuntimeCell, SyncResource},
+        sync::{Revision, RuntimeCell, SyncResource},
     },
 };
 
@@ -47,6 +47,11 @@ where
 
     pub fn list_mut(&mut self) -> impl Iterator<Item = (R::Id, &mut R)> {
         self.map.iter_mut()
+    }
+
+    pub fn project_revisions(&self) -> impl Iterator<Item = (ResourceId, Revision)> + '_ {
+        self.list()
+            .map(|(id, resource)| (id.into(), resource.project_revision()))
     }
 
     pub fn register(&mut self, value: R) -> R::Id {

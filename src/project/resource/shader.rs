@@ -16,10 +16,12 @@ use crate::{
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Shader {
-    pub label: String,
+    label: String,
     source: FilePath,
     #[serde(skip)]
-    revision: Revision,
+    runtime_revision: Revision,
+    #[serde(skip)]
+    project_revision: Revision,
 }
 
 pub struct ShaderRuntime {
@@ -41,7 +43,8 @@ impl Shader {
         Self {
             label,
             source,
-            revision: Revision::default(),
+            runtime_revision: Revision::default(),
+            project_revision: Revision::default(),
         }
     }
 
@@ -49,9 +52,17 @@ impl Shader {
         &self.source
     }
 
+    pub fn set_label(&mut self, label: String) {
+        if self.label != label {
+            self.label = label;
+            self.project_revision.increase();
+        }
+    }
+
     pub fn set_source(&mut self, source: FilePath) {
         self.source = source;
-        self.revision.increase();
+        self.runtime_revision.increase();
+        self.project_revision.increase();
     }
 }
 
@@ -86,6 +97,10 @@ impl ProjectResource for Shader {
     fn label(&self) -> &str {
         &self.label
     }
+
+    fn project_revision(&self) -> Revision {
+        self.project_revision
+    }
 }
 
 pub struct ShaderCreationContext<'a> {
@@ -97,6 +112,10 @@ impl SyncResource for Shader {
     type Context<'a> = ShaderCreationContext<'a>;
     type Runtime = ShaderRuntime;
     type Job = ShaderJob;
+
+    fn runtime_revision(&self) -> Revision {
+        self.runtime_revision
+    }
 
     fn sync<'a>(
         &self,
@@ -134,10 +153,6 @@ impl SyncResource for Shader {
             runtime,
             scope.pop(),
         )))
-    }
-
-    fn revision(&self) -> Revision {
-        self.revision
     }
 
     fn needs_rebuild_from_others(&self, tracker: &SyncTracker) -> bool {

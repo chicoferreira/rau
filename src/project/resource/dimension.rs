@@ -12,10 +12,12 @@ use crate::{
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Dimension {
-    pub label: String,
+    label: String,
     size: Size2d,
     #[serde(skip)]
-    revision: Revision,
+    runtime_revision: Revision,
+    #[serde(skip)]
+    project_revision: Revision,
 }
 
 impl Dimension {
@@ -23,7 +25,8 @@ impl Dimension {
         Self {
             label: label.into(),
             size,
-            revision: Revision::default(),
+            runtime_revision: Revision::default(),
+            project_revision: Revision::default(),
         }
     }
 
@@ -31,10 +34,18 @@ impl Dimension {
         self.size
     }
 
+    pub fn set_label(&mut self, label: String) {
+        if self.label != label {
+            self.label = label;
+            self.project_revision.increase();
+        }
+    }
+
     pub fn set_size(&mut self, size: Size2d) {
         if self.size != size {
             self.size = size;
-            self.revision.increase();
+            self.runtime_revision.increase();
+            self.project_revision.increase();
         }
     }
 }
@@ -51,12 +62,20 @@ impl ProjectResource for Dimension {
     fn label(&self) -> &str {
         &self.label
     }
+
+    fn project_revision(&self) -> Revision {
+        self.project_revision
+    }
 }
 
 impl SyncResource for Dimension {
     type Context<'a> = ();
     type Runtime = ();
     type Job = ();
+
+    fn runtime_revision(&self) -> Revision {
+        self.runtime_revision
+    }
 
     fn sync<'a>(
         &self,
@@ -65,10 +84,6 @@ impl SyncResource for Dimension {
         _job: Self::Job,
     ) -> AppResult<SyncOutcome<Self::Runtime, Self::Job>> {
         Ok(SyncOutcome::Changed(()))
-    }
-
-    fn revision(&self) -> Revision {
-        self.revision
     }
 
     fn needs_rebuild_from_others(&self, _: &SyncTracker) -> bool {

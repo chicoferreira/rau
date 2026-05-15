@@ -110,9 +110,10 @@ pub fn bind_groups_ui(
     render_pass_id: RenderPassId,
     pipeline: &mut RenderPipeline,
     bind_groups: &Storage<BindGroup>,
-) {
-    let static_before = pipeline.static_bind_groups.clone();
-    let draw_before = pipeline.draw.clone();
+) -> bool {
+    let mut changed = false;
+    let static_before = pipeline.static_bind_groups().to_vec();
+    let draw_before = pipeline.draw().clone();
     let mut entries = collect_bind_group_entries(pipeline);
     let mut actions = BindGroupEntryActions::default();
 
@@ -122,7 +123,7 @@ pub fn bind_groups_ui(
             bind_group_entries_list_ui(
                 ui,
                 render_pass_id,
-                pipeline.id,
+                pipeline.id(),
                 bind_groups,
                 &mut entries,
                 &mut actions,
@@ -139,15 +140,16 @@ pub fn bind_groups_ui(
     let (new_static, new_material_slot) = split_bind_group_entries(&entries);
 
     if new_static != static_before {
-        pipeline.set_static_bind_groups(new_static);
+        changed |= pipeline.set_static_bind_groups(new_static);
     }
 
-    apply_material_bind_group_slot(pipeline, draw_before, new_material_slot);
+    changed |= apply_material_bind_group_slot(pipeline, draw_before, new_material_slot);
+    changed
 }
 
 fn collect_bind_group_entries(pipeline: &RenderPipeline) -> Vec<UnifiedEntry> {
     let mut entries: Vec<_> = pipeline
-        .static_bind_groups
+        .static_bind_groups()
         .iter()
         .cloned()
         .map(|(slot, bg_id)| UnifiedEntry::Static { slot, bg_id })
@@ -156,9 +158,9 @@ fn collect_bind_group_entries(pipeline: &RenderPipeline) -> Vec<UnifiedEntry> {
     if let RenderDraw::Model {
         material_bind_group_slot: Some(slot),
         ..
-    } = pipeline.draw
+    } = pipeline.draw()
     {
-        entries.push(UnifiedEntry::Material { slot });
+        entries.push(UnifiedEntry::Material { slot: *slot });
     }
 
     entries.sort_by_key(|entry| match entry {
@@ -359,7 +361,7 @@ fn bind_group_entries_footer_ui(
     if let RenderDraw::Model {
         material_bind_group_slot: None,
         ..
-    } = pipeline.draw
+    } = pipeline.draw()
     {
         ui.add_space(4.0);
         if ui
@@ -428,11 +430,11 @@ fn apply_material_bind_group_slot(
     pipeline: &mut RenderPipeline,
     draw_before: RenderDraw,
     new_material_slot: Option<u32>,
-) {
+) -> bool {
     if let RenderDraw::Model {
         material_bind_group_slot,
         ..
-    } = &pipeline.draw
+    } = pipeline.draw()
         && *material_bind_group_slot != new_material_slot
     {
         let mut edited = draw_before;
@@ -443,8 +445,9 @@ fn apply_material_bind_group_slot(
         {
             *material_bind_group_slot = new_material_slot;
         }
-        pipeline.set_draw(edited);
+        return pipeline.set_draw(edited);
     }
+    false
 }
 
 pub fn draw_ui(
@@ -452,26 +455,27 @@ pub fn draw_ui(
     render_pass_id: RenderPassId,
     pipeline: &mut RenderPipeline,
     models: &Storage<Model>,
-) {
-    let before = pipeline.draw.clone();
-    let mut kind = render_draw_kind(&pipeline.draw);
+) -> bool {
+    let before = pipeline.draw().clone();
+    let mut kind = render_draw_kind(pipeline.draw());
     let kind_before = kind;
     let mut edited = before.clone();
 
     CollapsingHeader::new("Draw")
         .default_open(true)
         .show(ui, |ui| {
-            Grid::new(("pipeline_draw_model_grid", render_pass_id, pipeline.id))
+            Grid::new(("pipeline_draw_model_grid", render_pass_id, pipeline.id()))
                 .num_columns(2)
                 .show(ui, |ui| {
                     draw_kind_fields_ui(ui, pipeline, &mut kind, kind_before, &mut edited);
-                    draw_fields_ui(ui, pipeline.id, models, &mut edited);
+                    draw_fields_ui(ui, pipeline.id(), models, &mut edited);
                 });
         });
 
     if edited != before {
-        pipeline.set_draw(edited);
+        return pipeline.set_draw(edited);
     }
+    false
 }
 
 fn draw_kind_fields_ui(
@@ -482,7 +486,7 @@ fn draw_kind_fields_ui(
     edited: &mut RenderDraw,
 ) {
     ui.label("Draw Kind");
-    combo_list(ui, ("draw_kind", pipeline.id), DrawKind::iter(), kind);
+    combo_list(ui, ("draw_kind", pipeline.id()), DrawKind::iter(), kind);
     ui.end_row();
 
     if *kind != kind_before {
@@ -493,7 +497,7 @@ fn draw_kind_fields_ui(
         } = edited
         {
             *material_bind_group_slot = Some(first_available_slot(
-                pipeline.static_bind_groups.iter().map(|(slot, _)| *slot),
+                pipeline.static_bind_groups().iter().map(|(slot, _)| *slot),
             ));
         }
     }

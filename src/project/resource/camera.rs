@@ -32,7 +32,7 @@ pub struct CameraCreationContext<'a> {
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Camera {
-    pub label: String,
+    label: String,
     position: Point3<f32>,
     yaw: Rad<f32>,
     pitch: Rad<f32>,
@@ -49,7 +49,9 @@ pub struct Camera {
     #[serde(skip)]
     input: CameraFrameInput,
     #[serde(skip)]
-    revision: Revision,
+    runtime_revision: Revision,
+    #[serde(skip)]
+    project_revision: Revision,
 }
 
 #[derive(Debug, PartialEq)]
@@ -105,12 +107,20 @@ impl Camera {
             sensitivity: 0.1,
             scroll_speed: 0.05,
             input: CameraFrameInput::default(),
-            revision: Revision::default(),
+            runtime_revision: Revision::default(),
+            project_revision: Revision::default(),
         }
     }
 
     pub fn input_mut(&mut self) -> &mut CameraFrameInput {
         &mut self.input
+    }
+
+    pub fn set_label(&mut self, label: String) {
+        if self.label != label {
+            self.label = label;
+            self.project_revision.increase();
+        }
     }
 
     pub fn position(&self) -> Point3<f32> {
@@ -169,7 +179,8 @@ impl Camera {
         let position = position.into();
         if self.position != position {
             self.position = position;
-            self.revision.increase();
+            self.runtime_revision.increase();
+            self.project_revision.increase();
         }
     }
 
@@ -177,7 +188,8 @@ impl Camera {
         let yaw = Self::normalize_yaw(yaw);
         if self.yaw != yaw {
             self.yaw = yaw;
-            self.revision.increase();
+            self.runtime_revision.increase();
+            self.project_revision.increase();
         }
     }
 
@@ -185,7 +197,8 @@ impl Camera {
         let pitch = Self::clamp_pitch(pitch);
         if self.pitch != pitch {
             self.pitch = pitch;
-            self.revision.increase();
+            self.runtime_revision.increase();
+            self.project_revision.increase();
         }
     }
 
@@ -193,7 +206,8 @@ impl Camera {
         let fovy = Self::clamp_fovy(fovy);
         if self.fovy != fovy {
             self.fovy = fovy;
-            self.revision.increase();
+            self.runtime_revision.increase();
+            self.project_revision.increase();
         }
     }
 
@@ -204,7 +218,8 @@ impl Camera {
             if self.zfar < self.znear + 0.001 {
                 self.zfar = self.znear + 0.001;
             }
-            self.revision.increase();
+            self.runtime_revision.increase();
+            self.project_revision.increase();
         }
     }
 
@@ -212,7 +227,8 @@ impl Camera {
         let zfar = zfar.max(self.znear + 0.001);
         if self.zfar != zfar {
             self.zfar = zfar;
-            self.revision.increase();
+            self.runtime_revision.increase();
+            self.project_revision.increase();
         }
     }
 
@@ -220,7 +236,8 @@ impl Camera {
         let max_speed = max_speed.max(0.0);
         if self.max_speed != max_speed {
             self.max_speed = max_speed;
-            self.revision.increase();
+            self.runtime_revision.increase();
+            self.project_revision.increase();
         }
     }
 
@@ -228,7 +245,8 @@ impl Camera {
         let acceleration = acceleration.max(0.0);
         if self.acceleration != acceleration {
             self.acceleration = acceleration;
-            self.revision.increase();
+            self.runtime_revision.increase();
+            self.project_revision.increase();
         }
     }
 
@@ -236,7 +254,8 @@ impl Camera {
         let drag = drag.max(0.0);
         if self.drag != drag {
             self.drag = drag;
-            self.revision.increase();
+            self.runtime_revision.increase();
+            self.project_revision.increase();
         }
     }
 
@@ -244,7 +263,8 @@ impl Camera {
         let sensitivity = sensitivity.max(0.0);
         if self.sensitivity != sensitivity {
             self.sensitivity = sensitivity;
-            self.revision.increase();
+            self.runtime_revision.increase();
+            self.project_revision.increase();
         }
     }
 
@@ -252,14 +272,16 @@ impl Camera {
         let scroll_speed = scroll_speed.max(0.0);
         if self.scroll_speed != scroll_speed {
             self.scroll_speed = scroll_speed;
-            self.revision.increase();
+            self.runtime_revision.increase();
+            self.project_revision.increase();
         }
     }
 
     pub fn set_dimension_id(&mut self, dimension_id: Option<DimensionId>) {
         if self.dimension_id != dimension_id {
             self.dimension_id = dimension_id;
-            self.revision.increase();
+            self.runtime_revision.increase();
+            self.project_revision.increase();
         }
     }
 
@@ -351,7 +373,7 @@ impl Camera {
             || self.pitch != previous_pitch
             || self.current_speed != previous_current_speed
         {
-            self.revision.increase();
+            self.runtime_revision.increase();
         }
     }
 }
@@ -378,12 +400,20 @@ impl ProjectResource for Camera {
     fn label(&self) -> &str {
         &self.label
     }
+
+    fn project_revision(&self) -> Revision {
+        self.project_revision
+    }
 }
 
 impl SyncResource for Camera {
     type Context<'a> = CameraCreationContext<'a>;
     type Runtime = CameraRuntime;
     type Job = ();
+
+    fn runtime_revision(&self) -> Revision {
+        self.runtime_revision
+    }
 
     fn sync<'a>(
         &self,
@@ -412,10 +442,6 @@ impl SyncResource for Camera {
             Some(runtime) if runtime == new_runtime => Ok(SyncOutcome::Unchanged(runtime)),
             _ => Ok(SyncOutcome::Changed(new_runtime)),
         }
-    }
-
-    fn revision(&self) -> Revision {
-        self.revision
     }
 
     fn needs_rebuild_from_others(&self, tracker: &SyncTracker) -> bool {

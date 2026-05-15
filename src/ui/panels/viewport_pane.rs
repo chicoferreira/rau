@@ -1,5 +1,5 @@
 use crate::{
-    project::ViewportId,
+    project::{ProjectResource, ViewportId},
     ui::{components::tiles::Pane, pane::StateSnapshot},
 };
 
@@ -19,7 +19,7 @@ impl Pane for ViewportPane {
             return egui_tiles::UiResponse::None;
         };
 
-        let Some(texture_view_id) = viewport.texture_view_id else {
+        let Some(texture_view_id) = viewport.texture_view_id() else {
             ui.label("Please assign a texture view to this viewport.");
             return egui_tiles::UiResponse::None;
         };
@@ -42,7 +42,7 @@ impl Pane for ViewportPane {
             ui,
             self.viewport_id,
             egui_id,
-            viewport.requested_ui_size,
+            viewport.requested_ui_size(),
         );
         for event in events {
             state.event_queue.add(event);
@@ -56,7 +56,7 @@ impl Pane for ViewportPane {
             .project
             .viewports
             .get(self.viewport_id)
-            .map(|texture| texture.label.as_str().into())
+            .map(|viewport| viewport.label().into())
             .unwrap_or("Unknown Viewport".into())
     }
 }

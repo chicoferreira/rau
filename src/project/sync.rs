@@ -27,7 +27,7 @@ pub trait SyncResource: ProjectResource {
     type Runtime;
     type Job: Default;
 
-    fn revision(&self) -> Revision;
+    fn runtime_revision(&self) -> Revision;
 
     fn needs_rebuild_from_others(&self, tracker: &SyncTracker) -> bool;
 
@@ -36,7 +36,7 @@ pub trait SyncResource: ProjectResource {
         tracker: &SyncTracker,
         runtime: &RuntimeCell<Self::Runtime, Self::Job>,
     ) -> bool {
-        let current_revision = self.revision();
+        let current_revision = self.runtime_revision();
         let should_rebuild_from_others = self.needs_rebuild_from_others(tracker);
 
         let should_rebuild = match runtime {
@@ -153,7 +153,7 @@ impl SyncTracker {
         cell: &'a mut RuntimeCell<R::Runtime, R::Job>,
         ctx: &mut R::Context<'_>,
     ) -> AppResult<Option<&'a R::Runtime>> {
-        let current_revision = resource.revision();
+        let current_revision = resource.runtime_revision();
         let id = id.into();
 
         if resource.should_sync(self, cell) {

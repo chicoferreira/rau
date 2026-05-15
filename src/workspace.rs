@@ -274,9 +274,9 @@ impl Workspace {
                                 // set the requested_ui_size so:
                                 // 1. the viewport doesn't keep sending resize events when it doesn't match the actual size of the viewport
                                 // 2. we know to which size to resize the camera when the viewport gets focused (handled in the event below)
-                                viewport.requested_ui_size = Some(size);
+                                viewport.set_requested_ui_size(Some(size));
 
-                                if let Some(dimension_id) = viewport.dimension_id {
+                                if let Some(dimension_id) = viewport.dimension_id() {
                                     let is_owner = self
                                         .dimension_owners
                                         .get(dimension_id)
@@ -300,9 +300,9 @@ impl Workspace {
                             }
                             ViewportEvent::Focus => {
                                 // read the comment in the event above for more context
-                                if let Some(dimension_id) = viewport.dimension_id {
+                                if let Some(dimension_id) = viewport.dimension_id() {
                                     self.dimension_owners.insert(dimension_id, viewport_id);
-                                    if let Some(ui_size) = viewport.requested_ui_size {
+                                    if let Some(ui_size) = viewport.requested_ui_size() {
                                         if let Ok(dimension) =
                                             self.project.dimensions.get_mut(dimension_id)
                                         {
@@ -312,21 +312,21 @@ impl Workspace {
                                 }
                             }
                             ViewportEvent::Scroll { delta_y_px } => {
-                                if let Some(camera_id) = viewport.controls_camera_id
+                                if let Some(camera_id) = viewport.controls_camera_id()
                                     && let Ok(camera) = self.project.cameras.get_mut(camera_id)
                                 {
                                     camera.input_mut().handle_scroll_pixels(delta_y_px);
                                 }
                             }
                             ViewportEvent::Drag { mouse_dx, mouse_dy } => {
-                                if let Some(camera_id) = viewport.controls_camera_id
+                                if let Some(camera_id) = viewport.controls_camera_id()
                                     && let Ok(camera) = self.project.cameras.get_mut(camera_id)
                                 {
                                     camera.input_mut().handle_mouse(mouse_dx, mouse_dy);
                                 }
                             }
                             ViewportEvent::KeyboardKeys { keyboard_state } => {
-                                if let Some(camera_id) = viewport.controls_camera_id
+                                if let Some(camera_id) = viewport.controls_camera_id()
                                     && let Ok(camera) = self.project.cameras.get_mut(camera_id)
                                 {
                                     camera.input_mut().handle_keyboard(keyboard_state);

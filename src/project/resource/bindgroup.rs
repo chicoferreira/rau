@@ -27,7 +27,9 @@ pub struct BindGroup {
     label: String,
     entries: Vec<BindGroupEntry>,
     #[serde(skip)]
-    revision: Revision,
+    runtime_revision: Revision,
+    #[serde(skip)]
+    project_revision: Revision,
 }
 
 pub struct BindGroupRuntime {
@@ -82,7 +84,8 @@ impl BindGroup {
         BindGroup {
             label: label.into(),
             entries,
-            revision: Revision::default(),
+            runtime_revision: Revision::default(),
+            project_revision: Revision::default(),
         }
     }
 
@@ -96,25 +99,29 @@ impl BindGroup {
 
     pub fn set_label(&mut self, label: String) {
         self.label = label;
-        self.revision.increase();
+        self.runtime_revision.increase();
+        self.project_revision.increase();
     }
 
     pub fn add_entry(&mut self, entry: BindGroupEntry) {
         self.entries.push(entry);
-        self.revision.increase();
+        self.runtime_revision.increase();
+        self.project_revision.increase();
     }
 
     pub fn remove_entry(&mut self, index: usize) {
         if index < self.entries.len() {
             self.entries.remove(index);
-            self.revision.increase();
+            self.runtime_revision.increase();
+            self.project_revision.increase();
         }
     }
 
     pub fn update_entry(&mut self, index: usize, entry: BindGroupEntry) {
         if index < self.entries.len() {
             self.entries[index] = entry;
-            self.revision.increase();
+            self.runtime_revision.increase();
+            self.project_revision.increase();
         }
     }
 
@@ -153,7 +160,8 @@ impl BindGroup {
             return;
         }
         shift_vec(from, to, &mut self.entries);
-        self.revision.increase();
+        self.runtime_revision.increase();
+        self.project_revision.increase();
     }
 }
 
@@ -178,6 +186,10 @@ impl ProjectResource for BindGroup {
 
     fn label(&self) -> &str {
         &self.label
+    }
+
+    fn project_revision(&self) -> Revision {
+        self.project_revision
     }
 }
 
@@ -317,6 +329,10 @@ impl SyncResource for BindGroup {
     type Runtime = BindGroupRuntime;
     type Job = BindGroupJob;
 
+    fn runtime_revision(&self) -> Revision {
+        self.runtime_revision
+    }
+
     fn sync<'a>(
         &self,
         ctx: &mut Self::Context<'a>,
@@ -343,10 +359,6 @@ impl SyncResource for BindGroup {
                 ))),
             },
         }
-    }
-
-    fn revision(&self) -> Revision {
-        self.revision
     }
 
     fn needs_rebuild_from_others(&self, tracker: &SyncTracker) -> bool {

@@ -71,7 +71,7 @@ pub fn ui(state: &mut StateSnapshot, ui: &mut egui::Ui) -> Response {
                 .build_to(builder, state.event_queue, state.rename_state);
             pending_resource_node(state, builder, ResourceKind::Uniform);
             for (id, uniform) in state.project.uniforms.list_sorted() {
-                TreeNode::new(TreeNodeId::Uniform(id), &uniform.label)
+                TreeNode::new(TreeNodeId::Uniform(id), uniform.label())
                     .with_event("Inspect", StateEvent::InspectResource(id.into()))
                     .with_rename_event("Rename", RenameTarget::Uniform(id))
                     .with_event("Delete", StateEvent::DeleteResource(id.into()))
@@ -113,7 +113,7 @@ pub fn ui(state: &mut StateSnapshot, ui: &mut egui::Ui) -> Response {
                 .build_to(builder, state.event_queue, state.rename_state);
             pending_resource_node(state, builder, ResourceKind::Viewport);
             for (id, viewport) in state.project.viewports.list_sorted() {
-                TreeNode::new(TreeNodeId::Viewport(id), &viewport.label)
+                TreeNode::new(TreeNodeId::Viewport(id), viewport.label())
                     .with_event("View", StateEvent::OpenViewport(id))
                     .with_event("Inspect", StateEvent::InspectResource(id.into()))
                     .with_rename_event("Rename", RenameTarget::Viewport(id))
@@ -135,7 +135,7 @@ pub fn ui(state: &mut StateSnapshot, ui: &mut egui::Ui) -> Response {
                 .build_to(builder, state.event_queue, state.rename_state);
             pending_resource_node(state, builder, ResourceKind::Shader);
             for (id, shader) in state.project.shaders.list_sorted() {
-                TreeNode::new(TreeNodeId::Shader(id), &shader.label)
+                TreeNode::new(TreeNodeId::Shader(id), shader.label())
                     .with_event("Inspect", StateEvent::InspectResource(id.into()))
                     .with_rename_event("Rename", RenameTarget::Shader(id))
                     .with_event("Delete", StateEvent::DeleteResource(id.into()))
@@ -156,7 +156,7 @@ pub fn ui(state: &mut StateSnapshot, ui: &mut egui::Ui) -> Response {
                 .build_to(builder, state.event_queue, state.rename_state);
             pending_resource_node(state, builder, ResourceKind::Camera);
             for (id, camera) in state.project.cameras.list_sorted() {
-                TreeNode::new(TreeNodeId::Camera(id), &camera.label)
+                TreeNode::new(TreeNodeId::Camera(id), camera.label())
                     .with_event("Inspect", StateEvent::InspectResource(id.into()))
                     .with_rename_event("Rename", RenameTarget::Camera(id))
                     .with_event("Delete", StateEvent::DeleteResource(id.into()))
@@ -177,7 +177,7 @@ pub fn ui(state: &mut StateSnapshot, ui: &mut egui::Ui) -> Response {
                 .build_to(builder, state.event_queue, state.rename_state);
             pending_resource_node(state, builder, ResourceKind::Dimension);
             for (id, dimension) in state.project.dimensions.list_sorted() {
-                TreeNode::new(TreeNodeId::Dimension(id), &dimension.label)
+                TreeNode::new(TreeNodeId::Dimension(id), dimension.label())
                     .with_event("Inspect", StateEvent::InspectResource(id.into()))
                     .with_rename_event("Rename", RenameTarget::Dimension(id))
                     .with_event("Delete", StateEvent::DeleteResource(id.into()))
@@ -250,7 +250,7 @@ pub fn ui(state: &mut StateSnapshot, ui: &mut egui::Ui) -> Response {
                 // .with_event("Create New Model", StateEvent::CreateModel)
                 .build_to(builder, state.event_queue, state.rename_state);
             for (id, model) in state.project.models.list_sorted() {
-                TreeNode::new(TreeNodeId::Model(id), &model.label)
+                TreeNode::new(TreeNodeId::Model(id), model.label())
                     .with_event("Inspect", StateEvent::InspectResource(id.into()))
                     .with_rename_event("Rename", RenameTarget::Model(id))
                     // .with_event("Delete", StateEvent::DeleteModel(id))
@@ -266,7 +266,7 @@ pub fn ui(state: &mut StateSnapshot, ui: &mut egui::Ui) -> Response {
                 state.rename_state,
             );
             for (id, render_pass) in state.project.render_passes.list_sorted() {
-                TreeNode::new(TreeNodeId::RenderPass(id), &render_pass.label)
+                TreeNode::new(TreeNodeId::RenderPass(id), render_pass.label())
                     .with_event("Inspect", StateEvent::InspectResource(id.into()))
                     .with_rename_event("Rename", RenameTarget::RenderPass(id))
                     .build_to(builder, state.event_queue, state.rename_state);
