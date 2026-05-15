@@ -48,7 +48,7 @@ impl ProjectSaveState {
 
         let revisions = self.last_observed_snapshot.clone();
 
-        match serde_json::to_vec(project) {
+        match project.serialize() {
             Ok(bytes) => {
                 file_storage.save_in_background(&FilePath::project_json(), bytes);
                 self.saved_snapshot = revisions;

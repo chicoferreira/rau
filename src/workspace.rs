@@ -3,7 +3,9 @@ use slotmap::SecondaryMap;
 use crate::{
     app::AppEvent,
     error::AppResult,
-    file::{file_storage::FileStorage, identifier::ProjectIdentifier},
+    file::{
+        file_storage::FileStorage, file_system::FileSystemTrait, identifier::ProjectIdentifier,
+    },
     project::{
         DimensionId, FramePlanId, Project, ResourceId, ResourceKind, RuntimeProject, ViewportId,
         paths::FilePath,
@@ -81,7 +83,7 @@ pub enum StateEvent {
 }
 
 impl Workspace {
-    pub async fn new() -> AppResult<Self> {
+    pub async fn open_example_project() -> AppResult<Self> {
         #[cfg(not(target_arch = "wasm32"))]
         let project_identifier = {
             let path = "projects/full-example";
@@ -95,7 +97,6 @@ impl Workspace {
 
         #[cfg(target_arch = "wasm32")]
         {
-            use crate::file::file_system::FileSystemTrait;
             use crate::utils::github;
 
             let github_repo = github::GitRepository::new("chicoferreira", "rau", "main");
@@ -108,11 +109,21 @@ impl Workspace {
             }
         }
 
-        // let size = ui::Size2d::new(config.width, config.height);
-        // let project = crate::scene::create_scene(&device, size, &file_storage).await?;
-        // let project_str = serde_json::to_string(&project)?;
-        // std::fs::write("res/project.json", project_str)?;
+        Self::open_project(file_storage).await
+    }
 
+    pub async fn new_empty_project(project_identifier: ProjectIdentifier) -> AppResult<Self> {
+        let file_storage = FileStorage::new(project_identifier).await?;
+        let bytes = Project::default().serialize()?;
+
+        let json_path = FilePath::project_json();
+
+        file_storage.file_system.save(&json_path, bytes).await?;
+
+        Self::open_project(file_storage).await
+    }
+
+    async fn open_project(file_storage: FileStorage) -> AppResult<Self> {
         let project_bytes = file_storage.read(&FilePath::project_json()).await?;
         let project: Project = serde_json::from_slice(&project_bytes)?;
 

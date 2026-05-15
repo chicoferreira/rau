@@ -71,6 +71,8 @@ impl FileSystem {
 impl FileSystemTrait for FileSystem {
     fn mount(id: ProjectIdentifier) -> FutureResult<(Self, FileWatcher)> {
         AsyncJob::new(async move {
+            std::fs::create_dir_all(id.project_path())?; // File watcher requires the directory to exist
+
             let file_watcher = FileWatcher::new(id.project_path().clone())?;
             let (send_jobs, receive_jobs) = std::sync::mpsc::channel();
             Self::spawn_worker_thread(receive_jobs);

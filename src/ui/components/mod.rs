@@ -1,5 +1,6 @@
 pub mod code_editor;
 pub mod color_edit;
+pub mod create_project_modal;
 pub mod data_display;
 pub mod flags_selector;
 pub mod hint;

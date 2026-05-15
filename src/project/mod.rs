@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use slotmap::new_key_type;
 
 use crate::{
-    error::AppError,
+    error::{AppError, AppResult},
     project::{
         resource::{
             bindgroup::BindGroup, camera::Camera, compute_pass::ComputePass, dimension::Dimension,
@@ -150,6 +150,14 @@ impl Project {
                 ResourceId::FramePlan(FramePlanId),
                 self.frame_plan.project_revision(),
             )))
+    }
+
+    pub fn serialize(&self) -> AppResult<Vec<u8>> {
+        serde_json::to_vec(&self).map_err(Into::into)
+    }
+
+    pub fn deserialize(data: &[u8]) -> AppResult<Self> {
+        serde_json::from_slice(data).map_err(Into::into)
     }
 }
 

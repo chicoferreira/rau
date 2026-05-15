@@ -1,22 +1,35 @@
 use std::task::Poll;
 
 use crate::{
-    app::AppEvent, app::State, error::AppResult, utils::async_job::AsyncJob,
-    utils::event_queue::EventQueue, workspace::Workspace,
+    app::{AppEvent, State},
+    error::AppResult,
+    ui::components::create_project_modal::CreateProjectModal,
+    utils::{async_job::AsyncJob, event_queue::EventQueue},
+    workspace::Workspace,
 };
 
 #[derive(Default)]
 pub struct MainMenu {
     workspace_job: Option<AsyncJob<AppResult<Workspace>>>,
+    create_project_modal: Option<CreateProjectModal>,
 }
 
 impl MainMenu {
     pub fn render_ui(&mut self, ui: &mut egui::Ui) {
-        if let Some(_) = &mut self.workspace_job {
-            ui.spinner();
-        } else if ui.button("Open Project").clicked() {
-            let workspace_job = AsyncJob::new(Workspace::new());
+        if ui.button("Open Project").clicked() {
+            let workspace_job = AsyncJob::new(Workspace::open_example_project());
             self.workspace_job = Some(workspace_job);
+        }
+
+        if ui.button("New Project").clicked() {
+            self.create_project_modal = Some(CreateProjectModal::default());
+        }
+
+        if let Some(modal) = &mut self.create_project_modal {
+            if let Some(result) = modal.render_ui(ui) {
+                let workspace_job = AsyncJob::new(Workspace::new_empty_project(result));
+                self.workspace_job = Some(workspace_job);
+            }
         }
     }
 
