@@ -17,6 +17,7 @@ use crate::{
 
 pub mod paths;
 pub mod resource;
+pub mod save;
 pub mod storage;
 pub mod sync;
 

@@ -15,6 +15,7 @@ pub struct Viewport {
     texture_view_id: Option<TextureViewId>,
     dimension_id: Option<DimensionId>,
     controls_camera_id: Option<CameraId>,
+    #[serde(skip)]
     requested_ui_size: Option<Size2d>,
     #[serde(skip)]
     project_revision: Revision,

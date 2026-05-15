@@ -13,6 +13,7 @@ use crate::{
             shader::ShaderCreationContext, texture::TextureCreationContext,
             texture_view::TextureViewCreationContext, uniform::UniformCreationContext,
         },
+        save::ProjectSaveState,
         sync::SyncTracker,
     },
     ui::{
@@ -29,6 +30,7 @@ pub struct Workspace {
     runtime_project: RuntimeProject,
     tracker: SyncTracker,
     file_storage: FileStorage,
+    project_save_state: ProjectSaveState,
     rename_state: Option<ui::rename::RenameState>,
     event_queue: EventQueue<StateEvent>,
     inspector_tree_pane: TreePane<InspectorPane>,
@@ -121,6 +123,8 @@ impl Workspace {
             viewport_tree_pane.add_pane(ViewportPane { viewport_id });
         }
 
+        let project_save_state = ProjectSaveState::new(&project);
+
         Ok(Self {
             rename_state: None,
             event_queue: EventQueue::default(),
@@ -130,12 +134,15 @@ impl Workspace {
             runtime_project: RuntimeProject::default(),
             tracker: SyncTracker::default(),
             file_storage,
+            project_save_state,
             dimension_owners: Default::default(),
         })
     }
 
     pub fn render(&mut self, ctx: &mut AppContext) {
         self.handle_events();
+        self.project_save_state
+            .tick(&self.project, &mut self.file_storage);
 
         self.file_storage.tick(&mut self.tracker);
 
