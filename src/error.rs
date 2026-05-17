@@ -71,6 +71,8 @@ pub enum AppError {
     UrlParseError(#[from] url::ParseError),
     #[error("invalid path segment: {0}")]
     InvalidPathSegment(String),
+    #[error("invalid create project form: {0}")]
+    InvalidCreateProjectForm(&'static str),
     #[error("serialization error: {0}")]
     SerializationError(#[from] serde_json::Error),
 }

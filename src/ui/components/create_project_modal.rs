@@ -1,8 +1,6 @@
-use egui::{RichText, Ui};
+use egui::{Ui, Widget};
 
-use crate::error::AppError;
-#[cfg(not(target_arch = "wasm32"))]
-use crate::error::AppResult;
+use crate::error::{AppError, AppResult};
 use crate::featured_projects::FeaturedProject;
 #[cfg(not(target_arch = "wasm32"))]
 use crate::file::absolute::AbsolutePathBuf;
@@ -19,7 +17,8 @@ pub struct CreateProjectModal {
 }
 
 struct CreateProjectFormData {
-    source: ProjectCreationSource,
+    kind: ProjectCreationKind,
+    github_source: GithubProjectSource,
     project_name: String,
     error: Option<AppError>,
     #[cfg(not(target_arch = "wasm32"))]
@@ -33,10 +32,24 @@ enum CreateProjectModalState {
     Downloading(ProjectDownloadTask),
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 pub enum ProjectCreationSource {
     Empty,
-    Featured(&'static FeaturedProject),
+    Github(GithubProjectSource),
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum ProjectCreationKind {
+    Empty,
+    Github,
+}
+
+#[derive(Clone, Default)]
+pub struct GithubProjectSource {
+    owner: String,
+    repo: String,
+    git_ref: String,
+    path: String,
 }
 
 pub enum CreateProjectModalResponse {
@@ -54,15 +67,25 @@ struct ProjectDownloadTask {
 
 impl CreateProjectModal {
     pub fn new(source: ProjectCreationSource) -> Self {
-        let project_name = match source {
-            ProjectCreationSource::Empty => "Untitled Project",
-            ProjectCreationSource::Featured(project) => project.id,
+        let project_name = match &source {
+            ProjectCreationSource::Empty => "Untitled Project".to_string(),
+            ProjectCreationSource::Github(_) => "".to_string(),
         };
-        let project_name = project_name.to_string();
+
+        let kind = match source {
+            ProjectCreationSource::Empty => ProjectCreationKind::Empty,
+            ProjectCreationSource::Github(_) => ProjectCreationKind::Github,
+        };
+
+        let github_source = match source {
+            ProjectCreationSource::Empty => GithubProjectSource::default(),
+            ProjectCreationSource::Github(source) => source,
+        };
 
         Self {
             form_data: CreateProjectFormData {
-                source,
+                kind,
+                github_source,
                 project_name,
                 error: None,
                 #[cfg(not(target_arch = "wasm32"))]
@@ -74,6 +97,19 @@ impl CreateProjectModal {
         }
     }
 
+    pub fn from_featured_project(project: &'static FeaturedProject) -> Self {
+        let github_project_source = GithubProjectSource {
+            owner: project.owner.to_string(),
+            repo: project.repo.to_string(),
+            git_ref: project.git_ref.to_string(),
+            path: project.path.to_string(),
+        };
+
+        let mut modal = Self::new(ProjectCreationSource::Github(github_project_source));
+        modal.form_data.project_name = project.id.to_string();
+        modal
+    }
+
     pub fn render_ui(&mut self, ui: &mut egui::Ui) -> Option<CreateProjectModalResponse> {
         let mut result = None;
 
@@ -81,16 +117,10 @@ impl CreateProjectModal {
             egui::Modal::new(egui::Id::new("create_project_modal")).show(ui.ctx(), |ui| {
                 let is_downloading = matches!(self.state, CreateProjectModalState::Downloading(_));
 
-                ui_title(ui, &self.form_data);
+                ui.heading("Creating new project");
 
                 ui.add_enabled_ui(!is_downloading, |ui| {
-                    ui.horizontal(|ui| {
-                        ui.label("Project Name:");
-                        ui.text_edit_singleline(&mut self.form_data.project_name);
-                    });
-
-                    #[cfg(not(target_arch = "wasm32"))]
-                    folder_selector_ui(ui, &mut self.form_data);
+                    ui_form(ui, &mut self.form_data);
                 });
 
                 if let Some(error) = &self.form_data.error {
@@ -123,15 +153,18 @@ impl CreateProjectModal {
                         return;
                     }
 
-                    let Some(project_identifier) = self.form_data.create_project_identifier()
-                    else {
-                        return;
-                    };
-
                     self.form_data.error = None;
 
-                    match self.form_data.source {
-                        ProjectCreationSource::Empty => match Project::default().serialize() {
+                    let project_identifier = match self.form_data.create_project_identifier() {
+                        Ok(project_identifier) => project_identifier,
+                        Err(error) => {
+                            self.form_data.error = Some(error);
+                            return;
+                        }
+                    };
+
+                    match self.form_data.kind {
+                        ProjectCreationKind::Empty => match Project::default().serialize() {
                             Ok(bytes) => {
                                 result = Some(CreateProjectModalResponse::Create {
                                     project_identifier,
@@ -142,10 +175,9 @@ impl CreateProjectModal {
                                 self.form_data.error = Some(error);
                             }
                         },
-                        ProjectCreationSource::Featured(featured_project) => {
-                            match FilePath::from_str(featured_project.path) {
-                                Ok(path) => {
-                                    let repository = featured_project.repository();
+                        ProjectCreationKind::Github => {
+                            match self.form_data.github_source.create() {
+                                Ok((repository, path)) => {
                                     let task =
                                         github::download_files_under_path(&repository, &path);
 
@@ -187,48 +219,139 @@ impl CreateProjectModal {
 
 impl CreateProjectFormData {
     #[cfg(not(target_arch = "wasm32"))]
-    fn create_project_identifier(&self) -> Option<ProjectIdentifier> {
-        let project_name = self.project_name.clone();
+    fn create_project_identifier(&self) -> AppResult<ProjectIdentifier> {
+        let project_name = self.valid_project_name()?;
         let project_path = self.get_actual_project_path()?;
-        Some(ProjectIdentifier::new(project_name, project_path))
+        Ok(ProjectIdentifier::new(project_name, project_path))
     }
 
     #[cfg(target_arch = "wasm32")]
-    fn create_project_identifier(&self) -> Option<ProjectIdentifier> {
-        Some(ProjectIdentifier::new(self.project_name.clone()))
+    fn create_project_identifier(&self) -> AppResult<ProjectIdentifier> {
+        let project_name = self.valid_project_name()?;
+        Ok(ProjectIdentifier::new(project_name))
+    }
+
+    fn valid_project_name(&self) -> AppResult<String> {
+        if self.project_name.trim().is_empty() {
+            return Err(AppError::InvalidCreateProjectForm(
+                "project name is required",
+            ));
+        }
+
+        Ok(self.project_name.clone())
     }
 
     /// Returns the project path appended with the project name if the folder does not end with the project name.
     #[cfg(not(target_arch = "wasm32"))]
-    fn get_actual_project_path(&self) -> Option<AbsolutePathBuf> {
-        let path = self.project_path.as_ref()?.as_path_buf();
+    fn get_actual_project_path(&self) -> AppResult<AbsolutePathBuf> {
+        let project_path = self
+            .project_path
+            .as_ref()
+            .ok_or(AppError::InvalidCreateProjectForm(
+                "project folder is required",
+            ))?;
+        let path = project_path.as_path_buf();
         if path.ends_with(&self.project_name) {
-            return self.project_path.clone();
+            return Ok(project_path.clone());
         }
 
         let path_with_name = path.join(&self.project_name);
 
-        AbsolutePathBuf::new(path_with_name).ok()
+        AbsolutePathBuf::new(path_with_name)
     }
 }
 
-fn ui_title(ui: &mut egui::Ui, form_data: &CreateProjectFormData) {
-    match form_data.source {
-        ProjectCreationSource::Empty => {
-            ui.heading("Creating new empty project");
+impl GithubProjectSource {
+    fn create(&self) -> AppResult<(github::GitRepository, FilePath)> {
+        let owner = self.owner.trim();
+        if owner.is_empty() {
+            return Err(AppError::InvalidCreateProjectForm(
+                "GitHub owner is required",
+            ));
         }
-        ProjectCreationSource::Featured(project) => {
-            ui.horizontal(|ui| {
-                ui.spacing_mut().item_spacing.x = 0.0;
-                ui.heading("Creating new project based of ");
-                ui.label(RichText::new(project.name).heading().strong());
-            });
+
+        let repo = self.repo.trim();
+        if repo.is_empty() {
+            return Err(AppError::InvalidCreateProjectForm(
+                "GitHub repository is required",
+            ));
         }
+
+        let git_ref = self.git_ref.trim();
+        if git_ref.is_empty() {
+            return Err(AppError::InvalidCreateProjectForm(
+                "GitHub branch/Commit SHA is required",
+            ));
+        }
+
+        let path = FilePath::from_str(self.path.trim())?;
+        let repository = github::GitRepository::new(owner, repo, git_ref);
+        Ok((repository, path))
     }
+}
+
+fn ui_form(ui: &mut egui::Ui, form_data: &mut CreateProjectFormData) {
+    egui::Grid::new("create_project_form")
+        .num_columns(2)
+        .show(ui, |ui| {
+            ui.label("Source:");
+            ui.horizontal(|ui| {
+                ui.selectable_value(&mut form_data.kind, ProjectCreationKind::Empty, "Empty");
+                ui.selectable_value(
+                    &mut form_data.kind,
+                    ProjectCreationKind::Github,
+                    "From GitHub",
+                );
+            });
+            ui.end_row();
+
+            if form_data.kind == ProjectCreationKind::Github {
+                ui.label("Owner:");
+                egui::TextEdit::singleline(&mut form_data.github_source.owner)
+                    .hint_text("chicoferreira")
+                    .ui(ui);
+                ui.end_row();
+
+                ui.label("Repository:");
+                egui::TextEdit::singleline(&mut form_data.github_source.repo)
+                    .hint_text("rau")
+                    .ui(ui);
+                ui.end_row();
+
+                ui.label("Branch/Commit SHA:");
+                egui::TextEdit::singleline(&mut form_data.github_source.git_ref)
+                    .hint_text("main")
+                    .ui(ui);
+                ui.end_row();
+
+                ui.label("Folder in repository:");
+                egui::TextEdit::singleline(&mut form_data.github_source.path)
+                    .hint_text("optional folder path")
+                    .ui(ui);
+                ui.end_row();
+            }
+        });
+
+    ui.separator();
+
+    egui::Grid::new("create_project_form_name_and_folder")
+        .num_columns(2)
+        .show(ui, |ui| {
+            ui.label("Project Name:");
+            ui.text_edit_singleline(&mut form_data.project_name);
+            ui.end_row();
+
+            #[cfg(not(target_arch = "wasm32"))]
+            {
+                ui.label("Project Folder:");
+                folder_selector_controls_ui(ui, form_data);
+                ui.end_row();
+            }
+        });
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-fn folder_selector_ui(ui: &mut egui::Ui, form_data: &mut CreateProjectFormData) {
+fn folder_selector_controls_ui(ui: &mut egui::Ui, form_data: &mut CreateProjectFormData) {
     if let Some(job) = &mut form_data.folder_picker_job {
         if let std::task::Poll::Ready(result) = job.try_resolve() {
             match result {
@@ -243,10 +366,9 @@ fn folder_selector_ui(ui: &mut egui::Ui, form_data: &mut CreateProjectFormData) 
     }
 
     ui.horizontal(|ui| {
-        ui.label("Project Folder:");
-
         let path_str = form_data
             .get_actual_project_path()
+            .ok()
             .map(|path| path.as_ref().display().to_string())
             .unwrap_or_else(|| "No folder selected".to_string());
 

@@ -10,19 +10,19 @@ use crate::{
 pub struct GitRepository {
     pub user: String,
     pub repo: String,
-    pub branch: String,
+    pub git_ref: String,
 }
 
 impl GitRepository {
     pub fn new(
         user: impl Into<String>,
         repo: impl Into<String>,
-        branch: impl Into<String>,
+        git_ref: impl Into<String>,
     ) -> Self {
         Self {
             user: user.into(),
             repo: repo.into(),
-            branch: branch.into(),
+            git_ref: git_ref.into(),
         }
     }
 }
@@ -46,7 +46,7 @@ pub fn download_files_under_path(repository: &GitRepository, path: &FilePath) ->
 pub async fn list_files(repository: &GitRepository) -> AppResult<Vec<GitTreeItem>> {
     let url = format!(
         "https://api.github.com/repos/{}/{}/git/trees/{}?recursive=1",
-        repository.user, repository.repo, repository.branch
+        repository.user, repository.repo, repository.git_ref
     );
 
     let tree: GitTreeResponse = get_json(&url).await?;
@@ -57,7 +57,7 @@ pub async fn download_file(repository: &GitRepository, file_path: &FilePath) -> 
     let file_path = file_path.to_string();
     let url = format!(
         "https://raw.githubusercontent.com/{}/{}/{}/{}",
-        repository.user, repository.repo, repository.branch, file_path
+        repository.user, repository.repo, repository.git_ref, file_path
     );
 
     log::info!("Downloading file {file_path} from {url}...");

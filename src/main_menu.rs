@@ -21,9 +21,8 @@ impl MainMenu {
     pub fn render_ui(&mut self, ui: &mut egui::Ui) {
         for featured_project in FEATURED_PROJECTS {
             if ui.button(featured_project.name).clicked() {
-                self.create_project_modal = Some(CreateProjectModal::new(
-                    ProjectCreationSource::Featured(featured_project),
-                ));
+                self.create_project_modal =
+                    Some(CreateProjectModal::from_featured_project(featured_project));
             }
         }
 
