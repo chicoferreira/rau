@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::error::{AppError, AppResult};
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
 pub struct FilePath {
     segments: Vec<String>,
 }

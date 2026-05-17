@@ -83,42 +83,15 @@ pub enum StateEvent {
 }
 
 impl Workspace {
-    pub async fn open_example_project() -> AppResult<Self> {
-        #[cfg(not(target_arch = "wasm32"))]
-        let project_identifier = {
-            let path = "projects/full-example";
-            let path = crate::file::absolute::AbsolutePathBuf::try_from(path)?;
-            ProjectIdentifier::new("full-example", path)
-        };
-        #[cfg(target_arch = "wasm32")]
-        let project_identifier = ProjectIdentifier::new("full-example");
-
+    pub async fn new_project_from_files(
+        project_identifier: ProjectIdentifier,
+        files: Vec<(FilePath, Vec<u8>)>,
+    ) -> AppResult<Self> {
         let file_storage = FileStorage::new(project_identifier).await?;
 
-        #[cfg(target_arch = "wasm32")]
-        {
-            use crate::utils::github;
-
-            let github_repo = github::GitRepository::new("chicoferreira", "rau", "main");
-
-            let path = FilePath::from_str("projects/full-example")?;
-            let files = github::download_files_under_path(&github_repo, &path).await?;
-
-            for (file_path, data) in files {
-                file_storage.file_system.save(&file_path, data).await?;
-            }
+        for (file_path, data) in files {
+            file_storage.file_system.save(&file_path, data).await?;
         }
-
-        Self::open_project(file_storage).await
-    }
-
-    pub async fn new_empty_project(project_identifier: ProjectIdentifier) -> AppResult<Self> {
-        let file_storage = FileStorage::new(project_identifier).await?;
-        let bytes = Project::default().serialize()?;
-
-        let json_path = FilePath::project_json();
-
-        file_storage.file_system.save(&json_path, bytes).await?;
 
         Self::open_project(file_storage).await
     }

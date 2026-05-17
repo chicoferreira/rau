@@ -66,7 +66,7 @@ pub enum AppError {
     #[error("file not valid utf8: {0:?}")]
     FileNotValidUtf8(FilePath),
     #[error("fetch error: {0}")]
-    FetchError(#[from] reqwest::Error),
+    FetchError(ehttp::Error),
     #[error("url parse error: {0}")]
     UrlParseError(#[from] url::ParseError),
     #[error("invalid path segment: {0}")]

@@ -3,7 +3,10 @@ use std::task::Poll;
 use crate::{
     app::{AppEvent, State},
     error::AppResult,
-    ui::components::create_project_modal::CreateProjectModal,
+    featured_projects::FEATURED_PROJECTS,
+    ui::components::create_project_modal::{
+        CreateProjectModal, CreateProjectModalResponse, ProjectCreationSource,
+    },
     utils::{async_job::AsyncJob, event_queue::EventQueue},
     workspace::Workspace,
 };
@@ -16,19 +19,34 @@ pub struct MainMenu {
 
 impl MainMenu {
     pub fn render_ui(&mut self, ui: &mut egui::Ui) {
-        if ui.button("Open Project").clicked() {
-            let workspace_job = AsyncJob::new(Workspace::open_example_project());
-            self.workspace_job = Some(workspace_job);
+        for featured_project in FEATURED_PROJECTS {
+            if ui.button(featured_project.name).clicked() {
+                self.create_project_modal = Some(CreateProjectModal::new(
+                    ProjectCreationSource::Featured(featured_project),
+                ));
+            }
         }
 
         if ui.button("New Project").clicked() {
-            self.create_project_modal = Some(CreateProjectModal::default());
+            self.create_project_modal = Some(CreateProjectModal::new(ProjectCreationSource::Empty));
         }
 
         if let Some(modal) = &mut self.create_project_modal {
-            if let Some(result) = modal.render_ui(ui) {
-                let workspace_job = AsyncJob::new(Workspace::new_empty_project(result));
-                self.workspace_job = Some(workspace_job);
+            if let Some(response) = modal.render_ui(ui) {
+                match response {
+                    CreateProjectModalResponse::Create {
+                        project_identifier: project_id,
+                        files,
+                    } => {
+                        let workspace_job = Workspace::new_project_from_files(project_id, files);
+                        let workspace_job = AsyncJob::new(workspace_job);
+                        self.workspace_job = Some(workspace_job);
+                        self.create_project_modal = None;
+                    }
+                    CreateProjectModalResponse::Close => {
+                        self.create_project_modal = None;
+                    }
+                }
             }
         }
     }
