@@ -73,6 +73,8 @@ pub enum AppError {
     InvalidPathSegment(String),
     #[error("invalid create project form: {0}")]
     InvalidCreateProjectForm(&'static str),
+    #[error("missing project.json")]
+    MissingProjectJson,
     #[error("serialization error: {0}")]
     SerializationError(#[from] serde_json::Error),
 }

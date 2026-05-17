@@ -133,6 +133,10 @@ impl FilePath {
     pub fn to_string(&self) -> String {
         self.segments.join("/")
     }
+
+    pub fn is_project_json(&self) -> bool {
+        self == &FilePath::project_json()
+    }
 }
 
 fn normalize_segment(segment: String) -> AppResult<String> {

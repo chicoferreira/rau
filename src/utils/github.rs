@@ -149,6 +149,16 @@ pub mod download {
                     Poll::Ready(Ok(tree)) => {
                         let pending_files = pending_downloads_under_path(path, tree);
 
+                        let contains_project_json =
+                            pending_files.iter().any(|(path, _)| path.is_project_json());
+
+                        if !contains_project_json {
+                            *self = DownloadTask::Errored {
+                                error: AppError::MissingProjectJson,
+                            };
+                            return;
+                        }
+
                         *self = DownloadTask::Downloading {
                             repository: repository.clone(),
                             pending_files,
