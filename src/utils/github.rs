@@ -89,12 +89,13 @@ pub mod download {
     pub enum DownloadTask {
         Listing {
             repository: GitRepository,
-            path: FilePath,
+            under_path: FilePath,
             task: AsyncJob<AppResult<Vec<GitTreeItem>>>,
         },
         Downloading {
             repository: GitRepository,
-            pending_files: Vec<(FilePath, FilePath)>,
+            under_path: FilePath,
+            pending_files: Vec<FilePath>,
             downloaded_files: Vec<(FilePath, Vec<u8>)>,
             current_download: Option<(FilePath, AsyncJob<AppResult<Vec<u8>>>)>,
         },
@@ -107,13 +108,13 @@ pub mod download {
     }
 
     impl DownloadTask {
-        pub fn new(repository: GitRepository, path: FilePath) -> Self {
+        pub fn new(repository: GitRepository, under_path: FilePath) -> Self {
             let list_repository = repository.clone();
             let task = AsyncJob::new(async move { list_files(&list_repository).await });
 
             Self::Listing {
                 repository,
-                path,
+                under_path,
                 task,
             }
         }
@@ -142,15 +143,15 @@ pub mod download {
             match self {
                 DownloadTask::Listing {
                     repository,
-                    path,
+                    under_path,
                     task,
                 } => match task.try_resolve() {
                     Poll::Pending => {}
                     Poll::Ready(Ok(tree)) => {
-                        let pending_files = pending_downloads_under_path(path, tree);
+                        let pending_files = pending_downloads_under_path(under_path, tree);
 
                         let contains_project_json =
-                            pending_files.iter().any(|(path, _)| path.is_project_json());
+                            pending_files.iter().any(FilePath::is_project_json);
 
                         if !contains_project_json {
                             *self = DownloadTask::Errored {
@@ -159,8 +160,11 @@ pub mod download {
                             return;
                         }
 
+                        let under_path = under_path.clone();
+
                         *self = DownloadTask::Downloading {
                             repository: repository.clone(),
+                            under_path,
                             pending_files,
                             downloaded_files: Vec::new(),
                             current_download: None,
@@ -171,6 +175,7 @@ pub mod download {
                 },
                 DownloadTask::Downloading {
                     repository,
+                    under_path,
                     pending_files,
                     downloaded_files,
                     current_download,
@@ -193,14 +198,15 @@ pub mod download {
                             Poll::Ready(Err(error)) => *self = DownloadTask::Errored { error },
                         }
                     } else {
-                        if let Some((source_path, relative_path)) = pending_files.pop() {
+                        if let Some(relative_file_path) = pending_files.pop() {
+                            let path = under_path.join_path(&relative_file_path);
                             let repository = repository.clone();
-                            let task_path = source_path.clone();
 
-                            let task = async move { download_file(&repository, &task_path).await };
+                            let task = async move { download_file(&repository, &path).await };
+
                             let task = AsyncJob::new(task);
 
-                            *current_download = Some((relative_path, task));
+                            *current_download = Some((relative_file_path, task));
                             self.tick(); // Continue progress
                         } else {
                             let files = std::mem::take(downloaded_files);
@@ -213,18 +219,14 @@ pub mod download {
         }
     }
 
-    fn pending_downloads_under_path(
-        path: &FilePath,
-        tree: Vec<GitTreeItem>,
-    ) -> Vec<(FilePath, FilePath)> {
+    fn pending_downloads_under_path(path: &FilePath, tree: Vec<GitTreeItem>) -> Vec<FilePath> {
         tree.into_iter()
-            .filter(|tree_item| tree_item.item_type == "blob" && tree_item.path.starts_with(path))
+            .filter(|item| item.item_type == "blob" && item.path.starts_with(path))
             .map(|tree_item| {
-                let relative_path = tree_item
+                tree_item
                     .path
                     .strip_prefix(path)
-                    .unwrap_or_else(|| tree_item.path.clone());
-                (tree_item.path, relative_path)
+                    .unwrap_or_else(|| tree_item.path.clone())
             })
             .collect()
     }
