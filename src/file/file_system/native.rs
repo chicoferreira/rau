@@ -103,7 +103,7 @@ impl AppFileSystemTrait for AppFileSystem {
             let mut projects = Vec::new();
 
             for path in config.recent_projects {
-                match extract_identifier(path) {
+                match ProjectIdentifier::extract_identifier(path) {
                     Ok(project_identifier) => {
                         let project_path = project_identifier.project_path().as_path_buf();
                         if seen.insert(project_path) {
@@ -337,17 +337,6 @@ fn spawn_blocking<T: Send + 'static>(
         rx.await
             .expect("function must complete unless the fs worker panics")
     })
-}
-
-fn extract_identifier(path: AbsolutePathBuf) -> AppResult<ProjectIdentifier> {
-    let project_name = path
-        .as_ref()
-        .file_name()
-        .and_then(|name| name.to_str())
-        .ok_or_else(|| AppError::InvalidRecentProjectPath(path.as_path_buf()))?
-        .to_string();
-
-    Ok(ProjectIdentifier::new(project_name, path))
 }
 
 fn collect_entries(

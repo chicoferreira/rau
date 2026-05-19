@@ -1,4 +1,8 @@
 pub mod async_job;
+// Browser folder imports need DOM APIs, so this helper is only available to the
+// wasm main-menu import flow.
+#[cfg(target_arch = "wasm32")]
+pub mod browser_folder_picker;
 pub mod dir_node;
 pub mod event_queue;
 pub mod github;

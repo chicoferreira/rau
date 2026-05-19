@@ -68,6 +68,9 @@ pub enum AppError {
     #[cfg(target_arch = "wasm32")]
     #[error("file not valid utf8: {0:?}")]
     FileNotValidUtf8(FilePath),
+    #[cfg(target_arch = "wasm32")]
+    #[error("browser file picker error: {0}")]
+    BrowserFilePickerError(String),
     #[error("fetch error: {0}")]
     FetchError(ehttp::Error),
     #[error("url parse error: {0}")]
@@ -80,8 +83,8 @@ pub enum AppError {
     #[error("config directory unavailable")]
     ConfigDirectoryUnavailable,
     #[cfg(not(target_arch = "wasm32"))]
-    #[error("invalid recent project path: {0:?}")]
-    InvalidRecentProjectPath(PathBuf),
+    #[error("invalid project path: {0:?}")]
+    InvalidProjectPath(PathBuf),
     #[error("missing project.json")]
     MissingProjectJson,
     #[error("serialization error: {0}")]

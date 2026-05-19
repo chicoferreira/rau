@@ -31,7 +31,6 @@ impl RecentProjectsState {
     pub fn render_ui(
         &mut self,
         ui: &mut egui::Ui,
-        open_pending: bool,
         app_file_system: &AppFileSystem,
     ) -> Option<ProjectIdentifier> {
         ui.heading("Recent Projects");
@@ -47,17 +46,15 @@ impl RecentProjectsState {
 
         for project in projects.clone() {
             ui.horizontal(|ui| {
-                ui.add_enabled_ui(!open_pending, |ui| {
-                    let response = ui.button(project.project_name());
+                let response = ui.button(project.project_name());
 
-                    #[cfg(not(target_arch = "wasm32"))]
-                    let response = response
-                        .on_hover_text(project.project_path().as_ref().display().to_string());
+                #[cfg(not(target_arch = "wasm32"))]
+                let response =
+                    response.on_hover_text(project.project_path().as_ref().display().to_string());
 
-                    if response.clicked() {
-                        result = Some(project.clone());
-                    }
-                });
+                if response.clicked() {
+                    result = Some(project.clone());
+                }
 
                 ui.add_enabled_ui(!remove_pending, |ui| {
                     let remove_recent_label = cfg_select! {

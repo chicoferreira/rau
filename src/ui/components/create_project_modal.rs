@@ -54,14 +54,14 @@ pub struct GithubProjectSource {
 
 pub enum CreateProjectModalResponse {
     Create {
-        project_identifier: ProjectIdentifier,
+        project_id: ProjectIdentifier,
         files: Vec<(FilePath, Vec<u8>)>,
     },
     Close,
 }
 
 struct ProjectDownloadTask {
-    project_identifier: ProjectIdentifier,
+    project_id: ProjectIdentifier,
     task: github::download::DownloadTask,
 }
 
@@ -136,7 +136,7 @@ impl CreateProjectModal {
                         match download_task.task {
                             DownloadTask::Done { files } => {
                                 result = Some(CreateProjectModalResponse::Create {
-                                    project_identifier: download_task.project_identifier,
+                                    project_id: download_task.project_id,
                                     files,
                                 });
                             }
@@ -155,8 +155,8 @@ impl CreateProjectModal {
 
                     self.form_data.error = None;
 
-                    let project_identifier = match self.form_data.create_project_identifier() {
-                        Ok(project_identifier) => project_identifier,
+                    let project_id = match self.form_data.create_project_identifier() {
+                        Ok(id) => id,
                         Err(error) => {
                             self.form_data.error = Some(error);
                             return;
@@ -167,7 +167,7 @@ impl CreateProjectModal {
                         ProjectCreationKind::Empty => match Project::default().serialize() {
                             Ok(bytes) => {
                                 result = Some(CreateProjectModalResponse::Create {
-                                    project_identifier,
+                                    project_id,
                                     files: vec![(FilePath::project_json(), bytes)],
                                 });
                             }
@@ -181,10 +181,7 @@ impl CreateProjectModal {
                                     let task =
                                         github::download_files_under_path(&repository, &path);
 
-                                    let download_task = ProjectDownloadTask {
-                                        project_identifier,
-                                        task,
-                                    };
+                                    let download_task = ProjectDownloadTask { project_id, task };
                                     self.state =
                                         CreateProjectModalState::Downloading(download_task);
                                 }

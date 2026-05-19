@@ -1,5 +1,8 @@
 #[cfg(not(target_arch = "wasm32"))]
-use crate::file::absolute::AbsolutePathBuf;
+use crate::{
+    error::{AppError, AppResult},
+    file::absolute::AbsolutePathBuf,
+};
 
 #[derive(Clone, Debug)]
 pub struct ProjectIdentifier {
@@ -31,5 +34,17 @@ impl ProjectIdentifier {
     #[cfg(not(target_arch = "wasm32"))]
     pub fn project_path(&self) -> &AbsolutePathBuf {
         &self.project_path
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn extract_identifier(path: AbsolutePathBuf) -> AppResult<Self> {
+        let project_name = path
+            .as_ref()
+            .file_name()
+            .and_then(|name| name.to_str())
+            .map(str::to_string)
+            .ok_or_else(|| AppError::InvalidProjectPath(path.as_path_buf()))?;
+
+        Ok(Self::new(project_name, path))
     }
 }

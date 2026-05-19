@@ -4,6 +4,7 @@ pub mod create_project_modal;
 pub mod data_display;
 pub mod flags_selector;
 pub mod hint;
+pub mod open_or_import_project;
 pub mod recent_projects;
 pub mod rename_text_edit;
 pub mod renameable_label;
