@@ -802,6 +802,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "egui-notify"
+version = "0.22.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6a29b39d9d60a29c217d0e86ef8221cd2e736f841aba75b5c32a3a0cade5f802"
+dependencies = [
+ "egui",
+]
+
+[[package]]
 name = "egui-wgpu"
 version = "0.34.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2950,6 +2959,7 @@ dependencies = [
  "derive_more",
  "dirs",
  "egui",
+ "egui-notify",
  "egui-wgpu",
  "egui-winit",
  "egui_dnd",

@@ -83,7 +83,7 @@ impl RecentProjectsState {
         self.remove_job = Some(app_file_system.remove_recent_project(project_id));
     }
 
-    pub fn tick(&mut self, app_file_system: &AppFileSystem) {
+    pub fn tick(&mut self, app_file_system: &AppFileSystem, toasts: &mut egui_notify::Toasts) {
         match &mut self.load_state {
             RecentProjectLoadState::Pending => {
                 self.load_state = RecentProjectLoadState::Loading {
@@ -95,7 +95,8 @@ impl RecentProjectsState {
                     let projects = match result {
                         Ok(projects) => projects,
                         Err(error) => {
-                            log::error!("Failed to load recent projects: {error}");
+                            toasts_log_error!(toasts, "Failed to load recent projects: {error}");
+                            self.load_state = RecentProjectLoadState::Loaded { projects: vec![] };
                             return;
                         }
                     };
@@ -108,7 +109,7 @@ impl RecentProjectsState {
         if let Some(job) = &mut self.remove_job {
             if let Poll::Ready(result) = job.try_resolve() {
                 if let Err(error) = result {
-                    log::error!("Failed to remove recent project: {error}");
+                    toasts_log_error!(toasts, "Failed to remove recent project: {error}");
                 }
 
                 self.remove_job = None;

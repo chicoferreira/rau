@@ -2,6 +2,14 @@ use crate::utils::winit_runner;
 
 use winit::event_loop::EventLoop;
 
+macro_rules! toasts_log_error {
+    ($toasts:expr, $format:expr) => {
+        let error = format!($format);
+        log::error!("{error}");
+        $toasts.error(error);
+    };
+}
+
 mod app;
 mod error;
 mod featured_projects;

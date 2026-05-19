@@ -19,6 +19,7 @@ use std::task::Poll;
 
 #[derive(Default)]
 pub struct MainMenu {
+    toasts: egui_notify::Toasts,
     open_workspace_job: Option<AsyncJob<AppResult<Workspace>>>,
     open_or_import_project: OpenOrImportProject,
     recent_projects_state: RecentProjectsState,
@@ -27,6 +28,8 @@ pub struct MainMenu {
 
 impl MainMenu {
     pub fn render_ui(&mut self, ui: &mut egui::Ui, app_fs: &AppFileSystem) {
+        self.toasts.show(ui.ctx());
+
         if ui.button("New Project").clicked() {
             self.create_project_modal = Some(CreateProjectModal::new(ProjectCreationSource::Empty));
         }
@@ -47,7 +50,7 @@ impl MainMenu {
         }
 
         if let Some(modal) = &mut self.create_project_modal {
-            if let Some(response) = modal.render_ui(ui) {
+            if let Some(response) = modal.render_ui(ui, &mut self.toasts) {
                 match response {
                     CreateProjectModalResponse::Create { project_id, files } => {
                         self.open_project(app_fs.clone(), project_id, files);
@@ -77,7 +80,8 @@ impl MainMenu {
         app_event_queue: &mut EventQueue<AppEvent>,
         app_file_system: &AppFileSystem,
     ) {
-        self.recent_projects_state.tick(app_file_system);
+        self.recent_projects_state
+            .tick(app_file_system, &mut self.toasts);
 
         if let Some(result) = self.open_or_import_project.tick() {
             match result {
@@ -92,7 +96,7 @@ impl MainMenu {
                     self.open_project(app_file_system.clone(), project_id, vec![]);
                 }
                 Err(error) => {
-                    log::error!("Failed to pick project folder: {error:?}");
+                    toasts_log_error!(self.toasts, "Failed to pick project folder: {error:?}");
                     self.recent_projects_state.reload();
                 }
             }
@@ -105,7 +109,7 @@ impl MainMenu {
                         app_event_queue.add(AppEvent::SetState(State::Workspace(workspace)));
                     }
                     Err(error) => {
-                        log::error!("Failed to open workspace: {error:?}");
+                        toasts_log_error!(self.toasts, "Failed to open workspace: {error:?}");
                         self.recent_projects_state.reload();
                     }
                 }

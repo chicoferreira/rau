@@ -110,7 +110,11 @@ impl CreateProjectModal {
         modal
     }
 
-    pub fn render_ui(&mut self, ui: &mut egui::Ui) -> Option<CreateProjectModalResponse> {
+    pub fn render_ui(
+        &mut self,
+        ui: &mut egui::Ui,
+        toasts: &mut egui_notify::Toasts,
+    ) -> Option<CreateProjectModalResponse> {
         let mut result = None;
 
         let response =
@@ -120,7 +124,7 @@ impl CreateProjectModal {
                 ui.heading("Creating new project");
 
                 ui.add_enabled_ui(!is_downloading, |ui| {
-                    ui_form(ui, &mut self.form_data);
+                    ui_form(ui, &mut self.form_data, toasts);
                 });
 
                 if let Some(error) = &self.form_data.error {
@@ -287,7 +291,11 @@ impl GithubProjectSource {
     }
 }
 
-fn ui_form(ui: &mut egui::Ui, form_data: &mut CreateProjectFormData) {
+fn ui_form(
+    ui: &mut egui::Ui,
+    form_data: &mut CreateProjectFormData,
+    #[allow(unused)] toasts: &mut egui_notify::Toasts,
+) {
     egui::Grid::new("create_project_form")
         .num_columns(2)
         .show(ui, |ui| {
@@ -341,21 +349,25 @@ fn ui_form(ui: &mut egui::Ui, form_data: &mut CreateProjectFormData) {
             #[cfg(not(target_arch = "wasm32"))]
             {
                 ui.label("Project Folder:");
-                folder_selector_controls_ui(ui, form_data);
+                folder_selector_controls_ui(ui, form_data, toasts);
                 ui.end_row();
             }
         });
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-fn folder_selector_controls_ui(ui: &mut egui::Ui, form_data: &mut CreateProjectFormData) {
+fn folder_selector_controls_ui(
+    ui: &mut egui::Ui,
+    form_data: &mut CreateProjectFormData,
+    toasts: &mut egui_notify::Toasts,
+) {
     if let Some(job) = &mut form_data.folder_picker_job {
         if let std::task::Poll::Ready(result) = job.try_resolve() {
             match result {
                 Ok(Some(project_path)) => form_data.project_path = Some(project_path),
                 Ok(None) => {}
                 Err(error) => {
-                    log::error!("Failed to select project folder: {error}");
+                    toasts_log_error!(toasts, "Failed to select project folder: {error}");
                 }
             }
             form_data.folder_picker_job = None;
