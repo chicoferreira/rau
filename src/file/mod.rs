@@ -1,6 +1,9 @@
 #[cfg(not(target_arch = "wasm32"))]
 pub mod absolute;
+pub mod app_config;
 pub mod file_storage;
 pub mod file_system;
 pub mod file_watcher;
 pub mod identifier;
+#[cfg(target_arch = "wasm32")]
+pub mod indexed_db;

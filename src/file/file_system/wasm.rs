@@ -18,14 +18,11 @@ use crate::{
         file_system::{FileSystemEntries, FileSystemTrait, FutureResult},
         file_watcher::FileWatcher,
         identifier::ProjectIdentifier,
+        indexed_db,
     },
     project::paths::FilePath,
     utils::async_job::AsyncJob,
 };
-
-const DB_NAME: &str = "rau";
-const FILES_STORE: &str = "files";
-const DIRECTORIES_STORE: &str = "directories";
 
 #[derive(Clone)]
 pub struct FileSystem {
@@ -35,46 +32,6 @@ pub struct FileSystem {
 }
 
 impl FileSystem {
-    async fn open_database() -> AppResult<Database> {
-        let database = Database::open(DB_NAME).await?;
-
-        if Self::has_files_store(&database) && Self::has_directories_store(&database) {
-            return Ok(database);
-        }
-
-        let next_version = database.version() as u32 + 1;
-
-        database.close();
-
-        let database = Database::open(DB_NAME)
-            .with_version(next_version)
-            .with_on_upgrade_needed(|_event, database| {
-                if !Self::has_files_store(&database) {
-                    database.create_object_store(FILES_STORE).build()?;
-                }
-                if !Self::has_directories_store(&database) {
-                    database.create_object_store(DIRECTORIES_STORE).build()?;
-                }
-
-                Ok(())
-            })
-            .await?;
-
-        Ok(database)
-    }
-
-    fn has_files_store(database: &Database) -> bool {
-        database
-            .object_store_names()
-            .any(|store_name| store_name == FILES_STORE)
-    }
-
-    fn has_directories_store(database: &Database) -> bool {
-        database
-            .object_store_names()
-            .any(|store_name| store_name == DIRECTORIES_STORE)
-    }
-
     fn key(identifier: &ProjectIdentifier, file_path: &FilePath) -> Array {
         std::iter::once(identifier.project_name())
             .chain(file_path.segments().iter().map(String::as_str))
@@ -98,7 +55,7 @@ impl FileSystem {
 
     fn files_transaction(database: &Database, mode: TransactionMode) -> AppResult<Transaction<'_>> {
         database
-            .transaction(FILES_STORE)
+            .transaction(indexed_db::FILES_STORE)
             .with_mode(mode)
             .build()
             .map_err(Into::into)
@@ -109,19 +66,19 @@ impl FileSystem {
         mode: TransactionMode,
     ) -> AppResult<Transaction<'_>> {
         database
-            .transaction([FILES_STORE, DIRECTORIES_STORE])
+            .transaction([indexed_db::FILES_STORE, indexed_db::DIRECTORIES_STORE])
             .with_mode(mode)
             .build()
             .map_err(Into::into)
     }
 
     fn files_store<'a>(transaction: &'a TransactionRef<'a>) -> AppResult<ObjectStore<'a>> {
-        transaction.object_store(FILES_STORE).map_err(Into::into)
+        transaction.object_store(indexed_db::FILES_STORE).map_err(Into::into)
     }
 
     fn directories_store<'a>(transaction: &'a TransactionRef<'a>) -> AppResult<ObjectStore<'a>> {
         transaction
-            .object_store(DIRECTORIES_STORE)
+            .object_store(indexed_db::DIRECTORIES_STORE)
             .map_err(Into::into)
     }
 
@@ -259,7 +216,7 @@ impl FileSystem {
 impl FileSystemTrait for FileSystem {
     fn mount(id: ProjectIdentifier) -> FutureResult<(Self, FileWatcher)> {
         AsyncJob::new(async move {
-            let database = Self::open_database().await?;
+            let database = indexed_db::open_database().await?;
             let (sender, receiver) = std::sync::mpsc::channel();
 
             let file_system = Self {

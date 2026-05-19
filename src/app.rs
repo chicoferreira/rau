@@ -5,9 +5,10 @@ use winit::{event::WindowEvent, window::Window};
 
 use crate::{
     error::AppResult,
+    file::app_config::{AppConfig, RecentProject},
     main_menu::MainMenu,
     ui::{self},
-    utils::{event_queue::EventQueue, winit_runner::WindowApp},
+    utils::{async_job::AsyncJob, event_queue::EventQueue, winit_runner::WindowApp},
     workspace::{AppContext, Workspace},
 };
 
@@ -25,6 +26,9 @@ pub struct App {
     limits: wgpu::Limits,
     state: State,
     event_queue: EventQueue<AppEvent>,
+    app_config: AppConfig,
+    recent_projects: Vec<RecentProject>,
+    pending_add_recent: Option<AsyncJob<AppResult<()>>>,
 }
 
 pub enum AppEvent {
@@ -122,6 +126,8 @@ impl WindowApp for App {
 
         let egui_renderer = ui::renderer::EguiRenderer::new(&device, config.format, &window);
 
+        let (app_config, recent_projects) = AppConfig::load().await?;
+
         let state = State::MainMenu(MainMenu::default());
 
         Ok(Self {
@@ -138,6 +144,9 @@ impl WindowApp for App {
             limits: adapter.limits(),
             state,
             event_queue: EventQueue::default(),
+            app_config,
+            recent_projects,
+            pending_add_recent: None,
         })
     }
 
@@ -170,9 +179,28 @@ impl WindowApp for App {
 
 impl App {
     fn handle_events(&mut self) {
+        if let Some(job) = &mut self.pending_add_recent {
+            if let std::task::Poll::Ready(result) = job.try_resolve() {
+                if let Err(error) = result {
+                    log::error!("Failed to save recent project: {error:?}");
+                }
+                self.pending_add_recent = None;
+            }
+        }
+
         for event in self.event_queue.drain() {
             match event {
                 AppEvent::SetState(state) => {
+                    if let State::Workspace(workspace) = &state {
+                        let identifier = workspace.project_identifier();
+                        let recent = RecentProject::from_identifier(identifier);
+
+                        self.recent_projects.retain(|p| p != &recent);
+                        self.recent_projects.insert(0, recent);
+
+                        self.pending_add_recent =
+                            Some(self.app_config.add_recent(identifier));
+                    }
                     self.state = state;
                 }
             }
@@ -234,13 +262,19 @@ impl App {
 
         let state = &mut self.state;
         let app_event_queue = &mut self.event_queue;
+        let recent_projects = &self.recent_projects;
+        let app_config = &self.app_config;
         let frame = self.egui_renderer.handle(&self.window, |ui| match state {
-            State::MainMenu(main_menu) => main_menu.render_ui(ui),
+            State::MainMenu(main_menu) => {
+                main_menu.render_ui(ui, recent_projects, app_config)
+            }
             State::Workspace(workspace) => workspace.render_ui(ui, self.backend, app_event_queue),
         });
 
         match &mut self.state {
-            State::MainMenu(main_menu) => main_menu.render(&mut self.event_queue),
+            State::MainMenu(main_menu) => {
+                main_menu.render(&mut self.event_queue, &mut self.recent_projects)
+            }
             State::Workspace(workspace) => {
                 let mut ctx = AppContext {
                     device: &self.device,
