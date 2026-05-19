@@ -4,7 +4,9 @@ use crate::{
     app::AppEvent,
     error::AppResult,
     file::{
-        file_storage::FileStorage, file_system::FileSystemTrait, identifier::ProjectIdentifier,
+        file_storage::FileStorage,
+        file_system::{AppFileSystem, AppFileSystemTrait, ProjectFileSystemTrait},
+        identifier::ProjectIdentifier,
     },
     project::{
         DimensionId, FramePlanId, Project, ResourceId, ResourceKind, RuntimeProject, ViewportId,
@@ -83,17 +85,25 @@ pub enum StateEvent {
 }
 
 impl Workspace {
-    pub async fn new_project_from_files(
-        project_identifier: ProjectIdentifier,
+    pub async fn open_project_and_save_files(
+        app_fs: AppFileSystem,
+        project_id: ProjectIdentifier,
         files: Vec<(FilePath, Vec<u8>)>,
     ) -> AppResult<Self> {
-        let file_storage = FileStorage::new(project_identifier).await?;
+        let (file_system, file_watcher) = app_fs.mount_project(project_id.clone()).await?;
+
+        let file_storage = FileStorage::new(project_id.clone(), file_system, file_watcher);
 
         for (file_path, data) in files {
             file_storage.file_system.save(&file_path, data).await?;
         }
 
-        Self::open_project(file_storage).await
+        let workspace = Self::open_project(file_storage).await?;
+        if let Err(error) = app_fs.remember_project(project_id).await {
+            log::error!("Failed to remember project: {error}");
+        }
+
+        Ok(workspace)
     }
 
     async fn open_project(file_storage: FileStorage) -> AppResult<Self> {

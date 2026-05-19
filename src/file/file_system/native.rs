@@ -1,9 +1,14 @@
-use std::path::PathBuf;
+use std::{collections::HashSet, path::PathBuf};
+
+use serde::{Deserialize, Serialize};
 
 use crate::{
     error::{AppError, AppResult},
     file::{
-        file_system::{FileSystemEntries, FileSystemTrait, FutureResult},
+        absolute::AbsolutePathBuf,
+        file_system::{
+            AppFileSystemTrait, FileSystemEntries, FutureResult, ProjectFileSystemTrait,
+        },
         file_watcher::FileWatcher,
         identifier::ProjectIdentifier,
     },
@@ -14,12 +19,129 @@ use crate::{
 type FileSystemJob = Box<dyn FnOnce() + Send + 'static>;
 
 #[derive(Clone)]
-pub struct FileSystem {
+pub struct AppFileSystem {
+    send_jobs: std::sync::mpsc::Sender<FileSystemJob>,
+}
+
+#[derive(Clone)]
+pub struct ProjectFileSystem {
     id: ProjectIdentifier,
     send_jobs: std::sync::mpsc::Sender<FileSystemJob>,
 }
 
-impl FileSystem {
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct AppConfig {
+    #[serde(default)]
+    pub recent_projects: Vec<AbsolutePathBuf>,
+}
+
+fn config_path() -> AppResult<PathBuf> {
+    Ok(dirs::config_dir()
+        .ok_or(AppError::ConfigDirectoryUnavailable)?
+        .join("rau")
+        .join("config.toml"))
+}
+
+impl AppConfig {
+    fn read_or_default() -> AppResult<Self> {
+        let path = config_path()?;
+        match std::fs::read_to_string(&path) {
+            Ok(contents) => Ok(toml::from_str(&contents)?),
+            Err(err) if err.kind() == std::io::ErrorKind::NotFound => Ok(AppConfig::default()),
+            Err(err) => Err(err.into()),
+        }
+    }
+
+    fn save(&self) -> AppResult<()> {
+        let path = config_path()?;
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+
+        let contents = toml::to_string_pretty(self)?;
+        std::fs::write(path, contents)?;
+
+        Ok(())
+    }
+
+    fn remember_project_path(&mut self, project_path: AbsolutePathBuf) {
+        self.recent_projects.retain(|path| path != &project_path);
+        self.recent_projects.insert(0, project_path);
+    }
+}
+
+impl AppFileSystemTrait for AppFileSystem {
+    fn open() -> FutureResult<Self> {
+        AsyncJob::new(async move {
+            let (send_jobs, receive_jobs) = std::sync::mpsc::channel();
+            spawn_worker_thread(receive_jobs);
+
+            Ok(Self { send_jobs })
+        })
+    }
+
+    fn mount_project(
+        &self,
+        id: ProjectIdentifier,
+    ) -> FutureResult<(ProjectFileSystem, FileWatcher)> {
+        let send_jobs = self.send_jobs.clone();
+
+        AsyncJob::new(async move {
+            std::fs::create_dir_all(id.project_path())?; // File watcher requires the directory to exist
+
+            let file_watcher = FileWatcher::new(id.project_path().clone())?;
+            let file_system = ProjectFileSystem { id, send_jobs };
+
+            Ok((file_system, file_watcher))
+        })
+    }
+
+    fn recent_projects(&self) -> FutureResult<Vec<ProjectIdentifier>> {
+        spawn_blocking(self.send_jobs.clone(), move || {
+            let config = AppConfig::read_or_default()?;
+            let mut seen = HashSet::new();
+            let mut projects = Vec::new();
+
+            for path in config.recent_projects {
+                match extract_identifier(path) {
+                    Ok(project_identifier) => {
+                        let project_path = project_identifier.project_path().as_path_buf();
+                        if seen.insert(project_path) {
+                            projects.push(project_identifier);
+                        }
+                    }
+                    Err(error) => {
+                        log::error!("Skipping invalid recent project: {error}");
+                    }
+                }
+            }
+
+            Ok(projects)
+        })
+    }
+
+    fn remember_project(&self, id: ProjectIdentifier) -> FutureResult<()> {
+        let project_path = id.project_path().clone();
+
+        spawn_blocking(self.send_jobs.clone(), move || {
+            let mut config = AppConfig::read_or_default()?;
+            config.remember_project_path(project_path);
+            config.save()
+        })
+    }
+
+    fn remove_recent_project(&self, id: ProjectIdentifier) -> FutureResult<()> {
+        let project_path = id.project_path().clone();
+
+        spawn_blocking(self.send_jobs.clone(), move || {
+            let mut config = AppConfig::read_or_default()?;
+            config.recent_projects.retain(|path| path != &project_path);
+            config.save()
+        })
+    }
+}
+
+impl ProjectFileSystem {
     fn resolve(&self, file_path: &FilePath) -> PathBuf {
         let mut path_buf = self.id.project_path().as_path_buf();
         for segment in file_path.segments() {
@@ -42,45 +164,11 @@ impl FileSystem {
         &self,
         function: impl FnOnce() -> T + Send + 'static,
     ) -> AsyncJob<T> {
-        let (tx, rx) = tokio::sync::oneshot::channel();
-        let job = Box::new(move || {
-            let result = function();
-            tx.send(result).ok();
-        });
-
-        self.send_jobs.send(job).expect("the fs worker closed");
-
-        AsyncJob::new(async move {
-            rx.await
-                .expect("function must complete unless the fs worker panics")
-        })
-    }
-
-    fn spawn_worker_thread(rx: std::sync::mpsc::Receiver<FileSystemJob>) {
-        std::thread::Builder::new()
-            .name("native-fs-worker".to_string())
-            .spawn(move || {
-                while let Ok(job) = rx.recv() {
-                    (job)();
-                }
-            })
-            .expect("couldn't spawn thread");
+        spawn_blocking(self.send_jobs.clone(), function)
     }
 }
 
-impl FileSystemTrait for FileSystem {
-    fn mount(id: ProjectIdentifier) -> FutureResult<(Self, FileWatcher)> {
-        AsyncJob::new(async move {
-            std::fs::create_dir_all(id.project_path())?; // File watcher requires the directory to exist
-
-            let file_watcher = FileWatcher::new(id.project_path().clone())?;
-            let (send_jobs, receive_jobs) = std::sync::mpsc::channel();
-            Self::spawn_worker_thread(receive_jobs);
-
-            Ok((Self { id, send_jobs }, file_watcher))
-        })
-    }
-
+impl ProjectFileSystemTrait for ProjectFileSystem {
     fn read(&self, path: &FilePath) -> FutureResult<Vec<u8>> {
         let path = self.resolve_exists(path);
 
@@ -220,6 +308,46 @@ impl FileSystemTrait for FileSystem {
             Ok(())
         })
     }
+}
+
+fn spawn_worker_thread(rx: std::sync::mpsc::Receiver<FileSystemJob>) {
+    std::thread::Builder::new()
+        .name("native-fs-worker".to_string())
+        .spawn(move || {
+            while let Ok(job) = rx.recv() {
+                (job)();
+            }
+        })
+        .expect("couldn't spawn thread");
+}
+
+fn spawn_blocking<T: Send + 'static>(
+    send_jobs: std::sync::mpsc::Sender<FileSystemJob>,
+    function: impl FnOnce() -> T + Send + 'static,
+) -> AsyncJob<T> {
+    let (tx, rx) = tokio::sync::oneshot::channel();
+    let job = Box::new(move || {
+        let result = function();
+        tx.send(result).ok();
+    });
+
+    send_jobs.send(job).expect("the fs worker closed");
+
+    AsyncJob::new(async move {
+        rx.await
+            .expect("function must complete unless the fs worker panics")
+    })
+}
+
+fn extract_identifier(path: AbsolutePathBuf) -> AppResult<ProjectIdentifier> {
+    let project_name = path
+        .as_ref()
+        .file_name()
+        .and_then(|name| name.to_str())
+        .ok_or_else(|| AppError::InvalidRecentProjectPath(path.as_path_buf()))?
+        .to_string();
+
+    Ok(ProjectIdentifier::new(project_name, path))
 }
 
 fn collect_entries(

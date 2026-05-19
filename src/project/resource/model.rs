@@ -8,7 +8,7 @@ use crate::{
     error::{AppError, AppResult},
     file::{
         file_storage::FileStorage,
-        file_system::{FileSystem, FileSystemTrait},
+        file_system::{ProjectFileSystem, ProjectFileSystemTrait},
     },
     project::{
         BindGroupId, ModelId, ProjectResource,
@@ -268,7 +268,7 @@ impl SyncResource for Model {
 impl ModelRuntime {
     pub async fn load_from_obj_file(
         source: FilePath,
-        file_system: FileSystem, // TODO: use file storage for read cache
+        file_system: ProjectFileSystem, // TODO: use file storage for read cache
         vertex_buffer_spec: VertexBufferSpec,
         device: wgpu::Device,
     ) -> AppResult<Self> {

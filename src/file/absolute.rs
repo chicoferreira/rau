@@ -1,6 +1,6 @@
 use crate::error::{AppError, AppResult};
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct AbsolutePathBuf(std::path::PathBuf);
 
 impl AbsolutePathBuf {

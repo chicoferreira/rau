@@ -1,4 +1,4 @@
-use std::sync::mpsc::Sender;
+use std::{collections::BTreeSet, sync::mpsc::Sender};
 
 use indexed_db_futures::{
     Build, BuildPrimitive,
@@ -15,7 +15,9 @@ use web_sys::js_sys::Array;
 use crate::{
     error::{AppError, AppResult},
     file::{
-        file_system::{FileSystemEntries, FileSystemTrait, FutureResult},
+        file_system::{
+            AppFileSystemTrait, FileSystemEntries, FutureResult, ProjectFileSystemTrait,
+        },
         file_watcher::FileWatcher,
         identifier::ProjectIdentifier,
     },
@@ -28,13 +30,113 @@ const FILES_STORE: &str = "files";
 const DIRECTORIES_STORE: &str = "directories";
 
 #[derive(Clone)]
-pub struct FileSystem {
+pub struct AppFileSystem {
+    database: Database,
+}
+
+#[derive(Clone)]
+pub struct ProjectFileSystem {
     id: ProjectIdentifier,
     database: Database,
     file_watcher_sender: Sender<FilePath>,
 }
 
-impl FileSystem {
+impl AppFileSystemTrait for AppFileSystem {
+    fn open() -> FutureResult<Self> {
+        AsyncJob::new(async move {
+            Ok(Self {
+                database: ProjectFileSystem::open_database().await?,
+            })
+        })
+    }
+
+    fn mount_project(
+        &self,
+        id: ProjectIdentifier,
+    ) -> FutureResult<(ProjectFileSystem, FileWatcher)> {
+        let database = self.database.clone();
+
+        AsyncJob::new(async move {
+            let (sender, receiver) = std::sync::mpsc::channel();
+
+            let file_system = ProjectFileSystem {
+                database,
+                id,
+                file_watcher_sender: sender,
+            };
+            let file_watcher = FileWatcher::new(receiver);
+
+            Ok((file_system, file_watcher))
+        })
+    }
+
+    fn recent_projects(&self) -> FutureResult<Vec<ProjectIdentifier>> {
+        let database = self.database.clone();
+
+        AsyncJob::new(async move {
+            let transaction =
+                ProjectFileSystem::entries_transaction(&database, TransactionMode::Readonly)?;
+            let files_store = ProjectFileSystem::files_store(&transaction)?;
+            let directories_store = ProjectFileSystem::directories_store(&transaction)?;
+
+            let (file_project_names, directory_project_names) = futures_lite::future::try_zip(
+                ProjectFileSystem::project_names_in_store(files_store),
+                ProjectFileSystem::project_names_in_store(directories_store),
+            )
+            .await?;
+
+            let mut project_names = file_project_names;
+            project_names.extend(directory_project_names);
+
+            Ok(project_names
+                .into_iter()
+                .map(ProjectIdentifier::new)
+                .collect())
+        })
+    }
+
+    fn remember_project(&self, _id: ProjectIdentifier) -> FutureResult<()> {
+        // The project will be already remembered in the database by its key whenever a file is saved.
+        AsyncJob::new(async move { Ok(()) })
+    }
+
+    fn remove_recent_project(&self, id: ProjectIdentifier) -> FutureResult<()> {
+        // The wasm platform should actually delete the project instead of just removing it from a list.
+        let database = self.database.clone();
+
+        AsyncJob::new(async move {
+            let transaction =
+                ProjectFileSystem::entries_transaction(&database, TransactionMode::Readonly)?;
+            let files_store = ProjectFileSystem::files_store(&transaction)?;
+            let directories_store = ProjectFileSystem::directories_store(&transaction)?;
+
+            let (file_keys, directory_keys) = futures_lite::future::try_zip(
+                ProjectFileSystem::project_keys_in_store(&id, files_store),
+                ProjectFileSystem::project_keys_in_store(&id, directories_store),
+            )
+            .await?;
+            drop(transaction);
+
+            let transaction =
+                ProjectFileSystem::entries_transaction(&database, TransactionMode::Readwrite)?;
+            let files_store = ProjectFileSystem::files_store(&transaction)?;
+            let directories_store = ProjectFileSystem::directories_store(&transaction)?;
+
+            for key in file_keys {
+                files_store.delete(key).build()?;
+            }
+            for key in directory_keys {
+                directories_store.delete(key).build()?;
+            }
+
+            transaction.commit().await?;
+
+            Ok(())
+        })
+    }
+}
+
+impl ProjectFileSystem {
     async fn open_database() -> AppResult<Database> {
         let database = Database::open(DB_NAME).await?;
 
@@ -189,6 +291,35 @@ impl FileSystem {
             .collect())
     }
 
+    async fn project_names_in_store(store: ObjectStore<'_>) -> AppResult<BTreeSet<String>> {
+        Ok(store
+            .get_all_keys()
+            .primitive()?
+            .await?
+            .collect::<indexed_db_futures::Result<Vec<Array>>>()?
+            .into_iter()
+            .filter_map(|key| key.get(0).as_string())
+            .collect())
+    }
+
+    async fn project_keys_in_store(
+        identifier: &ProjectIdentifier,
+        store: ObjectStore<'_>,
+    ) -> AppResult<Vec<Array>> {
+        Ok(store
+            .get_all_keys()
+            .primitive()?
+            .await?
+            .collect::<indexed_db_futures::Result<Vec<Array>>>()?
+            .into_iter()
+            .filter(|key| {
+                key.get(0)
+                    .as_string()
+                    .is_some_and(|project_name| project_name == identifier.project_name())
+            })
+            .collect())
+    }
+
     async fn keyed_paths_under_path(
         identifier: &ProjectIdentifier,
         path: &FilePath,
@@ -256,23 +387,7 @@ impl FileSystem {
     }
 }
 
-impl FileSystemTrait for FileSystem {
-    fn mount(id: ProjectIdentifier) -> FutureResult<(Self, FileWatcher)> {
-        AsyncJob::new(async move {
-            let database = Self::open_database().await?;
-            let (sender, receiver) = std::sync::mpsc::channel();
-
-            let file_system = Self {
-                database,
-                id,
-                file_watcher_sender: sender,
-            };
-            let file_watcher = FileWatcher::new(receiver);
-
-            Ok((file_system, file_watcher))
-        })
-    }
-
+impl ProjectFileSystemTrait for ProjectFileSystem {
     fn save(&self, path: &FilePath, bytes: Vec<u8>) -> FutureResult<()> {
         let database = self.database.clone();
         let id = self.id.clone();

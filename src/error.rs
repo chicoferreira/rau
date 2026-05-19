@@ -1,3 +1,6 @@
+#[cfg(not(target_arch = "wasm32"))]
+use std::path::PathBuf;
+
 use crate::project::{ResourceId, paths::FilePath};
 
 pub type AppResult<T> = std::result::Result<T, AppError>;
@@ -73,8 +76,20 @@ pub enum AppError {
     InvalidPathSegment(String),
     #[error("invalid create project form: {0}")]
     InvalidCreateProjectForm(&'static str),
+    #[cfg(not(target_arch = "wasm32"))]
+    #[error("config directory unavailable")]
+    ConfigDirectoryUnavailable,
+    #[cfg(not(target_arch = "wasm32"))]
+    #[error("invalid recent project path: {0:?}")]
+    InvalidRecentProjectPath(PathBuf),
     #[error("missing project.json")]
     MissingProjectJson,
     #[error("serialization error: {0}")]
     SerializationError(#[from] serde_json::Error),
+    #[cfg(not(target_arch = "wasm32"))]
+    #[error("toml deserialize error: {0}")]
+    TomlDeserializeError(#[from] toml::de::Error),
+    #[cfg(not(target_arch = "wasm32"))]
+    #[error("toml serialize error: {0}")]
+    TomlSerializeError(#[from] toml::ser::Error),
 }

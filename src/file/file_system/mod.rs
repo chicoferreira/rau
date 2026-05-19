@@ -11,9 +11,9 @@ use crate::{
 };
 
 #[cfg(not(target_arch = "wasm32"))]
-pub use native::FileSystem;
+pub use native::{AppFileSystem, ProjectFileSystem};
 #[cfg(target_arch = "wasm32")]
-pub use wasm::FileSystem;
+pub use wasm::{AppFileSystem, ProjectFileSystem};
 
 #[derive(Debug, Clone, Default)]
 pub struct FileSystemEntries {
@@ -21,11 +21,24 @@ pub struct FileSystemEntries {
     pub directories: Vec<FilePath>,
 }
 
-type FutureResult<T> = AsyncJob<AppResult<T>>;
+pub type FutureResult<T> = AsyncJob<AppResult<T>>;
 
-pub trait FileSystemTrait: Clone + Sized {
-    fn mount(id: ProjectIdentifier) -> FutureResult<(Self, FileWatcher)>;
+pub trait AppFileSystemTrait: Clone + Sized {
+    fn open() -> FutureResult<Self>;
 
+    fn mount_project(
+        &self,
+        id: ProjectIdentifier,
+    ) -> FutureResult<(ProjectFileSystem, FileWatcher)>;
+
+    fn recent_projects(&self) -> FutureResult<Vec<ProjectIdentifier>>;
+
+    fn remember_project(&self, id: ProjectIdentifier) -> FutureResult<()>;
+
+    fn remove_recent_project(&self, id: ProjectIdentifier) -> FutureResult<()>;
+}
+
+pub trait ProjectFileSystemTrait: Clone + Sized {
     fn read(&self, path: &FilePath) -> FutureResult<Vec<u8>>;
 
     fn read_to_string(&self, path: &FilePath) -> FutureResult<String>;

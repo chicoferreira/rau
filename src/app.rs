@@ -5,6 +5,7 @@ use winit::{event::WindowEvent, window::Window};
 
 use crate::{
     error::AppResult,
+    file::file_system::{AppFileSystem, AppFileSystemTrait},
     main_menu::MainMenu,
     ui::{self},
     utils::{event_queue::EventQueue, winit_runner::WindowApp},
@@ -23,6 +24,7 @@ pub struct App {
     backend: wgpu::Backend,
     downlevel_flags: wgpu::DownlevelFlags,
     limits: wgpu::Limits,
+    app_file_system: AppFileSystem,
     state: State,
     event_queue: EventQueue<AppEvent>,
 }
@@ -122,6 +124,7 @@ impl WindowApp for App {
 
         let egui_renderer = ui::renderer::EguiRenderer::new(&device, config.format, &window);
 
+        let app_file_system = AppFileSystem::open().await?;
         let state = State::MainMenu(MainMenu::default());
 
         Ok(Self {
@@ -136,6 +139,7 @@ impl WindowApp for App {
             backend,
             downlevel_flags,
             limits: adapter.limits(),
+            app_file_system,
             state,
             event_queue: EventQueue::default(),
         })
@@ -234,13 +238,14 @@ impl App {
 
         let state = &mut self.state;
         let app_event_queue = &mut self.event_queue;
+        let app_file_system = &self.app_file_system;
         let frame = self.egui_renderer.handle(&self.window, |ui| match state {
-            State::MainMenu(main_menu) => main_menu.render_ui(ui),
+            State::MainMenu(main_menu) => main_menu.render_ui(ui, app_file_system),
             State::Workspace(workspace) => workspace.render_ui(ui, self.backend, app_event_queue),
         });
 
         match &mut self.state {
-            State::MainMenu(main_menu) => main_menu.render(&mut self.event_queue),
+            State::MainMenu(main_menu) => main_menu.render(&mut self.event_queue, app_file_system),
             State::Workspace(workspace) => {
                 let mut ctx = AppContext {
                     device: &self.device,

@@ -3,7 +3,7 @@ use std::{collections::HashMap, task::Poll};
 use crate::{
     error::{AppError, AppResult},
     file::{
-        file_system::{FileSystem, FileSystemEntries, FileSystemTrait},
+        file_system::{FileSystemEntries, ProjectFileSystem, ProjectFileSystemTrait},
         file_watcher::FileWatcher,
         identifier::ProjectIdentifier,
     },
@@ -14,7 +14,7 @@ use crate::{
 /// A struct that holds files of the project for the UI
 /// to display without having to poll the file system.
 pub struct FileStorage {
-    pub file_system: FileSystem,
+    pub file_system: ProjectFileSystem,
     project_id: ProjectIdentifier,
     file_watcher: FileWatcher,
     current_tasks: Vec<FileStorageTask>,
@@ -66,9 +66,12 @@ enum FileStorageTask {
 }
 
 impl FileStorage {
-    pub async fn new(project_identifier: ProjectIdentifier) -> AppResult<Self> {
-        let (file_system, file_watcher) = FileSystem::mount(project_identifier.clone()).await?;
-        Ok(Self {
+    pub fn new(
+        project_identifier: ProjectIdentifier,
+        file_system: ProjectFileSystem,
+        file_watcher: FileWatcher,
+    ) -> Self {
+        Self {
             file_system,
             project_id: project_identifier,
             cached_files: None,
@@ -76,7 +79,7 @@ impl FileStorage {
             current_tasks: vec![],
             file_watcher,
             open_files: HashMap::new(),
-        })
+        }
     }
 
     pub fn project_identifier(&self) -> &ProjectIdentifier {
