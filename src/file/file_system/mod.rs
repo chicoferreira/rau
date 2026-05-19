@@ -49,7 +49,6 @@ pub trait ProjectFileSystemTrait: Clone + Sized {
 
     fn create_directory(&self, path: &FilePath) -> FutureResult<()>;
 
-    #[allow(dead_code)]
     fn save(&self, path: &FilePath, bytes: Vec<u8>) -> FutureResult<()>;
 
     fn create_empty_file(&self, path: &FilePath) -> FutureResult<()>;

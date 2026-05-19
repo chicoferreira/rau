@@ -50,6 +50,7 @@ impl ProjectSaveState {
 
         match project.serialize() {
             Ok(bytes) => {
+                log::info!("Saving project file...");
                 file_storage.save_in_background(&FilePath::project_json(), bytes);
                 self.saved_snapshot = revisions;
                 self.save_deadline = None;
