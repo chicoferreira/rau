@@ -96,6 +96,15 @@ impl Workspace {
         Self::open_project(file_storage).await
     }
 
+    pub async fn open_existing(project_identifier: ProjectIdentifier) -> AppResult<Self> {
+        let file_storage = FileStorage::new(project_identifier).await?;
+        Self::open_project(file_storage).await
+    }
+
+    pub fn project_identifier(&self) -> &ProjectIdentifier {
+        self.file_storage.project_identifier()
+    }
+
     async fn open_project(file_storage: FileStorage) -> AppResult<Self> {
         let project_bytes = file_storage.read(&FilePath::project_json()).await?;
         let project: Project = serde_json::from_slice(&project_bytes)?;
