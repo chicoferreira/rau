@@ -43,7 +43,14 @@ pub fn pending_create_node<T>(
 
 enum ContextMenuEntity<'a> {
     Separator,
-    Action { label: &'a str, event: StateEvent },
+    Action {
+        label: &'a str,
+        event: StateEvent,
+    },
+    DisabledAction {
+        label: &'a str,
+        reason: Option<&'a str>,
+    },
 }
 
 impl<'a, T> TreeNode<'a, T>
@@ -72,6 +79,22 @@ where
 
     pub fn with_event(mut self, label: &'a str, event: StateEvent) -> Self {
         self.events.push(ContextMenuEntity::Action { label, event });
+        self
+    }
+
+    pub fn with_event_if(
+        mut self,
+        condition: bool,
+        label: &'a str,
+        reason: impl Into<Option<&'a str>>,
+        event: StateEvent,
+    ) -> Self {
+        let reason = reason.into();
+        let action = match condition {
+            true => ContextMenuEntity::Action { label, event },
+            false => ContextMenuEntity::DisabledAction { label, reason },
+        };
+        self.events.push(action);
         self
     }
 
@@ -134,6 +157,12 @@ where
                         ContextMenuEntity::Action { label, event } => {
                             if ui.button(*label).clicked() {
                                 event_queue.add(event.clone());
+                            }
+                        }
+                        ContextMenuEntity::DisabledAction { label, reason } => {
+                            let response = ui.add_enabled(false, egui::Button::new(*label));
+                            if let Some(reason) = reason {
+                                response.on_disabled_hover_text(*reason);
                             }
                         }
                     }

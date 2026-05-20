@@ -107,10 +107,10 @@ pub fn ui(state: &mut StateSnapshot, ui: &mut egui::Ui) -> Response {
             Action::SetSelected(selected) => {
                 for node in selected {
                     let path = match node {
-                        FileTreeNodeId::Root => continue,
-                        FileTreeNodeId::Folder(path) => path.clone(),
+                        FileTreeNodeId::Root
+                        | FileTreeNodeId::Folder(_)
+                        | FileTreeNodeId::Pending(_) => continue,
                         FileTreeNodeId::File(path) => path.clone(),
-                        FileTreeNodeId::Pending(path) => path.clone(),
                     };
                     state.event_queue.add(StateEvent::OpenFile(path));
                 }
@@ -183,7 +183,12 @@ fn render_dir_nodes(
             .with_event("Create Folder", StateEvent::CreateFolder(path.clone()))
             .with_rename_event("Rename File", RenameTarget::FileOrFolder(file_path.clone()))
             .with_separator()
-            .with_event("Delete File", StateEvent::DeleteFile(file_path.clone()))
+            .with_event_if(
+                !file_path.is_project_json(),
+                "Delete File",
+                "You can't delete the project.json file",
+                StateEvent::DeleteFile(file_path.clone()),
+            )
             .build_to(builder, event_queue, rename_state);
     }
 }
