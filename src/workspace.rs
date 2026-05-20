@@ -82,6 +82,7 @@ pub enum StateEvent {
         old_path: FilePath,
         new_path: FilePath,
     },
+    SetMainViewport(ViewportId),
 }
 
 impl Workspace {
@@ -335,6 +336,9 @@ impl Workspace {
                             }
                         }
                     }
+                }
+                StateEvent::SetMainViewport(viewport_id) => {
+                    self.project.main_viewport = Some(viewport_id);
                 }
             }
         }

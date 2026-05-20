@@ -113,11 +113,19 @@ pub fn ui(state: &mut StateSnapshot, ui: &mut egui::Ui) -> Response {
                 .build_to(builder, state.event_queue, state.rename_state);
             pending_resource_node(state, builder, ResourceKind::Viewport);
             for (id, viewport) in state.project.viewports.list_sorted() {
+                let is_main_viewport = state.project.main_viewport == Some(id);
                 TreeNode::new(TreeNodeId::Viewport(id), viewport.label())
                     .with_event("View", StateEvent::OpenViewport(id))
                     .with_event("Inspect", StateEvent::InspectResource(id.into()))
                     .with_rename_event("Rename", RenameTarget::Viewport(id))
                     .with_event("Delete", StateEvent::DeleteResource(id.into()))
+                    .with_separator()
+                    .with_event_if(
+                        !is_main_viewport,
+                        "Set as Main Viewport",
+                        "Already set as main viewport",
+                        StateEvent::SetMainViewport(id),
+                    )
                     .with_separator()
                     .with_event(
                         "Create New Viewport",
