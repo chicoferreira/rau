@@ -82,10 +82,18 @@ impl StateSnapshot<'_> {
         CollapsingHeader::new("Preview")
             .default_open(true)
             .show(ui, |ui| {
-                let Ok(texture_view) = self.runtime_project.texture_views.get_init(texture_view_id)
-                else {
-                    return;
-                };
+                let texture_view =
+                    match self.runtime_project.texture_views.get_init(texture_view_id) {
+                        Ok(Some(texture_view)) => texture_view,
+                        Ok(None) => {
+                            ui.spinner();
+                            return;
+                        }
+                        Err(err) => {
+                            ui.colored_label(ui.visuals().error_fg_color, err.to_string());
+                            return;
+                        }
+                    };
 
                 let Some(egui_id) = texture_view.egui_id() else {
                     ui.label("Only texture views with Rgba8UnormSrgb format can be previewed.");

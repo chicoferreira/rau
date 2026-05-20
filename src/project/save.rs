@@ -29,7 +29,6 @@ impl ProjectSaveState {
         let revisions = project.project_revisions().collect();
 
         if revisions != self.last_observed_snapshot {
-            log::info!("Detected project changes...");
             self.last_observed_snapshot = revisions;
             self.save_deadline = if self.last_observed_snapshot != self.saved_snapshot {
                 Some(now + PROJECT_SAVE_DEBOUNCE)

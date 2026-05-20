@@ -52,13 +52,6 @@ pub struct SamplerRuntime {
     inner: wgpu::Sampler,
 }
 
-#[derive(Default)]
-pub enum SamplerJob {
-    #[default]
-    Start,
-    Validation(SamplerRuntime, AsyncJob<AppResult<()>>),
-}
-
 impl Sampler {
     pub fn new(label: impl Into<String>, spec: SamplerSpec) -> Sampler {
         Sampler {
@@ -128,6 +121,13 @@ impl ProjectResource for Sampler {
     }
 }
 
+#[derive(Default)]
+pub enum SamplerJob {
+    #[default]
+    Start,
+    Validation(SamplerRuntime, AsyncJob<AppResult<()>>),
+}
+
 impl SyncResource for Sampler {
     type Context<'a> = &'a wgpu::Device;
     type Runtime = SamplerRuntime;
@@ -149,10 +149,7 @@ impl SyncResource for Sampler {
                 let inner = Self::create_sampler(ctx, &self.label, &self.spec);
 
                 let runtime = SamplerRuntime { inner };
-                Ok(SyncOutcome::Pending(SamplerJob::Validation(
-                    runtime,
-                    scope.pop(),
-                )))
+                self.sync(ctx, None, SamplerJob::Validation(runtime, scope.pop()))
             }
             SamplerJob::Validation(runtime, mut future) => match future.try_resolve() {
                 Poll::Ready(result) => result.map(|()| SyncOutcome::Changed(runtime)),

@@ -125,6 +125,7 @@ impl FramePlanStep {
     }
 }
 
+// TODO: Frame Plan is way too specific to be a project resource.
 impl SyncResource for FramePlan {
     type Context<'a> = FramePlanContext<'a>;
     type Runtime = ();
@@ -169,8 +170,6 @@ impl SyncResource for FramePlan {
             },
         }
 
-        let scope = WgpuErrorScope::push(ctx.device);
-
         let render_ctx = render_pass::Context {
             device: ctx.device,
             models: ctx.models,
@@ -180,14 +179,39 @@ impl SyncResource for FramePlan {
             runtime_bind_groups: ctx.runtime_bind_groups,
         };
 
+        let scope = WgpuErrorScope::push(ctx.device);
+
         for entry in self.entries() {
             let render_pass_id = entry.render_pass_id.ok_or(AppError::UninitializedFields)?;
             let render_pass = ctx.render_passes.get(render_pass_id)?;
-            let render_pass_runtime = ctx.runtime_render_passes.get_init(render_pass_id)?;
+            let Some(render_pass_runtime) = ctx.runtime_render_passes.get_init(render_pass_id)?
+            else {
+                return pending_after_scope(scope);
+            };
 
-            render_pass.submit(ctx.encoder, &render_ctx, render_pass_runtime)?;
+            if render_pass
+                .submit(ctx.encoder, &render_ctx, render_pass_runtime)?
+                .is_none()
+            {
+                return pending_after_scope(scope);
+            }
         }
 
-        Ok(SyncOutcome::Pending(FramePlanJob::Validation(scope.pop())))
+        let mut future = scope.pop();
+        match future.try_resolve() {
+            Poll::Ready(result) => result.map(|()| SyncOutcome::Unchanged(())),
+            Poll::Pending => Ok(SyncOutcome::Pending(FramePlanJob::Validation(future))),
+        }
+    }
+}
+
+fn pending_after_scope(scope: WgpuErrorScope) -> AppResult<SyncOutcome<(), FramePlanJob>> {
+    let mut future = scope.pop();
+    match future.try_resolve() {
+        Poll::Ready(result) => {
+            result?;
+            Ok(SyncOutcome::Pending(FramePlanJob::Start))
+        }
+        Poll::Pending => Ok(SyncOutcome::Pending(FramePlanJob::Validation(future))),
     }
 }

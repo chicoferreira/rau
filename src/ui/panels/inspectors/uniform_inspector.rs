@@ -61,16 +61,23 @@ impl StateSnapshot<'_> {
             return;
         };
 
-        let Ok(uniform_runtime) = self.runtime_project.uniforms.get_init(uniform_id) else {
-            ui.label("Uniform runtime couldn't be found.");
-            return;
-        };
-
-        let (total_size, _) = uniform_runtime.layout();
+        let uniform_runtime = self.runtime_project.uniforms.get_init(uniform_id);
         let has_fields = !uniform.fields().is_empty();
+
         ui.horizontal(|ui| {
             ui.label("Total size");
-            ui.strong(format!("{total_size} bytes"));
+            match &uniform_runtime {
+                Ok(Some(uniform_runtime)) => {
+                    let (total_size, _) = uniform_runtime.layout();
+                    ui.strong(format!("{total_size} bytes"));
+                }
+                Ok(None) => {
+                    ui.spinner();
+                }
+                Err(err) => {
+                    ui.colored_label(ui.visuals().error_fg_color, err.to_string());
+                }
+            }
         });
 
         ui.add_space(6.0);
@@ -84,15 +91,15 @@ impl StateSnapshot<'_> {
         };
 
         let response = egui_dnd::dnd(ui, "uniform").show_custom(|ui, iter| {
-            for ((index, field), runtime_field) in uniform
-                .fields()
-                .iter()
-                .enumerate()
-                .zip(uniform_runtime.fields().iter())
-            {
+            for (index, field) in uniform.fields().iter().enumerate() {
                 if index != 0 {
                     ui.add_space(5.0);
                 }
+
+                let runtime_field = match &uniform_runtime {
+                    Ok(Some(uniform_runtime)) => uniform_runtime.fields().get(index),
+                    Ok(None) | Err(_) => None,
+                };
 
                 ui.push_id(index, |ui| {
                     iter.next(ui, field.id(), index, true, |ui, item_handle| {
@@ -101,7 +108,9 @@ impl StateSnapshot<'_> {
                                 handle.ui(ui, |ui| {
                                     ui_uniform_field_title(ui, &mut ctx, uniform_id, index, field);
                                 });
-                                ui_uniform_type_label(ui, runtime_field.data().kind());
+                                if let Some(runtime_field) = runtime_field {
+                                    ui_uniform_type_label(ui, runtime_field.data().kind());
+                                }
                             });
 
                             ui_uniform_field_entry(ui, &mut ctx, index, field, runtime_field);
@@ -178,7 +187,7 @@ fn ui_uniform_field_entry(
     ctx: &mut UniformUiContext,
     index: usize,
     field: &UniformField,
-    runtime_field: &UniformRuntimeField,
+    runtime_field: Option<&UniformRuntimeField>,
 ) {
     ui.indent("entry", |ui| {
         let event = egui::Grid::new("entry_grid")
@@ -192,7 +201,11 @@ fn ui_uniform_field_entry(
         }
 
         ui.collapsing("Current Values", |ui| {
-            ui.horizontal(|ui| ui_uniform_field_data(ui, runtime_field.data()))
+            if let Some(runtime_field) = runtime_field {
+                ui.horizontal(|ui| ui_uniform_field_data(ui, runtime_field.data()));
+            } else {
+                ui.weak("Runtime values are not available.");
+            }
         });
     });
 }

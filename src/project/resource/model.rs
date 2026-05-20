@@ -244,14 +244,16 @@ impl SyncResource for Model {
                 let vertex_buffer_spec = self.vertex_buffer_spec.clone();
                 let device = ctx.device.clone();
 
-                Ok(SyncOutcome::Pending(ModelJob::Loading(AsyncJob::new(
-                    ModelRuntime::load_from_obj_file(
+                self.sync(
+                    ctx,
+                    None,
+                    ModelJob::Loading(AsyncJob::new(ModelRuntime::load_from_obj_file(
                         source,
                         file_system,
                         vertex_buffer_spec,
                         device,
-                    ),
-                ))))
+                    ))),
+                )
             }
             ModelJob::Loading(mut future) => match future.try_resolve() {
                 Poll::Ready(result) => result.map(SyncOutcome::Changed),
@@ -336,7 +338,7 @@ impl ModelRuntime {
         &self,
         model: &Model,
         runtime_bind_groups: &'a RuntimeStorage<BindGroup>,
-    ) -> AppResult<&'a BindGroupLayout> {
+    ) -> AppResult<Option<&'a BindGroupLayout>> {
         let mesh = self.meshes().first().ok_or(AppError::UninitializedFields)?;
         let m_index = model
             .selected_material_index(0, mesh)
@@ -346,8 +348,10 @@ impl ModelRuntime {
         let bind_group_id = model
             .material_bind_group_id(m_index)
             .ok_or(AppError::UninitializedFields)?;
-        let bind_group = runtime_bind_groups.get_init(bind_group_id)?;
-        Ok(bind_group.inner_layout())
+        let Some(bind_group) = runtime_bind_groups.get_init(bind_group_id)? else {
+            return Ok(None);
+        };
+        Ok(Some(bind_group.inner_layout()))
     }
 }
 

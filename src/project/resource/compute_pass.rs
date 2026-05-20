@@ -234,12 +234,12 @@ impl SyncResource for ComputePass {
                     });
                 }
 
-                let scope = WgpuErrorScope::push(ctx.device);
-
                 let mut bind_groups = vec![];
                 for entry in &self.bind_groups {
                     let id = entry.bind_group_id().ok_or(AppError::UninitializedFields)?;
-                    let bind_group_runtime = ctx.runtime_bind_groups.get_init(id)?;
+                    let Some(bind_group_runtime) = ctx.runtime_bind_groups.get_init(id)? else {
+                        return Ok(SyncOutcome::Pending(ComputePassJob::Start));
+                    };
 
                     bind_groups.push(bind_group_runtime);
                 }
@@ -259,7 +259,11 @@ impl SyncResource for ComputePass {
 
                 let shader_id = self.shader.ok_or(AppError::UninitializedFields)?;
 
-                let shader_runtime = ctx.runtime_shaders.get_init(shader_id)?;
+                let Some(shader_runtime) = ctx.runtime_shaders.get_init(shader_id)? else {
+                    return Ok(SyncOutcome::Pending(ComputePassJob::Start));
+                };
+
+                let scope = WgpuErrorScope::push(ctx.device);
 
                 let pipeline =
                     ctx.device
@@ -292,9 +296,7 @@ impl SyncResource for ComputePass {
 
                 drop(pass);
 
-                Ok(SyncOutcome::Pending(ComputePassJob::Validation(
-                    scope.pop(),
-                )))
+                self.sync(ctx, None, ComputePassJob::Validation(scope.pop()))
             }
             ComputePassJob::Validation(mut future) => match future.try_resolve() {
                 Poll::Ready(result) => result.map(|()| SyncOutcome::Changed(())),

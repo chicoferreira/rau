@@ -48,6 +48,9 @@ pub struct UniformRuntime {
 pub enum UniformJob {
     #[default]
     Start,
+    WaitingForResources {
+        previous: Option<UniformRuntime>,
+    },
     Validation(UniformRuntime, AsyncJob<AppResult<()>>),
 }
 
@@ -165,15 +168,15 @@ impl Uniform {
     fn runtime_fields(
         &self,
         ctx: &UniformCreationContext<'_>,
-    ) -> AppResult<Vec<UniformRuntimeField>> {
-        self.fields
-            .iter()
-            .map(|field| {
-                Ok(UniformRuntimeField {
-                    data: field.runtime_data(ctx)?,
-                })
-            })
-            .collect()
+    ) -> AppResult<Option<Vec<UniformRuntimeField>>> {
+        let mut runtime_fields = Vec::with_capacity(self.fields.len());
+        for field in &self.fields {
+            let Some(data) = field.runtime_data(ctx)? else {
+                return Ok(None);
+            };
+            runtime_fields.push(UniformRuntimeField { data });
+        }
+        Ok(Some(runtime_fields))
     }
 }
 
@@ -241,8 +244,13 @@ impl SyncResource for Uniform {
         job: Self::Job,
     ) -> AppResult<SyncOutcome<Self::Runtime, Self::Job>> {
         match job {
-            UniformJob::Start => {
-                let fields = self.runtime_fields(ctx)?;
+            UniformJob::Start => self.sync(ctx, None, UniformJob::WaitingForResources { previous }),
+            UniformJob::WaitingForResources { previous } => {
+                let Some(fields) = self.runtime_fields(ctx)? else {
+                    return Ok(SyncOutcome::Pending(UniformJob::WaitingForResources {
+                        previous,
+                    }));
+                };
                 let content = cast_fields(&fields);
                 let usage = wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST;
 
@@ -264,19 +272,16 @@ impl SyncResource for Uniform {
                             usage,
                         ) {
                             ChangeResult::Uploaded => Ok(SyncOutcome::Unchanged(runtime)),
-                            ChangeResult::Recreated => Ok(SyncOutcome::Pending(
-                                UniformJob::Validation(runtime, scope.pop()),
-                            )),
+                            ChangeResult::Recreated => {
+                                self.sync(ctx, None, UniformJob::Validation(runtime, scope.pop()))
+                            }
                         }
                     }
                     None => {
                         let scope = WgpuErrorScope::push(ctx.device);
                         let buffer = ResizableBuffer::new(ctx.device, &self.label, usage, &content);
                         let runtime = UniformRuntime { fields, buffer };
-                        Ok(SyncOutcome::Pending(UniformJob::Validation(
-                            runtime,
-                            scope.pop(),
-                        )))
+                        self.sync(ctx, None, UniformJob::Validation(runtime, scope.pop()))
                     }
                 }
             }
@@ -350,14 +355,19 @@ impl UniformField {
         }
     }
 
-    fn runtime_data(&self, context: &UniformCreationContext<'_>) -> AppResult<UniformFieldData> {
+    fn runtime_data(
+        &self,
+        context: &UniformCreationContext<'_>,
+    ) -> AppResult<Option<UniformFieldData>> {
         match &self.source {
-            UniformFieldSource::UserDefined(data) => Ok(data.clone()),
+            UniformFieldSource::UserDefined(data) => Ok(Some(data.clone())),
             UniformFieldSource::Camera { camera_id, field } => {
                 let camera_id = (*camera_id).ok_or(AppError::UninitializedFields)?;
                 let camera = context.cameras.get(camera_id)?;
-                let camera_runtime = context.cameras_runtime.get_init(camera_id)?;
-                Ok(field.compute(camera, camera_runtime))
+                let Some(camera_runtime) = context.cameras_runtime.get_init(camera_id)? else {
+                    return Ok(None);
+                };
+                Ok(Some(field.compute(camera, camera_runtime)))
             }
         }
     }

@@ -28,10 +28,18 @@ impl StateSnapshot<'_> {
 
         model_vertex_buffer_spec_inspector_ui(ui, &mut edits, model_id, &model);
 
-        let Ok(model_runtime) = self.runtime_project.models.get_init(model_id) else {
-            ui.weak("Model runtime is not available.");
-            apply_model_edits(self, model_id, edits);
-            return;
+        let model_runtime = match self.runtime_project.models.get_init(model_id) {
+            Ok(Some(model_runtime)) => model_runtime,
+            Ok(None) => {
+                ui.spinner();
+                apply_model_edits(self, model_id, edits);
+                return;
+            }
+            Err(err) => {
+                ui.colored_label(ui.visuals().error_fg_color, err.to_string());
+                apply_model_edits(self, model_id, edits);
+                return;
+            }
         };
 
         egui::CollapsingHeader::new(format!("Meshes ({})", model_runtime.meshes().len()))

@@ -163,18 +163,6 @@ impl SyncResource for Texture {
             }
         };
 
-        let non_srgb_format = self.format.remove_srgb_suffix();
-        let srgb_format = self.format.add_srgb_suffix();
-        let supports_view_formats = ctx
-            .downlevel_flags
-            .contains(wgpu::DownlevelFlags::VIEW_FORMATS);
-        let view_formats = if supports_view_formats && srgb_format != non_srgb_format {
-            // Automatically support both srgb-ness views
-            vec![non_srgb_format, srgb_format]
-        } else {
-            vec![]
-        };
-
         let mut image_to_write = None;
 
         let size = match &self.source {
@@ -192,9 +180,8 @@ impl SyncResource for Texture {
                 let bytes = match image_bytes {
                     Some(bytes) => bytes,
                     None => {
-                        return Ok(SyncOutcome::Pending(TextureJob::ReadingImage(
-                            ctx.file_storage.read(path),
-                        )));
+                        let read_job = ctx.file_storage.read(path);
+                        return self.sync(ctx, None, TextureJob::ReadingImage(read_job));
                     }
                 };
                 let dynamic_image = image::load_from_memory(&bytes)?;
@@ -210,6 +197,18 @@ impl SyncResource for Texture {
                 }
             }
             TextureSource::Manual { size } => *size,
+        };
+
+        let non_srgb_format = self.format.remove_srgb_suffix();
+        let srgb_format = self.format.add_srgb_suffix();
+        let supports_view_formats = ctx
+            .downlevel_flags
+            .contains(wgpu::DownlevelFlags::VIEW_FORMATS);
+        let view_formats = if supports_view_formats && srgb_format != non_srgb_format {
+            // Automatically support both srgb-ness views
+            vec![non_srgb_format, srgb_format]
+        } else {
+            vec![]
         };
 
         let scope = WgpuErrorScope::push(ctx.device);
@@ -240,10 +239,7 @@ impl SyncResource for Texture {
         }
 
         let runtime = TextureRuntime { inner: texture };
-        Ok(SyncOutcome::Pending(TextureJob::Validation(
-            runtime,
-            scope.pop(),
-        )))
+        self.sync(ctx, None, TextureJob::Validation(runtime, scope.pop()))
     }
 
     fn needs_rebuild_from_others(&self, tracker: &SyncTracker) -> bool {

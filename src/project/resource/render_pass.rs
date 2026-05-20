@@ -252,18 +252,21 @@ impl RenderPass {
         self.project_revision.increase();
     }
 
-    pub fn get_color_format(&self, ctx: &Context) -> AppResult<wgpu::TextureFormat> {
-        let target_view = self.target.get_target_inner(ctx.runtime_texture_views)?;
-        Ok(target_view.texture().format())
+    pub fn get_color_format(&self, ctx: &Context) -> AppResult<Option<wgpu::TextureFormat>> {
+        let Some(target_view) = self.target.get_target_inner(ctx.runtime_texture_views)? else {
+            return Ok(None);
+        };
+        Ok(Some(target_view.texture().format()))
     }
 
-    pub fn get_depth_format(&self, ctx: &Context) -> AppResult<Option<wgpu::TextureFormat>> {
-        Ok(self
-            .depth_target
-            .as_ref()
-            .map(|target| target.get_target_inner(ctx.runtime_texture_views))
-            .transpose()?
-            .map(|view| view.texture().format()))
+    pub fn get_depth_format(&self, ctx: &Context) -> AppResult<Option<Option<wgpu::TextureFormat>>> {
+        let Some(depth_target) = self.depth_target.as_ref() else {
+            return Ok(Some(None));
+        };
+        let Some(view) = depth_target.get_target_inner(ctx.runtime_texture_views)? else {
+            return Ok(None);
+        };
+        Ok(Some(Some(view.texture().format())))
     }
 
     pub fn submit(
@@ -271,14 +274,18 @@ impl RenderPass {
         encoder: &mut wgpu::CommandEncoder,
         ctx: &Context,
         runtime: &RenderPassRuntime,
-    ) -> AppResult<()> {
-        let color_view = self.target.get_target_inner(ctx.runtime_texture_views)?;
-
+    ) -> AppResult<Option<()>> {
+        let Some(color_view) = self.target.get_target_inner(ctx.runtime_texture_views)? else {
+            return Ok(None);
+        };
         let depth_stencil_attachment = self
             .depth_target
             .as_ref()
-            .map(|depth_target| -> AppResult<_> {
-                let depth_view = depth_target.get_target_inner(ctx.runtime_texture_views)?;
+            .map(|depth_target| -> AppResult<Option<_>> {
+                let Some(depth_view) = depth_target.get_target_inner(ctx.runtime_texture_views)?
+                else {
+                    return Ok(None);
+                };
                 Ok(wgpu::RenderPassDepthStencilAttachment {
                     view: depth_view,
                     depth_ops: Some(wgpu::Operations {
@@ -286,9 +293,15 @@ impl RenderPass {
                         store: wgpu::StoreOp::Store,
                     }),
                     stencil_ops: None,
-                })
+                }
+                .into())
             })
-            .transpose()?;
+            .transpose()?
+            .flatten();
+
+        if self.depth_target.is_some() && depth_stencil_attachment.is_none() {
+            return Ok(None);
+        }
 
         let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some(&self.label),
@@ -308,10 +321,15 @@ impl RenderPass {
         });
 
         for (pipeline, pipeline_runtime) in self.pipelines.iter().zip(&runtime.runtime_pipelines) {
-            pipeline_runtime.draw(&mut render_pass, pipeline, ctx)?;
+            if pipeline_runtime
+                .draw(&mut render_pass, pipeline, ctx)?
+                .is_none()
+            {
+                return Ok(None);
+            }
         }
 
-        Ok(())
+        Ok(Some(()))
     }
 }
 
@@ -431,11 +449,27 @@ impl RenderPipeline {
         primitive_state: wgpu::PrimitiveState,
         color_format: wgpu::TextureFormat,
         depth_format: Option<wgpu::TextureFormat>,
-    ) -> AppResult<wgpu::RenderPipeline> {
+    ) -> AppResult<Option<wgpu::RenderPipeline>> {
         let vertex_shader_id = vertex_shader_id.ok_or(AppError::UninitializedFields)?;
         let fragment_shader_id = fragment_shader_id.ok_or(AppError::UninitializedFields)?;
 
-        let bind_group_layouts = Self::resolved_bind_group_layout(ctx, &static_bind_groups, draw)?;
+        let Some(bind_group_layouts) =
+            Self::resolved_bind_group_layout(ctx, &static_bind_groups, draw)?
+        else {
+            return Ok(None);
+        };
+        let resolved_attributes_and_stride = Self::resolved_attributes_and_stride(ctx, draw)?;
+
+        let Some(vertex_shader) = ctx.runtime_shaders.get_init(vertex_shader_id)? else {
+            return Ok(None);
+        };
+        let vertex_shader = vertex_shader.inner();
+
+        let Some(fragment_shader) = ctx.runtime_shaders.get_init(fragment_shader_id)? else {
+            return Ok(None);
+        };
+        let fragment_shader = fragment_shader.inner();
+
         let device = ctx.device;
 
         let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
@@ -444,7 +478,6 @@ impl RenderPipeline {
             immediate_size: 0,
         });
 
-        let resolved_attributes_and_stride = Self::resolved_attributes_and_stride(ctx, draw)?;
         let vertex_buffers: &[wgpu::VertexBufferLayout] = match &resolved_attributes_and_stride {
             Some((attributes, array_stride)) => &[wgpu::VertexBufferLayout {
                 array_stride: *array_stride,
@@ -453,12 +486,6 @@ impl RenderPipeline {
             }],
             None => &[],
         };
-
-        let vertex_shader = ctx.runtime_shaders.get_init(vertex_shader_id)?;
-        let vertex_shader = vertex_shader.inner();
-
-        let fragment_shader = ctx.runtime_shaders.get_init(fragment_shader_id)?;
-        let fragment_shader = fragment_shader.inner();
 
         let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: Some(label),
@@ -499,15 +526,17 @@ impl RenderPipeline {
             cache: None,
         });
 
-        Ok(render_pipeline)
+        Ok(Some(render_pipeline))
     }
 
     fn resolved_bind_group_layout<'a>(
         ctx: &'a Context,
         static_bind_groups: &[(u32, Option<BindGroupId>)],
         draw: &RenderDraw,
-    ) -> AppResult<Vec<Option<&'a wgpu::BindGroupLayout>>> {
-        let material_layout = draw.material_bind_group_slot_and_layout(ctx)?;
+    ) -> AppResult<Option<Vec<Option<&'a wgpu::BindGroupLayout>>>> {
+        let Some(material_layout) = draw.material_bind_group_slot_and_layout(ctx)? else {
+            return Ok(None);
+        };
         let max_slot = static_bind_groups
             .iter()
             .map(|(slot, _)| *slot)
@@ -515,7 +544,7 @@ impl RenderPipeline {
             .max();
 
         let Some(max_slot) = max_slot else {
-            return Ok(vec![]);
+            return Ok(Some(vec![]));
         };
 
         let layout_count = max_slot as usize + 1;
@@ -532,7 +561,9 @@ impl RenderPipeline {
             let Some(bind_group_id) = bind_group_id else {
                 continue;
             };
-            let bind_group = ctx.runtime_bind_groups.get_init(bind_group_id)?;
+            let Some(bind_group) = ctx.runtime_bind_groups.get_init(bind_group_id)? else {
+                return Ok(None);
+            };
             result[slot as usize] = Some(bind_group.inner_layout());
         }
 
@@ -540,7 +571,7 @@ impl RenderPipeline {
             result[slot as usize] = Some(layout);
         }
 
-        Ok(result)
+        Ok(Some(result))
     }
 
     fn resolved_attributes_and_stride(
@@ -578,14 +609,16 @@ impl RenderPipelineRuntime {
         render_pass: &mut wgpu::RenderPass,
         pipeline: &RenderPipeline,
         ctx: &Context,
-    ) -> AppResult<()> {
+    ) -> AppResult<Option<()>> {
         render_pass.set_pipeline(&self.inner);
 
         for &(slot, id) in &pipeline.static_bind_groups {
             let Some(id) = id else {
                 continue;
             };
-            let bind_group = ctx.runtime_bind_groups.get_init(id)?;
+            let Some(bind_group) = ctx.runtime_bind_groups.get_init(id)? else {
+                return Ok(None);
+            };
             render_pass.set_bind_group(slot, bind_group.inner(), &[]);
         }
 
@@ -598,7 +631,9 @@ impl RenderPipelineRuntime {
             } => {
                 let model_id = model_id.ok_or(AppError::UninitializedFields)?;
                 let model = ctx.models.get(model_id)?;
-                let model_runtime = ctx.runtime_models.get_init(model_id)?;
+                let Some(model_runtime) = ctx.runtime_models.get_init(model_id)? else {
+                    return Ok(None);
+                };
 
                 for (mesh_index, mesh) in model_runtime.meshes().iter().enumerate() {
                     let vertex_buffer = mesh.vertex_buffer().inner();
@@ -614,7 +649,10 @@ impl RenderPipelineRuntime {
                         let bind_group_id = model
                             .material_bind_group_id(material_index)
                             .ok_or(AppError::UninitializedFields)?;
-                        let bind_group = ctx.runtime_bind_groups.get_init(bind_group_id)?;
+                        let Some(bind_group) = ctx.runtime_bind_groups.get_init(bind_group_id)?
+                        else {
+                            return Ok(None);
+                        };
                         render_pass.set_bind_group(*mat_slot, bind_group.inner(), &[]);
                     }
 
@@ -632,7 +670,7 @@ impl RenderPipelineRuntime {
                 render_pass.draw(vertices.clone(), instances.clone());
             }
         }
-        Ok(())
+        Ok(Some(()))
     }
 }
 
@@ -658,10 +696,12 @@ impl<T> RenderPassTarget<T> {
     pub fn get_target_inner<'a>(
         &self,
         runtime_texture_views: &'a RuntimeStorage<TextureView>,
-    ) -> AppResult<&'a wgpu::TextureView> {
+    ) -> AppResult<Option<&'a wgpu::TextureView>> {
         let target_view_id = self.texture_view_id.ok_or(AppError::UninitializedFields)?;
-        let target_view = runtime_texture_views.get_init(target_view_id)?;
-        Ok(target_view.inner())
+        let Some(target_view) = runtime_texture_views.get_init(target_view_id)? else {
+            return Ok(None);
+        };
+        Ok(Some(target_view.inner()))
     }
 }
 
@@ -669,25 +709,30 @@ impl RenderDraw {
     pub fn material_bind_group_slot_and_layout<'a>(
         &self,
         ctx: &Context<'a>,
-    ) -> AppResult<Option<(u32, &'a wgpu::BindGroupLayout)>> {
+    ) -> AppResult<Option<Option<(u32, &'a wgpu::BindGroupLayout)>>> {
         let RenderDraw::Model {
             model_id,
             material_bind_group_slot,
             ..
         } = self
         else {
-            return Ok(None);
+            return Ok(Some(None));
         };
 
         let Some(slot) = material_bind_group_slot else {
-            return Ok(None);
+            return Ok(Some(None));
         };
 
         let model_id = (*model_id).ok_or(AppError::UninitializedFields)?;
         let model = ctx.models.get(model_id)?;
-        let model_runtime = ctx.runtime_models.get_init(model_id)?;
-        let layout = model_runtime.get_bind_group_layout(model, ctx.runtime_bind_groups)?;
-        Ok(Some((*slot, layout)))
+        let Some(model_runtime) = ctx.runtime_models.get_init(model_id)? else {
+            return Ok(None);
+        };
+        let Some(layout) = model_runtime.get_bind_group_layout(model, ctx.runtime_bind_groups)?
+        else {
+            return Ok(None);
+        };
+        Ok(Some(Some((*slot, layout))))
     }
 
     fn needs_rebuild_from_others(&self, tracker: &SyncTracker) -> bool {
@@ -717,37 +762,37 @@ impl SyncResource for RenderPass {
     ) -> AppResult<SyncOutcome<Self::Runtime, Self::Job>> {
         match job {
             RenderPassJob::Start => {
-                let scope = WgpuErrorScope::push(ctx.device);
-                let color_format = self.get_color_format(ctx)?;
-                let depth_format = self.get_depth_format(ctx)?;
-
-                let runtime_pipelines: AppResult<Vec<RenderPipelineRuntime>> = self
-                    .pipelines
-                    .iter()
-                    .map(|pipeline| {
-                        RenderPipeline::create_wgpu_pipeline(
-                            ctx,
-                            &pipeline.label,
-                            &pipeline.static_bind_groups,
-                            &pipeline.draw,
-                            pipeline.vertex_shader,
-                            pipeline.fragment_shader,
-                            pipeline.primitive_state,
-                            color_format,
-                            depth_format,
-                        )
-                    })
-                    .map(|wgpu_pipeline| wgpu_pipeline.map(|inner| RenderPipelineRuntime { inner }))
-                    .collect();
-
-                let runtime = RenderPassRuntime {
-                    runtime_pipelines: runtime_pipelines?,
+                let Some(color_format) = self.get_color_format(ctx)? else {
+                    return Ok(SyncOutcome::Pending(RenderPassJob::Start));
+                };
+                let Some(depth_format) = self.get_depth_format(ctx)? else {
+                    return Ok(SyncOutcome::Pending(RenderPassJob::Start));
                 };
 
-                Ok(SyncOutcome::Pending(RenderPassJob::Validation(
-                    runtime,
-                    scope.pop(),
-                )))
+                let scope = WgpuErrorScope::push(ctx.device);
+
+                let mut runtime_pipelines = Vec::with_capacity(self.pipelines.len());
+                for pipeline in &self.pipelines {
+                    let Some(inner) = RenderPipeline::create_wgpu_pipeline(
+                        ctx,
+                        &pipeline.label,
+                        &pipeline.static_bind_groups,
+                        &pipeline.draw,
+                        pipeline.vertex_shader,
+                        pipeline.fragment_shader,
+                        pipeline.primitive_state,
+                        color_format,
+                        depth_format,
+                    )?
+                    else {
+                        return Ok(SyncOutcome::Pending(RenderPassJob::Start));
+                    };
+                    runtime_pipelines.push(RenderPipelineRuntime { inner });
+                }
+
+                let runtime = RenderPassRuntime { runtime_pipelines };
+
+                self.sync(ctx, None, RenderPassJob::Validation(runtime, scope.pop()))
             }
             RenderPassJob::Validation(runtime, mut future) => match future.try_resolve() {
                 Poll::Ready(result) => result.map(|()| SyncOutcome::Changed(runtime)),

@@ -19,15 +19,9 @@ pub enum AppError {
     /// The current renderer does not support a feature required by the resource.
     #[error("{feature} feature is not supported by the current renderer")]
     UnsupportedRendererFeature { feature: &'static str },
-    /// The resource where this error occurred is not yet initialized.
-    #[error("resource is not yet initialized: {0:?}")]
-    WaitingForUninitResource(ResourceId),
     /// Access to a resource that is erroring
     #[error("resource is erroring: {0:?}")]
     WaitingForErroredResource(ResourceId),
-    /// The resource is waiting for a pending sync operation.
-    #[error("resource is waiting for pending sync: {0:?}")]
-    WaitingForPendingResource(ResourceId),
     /// A WGPU error occurred.
     #[error(transparent)]
     WgpuError(#[from] wgpu::Error),

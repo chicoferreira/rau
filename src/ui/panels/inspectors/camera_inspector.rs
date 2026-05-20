@@ -16,10 +16,7 @@ impl StateSnapshot<'_> {
             return;
         };
 
-        let Ok(camera_runtime) = self.runtime_project.cameras.get_init(camera_id) else {
-            ui.label("Camera couldn't be found.");
-            return;
-        };
+        let camera_runtime = self.runtime_project.cameras.get_init(camera_id);
 
         CollapsingHeader::new("Transform")
             .default_open(true)
@@ -115,9 +112,15 @@ impl StateSnapshot<'_> {
                         ui.label("Aspect");
 
                         ui.horizontal(|ui| {
-                            ui.label(
-                                RichText::new(format!("{:.4}", camera_runtime.aspect())).weak(),
-                            );
+                            match &camera_runtime {
+                                Ok(Some(camera_runtime)) => ui.label(
+                                    RichText::new(format!("{:.4}", camera_runtime.aspect())).weak(),
+                                ),
+                                Ok(None) => ui.spinner(),
+                                Err(err) => {
+                                    ui.colored_label(ui.visuals().error_fg_color, err.to_string())
+                                }
+                            };
                             ui.label("from");
                             let mut current_dim_id = camera.dimension_id();
                             let before = current_dim_id;
@@ -211,10 +214,21 @@ impl StateSnapshot<'_> {
 
         ui.add_space(4.0);
 
-        let matrix = *camera_runtime.matrix();
         CollapsingHeader::new("Matrices")
             .default_open(false)
             .show(ui, |ui| {
+                let matrix = match &camera_runtime {
+                    Ok(Some(camera_runtime)) => camera_runtime.matrix(),
+                    Ok(None) => {
+                        ui.spinner();
+                        return;
+                    }
+                    Err(err) => {
+                        ui.colored_label(ui.visuals().error_fg_color, err.to_string());
+                        return;
+                    }
+                };
+
                 CollapsingHeader::new("Projection")
                     .id_salt("mat_projection")
                     .default_open(false)

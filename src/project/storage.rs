@@ -165,13 +165,13 @@ where
         self.map.remove(key);
     }
 
-    pub fn get_init(&self, key: R::Id) -> AppResult<&R::Runtime> {
+    pub fn get_init(&self, key: R::Id) -> AppResult<Option<&R::Runtime>> {
         let id = key.into();
         match self.map.get(key) {
-            Some(RuntimeCell::Created { runtime, .. }) => Ok(runtime),
-            Some(RuntimeCell::Pending { .. }) => Err(AppError::WaitingForPendingResource(id)),
+            Some(RuntimeCell::Created { runtime, .. }) => Ok(Some(runtime)),
+            Some(RuntimeCell::Pending { .. }) => Ok(None),
+            Some(RuntimeCell::Empty) => Ok(None),
             Some(RuntimeCell::Errored { .. }) => Err(AppError::WaitingForErroredResource(id)),
-            Some(RuntimeCell::Empty) => Err(AppError::WaitingForUninitResource(id)),
             None => Err(AppError::InvalidResource(id)),
         }
     }

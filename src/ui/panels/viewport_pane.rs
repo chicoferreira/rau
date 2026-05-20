@@ -24,13 +24,21 @@ impl Pane for ViewportPane {
             return egui_tiles::UiResponse::None;
         };
 
-        let Ok(runtime_texture_view) = state
+        let runtime_texture_view = state
             .runtime_project
             .texture_views
-            .get_init(texture_view_id)
-        else {
-            ui.label("Viewport points to a valid texture view.");
-            return egui_tiles::UiResponse::None;
+            .get_init(texture_view_id);
+        
+        let runtime_texture_view = match runtime_texture_view {
+            Ok(Some(runtime)) => runtime,
+            Ok(None) => {
+                ui.spinner();
+                return egui_tiles::UiResponse::None;
+            }
+            Err(err) => {
+                ui.colored_label(ui.visuals().error_fg_color, err.to_string());
+                return egui_tiles::UiResponse::None;
+            }
         };
 
         let Some(egui_id) = runtime_texture_view.egui_id() else {

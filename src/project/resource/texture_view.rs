@@ -44,6 +44,9 @@ pub struct TextureViewRuntime {
 pub enum TextureViewJob {
     #[default]
     Start,
+    PendingResource {
+        previous_egui_id: Option<egui::TextureId>,
+    },
     Validation(TextureViewRuntime, AsyncJob<AppResult<()>>),
 }
 
@@ -193,11 +196,21 @@ impl SyncResource for TextureView {
         match job {
             TextureViewJob::Start => {
                 let previous_egui_id = previous.as_ref().and_then(|runtime| runtime.egui_id);
-
+                self.sync(
+                    ctx,
+                    None,
+                    TextureViewJob::PendingResource { previous_egui_id },
+                )
+            }
+            TextureViewJob::PendingResource { previous_egui_id } => {
                 let texture_id = self.texture_id.ok_or(AppError::UninitializedFields)?;
 
                 let texture = ctx.textures.get(texture_id)?;
-                let runtime_texture = ctx.textures_runtime.get_init(texture_id)?;
+                let Some(runtime_texture) = ctx.textures_runtime.get_init(texture_id)? else {
+                    return Ok(SyncOutcome::Pending(TextureViewJob::PendingResource {
+                        previous_egui_id,
+                    }));
+                };
 
                 let scope = WgpuErrorScope::push(ctx.device);
 
@@ -235,10 +248,7 @@ impl SyncResource for TextureView {
                 };
 
                 let runtime = TextureViewRuntime { inner, egui_id };
-                Ok(SyncOutcome::Pending(TextureViewJob::Validation(
-                    runtime,
-                    scope.pop(),
-                )))
+                self.sync(ctx, None, TextureViewJob::Validation(runtime, scope.pop()))
             }
             TextureViewJob::Validation(runtime, mut future) => match future.try_resolve() {
                 Poll::Ready(result) => result.map(|()| SyncOutcome::Changed(runtime)),
