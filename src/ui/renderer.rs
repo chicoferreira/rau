@@ -15,6 +15,7 @@ impl EguiRenderer {
         window: &winit::window::Window,
     ) -> Self {
         let egui_context = egui::Context::default();
+        super::fonts::install(&egui_context);
 
         let egui_state = egui_winit::State::new(
             egui_context,

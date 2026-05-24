@@ -1,6 +1,7 @@
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 pub mod components;
+pub mod fonts;
 pub mod pane;
 pub mod panels;
 pub mod rename;
