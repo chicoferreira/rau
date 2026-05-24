@@ -121,7 +121,12 @@ impl BindGroup {
     fn resolve_entries<'a>(
         ctx: &'a BindGroupCreationContext<'a>,
         entries: &[BindGroupEntry],
-    ) -> AppResult<Option<(Vec<wgpu::BindGroupLayoutEntry>, Vec<wgpu::BindGroupEntry<'a>>)>> {
+    ) -> AppResult<
+        Option<(
+            Vec<wgpu::BindGroupLayoutEntry>,
+            Vec<wgpu::BindGroupEntry<'a>>,
+        )>,
+    > {
         let mut layout_entries = Vec::new();
         let mut group_entries = Vec::new();
 

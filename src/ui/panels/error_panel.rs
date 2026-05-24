@@ -50,7 +50,7 @@ pub fn ui(state: &mut StateSnapshot, ui: &mut egui::Ui) {
             .default_size(200.0)
             .min_size(80.0)
             .show_inside(ui, |ui| {
-                error_list_content(ui, state.project, state.event_queue, &errors);
+                error_list_content(ui, state.project, &mut state.event_queue, &errors);
             });
     }
 }
@@ -141,7 +141,7 @@ fn error_list_content(
                         .on_hover_cursor(egui::CursorIcon::PointingHand)
                         .clicked()
                     {
-                        event_queue.add(StateEvent::InspectResource(id));
+                        event_queue.inspect_resource(id);
                     }
 
                     ui.label(

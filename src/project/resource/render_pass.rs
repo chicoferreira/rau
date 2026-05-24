@@ -259,7 +259,10 @@ impl RenderPass {
         Ok(Some(target_view.texture().format()))
     }
 
-    pub fn get_depth_format(&self, ctx: &Context) -> AppResult<Option<Option<wgpu::TextureFormat>>> {
+    pub fn get_depth_format(
+        &self,
+        ctx: &Context,
+    ) -> AppResult<Option<Option<wgpu::TextureFormat>>> {
         let Some(depth_target) = self.depth_target.as_ref() else {
             return Ok(Some(None));
         };

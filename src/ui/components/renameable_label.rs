@@ -30,12 +30,11 @@ pub fn renameable_label<'a>(
             let escape_pressed = ui.input(|i| i.key_pressed(egui::Key::Escape));
 
             if response.lost_focus() && enter_pressed {
-                event_queue.add(StateEvent::ApplyRename(
-                    rename_state.target.clone(),
-                    rename_state.current_label.clone(),
-                ));
+                let target = rename_state.target.clone();
+                let label = rename_state.current_label.clone();
+                event_queue.apply_rename(target, label);
             } else if escape_pressed || response.lost_focus() {
-                event_queue.add(StateEvent::CancelRename);
+                event_queue.cancel_rename();
             }
 
             response

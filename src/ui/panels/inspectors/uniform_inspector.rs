@@ -176,7 +176,7 @@ fn ui_uniform_field_title(
             ui.close();
         }
         if ui.button("Rename Field").clicked() {
-            ctx.event_queue.add(StateEvent::StartRename(rename_target));
+            ctx.event_queue.start_rename(rename_target);
             ui.close();
         }
     });

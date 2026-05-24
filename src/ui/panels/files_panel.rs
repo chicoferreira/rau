@@ -112,7 +112,7 @@ pub fn ui(state: &mut StateSnapshot, ui: &mut egui::Ui) -> Response {
                         | FileTreeNodeId::Pending(_) => continue,
                         FileTreeNodeId::File(path) => path.clone(),
                     };
-                    state.event_queue.add(StateEvent::OpenFile(path));
+                    state.event_queue.open_file(path);
                 }
             }
             Action::Activate(_) | Action::DragExternal(_) | Action::MoveExternal(_) => {}

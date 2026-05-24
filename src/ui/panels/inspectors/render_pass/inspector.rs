@@ -80,7 +80,7 @@ impl StateSnapshot<'_> {
             .default_open(true)
             .show(ui, |ui| {
                 let mut enabled = render_pass.depth_target().is_some();
-                if ui.checkbox(&mut enabled, "Enabled").changed() {
+                if crate::ui::components::inspector::checkbox_row(ui, "Enabled", &mut enabled) {
                     if enabled {
                         render_pass.set_depth_target(Some(RenderPassTarget::default()));
                     } else {

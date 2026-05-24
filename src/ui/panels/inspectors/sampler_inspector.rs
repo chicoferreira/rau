@@ -1,9 +1,7 @@
-use egui::{Grid, Widget};
-
 use crate::{
     project::SamplerId,
     ui::{
-        components::selector::{AsWidgetText, ComboBoxExt},
+        components::{inspector, selector::AsWidgetText},
         pane::StateSnapshot,
     },
 };
@@ -93,58 +91,59 @@ impl StateSnapshot<'_> {
         let mut spec = sampler.spec().clone();
         let before = spec.clone();
 
-        Grid::new("sampler_inspector_grid")
-            .num_columns(2)
-            .spacing([8.0, 4.0])
-            .show(ui, |ui| {
-                ui.label("Address Mode");
-
-                egui::ComboBox::from_id_salt("address_mode")
-                    .selected_text(spec.address_mode.as_widget_text())
-                    .show_ui_list(ui, ADDRESS_MODES, &mut spec.address_mode);
-
-                ui.end_row();
-
-                ui.label("Mag Filter");
-                egui::ComboBox::from_id_salt("mag_filter")
-                    .selected_text(spec.mag_filter.as_widget_text())
-                    .show_ui_list(ui, FILTER_MODES, &mut spec.mag_filter);
-                ui.end_row();
-
-                ui.label("Min Filter");
-                egui::ComboBox::from_id_salt("min_filter")
-                    .selected_text(spec.min_filter.as_widget_text())
-                    .show_ui_list(ui, FILTER_MODES, &mut spec.min_filter);
-                ui.end_row();
-
-                ui.label("Mipmap Filter");
-                egui::ComboBox::from_id_salt("mipmap_filter")
-                    .selected_text(spec.mipmap_filter.as_widget_text())
-                    .show_ui_list(ui, MIPMAP_FILTER_MODES, &mut spec.mipmap_filter);
-                ui.end_row();
-
-                ui.label("LOD Min Clamp");
-                egui::DragValue::new(&mut spec.lod_min_clamp)
-                    .speed(0.1)
-                    .max_decimals(2)
-                    .range(0.0_f32..=f32::MAX)
-                    .ui(ui);
-                ui.end_row();
-
-                ui.label("LOD Max Clamp");
-                egui::DragValue::new(&mut spec.lod_max_clamp)
-                    .speed(0.1)
-                    .max_decimals(2)
-                    .range(0.0_f32..=f32::MAX)
-                    .ui(ui);
-                ui.end_row();
-
-                ui.label("Compare");
-                egui::ComboBox::from_id_salt("compare")
-                    .selected_text(spec.compare.as_widget_text())
-                    .show_ui_list(ui, COMPARE_FUNCTIONS, &mut spec.compare);
-                ui.end_row();
-            });
+        inspector::field_grid(ui, "sampler_inspector_grid", |ui| {
+            inspector::combo_row(
+                ui,
+                "Address Mode",
+                "address_mode",
+                ADDRESS_MODES,
+                &mut spec.address_mode,
+            );
+            inspector::combo_row(
+                ui,
+                "Mag Filter",
+                "mag_filter",
+                FILTER_MODES,
+                &mut spec.mag_filter,
+            );
+            inspector::combo_row(
+                ui,
+                "Min Filter",
+                "min_filter",
+                FILTER_MODES,
+                &mut spec.min_filter,
+            );
+            inspector::combo_row(
+                ui,
+                "Mipmap Filter",
+                "mipmap_filter",
+                MIPMAP_FILTER_MODES,
+                &mut spec.mipmap_filter,
+            );
+            inspector::f32_drag_row(
+                ui,
+                "LOD Min Clamp",
+                &mut spec.lod_min_clamp,
+                0.0_f32..=f32::MAX,
+                0.1,
+                2,
+            );
+            inspector::f32_drag_row(
+                ui,
+                "LOD Max Clamp",
+                &mut spec.lod_max_clamp,
+                0.0_f32..=f32::MAX,
+                0.1,
+                2,
+            );
+            inspector::combo_row(
+                ui,
+                "Compare",
+                "compare",
+                COMPARE_FUNCTIONS,
+                &mut spec.compare,
+            );
+        });
 
         if before != spec {
             sampler.set_spec(spec);

@@ -28,7 +28,7 @@ impl Pane for ViewportPane {
             .runtime_project
             .texture_views
             .get_init(texture_view_id);
-        
+
         let runtime_texture_view = match runtime_texture_view {
             Ok(Some(runtime)) => runtime,
             Ok(None) => {
@@ -46,15 +46,13 @@ impl Pane for ViewportPane {
             return egui_tiles::UiResponse::None;
         };
 
-        let events = crate::ui::components::viewport::ui(
+        let mut events = crate::ui::components::viewport::ui(
             ui,
             self.viewport_id,
             egui_id,
             viewport.requested_ui_size(),
         );
-        for event in events {
-            state.event_queue.add(event);
-        }
+        state.event_queue.add_all(&mut events);
 
         egui_tiles::UiResponse::None
     }
