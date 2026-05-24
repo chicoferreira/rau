@@ -189,12 +189,13 @@ impl App {
             self.config.height = height;
             self.surface.configure(&self.device, &self.config);
             self.is_surface_configured = true;
+            self.window.request_redraw();
+        } else {
+            self.is_surface_configured = false;
         }
     }
 
     pub fn render(&mut self, dt: instant::Duration) -> anyhow::Result<()> {
-        self.window.request_redraw();
-
         if !self.is_surface_configured {
             return Ok(());
         }
@@ -204,15 +205,22 @@ impl App {
             wgpu::CurrentSurfaceTexture::Suboptimal(texture) => {
                 drop(texture);
                 self.surface.configure(&self.device, &self.config);
+                self.window.request_redraw();
                 return Ok(());
             }
             wgpu::CurrentSurfaceTexture::Outdated => {
                 self.surface.configure(&self.device, &self.config);
+                self.window.request_redraw();
                 return Ok(());
             }
-            wgpu::CurrentSurfaceTexture::Timeout
-            | wgpu::CurrentSurfaceTexture::Occluded
-            | wgpu::CurrentSurfaceTexture::Validation => return Ok(()),
+            wgpu::CurrentSurfaceTexture::Timeout => {
+                self.window.request_redraw();
+                return Ok(());
+            }
+            wgpu::CurrentSurfaceTexture::Occluded => {
+                return Ok(());
+            }
+            wgpu::CurrentSurfaceTexture::Validation => return Ok(()),
             wgpu::CurrentSurfaceTexture::Lost => {
                 // TODO: recreate devices
                 anyhow::bail!("Lost device")
@@ -280,6 +288,7 @@ impl App {
         // }
 
         output.present();
+        self.window.request_redraw();
 
         Ok(())
     }
