@@ -3,7 +3,7 @@ use std::{hash::Hash, ops::RangeInclusive};
 use egui::{ComboBox, Grid, Ui, Widget, WidgetText};
 
 use crate::{
-    project::{ProjectResource, storage::Storage},
+    project::{ProjectResource, paths::FilePath, storage::Storage},
     ui::components::selector::{AsWidgetText, ComboBoxExt},
 };
 
@@ -65,6 +65,34 @@ where
             .selected_text_storage_opt(storage, *current_value)
             .show_ui_storage_opt_with_none(ui, storage, current_value);
     });
+    *current_value != before
+}
+
+pub fn file_opt_combo_row(
+    ui: &mut Ui,
+    label: impl Into<WidgetText>,
+    id_salt: impl Hash,
+    files: &[FilePath],
+    current_value: &mut Option<FilePath>,
+    filter: impl Fn(&FilePath) -> bool,
+    display_label: impl Fn(&FilePath) -> WidgetText,
+) -> bool {
+    let before = current_value.clone();
+    let selected_text = current_value
+        .as_ref()
+        .map_or_else(|| "None".into(), |path| display_label(path));
+
+    row(ui, label, |ui| {
+        ComboBox::from_id_salt(id_salt)
+            .selected_text(selected_text)
+            .show_ui(ui, |ui| {
+                ui.selectable_value(current_value, None, "None");
+                for file in files.iter().filter(|file| filter(file)) {
+                    ui.selectable_value(current_value, Some(file.clone()), display_label(file));
+                }
+            });
+    });
+
     *current_value != before
 }
 

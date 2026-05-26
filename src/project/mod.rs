@@ -97,7 +97,7 @@ impl Project {
 
     pub fn register_with_label(&mut self, kind: ResourceKind, label: String) -> Option<ResourceId> {
         let id = match kind {
-            ResourceKind::Shader => todo!("not yet implemented"),
+            ResourceKind::Shader => self.shaders.create(label).into(),
             ResourceKind::Viewport => self.viewports.create(label).into(),
             ResourceKind::Uniform => self.uniforms.create(label).into(),
             ResourceKind::BindGroup => self.bind_groups.create(label).into(),

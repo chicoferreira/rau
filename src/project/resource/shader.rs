@@ -3,10 +3,10 @@ use std::task::Poll;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    error::AppResult,
+    error::{AppError, AppResult},
     file::file_storage::FileStorage,
     project::{
-        ProjectResource, ShaderId,
+        Creatable, ProjectResource, ShaderId,
         paths::FilePath,
         sync::{Revision, SyncOutcome, SyncResource, SyncTracker},
     },
@@ -17,7 +17,8 @@ use crate::{
 #[serde(rename_all = "camelCase")]
 pub struct Shader {
     label: String,
-    source: FilePath,
+    #[serde(default)]
+    source: Option<FilePath>,
     #[serde(skip)]
     runtime_revision: Revision,
     #[serde(skip)]
@@ -42,14 +43,14 @@ impl Shader {
 
         Self {
             label,
-            source,
+            source: Some(source),
             runtime_revision: Revision::default(),
             project_revision: Revision::default(),
         }
     }
 
-    pub fn source(&self) -> &FilePath {
-        &self.source
+    pub fn source(&self) -> Option<&FilePath> {
+        self.source.as_ref()
     }
 
     pub fn set_label(&mut self, label: String) {
@@ -59,10 +60,12 @@ impl Shader {
         }
     }
 
-    pub fn set_source(&mut self, source: FilePath) {
-        self.source = source;
-        self.runtime_revision.increase();
-        self.project_revision.increase();
+    pub fn set_source(&mut self, source: Option<FilePath>) {
+        if self.source != source {
+            self.source = source;
+            self.runtime_revision.increase();
+            self.project_revision.increase();
+        }
     }
 }
 
@@ -72,24 +75,16 @@ impl ShaderRuntime {
     }
 }
 
-// impl Creatable for Shader {
-//     const DEFAULT_LABEL: &'static str = "Shader";
-
-//     fn create(label: String) -> Self {
-//         const DEFAULT_SOURCE: &str = r#"@vertex
-// fn vs_main() -> @builtin(position) vec4<f32> {
-//     return vec4<f32>(0.0, 0.0, 0.0, 1.0);
-// }
-
-// @fragment
-// fn fs_main() -> @location(0) vec4<f32> {
-//     return vec4<f32>(1.0, 1.0, 1.0, 1.0);
-// }
-// "#;
-
-//         Self::new(label, DEFAULT_SOURCE)
-//     }
-// }
+impl Creatable for Shader {
+    fn create(label: String) -> Self {
+        Self {
+            label,
+            source: None,
+            runtime_revision: Revision::default(),
+            project_revision: Revision::default(),
+        }
+    }
+}
 
 impl ProjectResource for Shader {
     type Id = ShaderId;
@@ -125,7 +120,8 @@ impl SyncResource for Shader {
     ) -> AppResult<SyncOutcome<Self::Runtime, Self::Job>> {
         let source = match job {
             ShaderJob::Start => {
-                let read_job = ctx.file_storage.read_to_string(&self.source);
+                let source = self.source.as_ref().ok_or(AppError::UninitializedFields)?;
+                let read_job = ctx.file_storage.read_to_string(source);
                 return self.sync(ctx, None, ShaderJob::ReadingSource(read_job));
             }
             ShaderJob::ReadingSource(mut future) => match future.try_resolve() {
@@ -150,6 +146,8 @@ impl SyncResource for Shader {
     }
 
     fn needs_rebuild_from_others(&self, tracker: &SyncTracker) -> bool {
-        tracker.file_changed(&self.source)
+        self.source
+            .as_ref()
+            .is_some_and(|source| tracker.file_changed(source))
     }
 }

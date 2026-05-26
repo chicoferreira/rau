@@ -93,6 +93,13 @@ impl FileStorage {
         self.cached_file_tree.as_ref()
     }
 
+    pub fn files(&mut self) -> Option<&[FilePath]> {
+        if self.cached_files.is_none() && !self.has_list_file_files_pending() {
+            self.refresh_file_system();
+        }
+        self.cached_files.as_deref()
+    }
+
     fn has_list_file_files_pending(&self) -> bool {
         self.current_tasks
             .iter()
