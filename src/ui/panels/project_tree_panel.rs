@@ -255,15 +255,22 @@ pub fn ui(state: &mut StateSnapshot, ui: &mut egui::Ui) -> Response {
             builder.close_dir();
 
             TreeNode::folder(TreeNodeId::ModelFolder, "Models")
-                // .with_event("Create New Model", StateEvent::CreateModel)
+                .with_event(
+                    "Create New Model",
+                    StateEvent::CreateResource(ResourceKind::Model),
+                )
                 .build_to(builder, state.event_queue, state.rename_state);
+            pending_resource_node(state, builder, ResourceKind::Model);
             for (id, model) in state.project.models.list_sorted() {
                 TreeNode::new(TreeNodeId::Model(id), model.label())
                     .with_event("Inspect", StateEvent::InspectResource(id.into()))
                     .with_rename_event("Rename", RenameTarget::Model(id))
-                    // .with_event("Delete", StateEvent::DeleteModel(id))
-                    // .with_separator()
-                    // .with_event("Create New Texture View", StateEvent::CreateTextureView)
+                    .with_event("Delete", StateEvent::DeleteResource(id.into()))
+                    .with_separator()
+                    .with_event(
+                        "Create New Model",
+                        StateEvent::CreateResource(ResourceKind::Model),
+                    )
                     .build_to(builder, state.event_queue, state.rename_state);
             }
             builder.close_dir();

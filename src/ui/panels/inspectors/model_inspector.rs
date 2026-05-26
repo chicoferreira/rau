@@ -11,6 +11,7 @@ use crate::{
     ui::{
         components::{
             hint::hint,
+            inspector,
             selector::{AsWidgetText, ComboBoxExt},
         },
         pane::StateSnapshot,
@@ -19,10 +20,30 @@ use crate::{
 
 impl StateSnapshot<'_> {
     pub fn model_inspector_ui(&mut self, ui: &mut egui::Ui, model_id: ModelId) {
-        let Ok(model) = self.project.models.get(model_id) else {
+        let Ok(model) = self.project.models.get_mut(model_id) else {
             ui.label("Model couldn't be found.");
             return;
         };
+
+        inspector::field_grid(ui, "model_inspector_grid", |ui| {
+            let mut source = model.source().cloned();
+
+            let Some(files) = self.file_storage.files() else {
+                ui.spinner();
+                return;
+            };
+
+            if inspector::file_opt_combo_row(
+                ui,
+                "Source",
+                "model_source",
+                &files,
+                &mut source,
+                |path| path.extension() == Some("obj"),
+            ) {
+                model.set_source(source);
+            }
+        });
 
         let mut edits = Vec::new();
 
@@ -35,8 +56,7 @@ impl StateSnapshot<'_> {
                 apply_model_edits(self, model_id, edits);
                 return;
             }
-            Err(err) => {
-                ui.colored_label(ui.visuals().error_fg_color, err.to_string());
+            Err(_) => {
                 apply_model_edits(self, model_id, edits);
                 return;
             }
@@ -221,6 +241,7 @@ impl StateSnapshot<'_> {
         apply_model_edits(self, model_id, edits);
     }
 }
+
 fn model_vertex_buffer_spec_inspector_ui(
     ui: &mut egui::Ui,
     edits: &mut Vec<ModelEdit>,

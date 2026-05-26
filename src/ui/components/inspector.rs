@@ -74,20 +74,22 @@ pub fn file_opt_combo_row(
     id_salt: impl Hash,
     files: &[FilePath],
     current_value: &mut Option<FilePath>,
-    filter: impl Fn(&FilePath) -> bool,
-    display_label: impl Fn(&FilePath) -> WidgetText,
+    file_filter: impl Fn(&FilePath) -> bool,
 ) -> bool {
     let before = current_value.clone();
+
+    let display_label = |path: &FilePath| path.to_string();
+
     let selected_text = current_value
         .as_ref()
-        .map_or_else(|| "None".into(), |path| display_label(path));
+        .map_or_else(|| "None".into(), display_label);
 
     row(ui, label, |ui| {
         ComboBox::from_id_salt(id_salt)
             .selected_text(selected_text)
             .show_ui(ui, |ui| {
                 ui.selectable_value(current_value, None, "None");
-                for file in files.iter().filter(|file| filter(file)) {
+                for file in files.iter().filter(|file| file_filter(file)) {
                     ui.selectable_value(current_value, Some(file.clone()), display_label(file));
                 }
             });

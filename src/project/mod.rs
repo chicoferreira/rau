@@ -106,7 +106,7 @@ impl Project {
             ResourceKind::Sampler => self.samplers.create(label).into(),
             ResourceKind::Dimension => self.dimensions.create(label).into(),
             ResourceKind::Camera => self.cameras.create(label).into(),
-            ResourceKind::Model => todo!("not yet implemented"),
+            ResourceKind::Model => self.models.create(label).into(),
             ResourceKind::RenderPass => self.render_passes.create(label).into(),
             ResourceKind::FramePlan => return None,
             ResourceKind::ComputePass => self.compute_passes.create(label).into(),

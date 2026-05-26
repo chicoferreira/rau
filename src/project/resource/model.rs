@@ -11,7 +11,7 @@ use crate::{
         file_system::{ProjectFileSystem, ProjectFileSystemTrait},
     },
     project::{
-        BindGroupId, ModelId, ProjectResource,
+        BindGroupId, Creatable, ModelId, ProjectResource,
         paths::FilePath,
         resource::{
             bindgroup::BindGroup,
@@ -37,7 +37,8 @@ pub struct ModelCreationContext<'a> {
 #[serde(rename_all = "camelCase")]
 pub struct Model {
     label: String,
-    source: FilePath,
+    #[serde(default)]
+    source: Option<FilePath>,
     material_bind_group_ids: Vec<Option<BindGroupId>>,
     mesh_material_selections: Vec<MeshMaterialSelection>,
     vertex_buffer_spec: VertexBufferSpec,
@@ -93,7 +94,7 @@ impl Model {
     pub fn new(label: impl Into<String>, source: FilePath) -> Self {
         Self {
             label: label.into(),
-            source,
+            source: Some(source),
             material_bind_group_ids: Vec::new(),
             mesh_material_selections: Vec::new(),
             vertex_buffer_spec: VertexBufferSpec::new(),
@@ -102,11 +103,11 @@ impl Model {
         }
     }
 
-    pub fn source(&self) -> &FilePath {
-        &self.source
+    pub fn source(&self) -> Option<&FilePath> {
+        self.source.as_ref()
     }
 
-    pub fn set_source(&mut self, source: FilePath) {
+    pub fn set_source(&mut self, source: Option<FilePath>) {
         if self.source != source {
             self.source = source;
             self.runtime_revision.increase();
@@ -115,7 +116,10 @@ impl Model {
     }
 
     pub fn set_label(&mut self, label: String) {
-        self.label = label;
+        if self.label != label {
+            self.label = label;
+            self.project_revision.increase();
+        }
     }
 
     pub fn material_bind_group_id(&self, material_index: usize) -> Option<BindGroupId> {
@@ -210,6 +214,20 @@ impl Model {
     }
 }
 
+impl Creatable for Model {
+    fn create(label: String) -> Self {
+        Self {
+            label,
+            source: None,
+            material_bind_group_ids: Vec::new(),
+            mesh_material_selections: Vec::new(),
+            vertex_buffer_spec: VertexBufferSpec::new(),
+            runtime_revision: Revision::default(),
+            project_revision: Revision::default(),
+        }
+    }
+}
+
 impl ProjectResource for Model {
     type Id = ModelId;
 
@@ -239,7 +257,7 @@ impl SyncResource for Model {
     ) -> AppResult<SyncOutcome<Self::Runtime, Self::Job>> {
         match job {
             ModelJob::Start => {
-                let source = self.source.clone();
+                let source = self.source.clone().ok_or(AppError::UninitializedFields)?;
                 let file_system = ctx.file_storage.file_system.clone();
                 let vertex_buffer_spec = self.vertex_buffer_spec.clone();
                 let device = ctx.device.clone();
@@ -263,7 +281,9 @@ impl SyncResource for Model {
     }
 
     fn needs_rebuild_from_others(&self, tracker: &SyncTracker) -> bool {
-        tracker.file_changed(&self.source)
+        self.source
+            .as_ref()
+            .is_some_and(|source| tracker.file_changed(source))
     }
 }
 
