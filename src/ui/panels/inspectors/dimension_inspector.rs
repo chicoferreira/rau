@@ -1,6 +1,6 @@
 use crate::{
     project::DimensionId,
-    ui::{Size2d, components::inspector, pane::StateSnapshot},
+    ui::{components::inspector, pane::StateSnapshot, size::Size2d},
 };
 
 impl StateSnapshot<'_> {

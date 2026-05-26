@@ -6,7 +6,7 @@ use crate::{
         Creatable, DimensionId, ProjectResource,
         sync::{Revision, SyncOutcome, SyncResource, SyncTracker},
     },
-    ui::Size2d,
+    ui::size::Size2d,
 };
 
 #[derive(Debug, Serialize, Deserialize)]

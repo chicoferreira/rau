@@ -5,7 +5,7 @@ use crate::{
         CameraId, Creatable, DimensionId, ProjectResource, TextureViewId, ViewportId,
         sync::Revision,
     },
-    ui::Size2d,
+    ui::size::Size2d,
 };
 
 #[derive(Serialize, Deserialize)]
