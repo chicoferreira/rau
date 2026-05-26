@@ -229,9 +229,7 @@ impl SyncResource for ComputePass {
         match job {
             ComputePassJob::Start => {
                 if ctx.limits.max_compute_workgroups_per_dimension == 0 {
-                    return Err(AppError::UnsupportedRendererFeature {
-                        feature: "Compute Passes",
-                    });
+                    return Err(AppError::UnsupportedRendererFeature("Compute Passes"));
                 }
 
                 let mut bind_groups = vec![];

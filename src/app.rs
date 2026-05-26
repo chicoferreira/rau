@@ -71,10 +71,15 @@ impl WindowApp for App {
         let backend = adapter.get_info().backend;
         log::info!("Selected renderer backend: {backend:?}");
 
+        // Allow polygon mode changes if the adapter supports it
+        let optional_features =
+            wgpu::Features::POLYGON_MODE_LINE | wgpu::Features::POLYGON_MODE_POINT;
+        let required_features = adapter.features() & optional_features;
+
         let (device, queue) = adapter
             .request_device(&wgpu::DeviceDescriptor {
                 label: None,
-                required_features: wgpu::Features::empty(),
+                required_features,
                 experimental_features: wgpu::ExperimentalFeatures::disabled(),
                 required_limits: adapter.limits(),
                 memory_hints: Default::default(),

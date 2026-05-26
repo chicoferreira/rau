@@ -328,9 +328,7 @@ impl BindGroupResource {
                 view_dimension,
             } => {
                 if ctx.limits.max_storage_textures_per_shader_stage == 0 {
-                    return Err(AppError::UnsupportedRendererFeature {
-                        feature: "Storage Textures",
-                    });
+                    return Err(AppError::UnsupportedRendererFeature("Storage Textures"));
                 }
 
                 let texture_view_id = texture_view_id.ok_or(AppError::UninitializedFields)?;

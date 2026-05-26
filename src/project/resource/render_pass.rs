@@ -252,6 +252,12 @@ impl RenderPass {
         self.project_revision.increase();
     }
 
+    fn clear_pipeline_dirty(&mut self) {
+        for pipeline in &mut self.pipelines {
+            pipeline.dirty = false;
+        }
+    }
+
     pub fn get_color_format(&self, ctx: &Context) -> AppResult<Option<wgpu::TextureFormat>> {
         let Some(target_view) = self.target.get_target_inner(ctx.runtime_texture_views)? else {
             return Ok(None);
@@ -455,6 +461,21 @@ impl RenderPipeline {
     ) -> AppResult<Option<wgpu::RenderPipeline>> {
         let vertex_shader_id = vertex_shader_id.ok_or(AppError::UninitializedFields)?;
         let fragment_shader_id = fragment_shader_id.ok_or(AppError::UninitializedFields)?;
+
+        let features = ctx.device.features();
+        match primitive_state.polygon_mode {
+            wgpu::PolygonMode::Fill => {}
+            wgpu::PolygonMode::Line => {
+                if !features.contains(wgpu::Features::POLYGON_MODE_LINE) {
+                    return Err(AppError::UnsupportedRendererFeature("Line Polygon Mode"));
+                }
+            }
+            wgpu::PolygonMode::Point => {
+                if !features.contains(wgpu::Features::POLYGON_MODE_POINT) {
+                    return Err(AppError::UnsupportedRendererFeature("Point Polygon Mode"));
+                }
+            }
+        }
 
         let Some(bind_group_layouts) =
             Self::resolved_bind_group_layout(ctx, &static_bind_groups, draw)?
@@ -807,9 +828,11 @@ impl SyncResource for RenderPass {
     }
 
     fn after_sync(&mut self) {
-        for pipeline in &mut self.pipelines {
-            pipeline.dirty = false;
-        }
+        self.clear_pipeline_dirty();
+    }
+
+    fn after_sync_error(&mut self) {
+        self.clear_pipeline_dirty();
     }
 
     fn needs_rebuild_from_others(&self, tracker: &SyncTracker) -> bool {

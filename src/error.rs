@@ -17,8 +17,8 @@ pub enum AppError {
     #[error("bind group layout count {count} exceeds render pass bind group limit {max}")]
     BindGroupLayoutLimitExceeded { count: usize, max: usize },
     /// The current renderer does not support a feature required by the resource.
-    #[error("{feature} feature is not supported by the current renderer")]
-    UnsupportedRendererFeature { feature: &'static str },
+    #[error("{0} feature is not supported by the current renderer")]
+    UnsupportedRendererFeature(&'static str),
     /// Access to a resource that is erroring
     #[error("resource is erroring: {0:?}")]
     WaitingForErroredResource(ResourceId),

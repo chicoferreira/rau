@@ -64,6 +64,9 @@ pub trait SyncResource: ProjectResource {
 
     // TODO: remove this once we separate the RenderPipeline from RenderPass.
     fn after_sync(&mut self) {}
+
+    // TODO: remove this once we separate the RenderPipeline from RenderPass.
+    fn after_sync_error(&mut self) {}
 }
 
 pub enum SyncOutcome<R, P> {
@@ -208,6 +211,7 @@ impl SyncTracker {
             Err(err) => {
                 log::error!("Error while syncing {id:?}: {:?}", err);
                 self.resource_changes.push(id);
+                resource.after_sync_error();
                 *cell = RuntimeCell::Errored {
                     revision,
                     error: err,
