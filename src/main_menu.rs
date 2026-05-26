@@ -49,6 +49,10 @@ impl MainMenu {
             }
         }
 
+        crate::ui::components::field_container::field_container(ui, "Camera", |ui| {
+            ui.label("merda");
+        });
+
         if let Some(modal) = &mut self.create_project_modal {
             if let Some(response) = modal.render_ui(ui, &mut self.toasts) {
                 match response {
