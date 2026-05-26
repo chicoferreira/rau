@@ -21,13 +21,13 @@ use crate::{
             viewport::Viewport,
         },
     },
-    ui::{self},
+    ui::size::Size2d,
 };
 
 #[allow(dead_code)]
 pub async fn create_scene(
     device: &wgpu::Device,
-    size: ui::Size2d,
+    size: Size2d,
     file_storage: &FileStorage,
 ) -> AppResult<Project> {
     let mut project = Project::default();

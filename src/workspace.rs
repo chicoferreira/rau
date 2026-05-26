@@ -25,6 +25,7 @@ use crate::{
         components::tiles::TreePane,
         panels::{inspector_pane::InspectorPane, viewport_pane::ViewportPane},
         rename::{RenameState, RenameTarget},
+        size::Size2d,
     },
     utils::{event_queue::EventQueue, key::KeyboardState},
 };
@@ -54,7 +55,7 @@ pub struct AppContext<'a> {
 
 #[derive(Debug, Clone)]
 pub enum ViewportEvent {
-    Resize { size: ui::Size2d },
+    Resize { size: Size2d },
     Scroll { delta_y_px: f32 },
     Drag { mouse_dx: f32, mouse_dy: f32 },
     KeyboardKeys { keyboard_state: KeyboardState },
