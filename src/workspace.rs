@@ -79,6 +79,8 @@ pub enum StateEvent {
     DeleteFolder(FilePath),
     ImportFile(FilePath),
     ReplaceFile(FilePath),
+    #[cfg(target_arch = "wasm32")]
+    DownloadFile(FilePath),
     MoveFileSystemEntry {
         old_path: FilePath,
         new_path: FilePath,
@@ -245,6 +247,10 @@ impl Workspace {
                 }
                 StateEvent::ReplaceFile(file_path) => {
                     self.file_storage.replace_file_in_background(file_path);
+                }
+                #[cfg(target_arch = "wasm32")]
+                StateEvent::DownloadFile(file_path) => {
+                    self.file_storage.download_file_in_background(file_path);
                 }
                 StateEvent::MoveFileSystemEntry { old_path, new_path } => {
                     self.file_storage

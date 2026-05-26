@@ -15,8 +15,9 @@ use web_sys::{
 };
 
 use crate::{
-    error::{AppError, AppResult},
+    error::AppResult,
     project::paths::FilePath,
+    utils::browser::{browser_error, js_error},
 };
 
 pub type PickedFolderFiles = (String, Vec<(FilePath, Vec<u8>)>);
@@ -30,9 +31,9 @@ pub async fn pick_folder_files() -> AppResult<Option<PickedFolderFiles>> {
     let mut result = Vec::new();
 
     for index in 0..files.length() {
-        let file = files.get(index).ok_or_else(|| {
-            AppError::BrowserFilePickerError("selected file was unavailable".to_string())
-        })?;
+        let file = files
+            .get(index)
+            .ok_or_else(|| browser_error("selected file was unavailable"))?;
 
         let relative_path = file_relative_path(&file)?;
         let (folder_name, file_path) = project_file_path(&relative_path)?;
@@ -44,28 +45,26 @@ pub async fn pick_folder_files() -> AppResult<Option<PickedFolderFiles>> {
         result.push((file_path, bytes));
     }
 
-    let project_name = project_name.ok_or_else(|| {
-        AppError::BrowserFilePickerError("selected folder did not contain files".to_string())
-    })?;
+    let project_name =
+        project_name.ok_or_else(|| browser_error("selected folder did not contain files"))?;
 
     Ok(Some((project_name, result)))
 }
 
 async fn pick_directory_file_list() -> AppResult<Option<FileList>> {
-    let window = web_sys::window()
-        .ok_or_else(|| AppError::BrowserFilePickerError("window unavailable".to_string()))?;
+    let window = web_sys::window().ok_or_else(|| browser_error("window unavailable"))?;
     let document = window
         .document()
-        .ok_or_else(|| AppError::BrowserFilePickerError("document unavailable".to_string()))?;
+        .ok_or_else(|| browser_error("document unavailable"))?;
     let body = document
         .body()
-        .ok_or_else(|| AppError::BrowserFilePickerError("document body unavailable".to_string()))?;
+        .ok_or_else(|| browser_error("document body unavailable"))?;
 
     let input: HtmlInputElement = document
         .create_element("input")
         .map_err(js_error)?
         .dyn_into()
-        .map_err(|_| AppError::BrowserFilePickerError("failed to create file input".to_string()))?;
+        .map_err(|_| browser_error("failed to create file input"))?;
 
     input.set_type("file");
     input.set_multiple(true);
@@ -119,7 +118,7 @@ fn project_file_path(relative_path: &str) -> AppResult<(&str, FilePath)> {
         .split_once('/')
         .or_else(|| relative_path.split_once('\\'))
     else {
-        return Err(AppError::BrowserFilePickerError(format!(
+        return Err(browser_error(format!(
             "selected file did not include a folder-relative path: {relative_path}"
         )));
     };
@@ -168,17 +167,4 @@ async fn read_web_file(file: File) -> AppResult<Vec<u8>> {
     buffer.copy_to(&mut bytes);
 
     Ok(bytes)
-}
-
-fn js_error(error: JsValue) -> AppError {
-    let message = error
-        .as_string()
-        .or_else(|| {
-            Reflect::get(&error, &JsValue::from_str("message"))
-                .ok()
-                .and_then(|message| message.as_string())
-        })
-        .unwrap_or_else(|| format!("{error:?}"));
-
-    AppError::BrowserFilePickerError(message)
 }

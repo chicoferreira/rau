@@ -9,7 +9,7 @@ use crate::file::absolute::AbsolutePathBuf;
 #[cfg(target_arch = "wasm32")]
 use crate::project::paths::FilePath;
 #[cfg(target_arch = "wasm32")]
-use crate::utils::browser_folder_picker;
+use crate::utils::browser::folder_picker;
 
 #[derive(Default)]
 pub struct OpenOrImportProject {
@@ -71,7 +71,7 @@ impl OpenOrImportProject {
 #[cfg(target_arch = "wasm32")]
 fn import_project_from_folder() -> AsyncJob<AppResult<Option<ProjectImport>>> {
     AsyncJob::new(async move {
-        let Some((project_name, files)) = browser_folder_picker::pick_folder_files().await? else {
+        let Some((project_name, files)) = folder_picker::pick_folder_files().await? else {
             return Ok(None);
         };
 

@@ -63,8 +63,8 @@ pub enum AppError {
     #[error("file not valid utf8: {0:?}")]
     FileNotValidUtf8(FilePath),
     #[cfg(target_arch = "wasm32")]
-    #[error("browser file picker error: {0}")]
-    BrowserFilePickerError(String),
+    #[error("browser error: {0}")]
+    BrowserError(String),
     #[error("fetch error: {0}")]
     FetchError(ehttp::Error),
     #[error("url parse error: {0}")]

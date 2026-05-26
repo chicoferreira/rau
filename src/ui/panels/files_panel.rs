@@ -173,8 +173,14 @@ fn render_dir_nodes(
             unreachable!("A file path can't be the root")
         };
 
-        TreeNode::new(FileTreeNodeId::File(file_path.clone()), file_name)
-            .with_event("Open File", StateEvent::OpenFile(file_path.clone()))
+        let file_node = TreeNode::new(FileTreeNodeId::File(file_path.clone()), file_name)
+            .with_event("Open File", StateEvent::OpenFile(file_path.clone()));
+
+        #[cfg(target_arch = "wasm32")]
+        let file_node =
+            file_node.with_event("Download File", StateEvent::DownloadFile(file_path.clone()));
+
+        file_node
             .with_separator()
             .with_event("Import File", StateEvent::ImportFile(path.clone()))
             .with_event("Replace File", StateEvent::ReplaceFile(file_path.clone()))

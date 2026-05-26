@@ -63,6 +63,10 @@ enum FileStorageTask {
     ReplaceFile {
         task: AsyncJob<AppResult<bool>>,
     },
+    #[cfg(target_arch = "wasm32")]
+    DownloadFile {
+        task: AsyncJob<AppResult<()>>,
+    },
 }
 
 impl FileStorage {
@@ -178,6 +182,19 @@ impl FileStorage {
             .push(FileStorageTask::ReplaceFile { task });
     }
 
+    #[cfg(target_arch = "wasm32")]
+    pub fn download_file_in_background(&mut self, file_path: FilePath) {
+        let file_system = self.file_system.clone();
+        let task = AsyncJob::new(async move {
+            let bytes = file_system.read(&file_path).await?;
+            let file_name = file_path.file_name().unwrap_or("download");
+            crate::utils::browser::file_download::download_file(file_name, bytes)
+        });
+
+        self.current_tasks
+            .push(FileStorageTask::DownloadFile { task });
+    }
+
     pub fn get_open_file(&self, path: &FilePath) -> Option<&OpenFileState> {
         self.open_files.get(path)
     }
@@ -281,6 +298,10 @@ impl FileStorage {
                         refresh_file_system = true;
                     }
                 })
+            }
+            #[cfg(target_arch = "wasm32")]
+            FileStorageTask::DownloadFile { task } => {
+                consume_if_ready(task, "download file", |_| {})
             }
         });
 
