@@ -42,6 +42,7 @@ slotmap = { version = "1.0", features = ["serde"] }
 strum = { version = "0.28.0", features = ["derive"] }
 thiserror = "2.0.18"
 tobj = { version = "4.0.3", default-features = false, features = ["futures"] }
+tokio = { version = "1.52.3", features = ["sync"] }
 wgpu = { version = "29.0", features = ["naga-ir", "serde"] }
 winit = { version = "0.30.12", features = ["android-native-activity"] }
 syntect = { version = "5.3.0", default-features = false, features = ["default-fancy"] }
@@ -58,7 +59,6 @@ egui-winit = { version = "0.34.1", default-features = true }
 pollster = "0.4.0"
 notify = "8.2.0"
 notify-debouncer-mini = "0.7.0"
-tokio = { version = "1.52.3", features = ["sync"] }
 toml = "0.8"
 dirs = "6.0"
 

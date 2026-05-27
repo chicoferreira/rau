@@ -4,11 +4,25 @@ use std::{
     task::{Context, Poll, Waker},
 };
 
+#[cfg(not(target_arch = "wasm32"))]
+type BoxFuture<T> = Pin<Box<dyn Future<Output = T> + Send + 'static>>;
+
+#[cfg(target_arch = "wasm32")]
+type BoxFuture<T> = Pin<Box<dyn Future<Output = T> + 'static>>;
+
 pub struct AsyncJob<T> {
-    inner: Pin<Box<dyn Future<Output = T> + 'static>>,
+    inner: BoxFuture<T>,
 }
 
 impl<T> AsyncJob<T> {
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn new(future: impl Future<Output = T> + Send + 'static) -> Self {
+        Self {
+            inner: Box::pin(future),
+        }
+    }
+
+    #[cfg(target_arch = "wasm32")]
     pub fn new(future: impl Future<Output = T> + 'static) -> Self {
         Self {
             inner: Box::pin(future),

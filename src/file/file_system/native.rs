@@ -13,7 +13,7 @@ use crate::{
         identifier::ProjectIdentifier,
     },
     project::paths::FilePath,
-    utils::async_job::AsyncJob,
+    utils::{async_job::AsyncJob, background_task},
 };
 
 type FileSystemJob = Box<dyn FnOnce() + Send + 'static>;
@@ -325,18 +325,12 @@ fn spawn_blocking<T: Send + 'static>(
     send_jobs: std::sync::mpsc::Sender<FileSystemJob>,
     function: impl FnOnce() -> T + Send + 'static,
 ) -> AsyncJob<T> {
-    let (tx, rx) = tokio::sync::oneshot::channel();
-    let job = Box::new(move || {
-        let result = function();
-        tx.send(result).ok();
-    });
+    let (sender, task) = background_task::channel();
+    let job = Box::new(move || sender.send(function()));
 
     send_jobs.send(job).expect("the fs worker closed");
 
-    AsyncJob::new(async move {
-        rx.await
-            .expect("function must complete unless the fs worker panics")
-    })
+    task
 }
 
 fn collect_entries(
