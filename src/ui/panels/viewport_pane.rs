@@ -46,13 +46,13 @@ impl Pane for ViewportPane {
             return egui_tiles::UiResponse::None;
         };
 
-        let mut events = crate::ui::components::viewport::ui(
+        let events = crate::ui::components::viewport::ui(
             ui,
             self.viewport_id,
             egui_id,
             viewport.requested_ui_size(),
         );
-        state.event_queue.add_all(&mut events);
+        state.event_queue.add_all(events);
 
         egui_tiles::UiResponse::None
     }

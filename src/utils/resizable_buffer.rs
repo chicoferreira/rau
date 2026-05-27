@@ -14,13 +14,14 @@ pub enum ChangeResult {
 impl ResizableBuffer {
     pub fn new(
         device: &wgpu::Device,
-        label: &str,
+        label: impl Into<String>,
         usage: wgpu::BufferUsages,
         contents: &[u8],
     ) -> Self {
-        let buffer = Self::create_buffer(device, label, contents, usage);
+        let label = label.into();
+        let buffer = Self::create_buffer(device, &label, contents, usage);
         Self {
-            label: label.to_string(),
+            label,
             buffer,
             usage,
         }

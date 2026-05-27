@@ -58,6 +58,46 @@ impl VertexBufferSpec {
         }
         shift_vec(from, to, &mut self.fields);
     }
+
+    pub(super) fn compute_vertex_contents(
+        &self,
+        positions: &[[f32; 3]],
+        normals: &[[f32; 3]],
+        texture_coords: &[[f32; 2]],
+        tangents: &[[f32; 3]],
+        bitangents: &[[f32; 3]],
+    ) -> Vec<f32> {
+        let vertex_count = positions.len();
+
+        let stride: usize = self
+            .fields
+            .iter()
+            .map(|f| f.vertex_format().size() as usize / std::mem::size_of::<f32>())
+            .sum();
+
+        let mut result = Vec::with_capacity(vertex_count * stride);
+
+        for i in 0..vertex_count {
+            let p = positions.get(i).unwrap_or(&[0.0, 0.0, 0.0]);
+            let n = normals.get(i).unwrap_or(&[0.0, 0.0, 0.0]);
+            let uv = texture_coords.get(i).unwrap_or(&[0.0, 0.0]);
+            let t = tangents.get(i).unwrap_or(&[0.0, 0.0, 0.0]);
+            let b = bitangents.get(i).unwrap_or(&[0.0, 0.0, 0.0]);
+
+            for f in &self.fields {
+                let value: &[f32] = match f {
+                    VertexBufferField::Position => p,
+                    VertexBufferField::TextureCoordinates => uv,
+                    VertexBufferField::Normal => n,
+                    VertexBufferField::Tangent => t,
+                    VertexBufferField::Bitangent => b,
+                };
+                result.extend_from_slice(value);
+            }
+        }
+
+        result
+    }
 }
 
 impl VertexBufferField {

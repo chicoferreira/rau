@@ -1,15 +1,11 @@
 use std::task::Poll;
 
-use futures_lite::io::{BufReader, Cursor};
 use serde::{Deserialize, Serialize};
 use wgpu::BindGroupLayout;
 
 use crate::{
     error::{AppError, AppResult},
-    file::{
-        file_storage::FileStorage,
-        file_system::{ProjectFileSystem, ProjectFileSystemTrait},
-    },
+    file::{file_storage::FileStorage, file_system::ProjectFileSystemTrait},
     project::{
         BindGroupId, Creatable, ModelId, ProjectResource,
         paths::FilePath,
@@ -21,7 +17,8 @@ use crate::{
         sync::{Revision, SyncOutcome, SyncResource, SyncTracker},
     },
     utils::{
-        async_job::AsyncJob, resizable_buffer::ResizableBuffer, wgpu_error_scope::WgpuErrorScope,
+        async_job::AsyncJob, obj::LoadedObj, resizable_buffer::ResizableBuffer,
+        wgpu_error_scope::WgpuErrorScope,
     },
 };
 
@@ -258,7 +255,6 @@ impl SyncResource for Model {
         match job {
             ModelJob::Start => {
                 let source = self.source.clone().ok_or(AppError::UninitializedFields)?;
-                let file_system = ctx.file_storage.file_system.clone();
                 let vertex_buffer_spec = self.vertex_buffer_spec.clone();
                 let device = ctx.device.clone();
 
@@ -267,7 +263,7 @@ impl SyncResource for Model {
                     None,
                     ModelJob::Loading(AsyncJob::new(ModelRuntime::load_from_obj_file(
                         source,
-                        file_system,
+                        ctx.file_storage,
                         vertex_buffer_spec,
                         device,
                     ))),
@@ -288,55 +284,41 @@ impl SyncResource for Model {
 }
 
 impl ModelRuntime {
-    pub async fn load_from_obj_file(
+    pub fn load_from_obj_file(
         source: FilePath,
-        file_system: ProjectFileSystem, // TODO: use file storage for read cache
+        file_storage: &FileStorage,
         vertex_buffer_spec: VertexBufferSpec,
         device: wgpu::Device,
-    ) -> AppResult<Self> {
-        let obj_bytes = file_system.read(&source).await?;
+    ) -> AsyncJob<AppResult<Self>> {
+        let file_system = file_storage.file_system.clone();
+        AsyncJob::new(async move {
+            let obj_bytes = file_system.read(&source).await?;
 
-        let load_options = tobj::LoadOptions {
-            triangulate: true,
-            single_index: true,
-            ..Default::default()
-        };
+            let LoadedObj { models, mtl_paths } = crate::utils::obj::load_obj(&obj_bytes, &source)?;
 
-        let obj_reader = BufReader::new(Cursor::new(obj_bytes));
-        let (models, obj_materials) =
-            tobj::futures::load_obj_buf(obj_reader, &load_options, move |material_path| {
-                let material_path = material_path.to_string_lossy().to_string();
-                // TODO: don't use this load_obj_buf function. load mtls manually so we can return errors and avoid the need to clone file_system
-                let material_path = FilePath::from_str(material_path).unwrap();
-                let material_path = source
-                    .parent()
-                    .map(|parent| parent.join_path(&material_path))
-                    .unwrap_or_else(|| material_path);
+            let mut materials = vec![];
+            for mtl_path in mtl_paths {
+                let mtl_bytes = file_system.read(&mtl_path).await?;
+                let mtl_materials = crate::utils::obj::load_mtl(&mtl_bytes)?
+                    .into_iter()
+                    .map(Into::into)
+                    .collect::<Vec<_>>();
 
-                let file_system = file_system.clone();
+                materials.extend(mtl_materials);
+            }
 
-                async move {
-                    let mat = file_system
-                        .read(&material_path)
-                        .await
-                        .map_err(|_| tobj::LoadError::OpenFileFailed)?;
-                    let reader = BufReader::new(Cursor::new(mat));
-                    tobj::futures::load_mtl_buf(reader).await
-                }
-            })
-            .await?;
+            let scope = WgpuErrorScope::push(&device);
+            let meshes = models
+                .into_iter()
+                .enumerate()
+                .map(|(i, m)| Mesh::new_from_obj(m, i, &vertex_buffer_spec, &device))
+                .collect::<AppResult<Vec<_>>>()?;
+            scope.pop().await?;
 
-        let scope = WgpuErrorScope::push(&device);
-        let meshes = models
-            .into_iter()
-            .map(|m| Mesh::new_from_obj(m, &vertex_buffer_spec, &device))
-            .collect::<AppResult<Vec<_>>>()?;
+            let runtime = Self { meshes, materials };
 
-        let materials = obj_materials?.into_iter().map(Into::into).collect();
-        let runtime = Self { meshes, materials };
-        scope.pop().await?;
-
-        Ok(runtime)
+            Ok(runtime)
+        })
     }
 
     pub fn meshes(&self) -> &[Mesh] {
@@ -400,37 +382,41 @@ impl From<tobj::Material> for Material {
 impl Mesh {
     pub fn new_from_obj(
         model: tobj::Model,
+        mesh_index: usize,
         vertex_buffer_spec: &VertexBufferSpec,
         device: &wgpu::Device,
     ) -> AppResult<Self> {
+        let name = format!("Mesh {} {mesh_index}", model.name);
         let (positions, _) = model.mesh.positions.as_chunks();
         let (normals, _) = model.mesh.normals.as_chunks();
         let (texture_coords, _) = model.mesh.texcoords.as_chunks();
 
         let indices = model.mesh.indices;
 
-        let (tangents, bitangents) =
-            Self::calculate_tangents_and_bitangents(positions, texture_coords, &indices);
+        let (tangents, bitangents) = crate::utils::obj::calculate_tangents_and_bitangents(
+            positions,
+            texture_coords,
+            &indices,
+        );
 
-        let vertex_buffer_contents = Self::calculate_compute_vertex_contents(
+        let vertex_buffer_contents = vertex_buffer_spec.compute_vertex_contents(
             positions,
             normals,
             texture_coords,
             &tangents,
             &bitangents,
-            vertex_buffer_spec,
         );
 
         let vertex_buffer = ResizableBuffer::new(
             device,
-            "TODO: add vertex buffer name",
+            format!("{name} Vertex Buffer"),
             wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
             bytemuck::cast_slice(&vertex_buffer_contents),
         );
 
         let index_buffer = ResizableBuffer::new(
             device,
-            "TODO: add index buffer name",
+            format!("{name} Index Buffer"),
             wgpu::BufferUsages::INDEX,
             bytemuck::cast_slice(&indices),
         );
@@ -446,125 +432,6 @@ impl Mesh {
             vertex_buffer,
             index_buffer,
         })
-    }
-
-    fn calculate_tangents_and_bitangents(
-        positions: &[[f32; 3]],
-        texture_coords: &[[f32; 2]],
-        indices: &[u32],
-    ) -> (Vec<[f32; 3]>, Vec<[f32; 3]>) {
-        use cgmath::{InnerSpace, Vector2, Vector3};
-
-        let vertex_count = positions.len();
-
-        let mut tangents = vec![[0.0f32; 3]; vertex_count];
-        let mut bitangents = vec![[0.0f32; 3]; vertex_count];
-        let mut triangles_included = vec![0u32; vertex_count];
-
-        let (triangles, _) = indices.as_chunks();
-        for [i0, i1, i2] in triangles {
-            let (i0, i1, i2) = (*i0 as usize, *i1 as usize, *i2 as usize);
-            if i0 >= vertex_count || i1 >= vertex_count || i2 >= vertex_count {
-                continue;
-            }
-
-            let p0: Vector3<_> = positions.get(i0).copied().unwrap_or([0.0, 0.0, 0.0]).into();
-            let p1: Vector3<_> = positions.get(i1).copied().unwrap_or([0.0, 0.0, 0.0]).into();
-            let p2: Vector3<_> = positions.get(i2).copied().unwrap_or([0.0, 0.0, 0.0]).into();
-            let uv0: Vector2<_> = texture_coords.get(i0).copied().unwrap_or([0.0, 0.0]).into();
-            let uv1: Vector2<_> = texture_coords.get(i1).copied().unwrap_or([0.0, 0.0]).into();
-            let uv2: Vector2<_> = texture_coords.get(i2).copied().unwrap_or([0.0, 0.0]).into();
-
-            let dp1 = p1 - p0;
-            let dp2 = p2 - p0;
-            let duv1 = uv1 - uv0;
-            let duv2 = uv2 - uv0;
-
-            let denom = duv1.x * duv2.y - duv1.y * duv2.x;
-            if denom.abs() < 1.0e-8 {
-                continue;
-            }
-            let r = 1.0 / denom;
-
-            let tangent = (dp1 * duv2.y - dp2 * duv1.y) * r;
-            let bitangent = (dp2 * duv1.x - dp1 * duv2.x) * r;
-
-            tangents[i0] = (Vector3::from(tangents[i0]) + tangent).into();
-            tangents[i1] = (Vector3::from(tangents[i1]) + tangent).into();
-            tangents[i2] = (Vector3::from(tangents[i2]) + tangent).into();
-
-            bitangents[i0] = (Vector3::from(bitangents[i0]) + bitangent).into();
-            bitangents[i1] = (Vector3::from(bitangents[i1]) + bitangent).into();
-            bitangents[i2] = (Vector3::from(bitangents[i2]) + bitangent).into();
-
-            triangles_included[i0] += 1;
-            triangles_included[i1] += 1;
-            triangles_included[i2] += 1;
-        }
-
-        for i in 0..vertex_count {
-            let n = triangles_included[i];
-            if n <= 0 {
-                continue;
-            }
-            let denom = 1.0 / n as f32;
-
-            let t = Vector3::from(tangents[i]) * denom;
-            let b = Vector3::from(bitangents[i]) * denom;
-
-            tangents[i] = if t.magnitude2() > 0.0 {
-                t.normalize().into()
-            } else {
-                [0.0, 0.0, 0.0]
-            };
-            bitangents[i] = if b.magnitude2() > 0.0 {
-                b.normalize().into()
-            } else {
-                [0.0, 0.0, 0.0]
-            };
-        }
-
-        (tangents, bitangents)
-    }
-
-    fn calculate_compute_vertex_contents(
-        positions: &[[f32; 3]],
-        normals: &[[f32; 3]],
-        texture_coords: &[[f32; 2]],
-        tangents: &[[f32; 3]],
-        bitangents: &[[f32; 3]],
-        vertex_buffer_spec: &VertexBufferSpec,
-    ) -> Vec<f32> {
-        let vertex_count = positions.len();
-
-        let stride: usize = vertex_buffer_spec
-            .fields
-            .iter()
-            .map(|f| f.vertex_format().size() as usize / std::mem::size_of::<f32>())
-            .sum();
-
-        let mut result = Vec::with_capacity(vertex_count * stride);
-
-        for i in 0..vertex_count {
-            let p = positions.get(i).unwrap_or(&[0.0, 0.0, 0.0]);
-            let n = normals.get(i).unwrap_or(&[0.0, 0.0, 0.0]);
-            let uv = texture_coords.get(i).unwrap_or(&[0.0, 0.0]);
-            let t = tangents.get(i).unwrap_or(&[0.0, 0.0, 0.0]);
-            let b = bitangents.get(i).unwrap_or(&[0.0, 0.0, 0.0]);
-
-            for f in &vertex_buffer_spec.fields {
-                let value: &[f32] = match f {
-                    vertex_buffer::VertexBufferField::Position => p,
-                    vertex_buffer::VertexBufferField::TextureCoordinates => uv,
-                    vertex_buffer::VertexBufferField::Normal => n,
-                    vertex_buffer::VertexBufferField::Tangent => t,
-                    vertex_buffer::VertexBufferField::Bitangent => b,
-                };
-                result.extend_from_slice(value);
-            }
-        }
-
-        result
     }
 
     pub fn positions(&self) -> &[[f32; 3]] {

@@ -5,6 +5,7 @@ pub mod dir_node;
 pub mod event_queue;
 pub mod github;
 pub mod key;
+pub mod obj;
 pub mod resizable_buffer;
 pub mod shader;
 pub mod wgpu_error_scope;
