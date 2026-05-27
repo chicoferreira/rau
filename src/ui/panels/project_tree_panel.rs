@@ -219,16 +219,23 @@ pub fn ui(state: &mut StateSnapshot, ui: &mut egui::Ui) -> Response {
             }
             builder.close_dir();
 
-            TreeNode::folder(TreeNodeId::TextureFolder, "Textures").build_to(
-                builder,
-                state.event_queue,
-                state.rename_state,
-            );
+            TreeNode::folder(TreeNodeId::TextureFolder, "Textures")
+                .with_event(
+                    "Create New Texture",
+                    StateEvent::CreateResource(ResourceKind::Texture),
+                )
+                .build_to(builder, state.event_queue, state.rename_state);
+            pending_resource_node(state, builder, ResourceKind::Texture);
             for (id, texture) in state.project.textures.list_sorted() {
                 TreeNode::new(TreeNodeId::Texture(id), texture.label())
                     .with_event("Inspect", StateEvent::InspectResource(id.into()))
                     .with_rename_event("Rename", RenameTarget::Texture(id))
                     .with_event("Delete", StateEvent::DeleteResource(id.into()))
+                    .with_separator()
+                    .with_event(
+                        "Create New Texture",
+                        StateEvent::CreateResource(ResourceKind::Texture),
+                    )
                     .build_to(builder, state.event_queue, state.rename_state);
             }
             builder.close_dir();

@@ -134,13 +134,3 @@ pub fn u32_drag_row(
             .changed()
     })
 }
-
-#[expect(
-    dead_code,
-    reason = "Foundation helper for upcoming inspector migrations."
-)]
-pub fn readonly_row(ui: &mut Ui, label: impl Into<WidgetText>, value: impl Into<WidgetText>) {
-    row(ui, label, |ui| {
-        ui.label(value);
-    });
-}

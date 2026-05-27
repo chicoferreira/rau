@@ -6,7 +6,7 @@ use crate::{
     error::{AppError, AppResult},
     file::file_storage::FileStorage,
     project::{
-        DimensionId, ProjectResource, TextureId,
+        Creatable, DimensionId, ProjectResource, TextureId,
         paths::FilePath,
         resource::dimension::Dimension,
         storage::Storage,
@@ -54,7 +54,7 @@ pub enum TextureJob {
 pub enum TextureSource {
     // Grab size from dimension
     Dimension(Option<DimensionId>),
-    Image(FilePath),
+    Image(Option<FilePath>),
     Manual { size: wgpu::Extent3d },
 }
 
@@ -118,6 +118,19 @@ impl TextureRuntime {
     }
 }
 
+impl Creatable for Texture {
+    fn create(label: String) -> Self {
+        Self {
+            label,
+            format: wgpu::TextureFormat::Rgba8UnormSrgb,
+            usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+            source: TextureSource::Image(None),
+            runtime_revision: Revision::default(),
+            project_revision: Revision::default(),
+        }
+    }
+}
+
 impl ProjectResource for Texture {
     type Id = TextureId;
 
@@ -177,6 +190,7 @@ impl SyncResource for Texture {
                 }
             }
             TextureSource::Image(path) => {
+                let path = path.as_ref().ok_or(AppError::uninit_field("Image"))?;
                 let bytes = match image_bytes {
                     Some(bytes) => bytes,
                     None => {
@@ -246,7 +260,8 @@ impl SyncResource for Texture {
         match &self.source {
             TextureSource::Dimension(Some(dimension_id)) => tracker.was_changed(*dimension_id),
             TextureSource::Dimension(None) => false,
-            TextureSource::Image(path) => tracker.file_changed(&path),
+            TextureSource::Image(Some(path)) => tracker.file_changed(path),
+            TextureSource::Image(None) => false,
             TextureSource::Manual { .. } => false,
         }
     }

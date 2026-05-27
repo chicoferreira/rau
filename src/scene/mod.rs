@@ -475,7 +475,7 @@ pub async fn create_scene(
 
 pub fn create_texture(path: FilePath, format: wgpu::TextureFormat) -> AppResult<Texture> {
     let label = path.to_string();
-    let source = TextureSource::Image(path);
+    let source = TextureSource::Image(Some(path));
 
     Ok(Texture::new(
         label,

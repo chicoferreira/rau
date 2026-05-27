@@ -101,7 +101,7 @@ impl Project {
             ResourceKind::Viewport => self.viewports.create(label).into(),
             ResourceKind::Uniform => self.uniforms.create(label).into(),
             ResourceKind::BindGroup => self.bind_groups.create(label).into(),
-            ResourceKind::Texture => todo!("not yet implemented"),
+            ResourceKind::Texture => self.textures.create(label).into(),
             ResourceKind::TextureView => self.texture_views.create(label).into(),
             ResourceKind::Sampler => self.samplers.create(label).into(),
             ResourceKind::Dimension => self.dimensions.create(label).into(),
