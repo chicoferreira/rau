@@ -5,7 +5,7 @@ use wgpu::BindGroupLayout;
 
 use crate::{
     error::{AppError, AppResult},
-    file::{file_storage::FileStorage, file_system::ProjectFileSystemTrait},
+    file::file_storage::FileStorage,
     project::{
         BindGroupId, Creatable, ModelId, ProjectResource,
         paths::FilePath,
@@ -254,7 +254,10 @@ impl SyncResource for Model {
     ) -> AppResult<SyncOutcome<Self::Runtime, Self::Job>> {
         match job {
             ModelJob::Start => {
-                let source = self.source.clone().ok_or(AppError::UninitializedFields)?;
+                let source = self
+                    .source
+                    .clone()
+                    .ok_or(AppError::uninit_field("Source"))?;
                 let vertex_buffer_spec = self.vertex_buffer_spec.clone();
                 let device = ctx.device.clone();
 
@@ -292,20 +295,11 @@ impl ModelRuntime {
     ) -> AsyncJob<AppResult<Self>> {
         let file_system = file_storage.file_system.clone();
         AsyncJob::new(async move {
-            let obj_bytes = file_system.read(&source).await?;
-
-            let LoadedObj { models, mtl_paths } = crate::utils::obj::load_obj(&obj_bytes, &source)?;
-
-            let mut materials = vec![];
-            for mtl_path in mtl_paths {
-                let mtl_bytes = file_system.read(&mtl_path).await?;
-                let mtl_materials = crate::utils::obj::load_mtl(&mtl_bytes)?
-                    .into_iter()
-                    .map(Into::into)
-                    .collect::<Vec<_>>();
-
-                materials.extend(mtl_materials);
-            }
+            let LoadedObj {
+                models,
+                materials: obj_materials,
+            } = crate::utils::obj::load_obj(source, file_system).await?;
+            let materials = obj_materials.into_iter().map(Into::into).collect();
 
             let scope = WgpuErrorScope::push(&device);
             let meshes = models
@@ -341,15 +335,20 @@ impl ModelRuntime {
         model: &Model,
         runtime_bind_groups: &'a RuntimeStorage<BindGroup>,
     ) -> AppResult<Option<&'a BindGroupLayout>> {
-        let mesh = self.meshes().first().ok_or(AppError::UninitializedFields)?;
+        let mesh = self
+            .meshes()
+            .first()
+            .ok_or(AppError::uninit_field("Mesh 0"))?;
         let m_index = model
             .selected_material_index(0, mesh)
-            .ok_or(AppError::UninitializedFields)?;
+            .ok_or(AppError::uninit_field("Mesh 0 Selected Material"))?;
         self.get_material(m_index)
-            .ok_or(AppError::UninitializedFields)?;
+            .ok_or(AppError::uninit_field(format!("Material {m_index}")))?;
         let bind_group_id = model
             .material_bind_group_id(m_index)
-            .ok_or(AppError::UninitializedFields)?;
+            .ok_or(AppError::uninit_field(format!(
+                "Material {m_index} Bind Group Id"
+            )))?;
         let Some(bind_group) = runtime_bind_groups.get_init(bind_group_id)? else {
             return Ok(None);
         };

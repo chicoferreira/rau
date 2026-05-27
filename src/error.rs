@@ -11,8 +11,8 @@ pub enum AppError {
     #[error("invalid resource: {0:?}")]
     InvalidResource(ResourceId),
     /// The resource has uninitialized fields.
-    #[error("resource has uninitialized fields")]
-    UninitializedFields,
+    #[error("Resource has uninitialized fields: {0}")]
+    UninitializedFields(String),
     /// The render pipeline has more bind group layouts than wgpu supports.
     #[error("bind group layout count {count} exceeds render pass bind group limit {max}")]
     BindGroupLayoutLimitExceeded { count: usize, max: usize },
@@ -89,4 +89,10 @@ pub enum AppError {
     #[cfg(not(target_arch = "wasm32"))]
     #[error("toml serialize error: {0}")]
     TomlSerializeError(#[from] toml::ser::Error),
+}
+
+impl AppError {
+    pub fn uninit_field(field: impl Into<String>) -> Self {
+        AppError::UninitializedFields(field.into())
+    }
 }

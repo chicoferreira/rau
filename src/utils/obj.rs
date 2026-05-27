@@ -1,48 +1,55 @@
-use std::{
-    cell::RefCell,
-    io::{BufReader, Cursor},
-};
+use futures_lite::io::{BufReader, Cursor};
 
-use crate::{error::AppResult, project::paths::FilePath};
+use crate::{
+    error::AppResult,
+    file::file_system::{ProjectFileSystem, ProjectFileSystemTrait},
+    project::paths::FilePath,
+};
 
 pub struct LoadedObj {
     pub models: Vec<tobj::Model>,
-    pub mtl_paths: Vec<FilePath>,
+    pub materials: Vec<tobj::Material>,
 }
 
-pub fn load_obj(obj_bytes: &[u8], obj_path: &FilePath) -> AppResult<LoadedObj> {
+pub async fn load_obj(obj_path: FilePath, file_system: ProjectFileSystem) -> AppResult<LoadedObj> {
+    let obj_bytes = file_system.read(&obj_path).await?;
+
     let load_options = tobj::LoadOptions {
         triangulate: true,
         single_index: true,
         ..Default::default()
     };
 
-    let material_paths = RefCell::new(vec![]);
-    let mut obj_reader = BufReader::new(Cursor::new(obj_bytes));
-    let (models, _) = tobj::load_obj_buf(&mut obj_reader, &load_options, |material_path| {
-        material_paths
-            .borrow_mut()
-            .push(material_path.to_string_lossy().to_string());
-        Ok((vec![], Default::default()))
-    })?;
+    let obj_reader = BufReader::new(Cursor::new(obj_bytes));
+    let (models, materials) =
+        tobj::futures::load_obj_buf(obj_reader, &load_options, move |material_path| {
+            let material_path = material_path.to_string_lossy().to_string();
+            let obj_path = obj_path.clone();
+            let file_system = file_system.clone();
 
-    let mut mtl_paths = vec![];
-    for path in material_paths.into_inner() {
-        let relative_path = FilePath::from_str(&path)?;
-        let path = obj_path
-            .parent()
-            .map(|parent| parent.join_path(&relative_path))
-            .unwrap_or(relative_path);
-        mtl_paths.push(path);
-    }
+            async move {
+                let relative_path = FilePath::from_str(&material_path)
+                    .map_err(|_| tobj::LoadError::OpenFileFailed)?;
+                let material_path = obj_path
+                    .parent()
+                    .map(|parent| parent.join_path(&relative_path))
+                    .unwrap_or(relative_path);
 
-    Ok(LoadedObj { models, mtl_paths })
-}
+                let mtl_bytes = file_system
+                    .read(&material_path)
+                    .await
+                    .map_err(|_| tobj::LoadError::OpenFileFailed)?;
+                let mtl_reader = BufReader::new(Cursor::new(mtl_bytes));
 
-pub fn load_mtl(mtl_bytes: &[u8]) -> AppResult<Vec<tobj::Material>> {
-    let mut mtl_reader = BufReader::new(Cursor::new(mtl_bytes));
-    let (material, _) = tobj::load_mtl_buf(&mut mtl_reader)?;
-    Ok(material)
+                tobj::futures::load_mtl_buf(mtl_reader).await
+            }
+        })
+        .await?;
+
+    Ok(LoadedObj {
+        models,
+        materials: materials?,
+    })
 }
 
 pub fn calculate_tangents_and_bitangents(

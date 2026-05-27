@@ -181,8 +181,11 @@ impl SyncResource for FramePlan {
 
         let scope = WgpuErrorScope::push(ctx.device);
 
-        for entry in self.entries() {
-            let render_pass_id = entry.render_pass_id.ok_or(AppError::UninitializedFields)?;
+        for (index, entry) in self.entries().iter().enumerate() {
+            let render_pass_id = entry.render_pass_id.ok_or(AppError::uninit_field(format!(
+                "Frame Plan Entry {index} ({}) Render Pass Id",
+                entry.id
+            )))?;
             let render_pass = ctx.render_passes.get(render_pass_id)?;
             let Some(render_pass_runtime) = ctx.runtime_render_passes.get_init(render_pass_id)?
             else {

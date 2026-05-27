@@ -120,7 +120,10 @@ impl SyncResource for Shader {
     ) -> AppResult<SyncOutcome<Self::Runtime, Self::Job>> {
         let source = match job {
             ShaderJob::Start => {
-                let source = self.source.as_ref().ok_or(AppError::UninitializedFields)?;
+                let source = self
+                    .source
+                    .as_ref()
+                    .ok_or(AppError::uninit_field("Source"))?;
                 let read_job = ctx.file_storage.read_to_string(source);
                 return self.sync(ctx, None, ShaderJob::ReadingSource(read_job));
             }

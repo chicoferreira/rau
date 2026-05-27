@@ -203,7 +203,9 @@ impl SyncResource for TextureView {
                 )
             }
             TextureViewJob::PendingResource { previous_egui_id } => {
-                let texture_id = self.texture_id.ok_or(AppError::UninitializedFields)?;
+                let texture_id = self
+                    .texture_id
+                    .ok_or(AppError::uninit_field("Texture Id"))?;
 
                 let texture = ctx.textures.get(texture_id)?;
                 let Some(runtime_texture) = ctx.textures_runtime.get_init(texture_id)? else {

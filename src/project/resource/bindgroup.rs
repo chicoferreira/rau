@@ -232,7 +232,9 @@ impl BindGroupEntry {
             | BindGroupResource::StorageTexture {
                 texture_view_id, ..
             } => {
-                let texture_view_id = texture_view_id.ok_or(AppError::UninitializedFields)?;
+                let texture_view_id = texture_view_id.ok_or(AppError::uninit_field(format!(
+                    "Binding {binding} Texture View Id"
+                )))?;
                 let Some(texture_view_runtime) =
                     ctx.runtime_texture_views.get_init(texture_view_id)?
                 else {
@@ -243,14 +245,18 @@ impl BindGroupEntry {
                 wgpu::BindingResource::TextureView(inner)
             }
             BindGroupResource::Sampler { sampler_id, .. } => {
-                let sampler_id = sampler_id.ok_or(AppError::UninitializedFields)?;
+                let sampler_id = sampler_id.ok_or(AppError::uninit_field(format!(
+                    "Binding {binding} Sampler Id"
+                )))?;
                 let Some(sampler) = ctx.runtime_samplers.get_init(sampler_id)? else {
                     return Ok(None);
                 };
                 wgpu::BindingResource::Sampler(sampler.inner())
             }
             BindGroupResource::Uniform(uniform_id) => {
-                let uniform_id = uniform_id.ok_or(AppError::UninitializedFields)?;
+                let uniform_id = uniform_id.ok_or(AppError::uninit_field(format!(
+                    "Binding {binding} Uniform Id"
+                )))?;
                 let Some(uniform) = ctx.runtime_uniforms.get_init(uniform_id)? else {
                     return Ok(None);
                 };
@@ -266,7 +272,7 @@ impl BindGroupEntry {
         binding: u32,
         ctx: &BindGroupCreationContext,
     ) -> AppResult<Option<wgpu::BindGroupLayoutEntry>> {
-        let Some(ty) = self.resource.to_wgpu_binding_type(ctx)? else {
+        let Some(ty) = self.resource.to_wgpu_binding_type(binding, ctx)? else {
             return Ok(None);
         };
 
@@ -301,6 +307,7 @@ impl BindGroupEntry {
 impl BindGroupResource {
     fn to_wgpu_binding_type(
         self,
+        binding: u32,
         ctx: &BindGroupCreationContext,
     ) -> AppResult<Option<wgpu::BindingType>> {
         Ok(match self {
@@ -331,7 +338,9 @@ impl BindGroupResource {
                     return Err(AppError::UnsupportedRendererFeature("Storage Textures"));
                 }
 
-                let texture_view_id = texture_view_id.ok_or(AppError::UninitializedFields)?;
+                let texture_view_id = texture_view_id.ok_or(AppError::uninit_field(format!(
+                    "Binding {binding} Texture View Id"
+                )))?;
                 let Some(texture_view_runtime) =
                     ctx.runtime_texture_views.get_init(texture_view_id)?
                 else {

@@ -459,8 +459,10 @@ impl RenderPipeline {
         color_format: wgpu::TextureFormat,
         depth_format: Option<wgpu::TextureFormat>,
     ) -> AppResult<Option<wgpu::RenderPipeline>> {
-        let vertex_shader_id = vertex_shader_id.ok_or(AppError::UninitializedFields)?;
-        let fragment_shader_id = fragment_shader_id.ok_or(AppError::UninitializedFields)?;
+        let vertex_shader_id =
+            vertex_shader_id.ok_or(AppError::uninit_field("Vertex Shader Id"))?;
+        let fragment_shader_id =
+            fragment_shader_id.ok_or(AppError::uninit_field("Fragment Shader Id"))?;
 
         let features = ctx.device.features();
         match primitive_state.polygon_mode {
@@ -604,7 +606,7 @@ impl RenderPipeline {
     ) -> AppResult<Option<(Vec<wgpu::VertexAttribute>, u64)>> {
         match &draw {
             RenderDraw::Model { model_id, .. } => {
-                let model_id = model_id.ok_or(AppError::UninitializedFields)?;
+                let model_id = model_id.ok_or(AppError::uninit_field("Model Id"))?;
                 let model = ctx.models.get(model_id)?;
                 let spec = model.vertex_buffer_spec();
                 Ok(Some(spec.to_wgpu_attributes_and_stride()))
@@ -653,7 +655,7 @@ impl RenderPipelineRuntime {
                 mesh_vertex_slot,
                 material_bind_group_slot,
             } => {
-                let model_id = model_id.ok_or(AppError::UninitializedFields)?;
+                let model_id = model_id.ok_or(AppError::uninit_field("Model Id"))?;
                 let model = ctx.models.get(model_id)?;
                 let Some(model_runtime) = ctx.runtime_models.get_init(model_id)? else {
                     return Ok(None);
@@ -666,13 +668,19 @@ impl RenderPipelineRuntime {
                     if let Some(mat_slot) = material_bind_group_slot {
                         let material_index = model
                             .selected_material_index(mesh_index, mesh)
-                            .ok_or(AppError::UninitializedFields)?;
+                            .ok_or(AppError::uninit_field(format!(
+                                "Mesh {mesh_index} Selected Material"
+                            )))?;
+
                         model_runtime
                             .get_material(material_index)
-                            .ok_or(AppError::UninitializedFields)?;
-                        let bind_group_id = model
-                            .material_bind_group_id(material_index)
-                            .ok_or(AppError::UninitializedFields)?;
+                            .ok_or(AppError::uninit_field(format!("Material {material_index}")))?;
+
+                        let bind_group_id = model.material_bind_group_id(material_index).ok_or(
+                            AppError::uninit_field(format!(
+                                "Material {material_index} Bind Group Id"
+                            )),
+                        )?;
                         let Some(bind_group) = ctx.runtime_bind_groups.get_init(bind_group_id)?
                         else {
                             return Ok(None);
@@ -721,7 +729,9 @@ impl<T> RenderPassTarget<T> {
         &self,
         runtime_texture_views: &'a RuntimeStorage<TextureView>,
     ) -> AppResult<Option<&'a wgpu::TextureView>> {
-        let target_view_id = self.texture_view_id.ok_or(AppError::UninitializedFields)?;
+        let target_view_id = self
+            .texture_view_id
+            .ok_or(AppError::uninit_field("Texture View Id"))?;
         let Some(target_view) = runtime_texture_views.get_init(target_view_id)? else {
             return Ok(None);
         };
@@ -747,7 +757,7 @@ impl RenderDraw {
             return Ok(Some(None));
         };
 
-        let model_id = (*model_id).ok_or(AppError::UninitializedFields)?;
+        let model_id = (*model_id).ok_or(AppError::uninit_field("Model Id"))?;
         let model = ctx.models.get(model_id)?;
         let Some(model_runtime) = ctx.runtime_models.get_init(model_id)? else {
             return Ok(None);

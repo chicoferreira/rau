@@ -170,8 +170,8 @@ impl Uniform {
         ctx: &UniformCreationContext<'_>,
     ) -> AppResult<Option<Vec<UniformRuntimeField>>> {
         let mut runtime_fields = Vec::with_capacity(self.fields.len());
-        for field in &self.fields {
-            let Some(data) = field.runtime_data(ctx)? else {
+        for (index, field) in self.fields.iter().enumerate() {
+            let Some(data) = field.runtime_data(index, ctx)? else {
                 return Ok(None);
             };
             runtime_fields.push(UniformRuntimeField { data });
@@ -357,12 +357,16 @@ impl UniformField {
 
     fn runtime_data(
         &self,
+        index: usize,
         context: &UniformCreationContext<'_>,
     ) -> AppResult<Option<UniformFieldData>> {
         match &self.source {
             UniformFieldSource::UserDefined(data) => Ok(Some(data.clone())),
             UniformFieldSource::Camera { camera_id, field } => {
-                let camera_id = (*camera_id).ok_or(AppError::UninitializedFields)?;
+                let camera_id = (*camera_id).ok_or(AppError::uninit_field(format!(
+                    "Uniform Field {index} ({}) Camera Id",
+                    self.id
+                )))?;
                 let camera = context.cameras.get(camera_id)?;
                 let Some(camera_runtime) = context.cameras_runtime.get_init(camera_id)? else {
                     return Ok(None);

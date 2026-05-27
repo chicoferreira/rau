@@ -305,7 +305,10 @@ impl Camera {
     }
 
     fn calculate_aspect(&self, dimensions: &Storage<Dimension>) -> AppResult<f32> {
-        let dimension_id = self.dimension_id.ok_or(AppError::UninitializedFields)?;
+        let dimension_id = self
+            .dimension_id
+            .ok_or(AppError::uninit_field("Dimension"))?;
+
         let dimension = dimensions.get(dimension_id)?;
         Ok(dimension.size().width() as f32 / dimension.size().height() as f32)
     }

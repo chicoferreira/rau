@@ -233,8 +233,11 @@ impl SyncResource for ComputePass {
                 }
 
                 let mut bind_groups = vec![];
-                for entry in &self.bind_groups {
-                    let id = entry.bind_group_id().ok_or(AppError::UninitializedFields)?;
+                for (i, entry) in self.bind_groups.iter().enumerate() {
+                    let id = entry
+                        .bind_group_id()
+                        .ok_or(AppError::uninit_field(format!("Bind Group {i} Id")))?;
+
                     let Some(bind_group_runtime) = ctx.runtime_bind_groups.get_init(id)? else {
                         return Ok(SyncOutcome::Pending(ComputePassJob::Start));
                     };
@@ -255,7 +258,7 @@ impl SyncResource for ComputePass {
                             immediate_size: 0,
                         });
 
-                let shader_id = self.shader.ok_or(AppError::UninitializedFields)?;
+                let shader_id = self.shader.ok_or(AppError::uninit_field("Shader"))?;
 
                 let Some(shader_runtime) = ctx.runtime_shaders.get_init(shader_id)? else {
                     return Ok(SyncOutcome::Pending(ComputePassJob::Start));
