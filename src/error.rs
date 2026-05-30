@@ -16,6 +16,14 @@ pub enum AppError {
     /// The render pipeline has more bind group layouts than wgpu supports.
     #[error("bind group layout count {count} exceeds render pass bind group limit {max}")]
     BindGroupLayoutLimitExceeded { count: usize, max: usize },
+    #[error(
+        "model {model_label:?} material {material_index} bind group layout does not match material {expected_material_index} bind group layout"
+    )]
+    ModelMaterialBindGroupLayoutMismatch {
+        model_label: String,
+        expected_material_index: usize,
+        material_index: usize,
+    },
     /// The current renderer does not support a feature required by the resource.
     #[error("{0} feature is not supported by the current renderer")]
     UnsupportedRendererFeature(&'static str),
@@ -94,5 +102,19 @@ pub enum AppError {
 impl AppError {
     pub fn uninit_field(field: impl Into<String>) -> Self {
         AppError::UninitializedFields(field.into())
+    }
+}
+
+pub trait RequiredFieldExt {
+    type Output;
+
+    fn ok_or_uninit_field(self, field: impl Into<String>) -> AppResult<Self::Output>;
+}
+
+impl<T> RequiredFieldExt for Option<T> {
+    type Output = T;
+
+    fn ok_or_uninit_field(self, field: impl Into<String>) -> AppResult<Self::Output> {
+        self.ok_or_else(|| AppError::uninit_field(field))
     }
 }

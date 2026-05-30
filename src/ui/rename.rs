@@ -2,8 +2,8 @@ use crate::{
     file::file_storage::FileStorage,
     project::{
         BindGroupId, CameraId, ComputePassId, DimensionId, ModelId, Project, RenderPassId,
-        ResourceId, ResourceKind, SamplerId, ShaderId, TextureId, TextureViewId, UniformId,
-        ViewportId, paths::FilePath,
+        RenderPipelineId, ResourceId, ResourceKind, SamplerId, ShaderId, TextureId, TextureViewId,
+        UniformId, ViewportId, paths::FilePath,
     },
 };
 
@@ -31,7 +31,7 @@ pub enum RenameTarget {
     TextureView(TextureViewId),
     Model(ModelId),
     RenderPass(RenderPassId),
-    RenderPipeline(RenderPassId, usize),
+    RenderPipeline(RenderPipelineId),
     ComputePass(ComputePassId),
 }
 
@@ -53,6 +53,7 @@ impl RenameTarget {
             RenameTarget::TextureView(id) => project.label(*id),
             RenameTarget::Uniform(id) => project.label(*id),
             RenameTarget::Model(id) => project.label(*id),
+            RenameTarget::RenderPipeline(id) => project.label(*id),
             RenameTarget::RenderPass(id) => project.label(*id),
             RenameTarget::ComputePass(id) => project.label(*id),
             RenameTarget::UniformField(id, index) => project
@@ -61,12 +62,6 @@ impl RenameTarget {
                 .ok()
                 .and_then(|uniform| uniform.get_field(*index))
                 .map(|field| field.label()),
-            RenameTarget::RenderPipeline(id, index) => project
-                .render_passes
-                .get(*id)
-                .ok()
-                .and_then(|render_pass| render_pass.pipelines().get(*index))
-                .map(|pipeline| pipeline.label()),
         }
     }
 
@@ -182,15 +177,9 @@ impl RenameTarget {
                     render_pass.set_label(new_name);
                 }
             }
-            RenameTarget::RenderPipeline(render_pass_id, index) => {
-                if let Ok(render_pass) = project.render_passes.get_mut(render_pass_id) {
-                    let changed = render_pass
-                        .pipelines_mut()
-                        .get_mut(index)
-                        .is_some_and(|pipeline| pipeline.set_label(new_name));
-                    if changed {
-                        render_pass.mark_pipeline_project_changed();
-                    }
+            RenameTarget::RenderPipeline(render_pipeline_id) => {
+                if let Ok(render_pipeline) = project.render_pipelines.get_mut(render_pipeline_id) {
+                    render_pipeline.set_label(new_name);
                 }
             }
             RenameTarget::ComputePass(compute_pass_id) => {
@@ -215,6 +204,7 @@ impl From<ResourceId> for Option<RenameTarget> {
             ResourceId::Texture(id) => Some(RenameTarget::Texture(id)),
             ResourceId::TextureView(id) => Some(RenameTarget::TextureView(id)),
             ResourceId::Model(id) => Some(RenameTarget::Model(id)),
+            ResourceId::RenderPipeline(id) => Some(RenameTarget::RenderPipeline(id)),
             ResourceId::RenderPass(id) => Some(RenameTarget::RenderPass(id)),
             ResourceId::ComputePass(id) => Some(RenameTarget::ComputePass(id)),
             ResourceId::FramePlan(_) => None,

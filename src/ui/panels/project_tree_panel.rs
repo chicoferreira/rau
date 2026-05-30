@@ -4,8 +4,8 @@ use egui_ltreeview::{Action, TreeView};
 use crate::{
     project::{
         BindGroupId, CameraId, ComputePassId, DimensionId, FramePlanId, ModelId, ProjectResource,
-        RenderPassId, ResourceKind, SamplerId, ShaderId, TextureId, TextureViewId, UniformId,
-        ViewportId,
+        RenderPassId, RenderPipelineId, ResourceKind, SamplerId, ShaderId, TextureId,
+        TextureViewId, UniformId, ViewportId,
     },
     ui::{
         components::tree_node::{TreeNode, pending_create_node},
@@ -38,6 +38,8 @@ pub enum TreeNodeId {
     TextureView(TextureViewId),
     ModelFolder,
     Model(ModelId),
+    RenderPipelineFolder,
+    RenderPipeline(RenderPipelineId),
     RenderPassFolder,
     RenderPass(RenderPassId),
     ComputePassFolder,
@@ -282,6 +284,27 @@ pub fn ui(state: &mut StateSnapshot, ui: &mut egui::Ui) -> Response {
             }
             builder.close_dir();
 
+            TreeNode::folder(TreeNodeId::RenderPipelineFolder, "Render Pipelines")
+                .with_event(
+                    "Create New Render Pipeline",
+                    StateEvent::CreateResource(ResourceKind::RenderPipeline),
+                )
+                .build_to(builder, state.event_queue, state.rename_state);
+            pending_resource_node(state, builder, ResourceKind::RenderPipeline);
+            for (id, render_pipeline) in state.project.render_pipelines.list_sorted() {
+                TreeNode::new(TreeNodeId::RenderPipeline(id), render_pipeline.label())
+                    .with_event("Inspect", StateEvent::InspectResource(id.into()))
+                    .with_rename_event("Rename", RenameTarget::RenderPipeline(id))
+                    .with_event("Delete", StateEvent::DeleteResource(id.into()))
+                    .with_separator()
+                    .with_event(
+                        "Create New Render Pipeline",
+                        StateEvent::CreateResource(ResourceKind::RenderPipeline),
+                    )
+                    .build_to(builder, state.event_queue, state.rename_state);
+            }
+            builder.close_dir();
+
             TreeNode::folder(TreeNodeId::RenderPassFolder, "Render Passes").build_to(
                 builder,
                 state.event_queue,
@@ -326,19 +349,20 @@ pub fn ui(state: &mut StateSnapshot, ui: &mut egui::Ui) -> Response {
             Action::SetSelected(selected) => {
                 for node in selected {
                     let event = match node {
-                        TreeNodeId::Viewport(id) => Some(StateEvent::OpenViewport(id)),
-                        TreeNodeId::Uniform(id) => Some(StateEvent::InspectResource(id.into())),
-                        TreeNodeId::BindGroup(id) => Some(StateEvent::InspectResource(id.into())),
-                        TreeNodeId::Shader(id) => Some(StateEvent::InspectResource(id.into())),
-                        TreeNodeId::Camera(id) => Some(StateEvent::InspectResource(id.into())),
-                        TreeNodeId::Dimension(id) => Some(StateEvent::InspectResource(id.into())),
-                        TreeNodeId::Sampler(id) => Some(StateEvent::InspectResource(id.into())),
-                        TreeNodeId::Texture(id) => Some(StateEvent::InspectResource(id.into())),
-                        TreeNodeId::TextureView(id) => Some(StateEvent::InspectResource(id.into())),
-                        TreeNodeId::Model(id) => Some(StateEvent::InspectResource(id.into())),
-                        TreeNodeId::RenderPass(id) => Some(StateEvent::InspectResource(id.into())),
-                        TreeNodeId::ComputePass(id) => Some(StateEvent::InspectResource(id.into())),
-                        TreeNodeId::FramePlan(id) => Some(StateEvent::InspectResource(id.into())),
+                        TreeNodeId::Viewport(id) => StateEvent::OpenViewport(id),
+                        TreeNodeId::Uniform(id) => StateEvent::InspectResource(id.into()),
+                        TreeNodeId::BindGroup(id) => StateEvent::InspectResource(id.into()),
+                        TreeNodeId::Shader(id) => StateEvent::InspectResource(id.into()),
+                        TreeNodeId::Camera(id) => StateEvent::InspectResource(id.into()),
+                        TreeNodeId::Dimension(id) => StateEvent::InspectResource(id.into()),
+                        TreeNodeId::Sampler(id) => StateEvent::InspectResource(id.into()),
+                        TreeNodeId::Texture(id) => StateEvent::InspectResource(id.into()),
+                        TreeNodeId::TextureView(id) => StateEvent::InspectResource(id.into()),
+                        TreeNodeId::Model(id) => StateEvent::InspectResource(id.into()),
+                        TreeNodeId::RenderPipeline(id) => StateEvent::InspectResource(id.into()),
+                        TreeNodeId::RenderPass(id) => StateEvent::InspectResource(id.into()),
+                        TreeNodeId::ComputePass(id) => StateEvent::InspectResource(id.into()),
+                        TreeNodeId::FramePlan(id) => StateEvent::InspectResource(id.into()),
                         TreeNodeId::UniformFolder
                         | TreeNodeId::BindGroupFolder
                         | TreeNodeId::ViewportFolder
@@ -349,14 +373,13 @@ pub fn ui(state: &mut StateSnapshot, ui: &mut egui::Ui) -> Response {
                         | TreeNodeId::TextureFolder
                         | TreeNodeId::TextureViewFolder
                         | TreeNodeId::ModelFolder
+                        | TreeNodeId::RenderPipelineFolder
                         | TreeNodeId::RenderPassFolder
                         | TreeNodeId::ComputePassFolder
-                        | TreeNodeId::PendingCreate(_) => None,
+                        | TreeNodeId::PendingCreate(_) => continue,
                     };
 
-                    if let Some(event) = event {
-                        state.event_queue.add(event);
-                    }
+                    state.event_queue.add(event);
                 }
             }
             _ => {}

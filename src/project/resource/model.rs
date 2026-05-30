@@ -1,7 +1,6 @@
 use std::task::Poll;
 
 use serde::{Deserialize, Serialize};
-use wgpu::BindGroupLayout;
 
 use crate::{
     error::{AppError, AppResult},
@@ -28,6 +27,7 @@ pub struct ModelCreationContext<'a> {
     pub device: &'a wgpu::Device,
     pub queue: &'a wgpu::Queue,
     pub file_storage: &'a FileStorage,
+    pub runtime_bind_groups: &'a RuntimeStorage<BindGroup>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -126,6 +126,13 @@ impl Model {
             .flatten()
     }
 
+    pub fn get_material_bind_group_ids(&self) -> Vec<BindGroupId> {
+        self.material_bind_group_ids
+            .iter()
+            .filter_map(|a| *a)
+            .collect()
+    }
+
     pub fn set_material_bind_group_id(
         &mut self,
         material_index: usize,
@@ -209,6 +216,38 @@ impl Model {
         self.runtime_revision.increase();
         self.project_revision.increase();
     }
+
+    fn validate_all_material_bind_group_layouts_are_the_same(
+        &self,
+        bind_group_ids: &[BindGroupId],
+        runtime_bind_groups: &RuntimeStorage<BindGroup>,
+    ) -> AppResult<Option<()>> {
+        let mut first = None;
+
+        for (i, id) in bind_group_ids.into_iter().copied().enumerate() {
+            let Some(bind_group) = runtime_bind_groups.get_init(id)? else {
+                // Bind groups aren't ready yet
+                return Ok(None);
+            };
+
+            let layout_entries = bind_group.layout_entries();
+
+            let Some((first_i, _, first_layout_entries)) = first else {
+                first = Some((i, id, layout_entries));
+                continue;
+            };
+
+            if layout_entries != first_layout_entries {
+                return Err(AppError::ModelMaterialBindGroupLayoutMismatch {
+                    model_label: self.label.clone(),
+                    expected_material_index: first_i,
+                    material_index: i,
+                });
+            }
+        }
+
+        Ok(Some(()))
+    }
 }
 
 impl Creatable for Model {
@@ -260,6 +299,18 @@ impl SyncResource for Model {
                     .ok_or(AppError::uninit_field("Source"))?;
                 let vertex_buffer_spec = self.vertex_buffer_spec.clone();
                 let device = ctx.device.clone();
+
+                // This is required because the render pipeline expects all
+                // material bind group layouts to be the same
+                let validation = self.validate_all_material_bind_group_layouts_are_the_same(
+                    &self.get_material_bind_group_ids(),
+                    ctx.runtime_bind_groups,
+                )?;
+
+                if validation.is_none() {
+                    // Some bind group is yet to be synced, wait for it to finish
+                    return Ok(SyncOutcome::Pending(ModelJob::Start));
+                };
 
                 self.sync(
                     ctx,
@@ -325,34 +376,6 @@ impl ModelRuntime {
 
     pub fn get_material(&self, material_id: usize) -> Option<&Material> {
         self.materials.get(material_id)
-    }
-
-    /// Returns the bind group layout of the first mesh.
-    /// This assumes all the meshes have the same bind group layout;
-    /// Otherwise the render pipeline will throw an error during rendering.
-    pub fn get_bind_group_layout<'a>(
-        &self,
-        model: &Model,
-        runtime_bind_groups: &'a RuntimeStorage<BindGroup>,
-    ) -> AppResult<Option<&'a BindGroupLayout>> {
-        let mesh = self
-            .meshes()
-            .first()
-            .ok_or(AppError::uninit_field("Mesh 0"))?;
-        let m_index = model
-            .selected_material_index(0, mesh)
-            .ok_or(AppError::uninit_field("Mesh 0 Selected Material"))?;
-        self.get_material(m_index)
-            .ok_or(AppError::uninit_field(format!("Material {m_index}")))?;
-        let bind_group_id = model
-            .material_bind_group_id(m_index)
-            .ok_or(AppError::uninit_field(format!(
-                "Material {m_index} Bind Group Id"
-            )))?;
-        let Some(bind_group) = runtime_bind_groups.get_init(bind_group_id)? else {
-            return Ok(None);
-        };
-        Ok(Some(bind_group.inner_layout()))
     }
 }
 

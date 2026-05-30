@@ -5,6 +5,7 @@ pub mod dimension;
 pub mod frame_plan;
 pub mod model;
 pub mod render_pass;
+pub mod render_pipeline;
 pub mod sampler;
 pub mod shader;
 pub mod texture;

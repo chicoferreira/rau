@@ -1,6 +1,6 @@
 use crate::{
     error::AppResult,
-    file::file_storage::FileStorage,
+    file::{file_storage::FileStorage, identifier::ProjectIdentifier},
     project::{
         Project,
         paths::FilePath,
@@ -10,7 +10,8 @@ use crate::{
             compute_pass::{ComputePass, ComputePassBindGroupEntry},
             dimension::Dimension,
             model::{Model, ModelRuntime},
-            render_pass::{LoadOperation, RenderDraw, RenderPass, RenderPassTarget},
+            render_pass::{LoadOperation, RenderPass, RenderPassTarget},
+            render_pipeline::{RenderDrawStrategy, RenderPipeline},
             sampler::{Sampler, SamplerSpec},
             shader::Shader,
             texture::{Texture, TextureSource},
@@ -23,6 +24,35 @@ use crate::{
     },
     ui::size::Size2d,
 };
+
+#[cfg(not(target_arch = "wasm32"))]
+#[allow(dead_code)]
+pub async fn create_and_save_scene(
+    app_file_system: &crate::file::file_system::AppFileSystem,
+    device: &wgpu::Device,
+) -> AppResult<()> {
+    use std::path::PathBuf;
+
+    use crate::file::{
+        absolute::AbsolutePathBuf,
+        file_system::{AppFileSystemTrait, ProjectFileSystemTrait},
+    };
+
+    let project_id = ProjectIdentifier::new(
+        "full-example",
+        AbsolutePathBuf::new(PathBuf::from("projects/full-example"))?,
+    );
+    let (file_system, file_watcher) = app_file_system.mount_project(project_id.clone()).await?;
+
+    let file_storage = FileStorage::new(project_id, file_system.clone(), file_watcher);
+
+    let project = create_scene(&device, Size2d::new(1080, 1080), &file_storage).await?;
+
+    let bytes = project.serialize()?;
+    file_system.save(&FilePath::project_json(), bytes);
+
+    Ok(())
+}
 
 #[allow(dead_code)]
 pub async fn create_scene(
@@ -201,9 +231,10 @@ pub async fn create_scene(
 
     let cube_model_id = project.models.register(cube_model);
 
+    let hdr_texture_format = wgpu::TextureFormat::Rgba16Float;
     let hdr_texture = Texture::new(
         "Hdr Texture".to_string(),
-        wgpu::TextureFormat::Rgba16Float,
+        hdr_texture_format,
         wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::RENDER_ATTACHMENT,
         TextureSource::Dimension(Some(dimension_id)),
     );
@@ -336,9 +367,10 @@ pub async fn create_scene(
 
     let environment_bind_group_id = project.bind_groups.register(environment_bind_group);
 
+    let depth_texture_format = wgpu::TextureFormat::Depth32Float;
     let depth_texture = Texture::new(
         "depth texture",
-        wgpu::TextureFormat::Depth32Float,
+        depth_texture_format,
         wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::RENDER_ATTACHMENT,
         TextureSource::Dimension(Some(dimension_id)),
     );
@@ -394,55 +426,65 @@ pub async fn create_scene(
         )),
     );
 
-    main_render_pass.add_pipeline(
+    let light_pipeline = RenderPipeline::new(
         "light pipeline",
-        primitive_state.clone(),
+        primitive_state,
         Some(light_shader_id),
         Some(light_shader_id),
-        vec![
-            (0, Some(camera_bind_group_id)),
-            (1, Some(light_bind_group_id)),
-        ],
-        RenderDraw::Model {
+        RenderDrawStrategy::Model {
             model_id: Some(cube_model_id),
             instances: 0..1,
             mesh_vertex_slot: 0,
             material_bind_group_slot: None,
         },
-    );
-
-    main_render_pass.add_pipeline(
-        "models pipeline",
-        primitive_state.clone(),
-        Some(main_shader_id),
-        Some(main_shader_id),
         vec![
-            (1, Some(camera_bind_group_id)),
-            (2, Some(light_bind_group_id)),
-            (3, Some(environment_bind_group_id)),
+            (0, Some(camera_bind_group_id)),
+            (1, Some(light_bind_group_id)),
         ],
-        RenderDraw::Model {
+        hdr_texture_format,
+        Some(depth_texture_format),
+    );
+    let light_pipeline_id = project.render_pipelines.register(light_pipeline);
+
+    let models_pipeline = RenderPipeline::new(
+        "models pipeline",
+        primitive_state,
+        Some(main_shader_id),
+        Some(main_shader_id),
+        RenderDrawStrategy::Model {
             model_id: Some(cube_model_id),
             instances: 0..100,
             mesh_vertex_slot: 0,
             material_bind_group_slot: Some(0),
         },
+        vec![
+            (1, Some(camera_bind_group_id)),
+            (2, Some(light_bind_group_id)),
+            (3, Some(environment_bind_group_id)),
+        ],
+        hdr_texture_format,
+        Some(depth_texture_format),
     );
+    let models_pipeline_id = project.render_pipelines.register(models_pipeline);
 
-    main_render_pass.add_pipeline(
+    let sky_pipeline = RenderPipeline::new(
         "sky pipeline",
         primitive_state,
         Some(sky_shader_id),
         Some(sky_shader_id),
+        RenderDrawStrategy::Direct {
+            vertices: 0..3,
+            instances: 0..1,
+        },
         vec![
             (0, Some(camera_bind_group_id)),
             (1, Some(environment_bind_group_id)),
         ],
-        RenderDraw::Direct {
-            vertices: 0..3,
-            instances: 0..1,
-        },
+        hdr_texture_format,
+        Some(depth_texture_format),
     );
+    let sky_pipeline_id = project.render_pipelines.register(sky_pipeline);
+    main_render_pass.set_pipelines(vec![light_pipeline_id, models_pipeline_id, sky_pipeline_id]);
 
     let main_render_pass_id = project.render_passes.register(main_render_pass);
     project.frame_plan.add(Some(main_render_pass_id));
@@ -453,17 +495,23 @@ pub async fn create_scene(
         None,
     );
 
-    hdr_render_pass.add_pipeline(
+    let hdr_pipeline = RenderPipeline::new(
         "HDR pipeline",
         primitive_state,
         Some(hdr_shader_id),
         Some(hdr_shader_id),
-        vec![(0, Some(hdr_bind_group_id))],
-        RenderDraw::Direct {
+        RenderDrawStrategy::Direct {
             vertices: 0..3,
             instances: 0..1,
         },
+        vec![(0, Some(hdr_bind_group_id))],
+        viewport_texture_format,
+        None,
     );
+
+    let hdr_pipeline_id = project.render_pipelines.register(hdr_pipeline);
+
+    hdr_render_pass.set_pipelines(vec![hdr_pipeline_id]);
 
     let hdr_render_pass_id = project.render_passes.register(hdr_render_pass);
     project.frame_plan.add(Some(hdr_render_pass_id));

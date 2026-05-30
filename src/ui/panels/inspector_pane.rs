@@ -4,8 +4,8 @@ use crate::{
     file::file_storage::OpenFileState,
     project::{
         BindGroupId, CameraId, ComputePassId, DimensionId, FramePlanId, ModelId, RenderPassId,
-        ResourceId, SamplerId, ShaderId, TextureId, TextureViewId, UniformId, ViewportId,
-        paths::FilePath,
+        RenderPipelineId, ResourceId, SamplerId, ShaderId, TextureId, TextureViewId, UniformId,
+        ViewportId, paths::FilePath,
     },
     ui::{components::tiles::Pane, pane::StateSnapshot},
 };
@@ -23,6 +23,7 @@ pub enum InspectorPane {
     TextureView(TextureViewId),
     Viewport(ViewportId),
     Model(ModelId),
+    RenderPipeline(RenderPipelineId),
     RenderPass(RenderPassId),
     FramePlan(FramePlanId),
     ComputePass(ComputePassId),
@@ -63,6 +64,7 @@ impl Pane for InspectorPane {
             InspectorPane::TextureView(id) => resource_tab_title(*id, state).into(),
             InspectorPane::Viewport(id) => resource_tab_title(*id, state).into(),
             InspectorPane::Model(id) => resource_tab_title(*id, state).into(),
+            InspectorPane::RenderPipeline(id) => resource_tab_title(*id, state).into(),
             InspectorPane::RenderPass(id) => resource_tab_title(*id, state).into(),
             InspectorPane::FramePlan(id) => resource_tab_title(*id, state).into(),
             InspectorPane::ComputePass(id) => resource_tab_title(*id, state).into(),
@@ -110,6 +112,9 @@ impl Pane for InspectorPane {
                         }
                         InspectorPane::Model(model_id) => {
                             state.model_inspector_ui(ui, *model_id);
+                        }
+                        InspectorPane::RenderPipeline(render_pipeline_id) => {
+                            state.render_pipeline_inspector_ui(ui, *render_pipeline_id);
                         }
                         InspectorPane::RenderPass(render_pass_id) => {
                             state.render_pass_inspector_ui(ui, *render_pass_id);

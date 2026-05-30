@@ -34,6 +34,7 @@ pub struct BindGroup {
 
 pub struct BindGroupRuntime {
     layout: wgpu::BindGroupLayout,
+    layout_entries: Vec<wgpu::BindGroupLayoutEntry>,
     inner: wgpu::BindGroup,
 }
 
@@ -178,6 +179,10 @@ impl BindGroup {
 impl BindGroupRuntime {
     pub fn inner_layout(&self) -> &wgpu::BindGroupLayout {
         &self.layout
+    }
+
+    pub fn layout_entries(&self) -> &[wgpu::BindGroupLayoutEntry] {
+        &self.layout_entries
     }
 
     pub fn inner(&self) -> &wgpu::BindGroup {
@@ -396,7 +401,11 @@ impl SyncResource for BindGroup {
                     &group_entries,
                 );
 
-                let runtime = Self::Runtime { layout, inner };
+                let runtime = Self::Runtime {
+                    layout,
+                    layout_entries,
+                    inner,
+                };
 
                 self.sync(ctx, None, BindGroupJob::Validation(runtime, scope.pop()))
             }

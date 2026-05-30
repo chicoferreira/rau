@@ -1,8 +1,8 @@
 {
   "framePlan": {
     "entries": [
-      { "id": 5598934305016276065, "renderPassId": { "idx": 1, "version": 1 } },
-      { "id": 8918716868420356981, "renderPassId": { "idx": 2, "version": 1 } }
+      { "id": 1952433409541445093, "renderPassId": { "idx": 1, "version": 1 } },
+      { "id": 5894853590723985033, "renderPassId": { "idx": 2, "version": 1 } }
     ]
   },
   "shaders": [
@@ -32,8 +32,7 @@
         "label": "HDR Buffer",
         "textureViewId": { "idx": 3, "version": 1 },
         "dimensionId": { "idx": 1, "version": 1 },
-        "controlsCameraId": { "idx": 1, "version": 1 },
-        "requestedUiSize": null
+        "controlsCameraId": { "idx": 1, "version": 1 }
       },
       "version": 1
     },
@@ -55,7 +54,7 @@
         "fields": [
           {
             "label": "view_position",
-            "id": 17338917605855533117,
+            "id": 6928600555204913530,
             "source": {
               "type": "camera",
               "camera_id": { "idx": 1, "version": 1 },
@@ -64,7 +63,7 @@
           },
           {
             "label": "view",
-            "id": 8532700721295099674,
+            "id": 7125030807404774929,
             "source": {
               "type": "camera",
               "camera_id": { "idx": 1, "version": 1 },
@@ -73,7 +72,7 @@
           },
           {
             "label": "proj_view",
-            "id": 8254482365306610017,
+            "id": 16171929969460285186,
             "source": {
               "type": "camera",
               "camera_id": { "idx": 1, "version": 1 },
@@ -82,7 +81,7 @@
           },
           {
             "label": "inv_proj",
-            "id": 16997202082755079593,
+            "id": 7037080092711087576,
             "source": {
               "type": "camera",
               "camera_id": { "idx": 1, "version": 1 },
@@ -91,7 +90,7 @@
           },
           {
             "label": "inv_view",
-            "id": 4522533068877829683,
+            "id": 7064538863078425782,
             "source": {
               "type": "camera",
               "camera_id": { "idx": 1, "version": 1 },
@@ -108,7 +107,7 @@
         "fields": [
           {
             "label": "position",
-            "id": 14821646575551399709,
+            "id": 17104277899690141062,
             "source": {
               "type": "userDefined",
               "data_type": "vec3f",
@@ -117,7 +116,7 @@
           },
           {
             "label": "color",
-            "id": 774858117802945978,
+            "id": 17698629891214046211,
             "source": {
               "type": "userDefined",
               "data_type": "rgb",
@@ -136,7 +135,7 @@
         "label": "camera bind group",
         "entries": [
           {
-            "id": 5534530010483538464,
+            "id": 2953213360164447626,
             "visibility": "VERTEX | FRAGMENT",
             "resource": {
               "type": "uniform",
@@ -152,7 +151,7 @@
         "label": "light bind group",
         "entries": [
           {
-            "id": 8409231501571542427,
+            "id": 7822621273061783947,
             "visibility": "VERTEX | FRAGMENT",
             "resource": {
               "type": "uniform",
@@ -168,7 +167,7 @@
         "label": "cube bind group",
         "entries": [
           {
-            "id": 5089035403280418029,
+            "id": 1389957793993263508,
             "visibility": "VERTEX | FRAGMENT",
             "resource": {
               "type": "texture",
@@ -180,7 +179,7 @@
             }
           },
           {
-            "id": 8186877729984797312,
+            "id": 7783090778124969206,
             "visibility": "VERTEX | FRAGMENT",
             "resource": {
               "type": "texture",
@@ -192,7 +191,7 @@
             }
           },
           {
-            "id": 6407598045127887178,
+            "id": 15170609366101758009,
             "visibility": "VERTEX | FRAGMENT",
             "resource": {
               "type": "sampler",
@@ -211,7 +210,7 @@
         "label": "HDR Bind Group",
         "entries": [
           {
-            "id": 5137883360022060068,
+            "id": 16733935291551016374,
             "visibility": "VERTEX | FRAGMENT",
             "resource": {
               "type": "texture",
@@ -223,7 +222,7 @@
             }
           },
           {
-            "id": 6483174767174210371,
+            "id": 3741407330709941952,
             "visibility": "VERTEX | FRAGMENT",
             "resource": {
               "type": "sampler",
@@ -242,7 +241,7 @@
         "label": "compute shader bind group",
         "entries": [
           {
-            "id": 13495370010990317964,
+            "id": 275776604663684727,
             "visibility": "COMPUTE",
             "resource": {
               "type": "texture",
@@ -254,7 +253,7 @@
             }
           },
           {
-            "id": 10097804655350577814,
+            "id": 17059235708199416085,
             "visibility": "COMPUTE",
             "resource": {
               "type": "storageTexture",
@@ -274,7 +273,7 @@
         "label": "Environment Bind Group",
         "entries": [
           {
-            "id": 3768429899594898768,
+            "id": 14474798373087354475,
             "visibility": "VERTEX | FRAGMENT",
             "resource": {
               "type": "texture",
@@ -286,7 +285,7 @@
             }
           },
           {
-            "id": 7826451995298668927,
+            "id": 4615161084084413336,
             "visibility": "VERTEX | FRAGMENT",
             "resource": {
               "type": "sampler",
@@ -491,7 +490,10 @@
   ],
   "dimensions": [
     { "value": null, "version": 0 },
-    { "value": { "label": "Main Dimension", "size": [800, 600] }, "version": 1 }
+    {
+      "value": { "label": "Main Dimension", "size": [1080, 1080] },
+      "version": 1
+    }
   ],
   "cameras": [
     { "value": null, "version": 0 },
@@ -536,6 +538,123 @@
       "version": 1
     }
   ],
+  "renderPipelines": [
+    { "value": null, "version": 0 },
+    {
+      "value": {
+        "label": "light pipeline",
+        "primitiveState": {
+          "topology": "triangle-list",
+          "stripIndexFormat": null,
+          "frontFace": "ccw",
+          "cullMode": "back",
+          "unclippedDepth": false,
+          "polygonMode": "fill",
+          "conservative": false
+        },
+        "vertexShader": { "idx": 3, "version": 1 },
+        "fragmentShader": { "idx": 3, "version": 1 },
+        "drawStrategy": {
+          "type": "model",
+          "model_id": { "idx": 1, "version": 1 },
+          "instances": { "start": 0, "end": 1 },
+          "mesh_vertex_slot": 0,
+          "material_bind_group_slot": null
+        },
+        "staticBindGroups": [
+          [0, { "idx": 1, "version": 1 }],
+          [1, { "idx": 2, "version": 1 }]
+        ],
+        "colorFormat": "rgba16float",
+        "depthFormat": "depth32float"
+      },
+      "version": 1
+    },
+    {
+      "value": {
+        "label": "models pipeline",
+        "primitiveState": {
+          "topology": "triangle-list",
+          "stripIndexFormat": null,
+          "frontFace": "ccw",
+          "cullMode": "back",
+          "unclippedDepth": false,
+          "polygonMode": "fill",
+          "conservative": false
+        },
+        "vertexShader": { "idx": 4, "version": 1 },
+        "fragmentShader": { "idx": 4, "version": 1 },
+        "drawStrategy": {
+          "type": "model",
+          "model_id": { "idx": 1, "version": 1 },
+          "instances": { "start": 0, "end": 100 },
+          "mesh_vertex_slot": 0,
+          "material_bind_group_slot": 0
+        },
+        "staticBindGroups": [
+          [1, { "idx": 1, "version": 1 }],
+          [2, { "idx": 2, "version": 1 }],
+          [3, { "idx": 6, "version": 1 }]
+        ],
+        "colorFormat": "rgba16float",
+        "depthFormat": "depth32float"
+      },
+      "version": 1
+    },
+    {
+      "value": {
+        "label": "sky pipeline",
+        "primitiveState": {
+          "topology": "triangle-list",
+          "stripIndexFormat": null,
+          "frontFace": "ccw",
+          "cullMode": "back",
+          "unclippedDepth": false,
+          "polygonMode": "fill",
+          "conservative": false
+        },
+        "vertexShader": { "idx": 5, "version": 1 },
+        "fragmentShader": { "idx": 5, "version": 1 },
+        "drawStrategy": {
+          "type": "direct",
+          "vertices": { "start": 0, "end": 3 },
+          "instances": { "start": 0, "end": 1 }
+        },
+        "staticBindGroups": [
+          [0, { "idx": 1, "version": 1 }],
+          [1, { "idx": 6, "version": 1 }]
+        ],
+        "colorFormat": "rgba16float",
+        "depthFormat": "depth32float"
+      },
+      "version": 1
+    },
+    {
+      "value": {
+        "label": "HDR pipeline",
+        "primitiveState": {
+          "topology": "triangle-list",
+          "stripIndexFormat": null,
+          "frontFace": "ccw",
+          "cullMode": "back",
+          "unclippedDepth": false,
+          "polygonMode": "fill",
+          "conservative": false
+        },
+        "vertexShader": { "idx": 2, "version": 1 },
+        "fragmentShader": { "idx": 2, "version": 1 },
+        "drawStrategy": {
+          "type": "direct",
+          "vertices": { "start": 0, "end": 3 },
+          "instances": { "start": 0, "end": 1 }
+        },
+        "staticBindGroups": [[0, { "idx": 4, "version": 1 }]],
+        "colorFormat": "rgba8unorm-srgb",
+        "depthFormat": null
+      },
+      "version": 1
+    }
+  ],
   "renderPasses": [
     { "value": null, "version": 0 },
     {
@@ -550,86 +669,9 @@
           "loadOperation": { "type": "Clear", "value": 1.0 }
         },
         "pipelines": [
-          {
-            "id": 10428428691204811716,
-            "label": "light pipeline",
-            "primitiveState": {
-              "topology": "triangle-list",
-              "stripIndexFormat": null,
-              "frontFace": "ccw",
-              "cullMode": "back",
-              "unclippedDepth": false,
-              "polygonMode": "fill",
-              "conservative": false
-            },
-            "vertexShader": { "idx": 3, "version": 1 },
-            "fragmentShader": { "idx": 3, "version": 1 },
-            "staticBindGroups": [
-              [0, { "idx": 1, "version": 1 }],
-              [1, { "idx": 2, "version": 1 }]
-            ],
-            "draw": {
-              "type": "Model",
-              "model_id": { "idx": 1, "version": 1 },
-              "instances": { "start": 0, "end": 1 },
-              "mesh_vertex_slot": 0,
-              "material_bind_group_slot": null
-            },
-            "dirty": false
-          },
-          {
-            "id": 8992986473092237939,
-            "label": "models pipeline",
-            "primitiveState": {
-              "topology": "triangle-list",
-              "stripIndexFormat": null,
-              "frontFace": "ccw",
-              "cullMode": "back",
-              "unclippedDepth": false,
-              "polygonMode": "fill",
-              "conservative": false
-            },
-            "vertexShader": { "idx": 4, "version": 1 },
-            "fragmentShader": { "idx": 4, "version": 1 },
-            "staticBindGroups": [
-              [1, { "idx": 1, "version": 1 }],
-              [2, { "idx": 2, "version": 1 }],
-              [3, { "idx": 6, "version": 1 }]
-            ],
-            "draw": {
-              "type": "Model",
-              "model_id": { "idx": 1, "version": 1 },
-              "instances": { "start": 0, "end": 100 },
-              "mesh_vertex_slot": 0,
-              "material_bind_group_slot": 0
-            },
-            "dirty": false
-          },
-          {
-            "id": 2146744722145373575,
-            "label": "sky pipeline",
-            "primitiveState": {
-              "topology": "triangle-list",
-              "stripIndexFormat": null,
-              "frontFace": "ccw",
-              "cullMode": "back",
-              "unclippedDepth": false,
-              "polygonMode": "fill",
-              "conservative": false
-            },
-            "vertexShader": { "idx": 5, "version": 1 },
-            "fragmentShader": { "idx": 5, "version": 1 },
-            "staticBindGroups": [
-              [0, { "idx": 1, "version": 1 }],
-              [1, { "idx": 6, "version": 1 }]
-            ],
-            "draw": {
-              "type": "Direct",
-              "vertices": { "start": 0, "end": 3 },
-              "instances": { "start": 0, "end": 1 }
-            },
-            "dirty": false
-          }
+          { "idx": 1, "version": 1 },
+          { "idx": 2, "version": 1 },
+          { "idx": 3, "version": 1 }
         ]
       },
       "version": 1
@@ -642,30 +684,7 @@
           "loadOperation": { "type": "Clear", "value": [0.0, 0.0, 0.0, 1.0] }
         },
         "depthTarget": null,
-        "pipelines": [
-          {
-            "id": 17797847800040295895,
-            "label": "HDR pipeline",
-            "primitiveState": {
-              "topology": "triangle-list",
-              "stripIndexFormat": null,
-              "frontFace": "ccw",
-              "cullMode": "back",
-              "unclippedDepth": false,
-              "polygonMode": "fill",
-              "conservative": false
-            },
-            "vertexShader": { "idx": 2, "version": 1 },
-            "fragmentShader": { "idx": 2, "version": 1 },
-            "staticBindGroups": [[0, { "idx": 4, "version": 1 }]],
-            "draw": {
-              "type": "Direct",
-              "vertices": { "start": 0, "end": 3 },
-              "instances": { "start": 0, "end": 1 }
-            },
-            "dirty": false
-          }
-        ]
+        "pipelines": [{ "idx": 4, "version": 1 }]
       },
       "version": 1
     }
@@ -677,7 +696,7 @@
         "label": "equirect_to_cube_map",
         "bindGroups": [
           {
-            "id": 4012588922994882566,
+            "id": 776922833393541375,
             "bindGroupId": { "idx": 5, "version": 1 }
           }
         ],

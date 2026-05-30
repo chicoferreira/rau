@@ -3,15 +3,12 @@ use serde::{Deserialize, Serialize};
 use std::task::Poll;
 
 use crate::{
-    error::{AppError, AppResult},
+    error::{AppResult, RequiredFieldExt},
     project::{
-        FramePlanId, ProjectResource, RenderPassId,
+        FramePlanId, ProjectResource, RenderPassId, render,
         resource::{
-            bindgroup::BindGroup,
-            model::Model,
-            render_pass::{self, RenderPass},
-            shader::Shader,
-            texture_view::TextureView,
+            bindgroup::BindGroup, model::Model, render_pass::RenderPass,
+            render_pipeline::RenderPipeline, shader::Shader, texture_view::TextureView,
         },
         storage::{RuntimeStorage, Storage},
         sync::{Revision, RuntimeCell, SyncOutcome, SyncResource, SyncTracker},
@@ -41,12 +38,13 @@ pub struct FramePlanContext<'a> {
     pub device: &'a wgpu::Device,
     pub encoder: &'a mut wgpu::CommandEncoder,
     pub render_passes: &'a Storage<RenderPass>,
-    pub runtime_render_passes: &'a RuntimeStorage<RenderPass>,
+    pub render_pipelines: &'a Storage<RenderPipeline>,
     pub models: &'a Storage<Model>,
+    pub runtime_bind_groups: &'a RuntimeStorage<BindGroup>,
     pub runtime_models: &'a RuntimeStorage<Model>,
     pub runtime_shaders: &'a RuntimeStorage<Shader>,
     pub runtime_texture_views: &'a RuntimeStorage<TextureView>,
-    pub runtime_bind_groups: &'a RuntimeStorage<BindGroup>,
+    pub runtime_render_pipelines: &'a RuntimeStorage<RenderPipeline>,
 }
 
 #[derive(Default)]
@@ -170,34 +168,25 @@ impl SyncResource for FramePlan {
             },
         }
 
-        let render_ctx = render_pass::Context {
-            device: ctx.device,
+        let render_ctx = render::RenderContext {
             models: ctx.models,
+            render_pipelines: ctx.render_pipelines,
             runtime_models: ctx.runtime_models,
-            runtime_shaders: ctx.runtime_shaders,
-            runtime_texture_views: ctx.runtime_texture_views,
             runtime_bind_groups: ctx.runtime_bind_groups,
+            runtime_texture_views: ctx.runtime_texture_views,
+            runtime_render_pipelines: ctx.runtime_render_pipelines,
         };
 
         let scope = WgpuErrorScope::push(ctx.device);
 
         for (index, entry) in self.entries().iter().enumerate() {
-            let render_pass_id = entry.render_pass_id.ok_or(AppError::uninit_field(format!(
+            let render_pass_id = entry.render_pass_id.ok_or_uninit_field(format!(
                 "Frame Plan Entry {index} ({}) Render Pass Id",
                 entry.id
-            )))?;
+            ))?;
             let render_pass = ctx.render_passes.get(render_pass_id)?;
-            let Some(render_pass_runtime) = ctx.runtime_render_passes.get_init(render_pass_id)?
-            else {
-                return pending_after_scope(scope);
-            };
 
-            if render_pass
-                .submit(ctx.encoder, &render_ctx, render_pass_runtime)?
-                .is_none()
-            {
-                return pending_after_scope(scope);
-            }
+            render_pass.submit(ctx.encoder, &render_ctx)?;
         }
 
         let mut future = scope.pop();
@@ -205,16 +194,5 @@ impl SyncResource for FramePlan {
             Poll::Ready(result) => result.map(|()| SyncOutcome::Unchanged(())),
             Poll::Pending => Ok(SyncOutcome::Pending(FramePlanJob::Validation(future))),
         }
-    }
-}
-
-fn pending_after_scope(scope: WgpuErrorScope) -> AppResult<SyncOutcome<(), FramePlanJob>> {
-    let mut future = scope.pop();
-    match future.try_resolve() {
-        Poll::Ready(result) => {
-            result?;
-            Ok(SyncOutcome::Pending(FramePlanJob::Start))
-        }
-        Poll::Pending => Ok(SyncOutcome::Pending(FramePlanJob::Validation(future))),
     }
 }

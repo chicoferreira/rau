@@ -6,9 +6,9 @@ use crate::{
     project::{
         resource::{
             bindgroup::BindGroup, camera::Camera, compute_pass::ComputePass, dimension::Dimension,
-            frame_plan::FramePlan, model::Model, render_pass::RenderPass, sampler::Sampler,
-            shader::Shader, texture::Texture, texture_view::TextureView, uniform::Uniform,
-            viewport::Viewport,
+            frame_plan::FramePlan, model::Model, render_pass::RenderPass,
+            render_pipeline::RenderPipeline, sampler::Sampler, shader::Shader, texture::Texture,
+            texture_view::TextureView, uniform::Uniform, viewport::Viewport,
         },
         storage::{RuntimeStorage, Storage},
         sync::Revision,
@@ -16,6 +16,7 @@ use crate::{
 };
 
 pub mod paths;
+pub mod render;
 pub mod resource;
 pub mod save;
 pub mod storage;
@@ -33,6 +34,7 @@ new_key_type! {
     pub struct CameraId;
     pub struct ModelId;
     pub struct RenderPassId;
+    pub struct RenderPipelineId;
     pub struct ComputePassId;
 }
 
@@ -53,6 +55,7 @@ pub struct Project {
     pub dimensions: Storage<Dimension>,
     pub cameras: Storage<Camera>,
     pub models: Storage<Model>,
+    pub render_pipelines: Storage<RenderPipeline>,
     pub render_passes: Storage<RenderPass>,
     pub compute_passes: Storage<ComputePass>,
     pub main_viewport: Option<ViewportId>,
@@ -69,7 +72,7 @@ pub struct RuntimeProject {
     pub dimensions: RuntimeStorage<Dimension>,
     pub cameras: RuntimeStorage<Camera>,
     pub models: RuntimeStorage<Model>,
-    pub render_passes: RuntimeStorage<RenderPass>,
+    pub render_pipelines: RuntimeStorage<RenderPipeline>,
     pub frame_plan: sync::RuntimeCell<(), <FramePlan as sync::SyncResource>::Job>,
     pub compute_passes: RuntimeStorage<ComputePass>,
 }
@@ -83,6 +86,7 @@ impl Project {
             ResourceId::BindGroup(id) => self.bind_groups.get_label(id),
             ResourceId::Texture(id) => self.textures.get_label(id),
             ResourceId::TextureView(id) => self.texture_views.get_label(id),
+            ResourceId::RenderPipeline(id) => self.render_pipelines.get_label(id),
             ResourceId::RenderPass(id) => self.render_passes.get_label(id),
             ResourceId::Sampler(id) => self.samplers.get_label(id),
             ResourceId::Dimension(id) => self.dimensions.get_label(id),
@@ -107,6 +111,7 @@ impl Project {
             ResourceKind::Dimension => self.dimensions.create(label).into(),
             ResourceKind::Camera => self.cameras.create(label).into(),
             ResourceKind::Model => self.models.create(label).into(),
+            ResourceKind::RenderPipeline => self.render_pipelines.create(label).into(),
             ResourceKind::RenderPass => self.render_passes.create(label).into(),
             ResourceKind::FramePlan => return None,
             ResourceKind::ComputePass => self.compute_passes.create(label).into(),
@@ -128,6 +133,7 @@ impl Project {
             ResourceId::FramePlan(_) => {}
             ResourceId::ComputePass(id) => self.compute_passes.unregister(id),
             ResourceId::Viewport(id) => self.viewports.unregister(id),
+            ResourceId::RenderPipeline(id) => self.render_pipelines.unregister(id),
             ResourceId::RenderPass(id) => self.render_passes.unregister(id),
         };
     }
@@ -144,6 +150,7 @@ impl Project {
             .chain(self.dimensions.project_revisions())
             .chain(self.cameras.project_revisions())
             .chain(self.models.project_revisions())
+            .chain(self.render_pipelines.project_revisions())
             .chain(self.render_passes.project_revisions())
             .chain(self.compute_passes.project_revisions())
             .chain(std::iter::once((
@@ -173,7 +180,8 @@ impl RuntimeProject {
             ResourceId::Dimension(id) => self.dimensions.unregister(id),
             ResourceId::Camera(id) => self.cameras.unregister(id),
             ResourceId::Model(id) => self.models.unregister(id),
-            ResourceId::RenderPass(id) => self.render_passes.unregister(id),
+            ResourceId::RenderPipeline(id) => self.render_pipelines.unregister(id),
+            ResourceId::RenderPass(_) => {}
             ResourceId::FramePlan(_) => self.frame_plan = sync::RuntimeCell::Empty,
             ResourceId::ComputePass(id) => self.compute_passes.unregister(id),
             ResourceId::Viewport(_) => {}
@@ -191,7 +199,7 @@ impl RuntimeProject {
             .chain(self.dimensions.get_errors())
             .chain(self.cameras.get_errors())
             .chain(self.models.get_errors())
-            .chain(self.render_passes.get_errors())
+            .chain(self.render_pipelines.get_errors())
             .chain(self.compute_passes.get_errors())
             .chain(self.frame_plan.get_error(FramePlanId))
     }
@@ -209,6 +217,7 @@ pub enum ResourceId {
     Dimension(DimensionId),
     Camera(CameraId),
     Model(ModelId),
+    RenderPipeline(RenderPipelineId),
     RenderPass(RenderPassId),
     FramePlan(FramePlanId),
     ComputePass(ComputePassId),
@@ -226,6 +235,7 @@ pub enum ResourceKind {
     Dimension,
     Camera,
     Model,
+    RenderPipeline,
     RenderPass,
     FramePlan,
     ComputePass,

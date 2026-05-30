@@ -13,7 +13,7 @@ use crate::{
         paths::FilePath,
         resource::{
             bindgroup::BindGroupCreationContext, camera::CameraCreationContext, compute_pass,
-            frame_plan::FramePlanContext, model::ModelCreationContext, render_pass,
+            frame_plan::FramePlanContext, model::ModelCreationContext, render_pipeline,
             shader::ShaderCreationContext, texture::TextureCreationContext,
             texture_view::TextureViewCreationContext, uniform::UniformCreationContext,
         },
@@ -194,6 +194,7 @@ impl Workspace {
                         ResourceId::Viewport(id) => InspectorPane::Viewport(id),
                         ResourceId::Texture(id) => InspectorPane::Texture(id),
                         ResourceId::Model(id) => InspectorPane::Model(id),
+                        ResourceId::RenderPipeline(id) => InspectorPane::RenderPipeline(id),
                         ResourceId::RenderPass(id) => InspectorPane::RenderPass(id),
                         ResourceId::FramePlan(id) => InspectorPane::FramePlan(id),
                         ResourceId::ComputePass(id) => InspectorPane::ComputePass(id),
@@ -429,6 +430,7 @@ impl Workspace {
             device: &ctx.device,
             queue: &ctx.queue,
             file_storage: &self.file_storage,
+            runtime_bind_groups: &self.runtime_project.bind_groups,
         };
         self.tracker.sync_storage(
             &mut self.project.models,
@@ -446,17 +448,16 @@ impl Workspace {
             view,
         );
 
-        let view = &mut render_pass::Context {
+        let view = &mut render_pipeline::Context {
             device: &ctx.device,
+            runtime_shaders: &mut self.runtime_project.shaders,
+            runtime_bind_groups: &self.runtime_project.bind_groups,
             models: &self.project.models,
             runtime_models: &self.runtime_project.models,
-            runtime_shaders: &mut self.runtime_project.shaders,
-            runtime_texture_views: &mut self.runtime_project.texture_views,
-            runtime_bind_groups: &mut self.runtime_project.bind_groups,
         };
         self.tracker.sync_storage(
-            &mut self.project.render_passes,
-            &mut self.runtime_project.render_passes,
+            &mut self.project.render_pipelines,
+            &mut self.runtime_project.render_pipelines,
             view,
         );
 
@@ -473,22 +474,23 @@ impl Workspace {
             view,
         );
 
-        let mut frame_plan_ctx = FramePlanContext {
+        let view = &mut FramePlanContext {
             device: &ctx.device,
             encoder: &mut ctx.encoder,
             render_passes: &self.project.render_passes,
-            runtime_render_passes: &self.runtime_project.render_passes,
             models: &self.project.models,
             runtime_models: &self.runtime_project.models,
             runtime_shaders: &self.runtime_project.shaders,
             runtime_texture_views: &self.runtime_project.texture_views,
             runtime_bind_groups: &self.runtime_project.bind_groups,
+            render_pipelines: &self.project.render_pipelines,
+            runtime_render_pipelines: &self.runtime_project.render_pipelines,
         };
         let _ = self.tracker.sync_singleton(
             FramePlanId,
             &mut self.project.frame_plan,
             &mut self.runtime_project.frame_plan,
-            &mut frame_plan_ctx,
+            view,
         );
 
         self.tracker.clear_changes();
