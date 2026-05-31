@@ -27,12 +27,20 @@ impl CameraField {
         let position = camera.position();
         let matrix = camera_runtime.matrix();
         match self {
-            CameraField::Position => UniformFieldData::Vec4f(position.to_homogeneous().into()),
-            CameraField::Projection => UniformFieldData::Mat4x4f(matrix.projection.into()),
-            CameraField::View => UniformFieldData::Mat4x4f(matrix.view.into()),
-            CameraField::ProjectionView => UniformFieldData::Mat4x4f(matrix.projection_view.into()),
-            CameraField::InverseProjection => UniformFieldData::Mat4x4f(matrix.inv_proj.into()),
-            CameraField::InverseView => UniformFieldData::Mat4x4f(matrix.inverse_view.into()),
+            CameraField::Position => UniformFieldData::Vec4f(position.extend(1.0).to_array()),
+            CameraField::Projection => {
+                UniformFieldData::Mat4x4f(matrix.projection.to_cols_array_2d())
+            }
+            CameraField::View => UniformFieldData::Mat4x4f(matrix.view.to_cols_array_2d()),
+            CameraField::ProjectionView => {
+                UniformFieldData::Mat4x4f(matrix.projection_view.to_cols_array_2d())
+            }
+            CameraField::InverseProjection => {
+                UniformFieldData::Mat4x4f(matrix.inv_proj.to_cols_array_2d())
+            }
+            CameraField::InverseView => {
+                UniformFieldData::Mat4x4f(matrix.inverse_view.to_cols_array_2d())
+            }
         }
     }
 }

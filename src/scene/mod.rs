@@ -6,8 +6,8 @@ use crate::{
         paths::FilePath,
         resource::{
             bindgroup::{BindGroup, BindGroupEntry, BindGroupResource},
-            camera::Camera,
-            compute_pass::{ComputePass, ComputePassBindGroupEntry},
+            camera::{Camera, Deg, Pitch, Yaw},
+            compute_pass::{ComputePass, WorkGroups},
             dimension::Dimension,
             model::{Model, ModelRuntime},
             render_pass::{LoadOperation, RenderPass, RenderPassTarget},
@@ -85,9 +85,9 @@ pub async fn create_scene(
 
     let mut camera = Camera::new("Main Camera".to_string());
     camera.set_dimension_id(Some(dimension_id));
-    camera.set_position((0.0, 5.0, 10.0));
-    camera.set_pitch(cgmath::Deg(-20.0));
-    camera.set_yaw(cgmath::Deg(-90.0));
+    camera.set_position(glam::Vec3::new(0.0, 5.0, 10.0));
+    camera.set_pitch(Pitch::new(Deg(-20.0)));
+    camera.set_yaw(Yaw::new(Deg(-90.0)));
 
     let camera_id = project.cameras.register(camera);
 
@@ -184,6 +184,7 @@ pub async fn create_scene(
         device.clone(),
     )
     .await?; // temporary so we can set the material selection
+    let mut material_bind_group_ids = cube_model.material_bind_group_ids().to_vec();
     for (material_index, material) in cube_model_runtime.materials().iter().enumerate() {
         let texture_paths = material.texture_paths();
         let diffuse_path = texture_paths.get(0).cloned().unwrap_or_default();
@@ -226,8 +227,12 @@ pub async fn create_scene(
         let bind_group = BindGroup::new("cube bind group", entries);
         let bind_group_id = project.bind_groups.register(bind_group);
 
-        cube_model.set_material_bind_group_id(material_index, Some(bind_group_id));
+        if material_bind_group_ids.len() <= material_index {
+            material_bind_group_ids.resize(material_index + 1, None);
+        }
+        material_bind_group_ids[material_index] = Some(bind_group_id);
     }
+    cube_model.set_material_bind_group_ids(material_bind_group_ids);
 
     let cube_model_id = project.models.register(cube_model);
 
@@ -333,11 +338,9 @@ pub async fn create_scene(
     let num_workgroups = (dst_size + 15) / 16;
     let compute_pass = ComputePass::new(
         "equirect_to_cube_map",
-        vec![ComputePassBindGroupEntry::new(Some(bind_group_id))],
+        vec![Some(bind_group_id)],
         Some(equirectengular_shader_id),
-        num_workgroups,
-        num_workgroups,
-        6,
+        WorkGroups::new(num_workgroups, num_workgroups, 6),
     );
 
     project.compute_passes.register(compute_pass);

@@ -1,15 +1,22 @@
-use egui::{Label, RichText, Sense};
+use egui::RichText;
 use strum::IntoEnumIterator;
 
 use crate::{
     project::{
         BindGroupId, ModelId,
-        resource::model::{
-            Material, Mesh, MeshMaterialSelection, Model, vertex_buffer::VertexBufferField,
+        paths::FilePath,
+        resource::{
+            bindgroup::BindGroup,
+            model::{
+                Material, Mesh, MeshMaterialSelection, Model, ModelRuntime,
+                vertex_buffer::{VertexBufferField, VertexBufferSpec},
+            },
         },
+        storage::Storage,
     },
     ui::{
         components::{
+            draggable_list::{ListEdits, draggable_list},
             hint::hint,
             inspector,
             selector::{AsWidgetText, ComboBoxExt},
@@ -25,283 +32,77 @@ impl StateSnapshot<'_> {
             return;
         };
 
-        inspector::field_grid(ui, "model_inspector_grid", |ui| {
-            let mut source = model.source().cloned();
+        model_source_ui(ui, model, self.file_storage.files());
 
-            let Some(files) = self.file_storage.files() else {
-                ui.spinner();
-                return;
-            };
+        let mut material_bind_group_ids = model.material_bind_group_ids().to_vec();
+        let mut mesh_material_selections = model.mesh_material_selections().to_vec();
+        let mut vertex_buffer_spec = model.vertex_buffer_spec().clone();
 
-            if inspector::file_opt_combo_row(
-                ui,
-                "Source",
-                "model_source",
-                &files,
-                &mut source,
-                |path| path.extension() == Some("obj"),
-            ) {
-                model.set_source(source);
+        model_vertex_buffer_spec_inspector_ui(ui, model_id, &mut vertex_buffer_spec);
+
+        match self.runtime_project.models.get_init(model_id) {
+            Ok(Some(model_runtime)) => {
+                meshes_ui(ui, model_id, model_runtime, &mut mesh_material_selections);
+                materials_ui(
+                    ui,
+                    model_id,
+                    model_runtime,
+                    &self.project.bind_groups,
+                    &mut material_bind_group_ids,
+                );
             }
-        });
-
-        let mut edits = Vec::new();
-
-        model_vertex_buffer_spec_inspector_ui(ui, &mut edits, model_id, &model);
-
-        let model_runtime = match self.runtime_project.models.get_init(model_id) {
-            Ok(Some(model_runtime)) => model_runtime,
             Ok(None) => {
                 ui.spinner();
-                apply_model_edits(self, model_id, edits);
-                return;
             }
-            Err(_) => {
-                apply_model_edits(self, model_id, edits);
-                return;
-            }
+            Err(_) => {}
+        }
+
+        model.set_material_bind_group_ids(material_bind_group_ids);
+        model.set_mesh_material_selections(mesh_material_selections);
+        model.set_vertex_buffer_spec(vertex_buffer_spec);
+    }
+}
+
+fn model_source_ui(ui: &mut egui::Ui, model: &mut Model, files: Option<&[FilePath]>) {
+    inspector::field_grid(ui, "model_inspector_grid", |ui| {
+        let mut source = model.source().cloned();
+
+        let Some(files) = files else {
+            ui.spinner();
+            return;
         };
 
-        egui::CollapsingHeader::new(format!("Meshes ({})", model_runtime.meshes().len()))
-            .default_open(true)
-            .show(ui, |ui| {
-                if model_runtime.meshes().is_empty() {
-                    ui.weak("No meshes.");
-                    return;
-                }
-
-                for (mesh_index, mesh) in model_runtime.meshes().iter().enumerate() {
-                    let id = format!("model_mesh_{model_id:?}_{mesh_index}");
-                    ui.push_id(id, |ui| {
-                        ui.collapsing(format!("Mesh {mesh_index}"), |ui| {
-                            egui::Grid::new("mesh_grid")
-                                .num_columns(2)
-                                .spacing([8.0, 4.0])
-                                .show(ui, |ui| {
-                                    ui.label("Vertices");
-                                    ui.strong(mesh.positions().len().to_string());
-                                    ui.end_row();
-
-                                    ui.label("Normals");
-                                    ui.strong(mesh.normals().len().to_string());
-                                    ui.end_row();
-
-                                    ui.label("UVs");
-                                    ui.strong(mesh.texture_coords().len().to_string());
-                                    ui.end_row();
-
-                                    ui.label("Tangents");
-                                    ui.strong(mesh.tangents().len().to_string());
-                                    ui.end_row();
-
-                                    ui.label("Bitangents");
-                                    ui.strong(mesh.bitangents().len().to_string());
-                                    ui.end_row();
-
-                                    ui.label("Indices");
-                                    ui.strong(mesh.indices().len().to_string());
-                                    ui.end_row();
-
-                                    ui.label("Triangles");
-                                    ui.strong((mesh.indices().len() / 3).to_string());
-                                    ui.end_row();
-
-                                    ui.label("Material");
-                                    let current_selection =
-                                        model.mesh_material_selection(mesh_index);
-                                    let mut selection = current_selection.clone();
-                                    let materials = model_runtime.materials();
-                                    let source_index = mesh.material_index();
-
-                                    let options = [
-                                        MeshMaterialSelection::FromSource,
-                                        MeshMaterialSelection::Material(None),
-                                    ]
-                                    .into_iter()
-                                    .chain(
-                                        (0..materials.len())
-                                            .map(|i| MeshMaterialSelection::Material(Some(i))),
-                                    );
-
-                                    let selected = material_selection_label(
-                                        &selection,
-                                        source_index,
-                                        materials,
-                                    );
-
-                                    egui::ComboBox::from_id_salt((
-                                        "mesh_material_selection",
-                                        model_id,
-                                        mesh_index,
-                                    ))
-                                    .selected_text(selected)
-                                    .show_ui_iter(
-                                        ui,
-                                        options,
-                                        |sel| {
-                                            material_selection_label(sel, source_index, materials)
-                                                .into()
-                                        },
-                                        &mut selection,
-                                    );
-
-                                    if selection != current_selection {
-                                        edits.push(ModelEdit::SetMeshMaterialSelection(
-                                            mesh_index, selection,
-                                        ));
-                                    }
-                                    ui.end_row();
-                                });
-
-                            ui.collapsing("Indices", |ui| {
-                                let row_count = mesh.indices().len();
-                                if row_count < 3 {
-                                    ui.weak("No indices.");
-                                    return;
-                                }
-
-                                let mut delegate = TriangleTableDelegate { mesh };
-
-                                let columns = [
-                                    egui_table::Column::new(100.0).resizable(true),
-                                    egui_table::Column::new(300.0).resizable(true),
-                                    egui_table::Column::new(300.0).resizable(true),
-                                    egui_table::Column::new(300.0).resizable(true),
-                                    egui_table::Column::new(300.0).resizable(true),
-                                    egui_table::Column::new(300.0).resizable(true),
-                                ];
-
-                                ui.allocate_ui(egui::vec2(ui.available_width(), 320.0), |ui| {
-                                    egui::Frame::new().inner_margin(6).show(ui, |ui| {
-                                        ui.set_width(ui.available_width());
-                                        egui_table::Table::new()
-                                            .id_salt(("model_indices", model_id, mesh_index))
-                                            .num_rows(row_count as u64)
-                                            .headers([egui_table::HeaderRow::new(18.0)])
-                                            .columns(columns)
-                                            .auto_size_mode(egui_table::AutoSizeMode::Never)
-                                            .show(ui, &mut delegate);
-                                    });
-                                });
-                            });
-                        });
-                    });
-                }
-            });
-
-        egui::CollapsingHeader::new(format!("Materials ({})", model_runtime.materials().len()))
-            .default_open(true)
-            .show(ui, |ui| {
-                if model_runtime.materials().is_empty() {
-                    ui.weak("No materials.");
-                    return;
-                }
-
-                for (mat_index, mat) in model_runtime.materials().iter().enumerate() {
-                    let id = format!("model_material_{model_id:?}_{mat_index}");
-                    ui.push_id(id, |ui| {
-                        ui.collapsing(format!("Material {mat_index}: {}", mat.label()), |ui| {
-                            ui.horizontal(|ui| {
-                                ui.label("Bind Group");
-                                let mut bind_group_id: Option<BindGroupId> =
-                                    model.material_bind_group_id(mat_index);
-
-                                let storage = &self.project.bind_groups;
-                                egui::ComboBox::from_id_salt("model_material_bind_group")
-                                    .selected_text_storage_opt(storage, bind_group_id)
-                                    .show_ui_storage_opt_with_none(ui, storage, &mut bind_group_id);
-                                if bind_group_id != model.material_bind_group_id(mat_index) {
-                                    edits.push(ModelEdit::SetMaterialBindGroup(
-                                        mat_index,
-                                        bind_group_id,
-                                    ));
-                                }
-                            });
-
-                            if mat.texture_paths().is_empty() {
-                                ui.weak("No textures referenced.");
-                                return;
-                            }
-
-                            egui::CollapsingHeader::new("Textures")
-                                .default_open(true)
-                                .show(ui, |ui| {
-                                    for (tex_index, tex) in mat.texture_paths().iter().enumerate() {
-                                        ui.horizontal(|ui| {
-                                            ui.weak(format!("{tex_index}"));
-                                            ui.label(tex);
-                                        });
-                                    }
-                                });
-                        });
-                    });
-                }
-            });
-
-        apply_model_edits(self, model_id, edits);
-    }
+        if inspector::file_opt_combo_row(ui, "Source", "model_source", files, &mut source, |path| {
+            path.extension() == Some("obj")
+        }) {
+            model.set_source(source);
+        }
+    });
 }
 
 fn model_vertex_buffer_spec_inspector_ui(
     ui: &mut egui::Ui,
-    edits: &mut Vec<ModelEdit>,
     model_id: ModelId,
-    model: &Model,
+    vertex_buffer_spec: &mut VertexBufferSpec,
 ) {
-    let fields: Vec<VertexBufferField> = model.vertex_buffer_spec().fields.clone();
+    let before = vertex_buffer_spec.fields.clone();
+    let mut entries = before
+        .iter()
+        .copied()
+        .enumerate()
+        .collect::<Vec<(usize, VertexBufferField)>>();
 
     egui::CollapsingHeader::new("Vertex Buffer Layout")
         .default_open(false)
         .show(ui, |ui| {
-            let response = egui_dnd::dnd(ui, ("model_vertex_buffer_spec", model_id)).show_custom(
-                |ui, iter| {
-                    for (index, field) in fields.iter().enumerate() {
-                        if index != 0 {
-                            ui.add_space(5.0);
-                        }
-                        let item_id = egui::Id::new((model_id, "vertex_buffer_field", index));
-                        ui.push_id(index, |ui| {
-                            iter.next(ui, item_id, index, true, |ui, item_handle| {
-                                item_handle.ui(ui, |ui, handle, _state| {
-                                    ui.horizontal(|ui| {
-                                        handle.ui(ui, |ui| {
-                                            ui.add(
-                                                Label::new(format!("Location {index}"))
-                                                    .selectable(false)
-                                                    .sense(Sense::click()),
-                                            )
-                                            .context_menu(|ui| {
-                                                if ui.button("Delete attribute").clicked() {
-                                                    edits.push(ModelEdit::DeleteVertexBufferField(
-                                                        index,
-                                                    ));
-                                                    ui.close();
-                                                }
-                                            });
-                                        });
-
-                                        let mut current = *field;
-                                        let fields = VertexBufferField::iter();
-                                        egui::ComboBox::from_id_salt("vertex_buffer_field_kind")
-                                            .selected_text(current.to_string())
-                                            .show_ui_list(ui, fields, &mut current);
-
-                                        if current != *field {
-                                            edits.push(ModelEdit::UpdateVertexBufferField(
-                                                index, current,
-                                            ));
-                                        }
-                                    });
-                                })
-                            });
-                        });
-                    }
+            let mut list_edits = draggable_list(
+                ui,
+                ("model_vertex_buffer_spec", model_id),
+                &entries,
+                |ui, (entry_id, field), index, handle, list_edits| {
+                    model_vertex_buffer_field_ui(ui, handle, index, *entry_id, *field, list_edits);
                 },
             );
-
-            if let Some(update) = response.final_update() {
-                edits.push(ModelEdit::ReorderVertexBufferField(update));
-            }
 
             ui.add_space(6.0);
 
@@ -309,12 +110,18 @@ fn model_vertex_buffer_spec_inspector_ui(
                 for kind in VertexBufferField::iter() {
                     if ui.button(kind.to_string()).clicked() {
                         ui.close();
-                        edits.push(ModelEdit::AddVertexBufferField(kind));
+                        let next_entry_id = entries
+                            .iter()
+                            .map(|(entry_id, _)| *entry_id)
+                            .max()
+                            .map(|entry_id| entry_id + 1)
+                            .unwrap_or_default();
+                        list_edits.push_add_edit((next_entry_id, kind));
                     }
                 }
             });
 
-            if !fields.is_empty() {
+            if !entries.is_empty() {
                 ui.add_space(6.0);
                 ui.add(hint(|ui| {
                     ui.label("Right-click a");
@@ -322,45 +129,340 @@ fn model_vertex_buffer_spec_inspector_ui(
                     ui.label("label to remove an attribute, or drag it to reorder.");
                 }));
             }
+
+            list_edits.apply(&mut entries);
+            let fields = entries.iter().map(|(_, field)| *field).collect::<Vec<_>>();
+
+            if fields != before {
+                vertex_buffer_spec.fields = fields;
+            }
         });
 }
 
-enum ModelEdit {
-    AddVertexBufferField(VertexBufferField),
-    DeleteVertexBufferField(usize),
-    UpdateVertexBufferField(usize, VertexBufferField),
-    ReorderVertexBufferField(egui_dnd::DragUpdate),
-    SetMaterialBindGroup(usize, Option<BindGroupId>),
-    SetMeshMaterialSelection(usize, MeshMaterialSelection),
+fn model_vertex_buffer_field_ui(
+    ui: &mut egui::Ui,
+    handle: egui_dnd::Handle<'_>,
+    index: usize,
+    entry_id: usize,
+    field: VertexBufferField,
+    list_edits: &mut ListEdits<(usize, VertexBufferField)>,
+) {
+    handle.ui(ui, |ui| {
+        ui.add(
+            egui::Label::new(format!("Location {index}"))
+                .selectable(false)
+                .sense(egui::Sense::click()),
+        )
+        .context_menu(|ui| {
+            if ui.button("Delete attribute").clicked() {
+                list_edits.push_remove_edit(index);
+                ui.close();
+            }
+        });
+    });
+
+    ui.indent(("model_vertex_buffer_field", index), |ui| {
+        let mut current = field;
+        inspector::field_grid(ui, ("model_vertex_buffer_field_grid", index), |ui| {
+            inspector::combo_row(
+                ui,
+                "Attribute",
+                "vertex_buffer_field_kind",
+                VertexBufferField::iter(),
+                &mut current,
+            );
+        });
+
+        if current != field {
+            list_edits.push_set_edit(index, (entry_id, current));
+        }
+    });
 }
 
-fn apply_model_edits(state: &mut StateSnapshot<'_>, model_id: ModelId, edits: Vec<ModelEdit>) {
-    if edits.is_empty() {
+fn meshes_ui(
+    ui: &mut egui::Ui,
+    model_id: ModelId,
+    model_runtime: &ModelRuntime,
+    mesh_material_selections: &mut Vec<MeshMaterialSelection>,
+) {
+    egui::CollapsingHeader::new(format!("Meshes ({})", model_runtime.meshes().len()))
+        .default_open(true)
+        .show(ui, |ui| {
+            if model_runtime.meshes().is_empty() {
+                ui.weak("No meshes.");
+                return;
+            }
+
+            for (mesh_index, mesh) in model_runtime.meshes().iter().enumerate() {
+                let id = format!("model_mesh_{model_id:?}_{mesh_index}");
+                ui.push_id(id, |ui| {
+                    mesh_ui(
+                        ui,
+                        model_id,
+                        mesh_index,
+                        mesh,
+                        model_runtime,
+                        mesh_material_selections,
+                    );
+                });
+            }
+        });
+}
+
+fn mesh_ui(
+    ui: &mut egui::Ui,
+    model_id: ModelId,
+    mesh_index: usize,
+    mesh: &Mesh,
+    model_runtime: &ModelRuntime,
+    mesh_material_selections: &mut Vec<MeshMaterialSelection>,
+) {
+    ui.collapsing(format!("Mesh {mesh_index}"), |ui| {
+        mesh_info_ui(
+            ui,
+            model_id,
+            mesh_index,
+            mesh,
+            model_runtime,
+            mesh_material_selections,
+        );
+        mesh_indices_ui(ui, model_id, mesh_index, mesh);
+    });
+}
+
+fn mesh_info_ui(
+    ui: &mut egui::Ui,
+    model_id: ModelId,
+    mesh_index: usize,
+    mesh: &Mesh,
+    model_runtime: &ModelRuntime,
+    mesh_material_selections: &mut Vec<MeshMaterialSelection>,
+) {
+    inspector::field_grid(ui, "mesh_grid", |ui| {
+        inspector::row(ui, "Vertices", |ui| {
+            ui.strong(mesh.positions().len().to_string());
+        });
+        inspector::row(ui, "Normals", |ui| {
+            ui.strong(mesh.normals().len().to_string());
+        });
+        inspector::row(ui, "UVs", |ui| {
+            ui.strong(mesh.texture_coords().len().to_string());
+        });
+        inspector::row(ui, "Tangents", |ui| {
+            ui.strong(mesh.tangents().len().to_string());
+        });
+        inspector::row(ui, "Bitangents", |ui| {
+            ui.strong(mesh.bitangents().len().to_string());
+        });
+        inspector::row(ui, "Indices", |ui| {
+            ui.strong(mesh.indices().len().to_string());
+        });
+        inspector::row(ui, "Triangles", |ui| {
+            ui.strong((mesh.indices().len() / 3).to_string());
+        });
+        inspector::row(ui, "Material", |ui| {
+            mesh_material_selection_ui(
+                ui,
+                model_id,
+                mesh_index,
+                mesh,
+                model_runtime,
+                mesh_material_selections,
+            );
+        });
+    });
+}
+
+fn mesh_material_selection_ui(
+    ui: &mut egui::Ui,
+    model_id: ModelId,
+    mesh_index: usize,
+    mesh: &Mesh,
+    model_runtime: &ModelRuntime,
+    mesh_material_selections: &mut Vec<MeshMaterialSelection>,
+) {
+    let current_selection = mesh_material_selection(mesh_material_selections, mesh_index);
+    let mut selection = current_selection.clone();
+    let materials = model_runtime.materials();
+    let source_index = mesh.material_index();
+
+    let options = [
+        MeshMaterialSelection::FromSource,
+        MeshMaterialSelection::Material(None),
+    ]
+    .into_iter()
+    .chain((0..materials.len()).map(|i| MeshMaterialSelection::Material(Some(i))));
+
+    egui::ComboBox::from_id_salt(("mesh_material_selection", model_id, mesh_index))
+        .selected_text(material_selection_label(
+            &selection,
+            source_index,
+            materials,
+        ))
+        .show_ui_iter(
+            ui,
+            options,
+            |sel| material_selection_label(sel, source_index, materials).into(),
+            &mut selection,
+        );
+
+    if selection != current_selection {
+        set_mesh_material_selection(mesh_material_selections, mesh_index, selection);
+    }
+}
+
+fn mesh_indices_ui(ui: &mut egui::Ui, model_id: ModelId, mesh_index: usize, mesh: &Mesh) {
+    ui.collapsing("Indices", |ui| {
+        let row_count = mesh.indices().len();
+        if row_count < 3 {
+            ui.weak("No indices.");
+            return;
+        }
+
+        let mut delegate = TriangleTableDelegate { mesh };
+        let columns = [
+            egui_table::Column::new(100.0).resizable(true),
+            egui_table::Column::new(300.0).resizable(true),
+            egui_table::Column::new(300.0).resizable(true),
+            egui_table::Column::new(300.0).resizable(true),
+            egui_table::Column::new(300.0).resizable(true),
+            egui_table::Column::new(300.0).resizable(true),
+        ];
+
+        ui.allocate_ui(egui::vec2(ui.available_width(), 320.0), |ui| {
+            egui::Frame::new().inner_margin(6).show(ui, |ui| {
+                ui.set_width(ui.available_width());
+                egui_table::Table::new()
+                    .id_salt(("model_indices", model_id, mesh_index))
+                    .num_rows(row_count as u64)
+                    .headers([egui_table::HeaderRow::new(18.0)])
+                    .columns(columns)
+                    .auto_size_mode(egui_table::AutoSizeMode::Never)
+                    .show(ui, &mut delegate);
+            });
+        });
+    });
+}
+
+fn materials_ui(
+    ui: &mut egui::Ui,
+    model_id: ModelId,
+    model_runtime: &ModelRuntime,
+    bind_groups: &Storage<BindGroup>,
+    material_bind_group_ids: &mut Vec<Option<BindGroupId>>,
+) {
+    egui::CollapsingHeader::new(format!("Materials ({})", model_runtime.materials().len()))
+        .default_open(true)
+        .show(ui, |ui| {
+            if model_runtime.materials().is_empty() {
+                ui.weak("No materials.");
+                return;
+            }
+
+            for (mat_index, mat) in model_runtime.materials().iter().enumerate() {
+                let id = format!("model_material_{model_id:?}_{mat_index}");
+                ui.push_id(id, |ui| {
+                    material_ui(ui, mat_index, mat, bind_groups, material_bind_group_ids)
+                });
+            }
+        });
+}
+
+fn material_ui(
+    ui: &mut egui::Ui,
+    mat_index: usize,
+    mat: &Material,
+    bind_groups: &Storage<BindGroup>,
+    material_bind_group_ids: &mut Vec<Option<BindGroupId>>,
+) {
+    ui.collapsing(format!("Material {mat_index}: {}", mat.label()), |ui| {
+        material_bind_group_ui(ui, mat_index, bind_groups, material_bind_group_ids);
+        material_textures_ui(ui, mat);
+    });
+}
+
+fn material_bind_group_ui(
+    ui: &mut egui::Ui,
+    mat_index: usize,
+    bind_groups: &Storage<BindGroup>,
+    material_bind_group_ids: &mut Vec<Option<BindGroupId>>,
+) {
+    inspector::field_grid(ui, "model_material_grid", |ui| {
+        let current_bind_group_id = material_bind_group_id(material_bind_group_ids, mat_index);
+        let mut bind_group_id = current_bind_group_id;
+
+        if inspector::storage_opt_combo_row(
+            ui,
+            "Bind Group",
+            "model_material_bind_group",
+            bind_groups,
+            &mut bind_group_id,
+        ) {
+            set_material_bind_group_id(material_bind_group_ids, mat_index, bind_group_id);
+        }
+    });
+}
+
+fn material_textures_ui(ui: &mut egui::Ui, mat: &Material) {
+    if mat.texture_paths().is_empty() {
+        ui.weak("No textures referenced.");
         return;
     }
 
-    if let Ok(model) = state.project.models.get_mut(model_id) {
-        for edit in edits {
-            match edit {
-                ModelEdit::AddVertexBufferField(field) => model.add_vertex_buffer_field(field),
-                ModelEdit::DeleteVertexBufferField(index) => {
-                    model.remove_vertex_buffer_field(index)
-                }
-                ModelEdit::UpdateVertexBufferField(index, field) => {
-                    model.set_vertex_buffer_field(index, field)
-                }
-                ModelEdit::ReorderVertexBufferField(update) => {
-                    model.reorder_vertex_buffer_field(update.from, update.to)
-                }
-                ModelEdit::SetMaterialBindGroup(material_index, bind_group_id) => {
-                    model.set_material_bind_group_id(material_index, bind_group_id);
-                }
-                ModelEdit::SetMeshMaterialSelection(mesh_index, selection) => {
-                    model.set_mesh_material_selection(mesh_index, selection);
-                }
+    egui::CollapsingHeader::new("Textures")
+        .default_open(true)
+        .show(ui, |ui| {
+            for (tex_index, tex) in mat.texture_paths().iter().enumerate() {
+                ui.horizontal(|ui| {
+                    ui.weak(format!("{tex_index}"));
+                    ui.label(tex);
+                });
             }
-        }
+        });
+}
+
+fn material_bind_group_id(
+    material_bind_group_ids: &[Option<BindGroupId>],
+    material_index: usize,
+) -> Option<BindGroupId> {
+    material_bind_group_ids
+        .get(material_index)
+        .copied()
+        .flatten()
+}
+
+fn set_material_bind_group_id(
+    material_bind_group_ids: &mut Vec<Option<BindGroupId>>,
+    material_index: usize,
+    bind_group_id: Option<BindGroupId>,
+) {
+    if material_bind_group_ids.len() <= material_index {
+        material_bind_group_ids.resize(material_index + 1, None);
     }
+
+    material_bind_group_ids[material_index] = bind_group_id;
+}
+
+fn mesh_material_selection(
+    mesh_material_selections: &[MeshMaterialSelection],
+    mesh_index: usize,
+) -> MeshMaterialSelection {
+    mesh_material_selections
+        .get(mesh_index)
+        .cloned()
+        .unwrap_or_default()
+}
+
+fn set_mesh_material_selection(
+    mesh_material_selections: &mut Vec<MeshMaterialSelection>,
+    mesh_index: usize,
+    selection: MeshMaterialSelection,
+) {
+    if mesh_material_selections.len() <= mesh_index {
+        mesh_material_selections.resize(mesh_index + 1, MeshMaterialSelection::default());
+    }
+
+    mesh_material_selections[mesh_index] = selection;
 }
 
 struct TriangleTableDelegate<'a> {

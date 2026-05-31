@@ -1,5 +1,4 @@
 use egui::{Label, RichText, Sense, Ui};
-use egui_dnd::DragDropItem;
 use strum::IntoEnumIterator;
 
 use crate::{
@@ -18,9 +17,11 @@ use crate::{
         components::{
             color_edit::color_edit_rgba,
             data_display::{ui_array, ui_array_mut},
+            draggable_list::{ListEdits, draggable_list},
             hint::hint,
+            inspector,
             renameable_label::renameable_label,
-            selector::{AsWidgetText, ComboBoxExt},
+            selector::AsWidgetText,
         },
         pane::StateSnapshot,
         rename::{RenameState, RenameTarget},
@@ -56,13 +57,12 @@ impl UniformFieldSourceKind {
 
 impl StateSnapshot<'_> {
     pub fn uniform_inspector_ui(&mut self, uniform_id: UniformId, ui: &mut egui::Ui) {
-        let Ok(uniform) = self.project.uniforms.get(uniform_id) else {
+        let Ok(uniform) = self.project.uniforms.get_mut(uniform_id) else {
             ui.label("Uniform couldn't be found.");
             return;
         };
 
         let uniform_runtime = self.runtime_project.uniforms.get_init(uniform_id);
-        let has_fields = !uniform.fields().is_empty();
 
         ui.horizontal(|ui| {
             ui.label("Total size");
@@ -82,61 +82,66 @@ impl StateSnapshot<'_> {
 
         ui.add_space(6.0);
 
-        let mut edits = Vec::new();
         let mut ctx = UniformUiContext {
-            edits: &mut edits,
             event_queue: &mut self.event_queue,
             rename_state: &mut self.rename_state,
             cameras: &self.project.cameras,
         };
 
-        let response = egui_dnd::dnd(ui, "uniform").show_custom(|ui, iter| {
-            for (index, field) in uniform.fields().iter().enumerate() {
-                if index != 0 {
-                    ui.add_space(5.0);
-                }
+        let mut fields = uniform.fields().to_vec();
 
+        let mut edits = draggable_list(
+            ui,
+            ("uniform", uniform_id),
+            &fields,
+            |ui, field, index, handle, edits| {
                 let runtime_field = match &uniform_runtime {
                     Ok(Some(uniform_runtime)) => uniform_runtime.fields().get(index),
                     Ok(None) | Err(_) => None,
                 };
 
-                ui.push_id(index, |ui| {
-                    iter.next(ui, field.id(), index, true, |ui, item_handle| {
-                        item_handle.ui(ui, |ui, handle, _state| {
-                            ui.horizontal(|ui| {
-                                handle.ui(ui, |ui| {
-                                    ui_uniform_field_title(ui, &mut ctx, uniform_id, index, field);
-                                });
-                                if let Some(runtime_field) = runtime_field {
-                                    ui_uniform_type_label(ui, runtime_field.data().kind());
-                                }
-                            });
-
-                            ui_uniform_field_entry(ui, &mut ctx, index, field, runtime_field);
-                        })
+                ui.horizontal(|ui| {
+                    handle.ui(ui, |ui| {
+                        ui_uniform_field_title(ui, &mut ctx, edits, uniform_id, index, field);
                     });
+                    if let Some(runtime_field) = runtime_field {
+                        ui_uniform_type_label(ui, runtime_field.data().kind());
+                    }
                 });
-            }
-        });
 
-        if let Some(update) = response.final_update() {
-            edits.push(UniformEdit::Reorder(update));
-        }
+                ui_uniform_field_entry(ui, &mut ctx, edits, index, field, runtime_field);
+            },
+        );
 
         ui.add_space(6.0);
+
+        let mut rename_index: Option<usize> = None;
+
+        const DEFAULT_NAME: &str = "Field";
 
         ui.menu_button("Add Uniform", |ui| {
             for kind in UniformFieldSourceKind::iter() {
                 if ui.button(kind.to_string()).clicked() {
-                    edits.push(UniformEdit::AddField(kind.into_source()));
+                    edits.push_add_edit(UniformField::new(DEFAULT_NAME, kind.into_source()));
+                    rename_index = Some(uniform.fields().len());
                 }
             }
         });
 
-        apply_uniform_edits(self, uniform_id, edits);
+        if let Some(index) = rename_index {
+            *self.rename_state = Some(RenameState {
+                target: RenameTarget::UniformField(uniform_id, index),
+                current_label: DEFAULT_NAME.to_string(),
+            });
+        }
 
-        if has_fields {
+        edits.apply(&mut fields);
+
+        if &fields != uniform.fields() {
+            uniform.set_fields(fields);
+        }
+
+        if !uniform.fields().is_empty() {
             ui.add_space(6.0);
             ui.add(hint(|ui| {
                 ui.label("Right-click a");
@@ -148,7 +153,6 @@ impl StateSnapshot<'_> {
 }
 
 struct UniformUiContext<'a> {
-    edits: &'a mut Vec<UniformEdit>,
     event_queue: &'a mut EventQueue<StateEvent>,
     rename_state: &'a mut Option<RenameState>,
     cameras: &'a Storage<Camera>,
@@ -157,6 +161,7 @@ struct UniformUiContext<'a> {
 fn ui_uniform_field_title(
     ui: &mut Ui,
     ctx: &mut UniformUiContext,
+    edits: &mut ListEdits<UniformField>,
     uniform_id: UniformId,
     index: usize,
     field: &UniformField,
@@ -171,12 +176,12 @@ fn ui_uniform_field_title(
         rename_target.clone(),
     ))
     .context_menu(|ui| {
-        if ui.button("Delete Field").clicked() {
-            ctx.edits.push(UniformEdit::DeleteField(index));
-            ui.close();
-        }
         if ui.button("Rename Field").clicked() {
             ctx.event_queue.start_rename(rename_target);
+            ui.close();
+        }
+        if ui.button("Delete Field").clicked() {
+            edits.push_remove_edit(index);
             ui.close();
         }
     });
@@ -185,20 +190,15 @@ fn ui_uniform_field_title(
 fn ui_uniform_field_entry(
     ui: &mut Ui,
     ctx: &mut UniformUiContext,
+    edits: &mut ListEdits<UniformField>,
     index: usize,
     field: &UniformField,
     runtime_field: Option<&UniformRuntimeField>,
 ) {
     ui.indent("entry", |ui| {
-        let event = egui::Grid::new("entry_grid")
-            .num_columns(2)
-            .spacing([20.0, 4.0])
-            .show(ui, |ui| ui_field_entry(ui, ctx, index, field))
-            .inner;
-
-        if let Some(event) = event {
-            ctx.edits.push(event);
-        }
+        inspector::field_grid(ui, "entry_grid", |ui| {
+            ui_field_entry(ui, ctx, index, field, edits)
+        });
 
         ui.collapsing("Current Values", |ui| {
             if let Some(runtime_field) = runtime_field {
@@ -215,120 +215,58 @@ fn ui_field_entry(
     ctx: &mut UniformUiContext,
     index: usize,
     field: &UniformField,
-) -> Option<UniformEdit> {
+    edits: &mut ListEdits<UniformField>,
+) {
     let mut source_kind = UniformFieldSourceKind::from_source(field.source());
-    let source_kind_before = source_kind;
-    ui.label("Source");
-    egui::ComboBox::from_id_salt("source")
-        .selected_text(source_kind.as_widget_text())
-        .show_ui_list(ui, UniformFieldSourceKind::iter(), &mut source_kind);
-    ui.end_row();
+    let source_kind_changed = inspector::combo_row(
+        ui,
+        "Source",
+        "source",
+        UniformFieldSourceKind::iter(),
+        &mut source_kind,
+    );
 
     let source_specific_event = match &field.source() {
         UniformFieldSource::UserDefined(data) => {
             let mut changed = false;
             let mut kind = data.kind();
-            let kind_before = kind;
-            ui.label("Type");
-            egui::ComboBox::from_id_salt("type")
-                .selected_text(kind.as_widget_text())
-                .show_ui_list(ui, UniformFieldDataKind::iter(), &mut kind);
-            ui.end_row();
+            let kind_changed =
+                inspector::combo_row(ui, "Type", "type", UniformFieldDataKind::iter(), &mut kind);
 
             let mut data = data.clone();
-            if kind_before != kind {
+            if kind_changed {
                 data = UniformFieldData::from_kind(kind);
                 changed = true;
             }
 
-            ui.label("Data");
-            ui.horizontal(|ui| {
+            inspector::row(ui, "Data", |ui| {
                 changed = edit_uniform_field_data(ui, &mut data);
             });
-            ui.end_row();
 
-            changed.then_some(UniformEdit::UpdateFieldSource(
-                index,
-                UniformFieldSource::UserDefined(data),
-            ))
+            changed.then_some(UniformFieldSource::UserDefined(data))
         }
         UniformFieldSource::Camera {
             camera_id, field, ..
         } => {
             let mut camera_id = *camera_id;
             let camera_id_before = camera_id;
-            ui.label("Camera");
-            egui::ComboBox::from_id_salt("camera")
-                .selected_text_storage_opt(&ctx.cameras, camera_id)
-                .show_ui_storage_opt_with_none(ui, &ctx.cameras, &mut camera_id);
-            ui.end_row();
-            ui.label("Field");
+            inspector::storage_opt_combo_row(ui, "Camera", "camera", &ctx.cameras, &mut camera_id);
+
             let mut field = field.clone();
             let field_before = field.clone();
-            egui::ComboBox::from_id_salt("camera_field")
-                .selected_text(field.as_widget_text())
-                .show_ui_list(ui, CameraField::iter(), &mut field);
-            ui.end_row();
+            inspector::combo_row(ui, "Field", "camera_field", CameraField::iter(), &mut field);
 
-            (camera_id != camera_id_before || field != field_before).then_some(
-                UniformEdit::UpdateFieldSource(
-                    index,
-                    UniformFieldSource::new_camera_sourced(camera_id, field),
-                ),
-            )
+            (camera_id != camera_id_before || field != field_before)
+                .then_some(UniformFieldSource::new_camera_sourced(camera_id, field))
         }
     };
 
-    (source_kind != source_kind_before)
-        .then_some(UniformEdit::UpdateFieldSource(
-            index,
-            source_kind.into_source(),
-        ))
+    if let Some(new_source) = source_kind_changed
+        .then_some(source_kind.into_source())
         .or(source_specific_event)
-}
-
-#[derive(Debug)]
-enum UniformEdit {
-    AddField(UniformFieldSource),
-    DeleteField(usize),
-    UpdateFieldSource(usize, UniformFieldSource),
-    Reorder(egui_dnd::DragUpdate),
-}
-
-fn apply_uniform_edits(
-    state: &mut StateSnapshot<'_>,
-    uniform_id: UniformId,
-    edits: Vec<UniformEdit>,
-) {
-    if edits.is_empty() {
-        return;
-    }
-
-    const DEFAULT_NAME: &str = "Field";
-    let mut rename_index = None;
-
-    if let Ok(uniform) = state.project.uniforms.get_mut(uniform_id) {
-        for edit in edits {
-            match edit {
-                UniformEdit::AddField(source) => {
-                    let index = uniform.fields().len();
-                    uniform.add_field(UniformField::new(DEFAULT_NAME, source));
-                    rename_index = Some(index);
-                }
-                UniformEdit::DeleteField(index) => uniform.remove_field(index),
-                UniformEdit::UpdateFieldSource(index, source) => {
-                    uniform.set_field_source(index, source);
-                }
-                UniformEdit::Reorder(update) => uniform.reorder_field(update.from, update.to),
-            }
-        }
-    }
-
-    if let Some(index) = rename_index {
-        *state.rename_state = Some(RenameState {
-            target: RenameTarget::UniformField(uniform_id, index),
-            current_label: DEFAULT_NAME.to_string(),
-        });
+    {
+        let field = UniformField::new(field.label(), new_source);
+        edits.push_set_edit(index, field);
     }
 }
 

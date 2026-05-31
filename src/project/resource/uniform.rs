@@ -1,4 +1,3 @@
-use egui_dnd::utils::shift_vec;
 use serde::{Deserialize, Serialize};
 use std::task::Poll;
 
@@ -14,6 +13,7 @@ use crate::{
         storage::{RuntimeStorage, Storage},
         sync::{Revision, SyncOutcome, SyncResource, SyncTracker},
     },
+    resource_getters, resource_setters,
     utils::{
         async_job::AsyncJob,
         resizable_buffer::{ChangeResult, ResizableBuffer},
@@ -59,17 +59,14 @@ pub struct UniformRuntimeField {
     data: UniformFieldData,
 }
 
-type UniformFieldId = u64;
-
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct UniformField {
     label: String,
-    id: UniformFieldId, // Used for stability in reordering
     source: UniformFieldSource,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", tag = "type")]
 pub enum UniformFieldSource {
     UserDefined(UniformFieldData),
@@ -111,58 +108,25 @@ impl Uniform {
         }
     }
 
-    pub fn fields(&self) -> &[UniformField] {
-        &self.fields
+    resource_getters! {
+        pub fn label() -> &str;
+        pub fn fields() -> &[UniformField];
+    }
+
+    resource_setters! {
+        increases: [runtime_revision, project_revision];
+        pub fn set_label(label: String);
+        pub fn set_fields(fields: Vec<UniformField>);
     }
 
     pub fn get_field(&self, index: usize) -> Option<&UniformField> {
         self.fields.get(index)
     }
 
-    pub fn set_label(&mut self, label: String) {
-        if self.label != label {
-            self.label = label;
-            self.project_revision.increase();
-        }
-    }
-
-    pub fn add_field(&mut self, field: UniformField) {
-        self.fields.push(field);
-        self.runtime_revision.increase();
-        self.project_revision.increase();
-    }
-
-    pub fn remove_field(&mut self, index: usize) {
-        if index < self.fields.len() {
-            self.fields.remove(index);
-            self.runtime_revision.increase();
-            self.project_revision.increase();
-        }
-    }
-
     pub fn set_field_label(&mut self, index: usize, new_name: String) {
         if let Some(field) = self.fields.get_mut(index) {
             field.label = new_name;
-            self.runtime_revision.increase();
-            self.project_revision.increase();
         }
-    }
-
-    pub fn set_field_source(&mut self, index: usize, source: UniformFieldSource) {
-        if let Some(field) = self.fields.get_mut(index) {
-            field.source = source;
-            self.runtime_revision.increase();
-            self.project_revision.increase();
-        }
-    }
-
-    pub fn reorder_field(&mut self, from: usize, to: usize) {
-        if from == to {
-            return;
-        }
-        shift_vec(from, to, &mut self.fields);
-        self.runtime_revision.increase();
-        self.project_revision.increase();
     }
 
     fn runtime_fields(
@@ -328,7 +292,6 @@ fn cast_fields(fields: &[UniformRuntimeField]) -> Vec<u8> {
 impl UniformField {
     pub fn new(label: impl Into<String>, source: UniformFieldSource) -> Self {
         Self {
-            id: fastrand::u64(..),
             label: label.into(),
             source,
         }
@@ -364,8 +327,7 @@ impl UniformField {
             UniformFieldSource::UserDefined(data) => Ok(Some(data.clone())),
             UniformFieldSource::Camera { camera_id, field } => {
                 let camera_id = (*camera_id).ok_or(AppError::uninit_field(format!(
-                    "Uniform Field {index} ({}) Camera Id",
-                    self.id
+                    "Uniform Field {index} Camera Id",
                 )))?;
                 let camera = context.cameras.get(camera_id)?;
                 let Some(camera_runtime) = context.cameras_runtime.get_init(camera_id)? else {
@@ -460,6 +422,6 @@ impl UniformFieldDataKind {
 
 impl std::hash::Hash for UniformField {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.id.hash(state);
+        self.label.hash(state);
     }
 }

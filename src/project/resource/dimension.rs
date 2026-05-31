@@ -6,6 +6,7 @@ use crate::{
         Creatable, DimensionId, ProjectResource,
         sync::{Revision, SyncOutcome, SyncResource, SyncTracker},
     },
+    resource_getters, resource_setters,
     ui::size::Size2d,
 };
 
@@ -30,23 +31,18 @@ impl Dimension {
         }
     }
 
-    pub fn size(&self) -> Size2d {
-        self.size
+    resource_getters! {
+        pub fn size() -> Size2d;
     }
 
-    pub fn set_label(&mut self, label: String) {
-        if self.label != label {
-            self.label = label;
-            self.project_revision.increase();
-        }
+    resource_setters! {
+        increases: [project_revision];
+        pub fn set_label(label: String);
     }
 
-    pub fn set_size(&mut self, size: Size2d) {
-        if self.size != size {
-            self.size = size;
-            self.runtime_revision.increase();
-            self.project_revision.increase();
-        }
+    resource_setters! {
+        increases: [runtime_revision, project_revision];
+        pub fn set_size(size: Size2d);
     }
 }
 

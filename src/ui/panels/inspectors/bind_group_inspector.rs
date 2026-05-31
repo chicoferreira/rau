@@ -1,5 +1,4 @@
 use egui::RichText;
-use egui_dnd::DragDropItem;
 use strum::IntoEnumIterator;
 
 use crate::{
@@ -15,9 +14,11 @@ use crate::{
     },
     ui::{
         components::{
+            draggable_list::{ListEdits, draggable_list},
             flags_selector::flags_selector,
             hint::hint,
-            selector::{AsWidgetText, ComboBoxExt},
+            inspector,
+            selector::AsWidgetText,
         },
         pane::StateSnapshot,
     },
@@ -25,45 +26,43 @@ use crate::{
 
 impl StateSnapshot<'_> {
     pub fn bind_group_inspector_ui(&mut self, bind_group_id: BindGroupId, ui: &mut egui::Ui) {
-        let Ok(bind_group) = self.project.bind_groups.get(bind_group_id) else {
+        let Ok(bind_group) = self.project.bind_groups.get_mut(bind_group_id) else {
             ui.label("Bind group not found");
             return;
         };
 
-        let entries = bind_group.entries().to_vec();
+        let mut entries = bind_group.entries().to_vec();
         if entries.is_empty() {
             ui.label("No entries in bind group");
         }
 
-        let mut edits = Vec::new();
         let mut ctx = BindGroupUiContext {
-            edits: &mut edits,
             uniforms: &self.project.uniforms,
             texture_views: &self.project.texture_views,
             samplers: &self.project.samplers,
         };
 
-        let response = egui_dnd::dnd(ui, "bind_group").show_custom(|ui, iter| {
-            for (index, field) in entries.iter().enumerate() {
-                if index != 0 {
-                    ui.add_space(5.0);
-                }
-                ui.push_id(index, |ui| {
-                    iter.next(ui, field.id(), index, true, |ui, item_handle| {
-                        item_handle.ui(ui, |ui, handle, _state| {
-                            handle.ui(ui, |ui| {
-                                ui_entry_title(ui, &mut ctx, index);
-                            });
-                            ui_entry_fields(ui, &mut ctx, index, field);
-                        })
+        let mut edits = draggable_list(
+            ui,
+            ("bind_group", bind_group_id),
+            &entries,
+            |ui, field, index, handle, edits| {
+                handle.ui(ui, |ui| {
+                    ui.add(
+                        egui::Label::new(format!("Binding {index}"))
+                            .selectable(false)
+                            .sense(egui::Sense::click()),
+                    )
+                    .context_menu(|ui| {
+                        if ui.button("Delete Entry").clicked() {
+                            edits.push_remove_edit(index);
+                            ui.close();
+                        }
                     });
                 });
-            }
-        });
-
-        if let Some(update) = response.final_update() {
-            edits.push(BindGroupEdit::Reorder(update));
-        }
+                ui_entry_fields(ui, &mut ctx, edits, index, field);
+            },
+        );
 
         ui.add_space(6.0);
 
@@ -71,13 +70,10 @@ impl StateSnapshot<'_> {
             for kind in ResourceKind::iter() {
                 if ui.button(kind.to_string()).clicked() {
                     ui.close();
-                    let resource = kind.default_value();
-                    edits.push(BindGroupEdit::AddEntry(resource));
+                    edits.push_add_edit(BindGroupEntry::new_vertex_fragment(kind.default_value()));
                 }
             }
         });
-
-        apply_bind_group_edits(self, bind_group_id, edits);
 
         if !entries.is_empty() {
             ui.add_space(6.0);
@@ -87,137 +83,84 @@ impl StateSnapshot<'_> {
                 ui.label("to remove it or drag it to reorder it.");
             }));
         }
+
+        edits.apply(&mut entries);
+
+        if bind_group.entries() != entries {
+            bind_group.set_entries(entries);
+        }
     }
 }
 
 struct BindGroupUiContext<'a> {
-    edits: &'a mut Vec<BindGroupEdit>,
     uniforms: &'a Storage<Uniform>,
     texture_views: &'a Storage<TextureView>,
     samplers: &'a Storage<Sampler>,
 }
 
-fn ui_entry_title(ui: &mut egui::Ui, ctx: &mut BindGroupUiContext, index: usize) {
-    ui.horizontal(|ui| {
-        ui.add(
-            egui::Label::new(format!("Binding {index}"))
-                .selectable(false)
-                .sense(egui::Sense::click()),
-        )
-        .context_menu(|ui| {
-            if ui.button("Delete Entry").clicked() {
-                ctx.edits.push(BindGroupEdit::DeleteEntry(index));
-                ui.close();
-            }
-        });
-    });
-}
-
 fn ui_entry_fields(
     ui: &mut egui::Ui,
     ctx: &mut BindGroupUiContext,
+    edits: &mut ListEdits<BindGroupEntry>,
     index: usize,
     entry: &BindGroupEntry,
 ) {
     ui.vertical(|ui| {
         ui.indent("entry", |ui| {
-            egui::Grid::new("entry_grid")
-                .num_columns(2)
-                .spacing([8.0, 4.0])
-                .show(ui, |ui| {
-                    let mut current_kind: ResourceKind = entry.resource.into();
-                    let kind_before = current_kind;
-                    ui.label("Resource");
-                    egui::ComboBox::from_id_salt("resource")
-                        .selected_text(current_kind.as_widget_text())
-                        .show_ui_list(ui, ResourceKind::iter(), &mut current_kind);
-                    ui.end_row();
+            inspector::field_grid(ui, "entry_grid", |ui| {
+                let mut current_kind: ResourceKind = entry.resource.into();
+                let kind_changed = inspector::combo_row(
+                    ui,
+                    "Resource",
+                    "resource",
+                    ResourceKind::iter(),
+                    &mut current_kind,
+                );
 
-                    let mut visibility = entry.visibility;
-                    ui.label("Visibility");
-                    const SHADER_STAGE_OPTIONS: &[(wgpu::ShaderStages, &str)] = &[
-                        (wgpu::ShaderStages::VERTEX, "COPY_SRC"),
-                        (wgpu::ShaderStages::FRAGMENT, "COPY_DST"),
-                        (wgpu::ShaderStages::COMPUTE, "TEXTURE_BINDING"),
-                    ];
+                let mut visibility = entry.visibility;
+                const SHADER_STAGE_OPTIONS: &[(wgpu::ShaderStages, &str)] = &[
+                    (wgpu::ShaderStages::VERTEX, "COPY_SRC"),
+                    (wgpu::ShaderStages::FRAGMENT, "COPY_DST"),
+                    (wgpu::ShaderStages::COMPUTE, "TEXTURE_BINDING"),
+                ];
+                inspector::row(ui, "Visibility", |ui| {
                     flags_selector(ui, "visibility", &mut visibility, SHADER_STAGE_OPTIONS);
-                    ui.end_row();
-
-                    let resource_from_fields = match entry.resource {
-                        BindGroupResource::Uniform(id) => ui_uniform_fields(ui, ctx, id),
-                        BindGroupResource::Texture {
-                            texture_view_id,
-                            view_dimension,
-                            sample_type,
-                        } => {
-                            ui_texture_fields(ui, ctx, texture_view_id, view_dimension, sample_type)
-                        }
-                        BindGroupResource::Sampler {
-                            sampler_id,
-                            sampler_binding_type,
-                        } => ui_sampler_fields(ui, ctx, sampler_id, sampler_binding_type),
-                        BindGroupResource::StorageTexture {
-                            texture_view_id,
-                            access,
-                            view_dimension,
-                        } => ui_storage_texture_fields(
-                            ui,
-                            ctx,
-                            texture_view_id,
-                            access,
-                            view_dimension,
-                        ),
-                    };
-
-                    let resource = (current_kind != kind_before)
-                        .then_some(current_kind.default_value())
-                        .or(resource_from_fields);
-
-                    let updated_entry = BindGroupEntry {
-                        resource: resource.unwrap_or(entry.resource),
-                        visibility,
-                        ..*entry
-                    };
-
-                    if updated_entry != *entry {
-                        ctx.edits
-                            .push(BindGroupEdit::UpdateEntry(index, updated_entry));
-                    }
                 });
+
+                let resource_from_fields = match entry.resource {
+                    BindGroupResource::Uniform(id) => ui_uniform_fields(ui, ctx, id),
+                    BindGroupResource::Texture {
+                        texture_view_id,
+                        view_dimension,
+                        sample_type,
+                    } => ui_texture_fields(ui, ctx, texture_view_id, view_dimension, sample_type),
+                    BindGroupResource::Sampler {
+                        sampler_id,
+                        sampler_binding_type,
+                    } => ui_sampler_fields(ui, ctx, sampler_id, sampler_binding_type),
+                    BindGroupResource::StorageTexture {
+                        texture_view_id,
+                        access,
+                        view_dimension,
+                    } => {
+                        ui_storage_texture_fields(ui, ctx, texture_view_id, access, view_dimension)
+                    }
+                };
+
+                let resource = kind_changed
+                    .then_some(current_kind.default_value())
+                    .or(resource_from_fields);
+
+                let updated_entry = BindGroupEntry {
+                    resource: resource.unwrap_or(entry.resource),
+                    visibility,
+                    ..*entry
+                };
+
+                edits.push_set_edit(index, updated_entry);
+            });
         });
     });
-}
-
-enum BindGroupEdit {
-    AddEntry(BindGroupResource),
-    DeleteEntry(usize),
-    UpdateEntry(usize, BindGroupEntry),
-    Reorder(egui_dnd::DragUpdate),
-}
-
-fn apply_bind_group_edits(
-    state: &mut StateSnapshot<'_>,
-    bind_group_id: BindGroupId,
-    edits: Vec<BindGroupEdit>,
-) {
-    if edits.is_empty() {
-        return;
-    }
-
-    if let Ok(bind_group) = state.project.bind_groups.get_mut(bind_group_id) {
-        for edit in edits {
-            match edit {
-                BindGroupEdit::AddEntry(resource) => {
-                    bind_group.add_entry(BindGroupEntry::new_vertex_fragment(resource));
-                }
-                BindGroupEdit::DeleteEntry(index) => bind_group.remove_entry(index),
-                BindGroupEdit::UpdateEntry(index, entry) => bind_group.update_entry(index, entry),
-                BindGroupEdit::Reorder(update) => {
-                    bind_group.reorder_entries(update.from, update.to);
-                }
-            }
-        }
-    }
 }
 
 fn ui_uniform_fields(
@@ -226,11 +169,7 @@ fn ui_uniform_fields(
     mut uniform_id: Option<UniformId>,
 ) -> Option<BindGroupResource> {
     let before = uniform_id;
-    ui.label("Uniform");
-    egui::ComboBox::from_id_salt("uniform")
-        .selected_text_storage_opt(ctx.uniforms, uniform_id)
-        .show_ui_storage_opt_with_none(ui, ctx.uniforms, &mut uniform_id);
-    ui.end_row();
+    inspector::storage_opt_combo_row(ui, "Uniform", "uniform", ctx.uniforms, &mut uniform_id);
     (uniform_id != before).then_some(BindGroupResource::Uniform(uniform_id))
 }
 
@@ -243,25 +182,27 @@ fn ui_texture_fields(
 ) -> Option<BindGroupResource> {
     let (tvid_before, vd_before, st_before) = (texture_view_id, view_dimension, sample_type);
 
-    ui.label("Texture View");
-    egui::ComboBox::from_id_salt("texture view")
-        .selected_text_storage_opt(ctx.texture_views, texture_view_id)
-        .show_ui_storage_opt_with_none(ui, ctx.texture_views, &mut texture_view_id);
-
-    ui.end_row();
-
-    ui.label("Dimension");
-    egui::ComboBox::from_id_salt("view_dimension")
-        .selected_text(view_dimension.as_widget_text())
-        .show_ui_list(ui, TEXTURE_VIEW_DIMENSIONS, &mut view_dimension);
-
-    ui.end_row();
-
-    ui.label("Sample Type");
-    egui::ComboBox::from_id_salt("sample_type")
-        .selected_text(sample_type.as_widget_text())
-        .show_ui_list(ui, TEXTURE_SAMPLE_TYPES, &mut sample_type);
-    ui.end_row();
+    inspector::storage_opt_combo_row(
+        ui,
+        "Texture View",
+        "texture view",
+        ctx.texture_views,
+        &mut texture_view_id,
+    );
+    inspector::combo_row(
+        ui,
+        "Dimension",
+        "view_dimension",
+        TEXTURE_VIEW_DIMENSIONS,
+        &mut view_dimension,
+    );
+    inspector::combo_row(
+        ui,
+        "Sample Type",
+        "sample_type",
+        TEXTURE_SAMPLE_TYPES,
+        &mut sample_type,
+    );
 
     (texture_view_id != tvid_before || view_dimension != vd_before || sample_type != st_before)
         .then_some(BindGroupResource::Texture {
@@ -279,17 +220,14 @@ fn ui_sampler_fields(
 ) -> Option<BindGroupResource> {
     let (sid_before, sbt_before) = (sampler_id, sampler_binding_type);
 
-    ui.label("Sampler");
-    egui::ComboBox::from_id_salt("sampler")
-        .selected_text_storage_opt(ctx.samplers, sampler_id)
-        .show_ui_storage_opt_with_none(ui, ctx.samplers, &mut sampler_id);
-    ui.end_row();
-
-    ui.label("Binding Type");
-    egui::ComboBox::from_id_salt("sampler_binding_type")
-        .selected_text(sampler_binding_type.as_widget_text())
-        .show_ui_list(ui, SAMPLER_BINDING_TYPES, &mut sampler_binding_type);
-    ui.end_row();
+    inspector::storage_opt_combo_row(ui, "Sampler", "sampler", ctx.samplers, &mut sampler_id);
+    inspector::combo_row(
+        ui,
+        "Binding Type",
+        "sampler_binding_type",
+        SAMPLER_BINDING_TYPES,
+        &mut sampler_binding_type,
+    );
 
     (sampler_id != sid_before || sampler_binding_type != sbt_before).then_some(
         BindGroupResource::Sampler {
@@ -308,23 +246,27 @@ fn ui_storage_texture_fields(
 ) -> Option<BindGroupResource> {
     let before = (texture_view_id, access, view_dimension);
 
-    ui.label("Texture View");
-    egui::ComboBox::from_id_salt("storage_texture_view")
-        .selected_text_storage_opt(ctx.texture_views, texture_view_id)
-        .show_ui_storage_opt_with_none(ui, ctx.texture_views, &mut texture_view_id);
-    ui.end_row();
-
-    ui.label("Access");
-    egui::ComboBox::from_id_salt("storage_texture_access")
-        .selected_text(access.as_widget_text())
-        .show_ui_list(ui, STORAGE_TEXTURE_ACCESS, &mut access);
-    ui.end_row();
-
-    ui.label("Dimension");
-    egui::ComboBox::from_id_salt("storage_texture_view_dimension")
-        .selected_text(view_dimension.as_widget_text())
-        .show_ui_list(ui, TEXTURE_VIEW_DIMENSIONS, &mut view_dimension);
-    ui.end_row();
+    inspector::storage_opt_combo_row(
+        ui,
+        "Texture View",
+        "storage_texture_view",
+        ctx.texture_views,
+        &mut texture_view_id,
+    );
+    inspector::combo_row(
+        ui,
+        "Access",
+        "storage_texture_access",
+        STORAGE_TEXTURE_ACCESS,
+        &mut access,
+    );
+    inspector::combo_row(
+        ui,
+        "Dimension",
+        "storage_texture_view_dimension",
+        TEXTURE_VIEW_DIMENSIONS,
+        &mut view_dimension,
+    );
 
     ((texture_view_id, access, view_dimension) != before).then_some(
         BindGroupResource::StorageTexture {

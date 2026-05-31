@@ -12,6 +12,7 @@ use crate::{
         storage::Storage,
         sync::{Revision, SyncOutcome, SyncResource, SyncTracker},
     },
+    resource_getters, resource_setters,
     utils::{async_job::AsyncJob, wgpu_error_scope::WgpuErrorScope},
 };
 
@@ -75,40 +76,18 @@ impl Texture {
         }
     }
 
-    pub fn format(&self) -> wgpu::TextureFormat {
-        self.format
+    resource_getters! {
+        pub fn format() -> wgpu::TextureFormat;
+        pub fn usage() -> wgpu::TextureUsages;
+        pub fn source() -> &TextureSource;
     }
 
-    pub fn usage(&self) -> wgpu::TextureUsages {
-        self.usage
-    }
-
-    pub fn source(&self) -> &TextureSource {
-        &self.source
-    }
-
-    pub fn set_label(&mut self, label: String) {
-        self.label = label;
-        self.runtime_revision.increase();
-        self.project_revision.increase();
-    }
-
-    pub fn set_format(&mut self, format: wgpu::TextureFormat) {
-        self.format = format;
-        self.runtime_revision.increase();
-        self.project_revision.increase();
-    }
-
-    pub fn set_usage(&mut self, usage: wgpu::TextureUsages) {
-        self.usage = usage;
-        self.runtime_revision.increase();
-        self.project_revision.increase();
-    }
-
-    pub fn set_source(&mut self, source: TextureSource) {
-        self.source = source;
-        self.runtime_revision.increase();
-        self.project_revision.increase();
+    resource_setters! {
+        increases: [runtime_revision, project_revision];
+        pub fn set_label(label: String);
+        pub fn set_format(format: wgpu::TextureFormat);
+        pub fn set_usage(usage: wgpu::TextureUsages);
+        pub fn set_source(source: TextureSource);
     }
 }
 

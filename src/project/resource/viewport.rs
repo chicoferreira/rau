@@ -5,6 +5,7 @@ use crate::{
         CameraId, Creatable, DimensionId, ProjectResource, TextureViewId, ViewportId,
         sync::Revision,
     },
+    resource_getters, resource_setters,
     ui::size::Size2d,
 };
 
@@ -41,55 +42,20 @@ impl Viewport {
         }
     }
 
-    pub fn set_label(&mut self, label: String) {
-        if self.label != label {
-            self.label = label;
-            self.project_revision.increase();
-        }
+    resource_getters! {
+        pub fn texture_view_id() -> Option<TextureViewId>;
+        pub fn dimension_id() -> Option<DimensionId>;
+        pub fn controls_camera_id() -> Option<CameraId>;
+        pub fn requested_ui_size() -> Option<Size2d>;
     }
 
-    pub fn texture_view_id(&self) -> Option<TextureViewId> {
-        self.texture_view_id
-    }
-
-    pub fn set_texture_view_id(&mut self, texture_view_id: Option<TextureViewId>) {
-        if self.texture_view_id != texture_view_id {
-            self.texture_view_id = texture_view_id;
-            self.project_revision.increase();
-        }
-    }
-
-    pub fn dimension_id(&self) -> Option<DimensionId> {
-        self.dimension_id
-    }
-
-    pub fn set_dimension_id(&mut self, dimension_id: Option<DimensionId>) {
-        if self.dimension_id != dimension_id {
-            self.dimension_id = dimension_id;
-            self.project_revision.increase();
-        }
-    }
-
-    pub fn controls_camera_id(&self) -> Option<CameraId> {
-        self.controls_camera_id
-    }
-
-    pub fn set_controls_camera_id(&mut self, camera_id: Option<CameraId>) {
-        if self.controls_camera_id != camera_id {
-            self.controls_camera_id = camera_id;
-            self.project_revision.increase();
-        }
-    }
-
-    pub fn requested_ui_size(&self) -> Option<Size2d> {
-        self.requested_ui_size
-    }
-
-    pub fn set_requested_ui_size(&mut self, size: Option<Size2d>) {
-        if self.requested_ui_size != size {
-            self.requested_ui_size = size;
-            self.project_revision.increase();
-        }
+    resource_setters! {
+        increases: [project_revision];
+        pub fn set_label(label: String);
+        pub fn set_texture_view_id(texture_view_id: Option<TextureViewId>);
+        pub fn set_dimension_id(dimension_id: Option<DimensionId>);
+        pub fn set_controls_camera_id(controls_camera_id: Option<CameraId>);
+        pub fn set_requested_ui_size(requested_ui_size: Option<Size2d>);
     }
 }
 

@@ -1,8 +1,8 @@
 {
   "framePlan": {
     "entries": [
-      { "id": 1952433409541445093, "renderPassId": { "idx": 1, "version": 1 } },
-      { "id": 5894853590723985033, "renderPassId": { "idx": 2, "version": 1 } }
+      { "id": 6815097981440440610, "renderPassId": { "idx": 1, "version": 1 } },
+      { "id": 7236297203993788675, "renderPassId": { "idx": 2, "version": 1 } }
     ]
   },
   "shaders": [
@@ -54,7 +54,6 @@
         "fields": [
           {
             "label": "view_position",
-            "id": 6928600555204913530,
             "source": {
               "type": "camera",
               "camera_id": { "idx": 1, "version": 1 },
@@ -63,7 +62,6 @@
           },
           {
             "label": "view",
-            "id": 7125030807404774929,
             "source": {
               "type": "camera",
               "camera_id": { "idx": 1, "version": 1 },
@@ -72,7 +70,6 @@
           },
           {
             "label": "proj_view",
-            "id": 16171929969460285186,
             "source": {
               "type": "camera",
               "camera_id": { "idx": 1, "version": 1 },
@@ -81,7 +78,6 @@
           },
           {
             "label": "inv_proj",
-            "id": 7037080092711087576,
             "source": {
               "type": "camera",
               "camera_id": { "idx": 1, "version": 1 },
@@ -90,7 +86,6 @@
           },
           {
             "label": "inv_view",
-            "id": 7064538863078425782,
             "source": {
               "type": "camera",
               "camera_id": { "idx": 1, "version": 1 },
@@ -107,7 +102,6 @@
         "fields": [
           {
             "label": "position",
-            "id": 17104277899690141062,
             "source": {
               "type": "userDefined",
               "data_type": "vec3f",
@@ -116,7 +110,6 @@
           },
           {
             "label": "color",
-            "id": 17698629891214046211,
             "source": {
               "type": "userDefined",
               "data_type": "rgb",
@@ -135,7 +128,6 @@
         "label": "camera bind group",
         "entries": [
           {
-            "id": 2953213360164447626,
             "visibility": "VERTEX | FRAGMENT",
             "resource": {
               "type": "uniform",
@@ -151,7 +143,6 @@
         "label": "light bind group",
         "entries": [
           {
-            "id": 7822621273061783947,
             "visibility": "VERTEX | FRAGMENT",
             "resource": {
               "type": "uniform",
@@ -167,7 +158,6 @@
         "label": "cube bind group",
         "entries": [
           {
-            "id": 1389957793993263508,
             "visibility": "VERTEX | FRAGMENT",
             "resource": {
               "type": "texture",
@@ -179,7 +169,6 @@
             }
           },
           {
-            "id": 7783090778124969206,
             "visibility": "VERTEX | FRAGMENT",
             "resource": {
               "type": "texture",
@@ -191,7 +180,6 @@
             }
           },
           {
-            "id": 15170609366101758009,
             "visibility": "VERTEX | FRAGMENT",
             "resource": {
               "type": "sampler",
@@ -210,7 +198,6 @@
         "label": "HDR Bind Group",
         "entries": [
           {
-            "id": 16733935291551016374,
             "visibility": "VERTEX | FRAGMENT",
             "resource": {
               "type": "texture",
@@ -222,7 +209,6 @@
             }
           },
           {
-            "id": 3741407330709941952,
             "visibility": "VERTEX | FRAGMENT",
             "resource": {
               "type": "sampler",
@@ -241,7 +227,6 @@
         "label": "compute shader bind group",
         "entries": [
           {
-            "id": 275776604663684727,
             "visibility": "COMPUTE",
             "resource": {
               "type": "texture",
@@ -253,7 +238,6 @@
             }
           },
           {
-            "id": 17059235708199416085,
             "visibility": "COMPUTE",
             "resource": {
               "type": "storageTexture",
@@ -273,7 +257,6 @@
         "label": "Environment Bind Group",
         "entries": [
           {
-            "id": 14474798373087354475,
             "visibility": "VERTEX | FRAGMENT",
             "resource": {
               "type": "texture",
@@ -285,7 +268,6 @@
             }
           },
           {
-            "id": 4615161084084413336,
             "visibility": "VERTEX | FRAGMENT",
             "resource": {
               "type": "sampler",
@@ -500,14 +482,14 @@
     {
       "value": {
         "label": "Main Camera",
-        "position": { "x": 0.0, "y": 5.0, "z": 10.0 },
+        "position": [0.0, 5.0, 10.0],
         "yaw": -1.5707964,
         "pitch": -0.34906584,
         "dimensionId": { "idx": 1, "version": 1 },
         "fovy": 1.0471976,
         "znear": 0.1,
         "zfar": 100.0,
-        "currentSpeed": { "x": 0.0, "y": 0.0, "z": 0.0 },
+        "currentSpeed": [0.0, 0.0, 0.0],
         "maxSpeed": 20.0,
         "acceleration": 150.0,
         "drag": 12.0,
@@ -694,16 +676,9 @@
     {
       "value": {
         "label": "equirect_to_cube_map",
-        "bindGroups": [
-          {
-            "id": 776922833393541375,
-            "bindGroupId": { "idx": 5, "version": 1 }
-          }
-        ],
+        "bindGroups": [{ "idx": 5, "version": 1 }],
         "shader": { "idx": 1, "version": 1 },
-        "workGroupsX": 68,
-        "workGroupsY": 68,
-        "workGroupsZ": 6
+        "workGroups": [68, 68, 6]
       },
       "version": 1
     }

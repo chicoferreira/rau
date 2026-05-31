@@ -8,13 +8,11 @@ use crate::{
     project::{
         BindGroupId, Creatable, ModelId, ProjectResource,
         paths::FilePath,
-        resource::{
-            bindgroup::BindGroup,
-            model::vertex_buffer::{VertexBufferField, VertexBufferSpec},
-        },
+        resource::{bindgroup::BindGroup, model::vertex_buffer::VertexBufferSpec},
         storage::RuntimeStorage,
         sync::{Revision, SyncOutcome, SyncResource, SyncTracker},
     },
+    resource_getters, resource_setters,
     utils::{
         async_job::AsyncJob, obj::LoadedObj, resizable_buffer::ResizableBuffer,
         wgpu_error_scope::WgpuErrorScope,
@@ -100,23 +98,25 @@ impl Model {
         }
     }
 
-    pub fn source(&self) -> Option<&FilePath> {
-        self.source.as_ref()
+    resource_getters! {
+        pub fn label() -> &str;
+        pub fn source() -> Option<&FilePath>;
+        pub fn material_bind_group_ids() -> &[Option<BindGroupId>];
+        pub fn mesh_material_selections() -> &[MeshMaterialSelection];
+        pub fn vertex_buffer_spec() -> &VertexBufferSpec;
     }
 
-    pub fn set_source(&mut self, source: Option<FilePath>) {
-        if self.source != source {
-            self.source = source;
-            self.runtime_revision.increase();
-            self.project_revision.increase();
-        }
+    resource_setters! {
+        increases: [project_revision];
+        pub fn set_label(label: String);
     }
 
-    pub fn set_label(&mut self, label: String) {
-        if self.label != label {
-            self.label = label;
-            self.project_revision.increase();
-        }
+    resource_setters! {
+        increases: [runtime_revision, project_revision];
+        pub fn set_source(source: Option<FilePath>);
+        pub fn set_material_bind_group_ids(material_bind_group_ids: Vec<Option<BindGroupId>>);
+        pub fn set_mesh_material_selections(mesh_material_selections: Vec<MeshMaterialSelection>);
+        pub fn set_vertex_buffer_spec(vertex_buffer_spec: VertexBufferSpec);
     }
 
     pub fn material_bind_group_id(&self, material_index: usize) -> Option<BindGroupId> {
@@ -133,23 +133,6 @@ impl Model {
             .collect()
     }
 
-    pub fn set_material_bind_group_id(
-        &mut self,
-        material_index: usize,
-        bind_group_id: Option<BindGroupId>,
-    ) {
-        if self.material_bind_group_ids.len() <= material_index {
-            self.material_bind_group_ids
-                .resize(material_index + 1, None);
-        }
-
-        if self.material_bind_group_ids[material_index] != bind_group_id {
-            self.material_bind_group_ids[material_index] = bind_group_id;
-            self.runtime_revision.increase();
-            self.project_revision.increase();
-        }
-    }
-
     pub fn mesh_material_selection(&self, mesh_index: usize) -> MeshMaterialSelection {
         self.mesh_material_selections
             .get(mesh_index)
@@ -157,64 +140,11 @@ impl Model {
             .unwrap_or_default()
     }
 
-    pub fn set_mesh_material_selection(
-        &mut self,
-        mesh_index: usize,
-        selection: MeshMaterialSelection,
-    ) {
-        if self.mesh_material_selections.len() <= mesh_index {
-            self.mesh_material_selections
-                .resize(mesh_index + 1, MeshMaterialSelection::default());
-        }
-
-        if self.mesh_material_selections[mesh_index] != selection {
-            self.mesh_material_selections[mesh_index] = selection;
-            self.runtime_revision.increase();
-            self.project_revision.increase();
-        }
-    }
-
     pub fn selected_material_index(&self, mesh_index: usize, mesh: &Mesh) -> Option<usize> {
         match self.mesh_material_selection(mesh_index) {
             MeshMaterialSelection::FromSource => mesh.material_index(),
             MeshMaterialSelection::Material(material_index) => material_index,
         }
-    }
-
-    pub fn vertex_buffer_spec(&self) -> &VertexBufferSpec {
-        &self.vertex_buffer_spec
-    }
-
-    pub fn add_vertex_buffer_field(&mut self, field: VertexBufferField) {
-        self.vertex_buffer_spec.fields.push(field);
-        self.runtime_revision.increase();
-        self.project_revision.increase();
-    }
-
-    pub fn remove_vertex_buffer_field(&mut self, index: usize) {
-        let fields = &mut self.vertex_buffer_spec.fields;
-        if index < fields.len() {
-            fields.remove(index);
-            self.runtime_revision.increase();
-            self.project_revision.increase();
-        }
-    }
-
-    pub fn set_vertex_buffer_field(&mut self, index: usize, field: VertexBufferField) {
-        if let Some(f) = self.vertex_buffer_spec.fields.get_mut(index) {
-            *f = field;
-            self.runtime_revision.increase();
-            self.project_revision.increase();
-        }
-    }
-
-    pub fn reorder_vertex_buffer_field(&mut self, from: usize, to: usize) {
-        if from == to {
-            return;
-        }
-        self.vertex_buffer_spec.reorder_field(from, to);
-        self.runtime_revision.increase();
-        self.project_revision.increase();
     }
 
     fn validate_all_material_bind_group_layouts_are_the_same(

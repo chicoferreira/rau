@@ -4,7 +4,7 @@ use crate::{
     project::{
         ProjectResource, RenderPassId, RenderPipelineId, TextureViewId,
         resource::{
-            render_pass::{LoadOperation, RenderPassTarget},
+            render_pass::{LoadOperation, RenderPass, RenderPassTarget},
             render_pipeline::RenderPipeline,
             texture_view::TextureView,
         },
@@ -13,13 +13,13 @@ use crate::{
     ui::{
         components::{
             color_edit::color_edit_rgba,
+            draggable_list::{ListEdits, draggable_list},
             hint::hint,
             inspector,
             selector::{AsWidgetText, ComboBoxExt},
         },
         pane::StateSnapshot,
     },
-    workspace::StateEvent,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -51,7 +51,6 @@ impl StateSnapshot<'_> {
     pub fn render_pass_inspector_ui(&mut self, ui: &mut egui::Ui, render_pass_id: RenderPassId) {
         let texture_views = &self.project.texture_views;
         let render_pipelines = &self.project.render_pipelines;
-        let event_queue = &mut *self.event_queue;
 
         let Ok(render_pass) = self.project.render_passes.get_mut(render_pass_id) else {
             ui.label("Render Pass couldn't be found.");
@@ -123,13 +122,7 @@ impl StateSnapshot<'_> {
         CollapsingHeader::new(format!("Pipelines ({})", render_pass.pipelines().len()))
             .default_open(true)
             .show(ui, |ui| {
-                render_pass_pipeline_list_ui(
-                    ui,
-                    render_pass_id,
-                    render_pass,
-                    render_pipelines,
-                    event_queue,
-                );
+                render_pass_pipeline_list_ui(ui, render_pass_id, render_pass, render_pipelines);
             });
     }
 }
@@ -185,63 +178,55 @@ where
 fn render_pass_pipeline_list_ui(
     ui: &mut egui::Ui,
     render_pass_id: RenderPassId,
-    render_pass: &mut crate::project::resource::render_pass::RenderPass,
+    render_pass: &mut RenderPass,
     render_pipelines: &Storage<RenderPipeline>,
-    event_queue: &mut crate::utils::event_queue::EventQueue<StateEvent>,
 ) {
     let before = render_pass.pipelines().to_vec();
     let mut pipelines = before.clone();
-    let mut edits = Vec::new();
 
     if pipelines.is_empty() {
         ui.label("No pipelines in render pass.");
     }
 
-    let response = inspector::field_grid(ui, (render_pass_id, "render_pass_pipeline_grid"), |ui| {
-        egui_dnd::dnd(ui, (render_pass_id, "render_pass_pipelines")).show_custom(|ui, iter| {
-            for (index, pipeline_id) in pipelines.iter().copied().enumerate() {
-                let item_id = egui::Id::new((render_pass_id, pipeline_id, index));
-                ui.push_id((pipeline_id, index), |ui| {
-                    iter.next(ui, item_id, index, true, |ui, item_handle| {
-                        item_handle.ui(ui, |ui, handle, _state| {
-                            render_pass_pipeline_row_ui(
-                                ui,
-                                handle,
-                                index,
-                                pipeline_id,
-                                render_pipelines,
-                                event_queue,
-                                &mut edits,
-                            );
-                        })
-                    });
-                });
-            }
-        })
-    })
-    .inner;
-
-    if let Some(update) = response.final_update() {
-        edits.push(RenderPassPipelineEdit::Reorder(update));
-    }
+    let mut edits = draggable_list(
+        ui,
+        (render_pass_id, "render_pass_pipeline_grid"),
+        &pipelines,
+        |ui, pipeline_id, index, handle, edits| {
+            render_pass_pipeline_row_ui(ui, handle, index, *pipeline_id, render_pipelines, edits);
+        },
+    );
 
     ui.add_space(6.0);
-    render_pass_add_pipeline_ui(ui, render_pipelines, &mut edits);
 
-    apply_render_pass_pipeline_edits(&mut pipelines, edits);
-    let has_pipelines = !pipelines.is_empty();
+    ui.menu_button("Add Pipeline", |ui| {
+        let mut has_pipelines = false;
+        for (id, pipeline) in render_pipelines.list_sorted() {
+            has_pipelines = true;
+            if ui.button(pipeline.label()).clicked() {
+                edits.push_add_edit(id);
+                ui.close();
+            }
+        }
 
-    if pipelines != before {
-        render_pass.set_pipelines(pipelines);
-    }
+        if !has_pipelines {
+            ui.label("No render pipelines.");
+        }
+    });
 
-    if has_pipelines {
+    if !pipelines.is_empty() {
         ui.add_space(6.0);
         ui.add(hint(|ui| {
             ui.label("Right-click a");
             ui.label(RichText::new("Pipeline").strong());
             ui.label("to inspect or remove it, or drag to reorder.");
         }));
+    }
+
+    edits.apply(&mut pipelines);
+
+    if pipelines != before {
+        render_pass.set_pipelines(pipelines);
     }
 }
 
@@ -251,84 +236,38 @@ fn render_pass_pipeline_row_ui(
     index: usize,
     pipeline_id: RenderPipelineId,
     render_pipelines: &Storage<RenderPipeline>,
-    event_queue: &mut crate::utils::event_queue::EventQueue<StateEvent>,
-    edits: &mut Vec<RenderPassPipelineEdit>,
+    edits: &mut ListEdits<RenderPipelineId>,
 ) {
     handle.ui(ui, |ui| {
-        let mut selected = pipeline_id;
-
-        let response = inspector::row(ui, format!("{}.", index + 1), |ui| {
-            egui::ComboBox::from_id_salt(("render_pass_pipeline_select", index))
-                .selected_text(render_pipeline_label(render_pipelines, selected))
-                .show_ui(ui, |ui| {
-                    for (id, pipeline) in render_pipelines.list_sorted() {
-                        ui.selectable_value(&mut selected, id, pipeline.label());
-                    }
-                })
-                .response
-        });
-
-        response.context_menu(|ui| {
-            if ui.button("Inspect Pipeline").clicked() {
-                event_queue.add(StateEvent::InspectResource(pipeline_id.into()));
-                ui.close();
-            }
-
+        ui.add(
+            egui::Label::new(format!("Step {}", index + 1))
+                .selectable(false)
+                .sense(egui::Sense::click()),
+        )
+        .context_menu(|ui| {
             if ui.button("Remove Pipeline").clicked() {
-                edits.push(RenderPassPipelineEdit::Remove(index));
+                edits.push_remove_edit(index);
                 ui.close();
             }
         });
-
-        if selected != pipeline_id {
-            edits.push(RenderPassPipelineEdit::Update(index, selected));
-        }
     });
-}
 
-fn apply_render_pass_pipeline_edits(
-    pipelines: &mut Vec<RenderPipelineId>,
-    edits: Vec<RenderPassPipelineEdit>,
-) {
-    for edit in edits {
-        match edit {
-            RenderPassPipelineEdit::Add(id) => pipelines.push(id),
-            RenderPassPipelineEdit::Update(index, id) => {
-                if let Some(pipeline) = pipelines.get_mut(index) {
-                    *pipeline = id;
+    let mut selected = pipeline_id;
+
+    ui.indent(("render_pass_pipeline_select", index), |ui| {
+        // TODO: replace with one of the combobox components
+        egui::ComboBox::from_id_salt(("render_pass_pipeline_select", index))
+            .selected_text(render_pipeline_label(render_pipelines, selected))
+            .show_ui(ui, |ui| {
+                for (id, pipeline) in render_pipelines.list_sorted() {
+                    ui.selectable_value(&mut selected, id, pipeline.label());
                 }
-            }
-            RenderPassPipelineEdit::Remove(index) => {
-                if index < pipelines.len() {
-                    pipelines.remove(index);
-                }
-            }
-            RenderPassPipelineEdit::Reorder(update) => {
-                egui_dnd::utils::shift_vec(update.from, update.to, pipelines);
-            }
-        }
+            });
+    });
+
+    if selected != pipeline_id {
+        edits.push_set_edit(index, selected);
     }
-}
-
-fn render_pass_add_pipeline_ui(
-    ui: &mut egui::Ui,
-    render_pipelines: &Storage<RenderPipeline>,
-    edits: &mut Vec<RenderPassPipelineEdit>,
-) {
-    ui.menu_button("Add Pipeline", |ui| {
-        let mut has_pipelines = false;
-        for (id, pipeline) in render_pipelines.list_sorted() {
-            has_pipelines = true;
-            if ui.button(pipeline.label()).clicked() {
-                edits.push(RenderPassPipelineEdit::Add(id));
-                ui.close();
-            }
-        }
-
-        if !has_pipelines {
-            ui.label("No render pipelines.");
-        }
-    });
 }
 
 fn render_pipeline_label(
@@ -339,11 +278,4 @@ fn render_pipeline_label(
         .get_label(pipeline_id)
         .map(str::to_owned)
         .unwrap_or_else(|_| format!("Unknown {pipeline_id:?}"))
-}
-
-enum RenderPassPipelineEdit {
-    Add(RenderPipelineId),
-    Update(usize, RenderPipelineId),
-    Remove(usize),
-    Reorder(egui_dnd::DragUpdate),
 }

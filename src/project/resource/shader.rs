@@ -10,6 +10,7 @@ use crate::{
         paths::FilePath,
         sync::{Revision, SyncOutcome, SyncResource, SyncTracker},
     },
+    resource_getters, resource_setters,
     utils::{self, async_job::AsyncJob, wgpu_error_scope::WgpuErrorScope},
 };
 
@@ -49,23 +50,18 @@ impl Shader {
         }
     }
 
-    pub fn source(&self) -> Option<&FilePath> {
-        self.source.as_ref()
+    resource_getters! {
+        pub fn source() -> Option<&FilePath>;
     }
 
-    pub fn set_label(&mut self, label: String) {
-        if self.label != label {
-            self.label = label;
-            self.project_revision.increase();
-        }
+    resource_setters! {
+        increases: [project_revision];
+        pub fn set_label(label: String);
     }
 
-    pub fn set_source(&mut self, source: Option<FilePath>) {
-        if self.source != source {
-            self.source = source;
-            self.runtime_revision.increase();
-            self.project_revision.increase();
-        }
+    resource_setters! {
+        increases: [runtime_revision, project_revision];
+        pub fn set_source(source: Option<FilePath>);
     }
 }
 

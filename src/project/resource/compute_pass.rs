@@ -1,4 +1,3 @@
-use egui_dnd::utils::shift_vec;
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use std::task::Poll;
@@ -11,6 +10,7 @@ use crate::{
         storage::RuntimeStorage,
         sync::{Revision, SyncOutcome, SyncResource, SyncTracker},
     },
+    resource_getters, resource_setters,
     utils::{async_job::AsyncJob, wgpu_error_scope::WgpuErrorScope},
 };
 
@@ -18,25 +18,17 @@ use crate::{
 #[serde(rename_all = "camelCase")]
 pub struct ComputePass {
     label: String,
-    bind_groups: Vec<ComputePassBindGroupEntry>,
+    bind_groups: Vec<Option<BindGroupId>>,
     shader: Option<ShaderId>,
-    work_groups_x: u32,
-    work_groups_y: u32,
-    work_groups_z: u32,
+    work_groups: WorkGroups,
     #[serde(skip)]
     runtime_revision: Revision,
     #[serde(skip)]
     project_revision: Revision,
 }
 
-pub type ComputePassBindGroupEntryId = u64;
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ComputePassBindGroupEntry {
-    id: ComputePassBindGroupEntryId,
-    bind_group_id: Option<BindGroupId>,
-}
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct WorkGroups(u32, u32, u32);
 
 pub struct Context<'a> {
     pub device: &'a wgpu::Device,
@@ -59,9 +51,7 @@ impl Creatable for ComputePass {
             label,
             bind_groups: Default::default(),
             shader: Default::default(),
-            work_groups_x: Default::default(),
-            work_groups_y: Default::default(),
-            work_groups_z: Default::default(),
+            work_groups: WorkGroups::new(1, 1, 1),
             runtime_revision: Default::default(),
             project_revision: Default::default(),
         }
@@ -71,122 +61,43 @@ impl Creatable for ComputePass {
 impl ComputePass {
     pub fn new(
         label: impl Into<String>,
-        bind_groups: Vec<ComputePassBindGroupEntry>,
+        bind_groups: Vec<Option<BindGroupId>>,
         shader: Option<ShaderId>,
-        work_groups_x: u32,
-        work_groups_y: u32,
-        work_groups_z: u32,
+        work_groups: WorkGroups,
     ) -> Self {
         Self {
             label: label.into(),
             bind_groups,
             shader,
-            work_groups_x: work_groups_x.max(1),
-            work_groups_y: work_groups_y.max(1),
-            work_groups_z: work_groups_z.max(1),
+            work_groups,
             runtime_revision: Revision::default(),
             project_revision: Revision::default(),
         }
     }
 
-    pub fn label(&self) -> &str {
-        &self.label
+    resource_getters! {
+        pub fn label() -> &str;
+        pub fn bind_groups() -> &[Option<BindGroupId>];
+        pub fn shader() -> Option<ShaderId>;
+        pub fn work_groups() -> WorkGroups;
     }
 
-    pub fn bind_groups(&self) -> &[ComputePassBindGroupEntry] {
-        &self.bind_groups
-    }
-
-    pub fn shader(&self) -> Option<ShaderId> {
-        self.shader
-    }
-
-    pub fn work_groups(&self) -> (u32, u32, u32) {
-        (self.work_groups_x, self.work_groups_y, self.work_groups_z)
-    }
-
-    pub fn set_label(&mut self, label: String) {
-        if self.label != label {
-            self.label = label;
-            self.runtime_revision.increase();
-            self.project_revision.increase();
-        }
-    }
-
-    pub fn set_shader(&mut self, shader: Option<ShaderId>) {
-        if self.shader != shader {
-            self.shader = shader;
-            self.runtime_revision.increase();
-            self.project_revision.increase();
-        }
-    }
-
-    pub fn set_work_groups(&mut self, x: u32, y: u32, z: u32) {
-        let next = (x.max(1), y.max(1), z.max(1));
-        let current = (self.work_groups_x, self.work_groups_y, self.work_groups_z);
-        if current != next {
-            self.work_groups_x = next.0;
-            self.work_groups_y = next.1;
-            self.work_groups_z = next.2;
-            self.runtime_revision.increase();
-            self.project_revision.increase();
-        }
-    }
-
-    pub fn set_bind_group(&mut self, index: usize, bind_group: Option<BindGroupId>) {
-        if let Some(current) = self.bind_groups.get_mut(index)
-            && current.bind_group_id() != bind_group
-        {
-            current.set_bind_group_id(bind_group);
-            self.runtime_revision.increase();
-            self.project_revision.increase();
-        }
-    }
-
-    pub fn add_bind_group(&mut self, bind_group: Option<BindGroupId>) {
-        self.bind_groups
-            .push(ComputePassBindGroupEntry::new(bind_group));
-        self.runtime_revision.increase();
-        self.project_revision.increase();
-    }
-
-    pub fn remove_bind_group(&mut self, index: usize) {
-        if index < self.bind_groups.len() {
-            self.bind_groups.remove(index);
-            self.runtime_revision.increase();
-            self.project_revision.increase();
-        }
-    }
-
-    pub fn reorder_bind_groups(&mut self, from: usize, to: usize) {
-        if from == to {
-            return;
-        }
-
-        shift_vec(from, to, &mut self.bind_groups);
-        self.runtime_revision.increase();
-        self.project_revision.increase();
+    resource_setters! {
+        increases: [runtime_revision, project_revision];
+        pub fn set_label(label: String);
+        pub fn set_shader(shader: Option<ShaderId>);
+        pub fn set_bind_groups(bind_groups: Vec<Option<BindGroupId>>);
+        pub fn set_work_groups(work_groups: WorkGroups);
     }
 }
 
-impl ComputePassBindGroupEntry {
-    pub fn new(bind_group_id: Option<BindGroupId>) -> Self {
-        Self {
-            id: fastrand::u64(..),
-            bind_group_id,
-        }
+impl WorkGroups {
+    pub fn new(x: u32, y: u32, z: u32) -> Self {
+        Self(x.max(1), y.max(1), z.max(1))
     }
 
-    pub fn id(&self) -> ComputePassBindGroupEntryId {
-        self.id
-    }
-
-    pub fn bind_group_id(&self) -> Option<BindGroupId> {
-        self.bind_group_id
-    }
-
-    fn set_bind_group_id(&mut self, bind_group_id: Option<BindGroupId>) {
-        self.bind_group_id = bind_group_id;
+    pub fn into(self) -> (u32, u32, u32) {
+        (self.0, self.1, self.2)
     }
 }
 
@@ -216,7 +127,7 @@ impl SyncResource for ComputePass {
             || self
                 .bind_groups
                 .iter()
-                .filter_map(|entry| entry.bind_group_id())
+                .filter_map(|bind_group_id| *bind_group_id)
                 .any(|id| tracker.was_changed(id))
     }
 
@@ -233,9 +144,8 @@ impl SyncResource for ComputePass {
                 }
 
                 let mut bind_groups = vec![];
-                for (i, entry) in self.bind_groups.iter().enumerate() {
-                    let id = entry
-                        .bind_group_id()
+                for (i, bind_group_id) in self.bind_groups.iter().copied().enumerate() {
+                    let id = bind_group_id
                         .ok_or(AppError::uninit_field(format!("Bind Group {i} Id")))?;
 
                     let Some(bind_group_runtime) = ctx.runtime_bind_groups.get_init(id)? else {
@@ -289,11 +199,8 @@ impl SyncResource for ComputePass {
                     pass.set_bind_group(index as u32, bind_group_runtime.inner(), &[]);
                 }
 
-                pass.dispatch_workgroups(
-                    self.work_groups_x,
-                    self.work_groups_y,
-                    self.work_groups_z,
-                );
+                let (x, y, z) = self.work_groups().into();
+                pass.dispatch_workgroups(x, y, z);
 
                 drop(pass);
 

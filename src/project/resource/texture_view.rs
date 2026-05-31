@@ -10,6 +10,7 @@ use crate::{
         storage::{RuntimeStorage, Storage},
         sync::{Revision, SyncOutcome, SyncResource, SyncTracker},
     },
+    resource_getters, resource_setters,
     ui::renderer::EguiRenderer,
     utils::{async_job::AsyncJob, wgpu_error_scope::WgpuErrorScope},
 };
@@ -85,40 +86,18 @@ impl TextureView {
         }
     }
 
-    pub fn texture_id(&self) -> Option<TextureId> {
-        self.texture_id
+    resource_getters! {
+        pub fn texture_id() -> Option<TextureId>;
+        pub fn format() -> Option<TextureViewFormat>;
+        pub fn dimension() -> Option<wgpu::TextureViewDimension>;
     }
 
-    pub fn format(&self) -> Option<TextureViewFormat> {
-        self.format
-    }
-
-    pub fn dimension(&self) -> Option<wgpu::TextureViewDimension> {
-        self.dimension
-    }
-
-    pub fn set_label(&mut self, label: String) {
-        self.label = label;
-        self.runtime_revision.increase();
-        self.project_revision.increase();
-    }
-
-    pub fn set_texture_id(&mut self, texture_id: Option<TextureId>) {
-        self.texture_id = texture_id;
-        self.runtime_revision.increase();
-        self.project_revision.increase();
-    }
-
-    pub fn set_format(&mut self, format: Option<TextureViewFormat>) {
-        self.format = format;
-        self.runtime_revision.increase();
-        self.project_revision.increase();
-    }
-
-    pub fn set_dimension(&mut self, dimension: Option<wgpu::TextureViewDimension>) {
-        self.dimension = dimension;
-        self.runtime_revision.increase();
-        self.project_revision.increase();
+    resource_setters! {
+        increases: [runtime_revision, project_revision];
+        pub fn set_label(label: String);
+        pub fn set_texture_id(texture_id: Option<TextureId>);
+        pub fn set_format(format: Option<TextureViewFormat>);
+        pub fn set_dimension(dimension: Option<wgpu::TextureViewDimension>);
     }
 
     fn create_view(

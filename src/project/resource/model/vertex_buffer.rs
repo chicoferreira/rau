@@ -1,8 +1,7 @@
-use egui_dnd::utils::shift_vec;
 use serde::{Deserialize, Serialize};
 use strum::{Display, EnumIter};
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct VertexBufferSpec {
     pub fields: Vec<VertexBufferField>,
@@ -50,13 +49,6 @@ impl VertexBufferSpec {
         }
 
         (attributes, offset)
-    }
-
-    pub(super) fn reorder_field(&mut self, from: usize, to: usize) {
-        if from == to {
-            return;
-        }
-        shift_vec(from, to, &mut self.fields);
     }
 
     pub(super) fn compute_vertex_contents(

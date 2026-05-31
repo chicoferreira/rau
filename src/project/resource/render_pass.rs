@@ -1,7 +1,10 @@
 use serde::{Deserialize, Serialize};
 
-use crate::project::{
-    Creatable, ProjectResource, RenderPassId, RenderPipelineId, TextureViewId, sync::Revision,
+use crate::{
+    project::{
+        Creatable, ProjectResource, RenderPassId, RenderPipelineId, TextureViewId, sync::Revision,
+    },
+    resource_getters, resource_setters,
 };
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -15,7 +18,7 @@ pub struct RenderPass {
     project_revision: Revision,
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RenderPassTarget<T> {
     texture_view_id: Option<TextureViewId>,
@@ -30,7 +33,7 @@ pub enum LoadOperation<T> {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", transparent)]
 pub struct Color(pub [f32; 4]);
 
 impl Creatable for RenderPass {
@@ -72,40 +75,18 @@ impl RenderPass {
         }
     }
 
-    pub fn target(&self) -> RenderPassTarget<Color> {
-        self.target
+    resource_getters! {
+        pub fn target() -> RenderPassTarget<Color>;
+        pub fn depth_target() -> Option<RenderPassTarget<f32>>;
+        pub fn pipelines() -> &[RenderPipelineId];
     }
 
-    pub fn depth_target(&self) -> Option<RenderPassTarget<f32>> {
-        self.depth_target
-    }
-
-    pub fn set_label(&mut self, label: String) {
-        if self.label != label {
-            self.label = label;
-            self.project_revision.increase();
-        }
-    }
-
-    pub fn set_target(&mut self, target: RenderPassTarget<Color>) {
-        self.target = target;
-        self.project_revision.increase();
-    }
-
-    pub fn set_depth_target(&mut self, target: Option<RenderPassTarget<f32>>) {
-        self.depth_target = target;
-        self.project_revision.increase();
-    }
-
-    pub fn pipelines(&self) -> &[RenderPipelineId] {
-        &self.pipelines
-    }
-
-    pub fn set_pipelines(&mut self, pipelines: Vec<RenderPipelineId>) {
-        if self.pipelines != pipelines {
-            self.pipelines = pipelines;
-            self.project_revision.increase();
-        }
+    resource_setters! {
+        increases: [project_revision];
+        pub fn set_label(label: String);
+        pub fn set_target(target: RenderPassTarget<Color>);
+        pub fn set_depth_target(depth_target: Option<RenderPassTarget<f32>>);
+        pub fn set_pipelines(pipelines: Vec<RenderPipelineId>);
     }
 }
 

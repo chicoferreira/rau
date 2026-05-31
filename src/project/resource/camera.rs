@@ -1,6 +1,7 @@
 use std::f32::consts::FRAC_PI_2;
 
-use cgmath::{Deg, InnerSpace, Matrix4, Point3, Rad, SquareMatrix, Vector3, Zero};
+use derive_more::{Add, AddAssign, Deref};
+use glam::{Mat4, Vec3, Vec4};
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -11,18 +12,118 @@ use crate::{
         storage::Storage,
         sync::{Revision, SyncOutcome, SyncResource, SyncTracker},
     },
+    resource_getters, resource_setters,
     utils::key::{Key, KeyboardState},
 };
 
-#[rustfmt::skip]
-pub const OPENGL_TO_WGPU_MATRIX: cgmath::Matrix4<f32> = cgmath::Matrix4::from_cols(
-    cgmath::Vector4::new(1.0, 0.0, 0.0, 0.0),
-    cgmath::Vector4::new(0.0, 1.0, 0.0, 0.0),
-    cgmath::Vector4::new(0.0, 0.0, 0.5, 0.0),
-    cgmath::Vector4::new(0.0, 0.0, 0.5, 1.0),
+pub const OPENGL_TO_WGPU_MATRIX: Mat4 = Mat4::from_cols(
+    Vec4::new(1.0, 0.0, 0.0, 0.0),
+    Vec4::new(0.0, 1.0, 0.0, 0.0),
+    Vec4::new(0.0, 0.0, 0.5, 0.0),
+    Vec4::new(0.0, 0.0, 0.5, 1.0),
 );
 
-const SAFE_FRAC_PI_2: f32 = FRAC_PI_2 - 0.0001;
+const MIN_ZNEAR: f32 = 0.0001;
+const Z_CLIP_GAP: f32 = 0.001;
+const MIN_FOVY: Deg = Deg(1.0);
+const MAX_FOVY: Deg = Deg(179.0);
+const SAFE_FRAC_PI_2: f32 = FRAC_PI_2 - MIN_ZNEAR;
+
+#[derive(Debug, Clone, Copy, PartialEq, Add, AddAssign, Deref, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct Rad(pub f32);
+
+#[derive(Debug, Clone, Copy, PartialEq, Add, AddAssign, Deref, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct Deg(pub f32);
+
+impl From<Deg> for Rad {
+    fn from(degrees: Deg) -> Self {
+        Rad(degrees.0.to_radians())
+    }
+}
+
+impl From<Rad> for Deg {
+    fn from(radians: Rad) -> Self {
+        Deg(radians.0.to_degrees())
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Deref, Add, AddAssign, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct Yaw(Rad);
+
+#[derive(Debug, Clone, Copy, PartialEq, Deref, Add, AddAssign, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct Pitch(Rad);
+
+#[derive(Debug, Clone, Copy, PartialEq, Deref, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct Fov(Rad);
+
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct ClipRange {
+    znear: f32,
+    zfar: f32,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Deref, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct PositiveF32(f32);
+
+impl Yaw {
+    pub fn new(yaw: impl Into<Rad>) -> Self {
+        use std::f32::consts::PI;
+
+        let Rad(yaw) = yaw.into();
+        Self(Rad((yaw + PI).rem_euclid(2.0 * PI) - PI))
+    }
+}
+
+impl Pitch {
+    pub fn new(pitch: impl Into<Rad>) -> Self {
+        let Rad(pitch) = pitch.into();
+        Self(Rad(pitch.clamp(-SAFE_FRAC_PI_2, SAFE_FRAC_PI_2)))
+    }
+}
+
+impl Fov {
+    pub fn new(fov: impl Into<Rad>) -> Self {
+        let Rad(fov) = fov.into();
+        Self(Rad(fov.clamp(Rad::from(MIN_FOVY).0, Rad::from(MAX_FOVY).0)))
+    }
+}
+
+impl ClipRange {
+    pub fn new(znear: f32, zfar: f32) -> Self {
+        let znear = znear.max(MIN_ZNEAR);
+        let zfar = zfar.max(znear + Z_CLIP_GAP);
+
+        Self { znear, zfar }
+    }
+
+    pub fn with_znear(self, znear: f32) -> Self {
+        Self::new(znear, self.zfar)
+    }
+
+    pub fn with_zfar(self, zfar: f32) -> Self {
+        Self::new(self.znear, zfar)
+    }
+
+    pub fn znear(self) -> f32 {
+        self.znear
+    }
+
+    pub fn zfar(self) -> f32 {
+        self.zfar
+    }
+}
+
+impl PositiveF32 {
+    pub fn new(value: f32) -> Self {
+        Self(value.max(0.0))
+    }
+}
 
 pub struct CameraCreationContext<'a> {
     pub dimensions: &'a Storage<Dimension>,
@@ -33,19 +134,19 @@ pub struct CameraCreationContext<'a> {
 #[serde(rename_all = "camelCase")]
 pub struct Camera {
     label: String,
-    position: Point3<f32>,
-    yaw: Rad<f32>,
-    pitch: Rad<f32>,
+    position: Vec3,
+    yaw: Yaw,
+    pitch: Pitch,
     dimension_id: Option<DimensionId>,
-    fovy: Rad<f32>,
-    znear: f32,
-    zfar: f32,
-    current_speed: Vector3<f32>,
-    max_speed: f32,
-    acceleration: f32,
-    drag: f32,
-    sensitivity: f32,
-    scroll_speed: f32,
+    fovy: Fov,
+    #[serde(flatten)]
+    clip: ClipRange,
+    current_speed: Vec3,
+    max_speed: PositiveF32,
+    acceleration: PositiveF32,
+    drag: PositiveF32,
+    sensitivity: PositiveF32,
+    scroll_speed: PositiveF32,
     #[serde(skip)]
     input: CameraFrameInput,
     #[serde(skip)]
@@ -62,11 +163,11 @@ pub struct CameraRuntime {
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct CameraMatrix {
-    pub projection: Matrix4<f32>,
-    pub view: Matrix4<f32>,
-    pub projection_view: Matrix4<f32>,
-    pub inv_proj: Matrix4<f32>,
-    pub inverse_view: Matrix4<f32>,
+    pub projection: Mat4,
+    pub view: Mat4,
+    pub projection_view: Mat4,
+    pub inv_proj: Mat4,
+    pub inverse_view: Mat4,
 }
 
 #[derive(Debug, Default, Clone, Copy, PartialEq)]
@@ -84,12 +185,11 @@ pub struct CameraFrameInput {
 
 impl Camera {
     pub fn new(label: String) -> Self {
-        let position = Point3::new(0.0, 0.0, -1.0);
-        let pitch = Rad(0.0);
-        let yaw = Rad(0.0);
-        let fovy = Rad::from(Deg(60.0));
-        let znear = 0.1;
-        let zfar = 100.0;
+        let position = Vec3::new(0.0, 0.0, -1.0);
+        let pitch = Pitch::new(Rad(0.0));
+        let yaw = Yaw::new(Rad(0.0));
+        let fovy = Fov::new(Deg(60.0));
+        let clip = ClipRange::new(0.1, 100.0);
 
         Self {
             label,
@@ -98,14 +198,13 @@ impl Camera {
             yaw,
             dimension_id: None,
             fovy,
-            max_speed: 20.0,
-            znear,
-            zfar,
-            acceleration: 150.0,
-            drag: 12.0,
-            current_speed: Vector3::zero(),
-            sensitivity: 0.1,
-            scroll_speed: 0.05,
+            max_speed: PositiveF32::new(20.0),
+            clip,
+            acceleration: PositiveF32::new(150.0),
+            drag: PositiveF32::new(12.0),
+            current_speed: Vec3::ZERO,
+            sensitivity: PositiveF32::new(0.1),
+            scroll_speed: PositiveF32::new(0.05),
             input: CameraFrameInput::default(),
             runtime_revision: Revision::default(),
             project_revision: Revision::default(),
@@ -116,192 +215,40 @@ impl Camera {
         &mut self.input
     }
 
-    pub fn set_label(&mut self, label: String) {
-        if self.label != label {
-            self.label = label;
-            self.project_revision.increase();
-        }
+    resource_getters! {
+        pub fn label() -> &str;
+        pub fn position() -> Vec3;
+        pub fn current_speed() -> Vec3;
+        pub fn yaw() -> Yaw;
+        pub fn pitch() -> Pitch;
+        pub fn fovy() -> Fov;
+        pub fn clip() -> ClipRange;
+        pub fn max_speed() -> PositiveF32;
+        pub fn acceleration() -> PositiveF32;
+        pub fn sensitivity() -> PositiveF32;
+        pub fn scroll_speed() -> PositiveF32;
+        pub fn dimension_id() -> Option<DimensionId>;
+        pub fn drag() -> PositiveF32;
     }
 
-    pub fn position(&self) -> Point3<f32> {
-        self.position
+    resource_setters! {
+        increases: [project_revision];
+        pub fn set_label(label: String);
     }
 
-    pub fn current_speed(&self) -> Vector3<f32> {
-        self.current_speed
-    }
-
-    pub fn yaw(&self) -> Rad<f32> {
-        self.yaw
-    }
-
-    pub fn pitch(&self) -> Rad<f32> {
-        self.pitch
-    }
-
-    pub fn fovy(&self) -> Rad<f32> {
-        self.fovy
-    }
-
-    pub fn znear(&self) -> f32 {
-        self.znear
-    }
-
-    pub fn zfar(&self) -> f32 {
-        self.zfar
-    }
-
-    pub fn max_speed(&self) -> f32 {
-        self.max_speed
-    }
-
-    pub fn acceleration(&self) -> f32 {
-        self.acceleration
-    }
-
-    pub fn drag_factor(&self) -> f32 {
-        self.drag
-    }
-
-    pub fn sensitivity(&self) -> f32 {
-        self.sensitivity
-    }
-
-    pub fn scroll_speed(&self) -> f32 {
-        self.scroll_speed
-    }
-
-    pub fn dimension_id(&self) -> Option<DimensionId> {
-        self.dimension_id
-    }
-
-    pub fn set_position(&mut self, position: impl Into<Point3<f32>>) {
-        let position = position.into();
-        if self.position != position {
-            self.position = position;
-            self.runtime_revision.increase();
-            self.project_revision.increase();
-        }
-    }
-
-    pub fn set_yaw(&mut self, yaw: impl Into<Rad<f32>>) {
-        let yaw = Self::normalize_yaw(yaw);
-        if self.yaw != yaw {
-            self.yaw = yaw;
-            self.runtime_revision.increase();
-            self.project_revision.increase();
-        }
-    }
-
-    pub fn set_pitch(&mut self, pitch: impl Into<Rad<f32>>) {
-        let pitch = Self::clamp_pitch(pitch);
-        if self.pitch != pitch {
-            self.pitch = pitch;
-            self.runtime_revision.increase();
-            self.project_revision.increase();
-        }
-    }
-
-    pub fn set_fovy(&mut self, fovy: impl Into<Rad<f32>>) {
-        let fovy = Self::clamp_fovy(fovy);
-        if self.fovy != fovy {
-            self.fovy = fovy;
-            self.runtime_revision.increase();
-            self.project_revision.increase();
-        }
-    }
-
-    pub fn set_znear(&mut self, znear: f32) {
-        let znear = znear.max(0.0001);
-        if self.znear != znear {
-            self.znear = znear;
-            if self.zfar < self.znear + 0.001 {
-                self.zfar = self.znear + 0.001;
-            }
-            self.runtime_revision.increase();
-            self.project_revision.increase();
-        }
-    }
-
-    pub fn set_zfar(&mut self, zfar: f32) {
-        let zfar = zfar.max(self.znear + 0.001);
-        if self.zfar != zfar {
-            self.zfar = zfar;
-            self.runtime_revision.increase();
-            self.project_revision.increase();
-        }
-    }
-
-    pub fn set_max_speed(&mut self, max_speed: f32) {
-        let max_speed = max_speed.max(0.0);
-        if self.max_speed != max_speed {
-            self.max_speed = max_speed;
-            self.runtime_revision.increase();
-            self.project_revision.increase();
-        }
-    }
-
-    pub fn set_acceleration(&mut self, acceleration: f32) {
-        let acceleration = acceleration.max(0.0);
-        if self.acceleration != acceleration {
-            self.acceleration = acceleration;
-            self.runtime_revision.increase();
-            self.project_revision.increase();
-        }
-    }
-
-    pub fn set_drag_factor(&mut self, drag: f32) {
-        let drag = drag.max(0.0);
-        if self.drag != drag {
-            self.drag = drag;
-            self.runtime_revision.increase();
-            self.project_revision.increase();
-        }
-    }
-
-    pub fn set_sensitivity(&mut self, sensitivity: f32) {
-        let sensitivity = sensitivity.max(0.0);
-        if self.sensitivity != sensitivity {
-            self.sensitivity = sensitivity;
-            self.runtime_revision.increase();
-            self.project_revision.increase();
-        }
-    }
-
-    pub fn set_scroll_speed(&mut self, scroll_speed: f32) {
-        let scroll_speed = scroll_speed.max(0.0);
-        if self.scroll_speed != scroll_speed {
-            self.scroll_speed = scroll_speed;
-            self.runtime_revision.increase();
-            self.project_revision.increase();
-        }
-    }
-
-    pub fn set_dimension_id(&mut self, dimension_id: Option<DimensionId>) {
-        if self.dimension_id != dimension_id {
-            self.dimension_id = dimension_id;
-            self.runtime_revision.increase();
-            self.project_revision.increase();
-        }
-    }
-
-    fn normalize_yaw(yaw: impl Into<Rad<f32>>) -> Rad<f32> {
-        use std::f32::consts::PI;
-
-        let rad: Rad<f32> = yaw.into();
-        Rad((rad.0 + PI).rem_euclid(2.0 * PI) - PI)
-    }
-
-    fn clamp_pitch(pitch: impl Into<Rad<f32>>) -> Rad<f32> {
-        let rad: Rad<f32> = pitch.into();
-        Rad(rad.0.clamp(-SAFE_FRAC_PI_2, SAFE_FRAC_PI_2))
-    }
-
-    fn clamp_fovy(fovy: impl Into<Rad<f32>>) -> Rad<f32> {
-        let rad: Rad<f32> = fovy.into();
-        Rad(rad
-            .0
-            .clamp(Rad::from(Deg(1.0_f32)).0, Rad::from(Deg(179.0_f32)).0))
+    resource_setters! {
+        increases: [runtime_revision, project_revision];
+        pub fn set_position(position: Vec3);
+        pub fn set_dimension_id(dimension_id: Option<DimensionId>);
+        pub fn set_yaw(yaw: Yaw);
+        pub fn set_pitch(pitch: Pitch);
+        pub fn set_fovy(fovy: Fov);
+        pub fn set_clip(clip: ClipRange);
+        pub fn set_max_speed(max_speed: PositiveF32);
+        pub fn set_acceleration(acceleration: PositiveF32);
+        pub fn set_drag_factor(drag: PositiveF32);
+        pub fn set_sensitivity(sensitivity: PositiveF32);
+        pub fn set_scroll_speed(scroll_speed: PositiveF32);
     }
 
     fn calculate_aspect(&self, dimensions: &Storage<Dimension>) -> AppResult<f32> {
@@ -320,19 +267,19 @@ impl Camera {
         let previous_pitch = self.pitch;
         let previous_current_speed = self.current_speed;
 
-        let (yaw_sin, yaw_cos) = self.yaw.0.sin_cos();
-        let forward = Vector3::new(yaw_cos, 0.0, yaw_sin).normalize();
-        let right = Vector3::new(-yaw_sin, 0.0, yaw_cos).normalize();
+        let (yaw_sin, yaw_cos) = self.yaw.0.0.sin_cos();
+        let forward = Vec3::new(yaw_cos, 0.0, yaw_sin).normalize();
+        let right = Vec3::new(-yaw_sin, 0.0, yaw_cos).normalize();
 
         let amount_forward = self.input.forward - self.input.backward;
         let amount_right = self.input.right - self.input.left;
         let amount_up = self.input.up - self.input.down;
 
-        self.current_speed += forward * amount_forward * self.acceleration * dt;
-        self.current_speed += right * amount_right * self.acceleration * dt;
-        self.current_speed += Vector3::unit_y() * amount_up * self.acceleration * dt;
+        self.current_speed += forward * amount_forward * *self.acceleration * dt;
+        self.current_speed += right * amount_right * *self.acceleration * dt;
+        self.current_speed += Vec3::Y * amount_up * *self.acceleration * dt;
 
-        self.current_speed -= self.current_speed * self.drag * dt;
+        self.current_speed -= self.current_speed * *self.drag * dt;
 
         const SPEED_EPSILON: f32 = 0.0005;
         if self.current_speed.x.abs() < SPEED_EPSILON {
@@ -345,26 +292,22 @@ impl Camera {
             self.current_speed.z = 0.0;
         }
 
-        let speed = self.current_speed.magnitude();
-        if speed > self.max_speed {
-            self.current_speed *= self.max_speed / speed;
+        let speed = self.current_speed.length();
+        if speed > *self.max_speed {
+            self.current_speed *= *self.max_speed / speed;
         }
 
         self.position += self.current_speed * dt;
 
-        let (pitch_sin, pitch_cos) = self.pitch.0.sin_cos();
-        let front = Vector3::new(pitch_cos * yaw_cos, pitch_sin, pitch_cos * yaw_sin).normalize();
-        self.position += front * self.input.scroll * self.scroll_speed;
+        let (pitch_sin, pitch_cos) = (**self.pitch).sin_cos();
+        let front = Vec3::new(pitch_cos * yaw_cos, pitch_sin, pitch_cos * yaw_sin).normalize();
+        self.position += front * self.input.scroll * *self.scroll_speed;
 
         if self.input.mouse_h != 0.0 {
-            self.yaw = Self::normalize_yaw(
-                self.yaw + Rad::from(Deg(self.input.mouse_h * self.sensitivity)),
-            );
+            self.yaw += Yaw::new(Deg(self.input.mouse_h * *self.sensitivity));
         }
         if self.input.mouse_v != 0.0 {
-            self.pitch = Self::clamp_pitch(
-                self.pitch + Rad::from(Deg(-self.input.mouse_v * self.sensitivity)),
-            );
+            self.pitch += Pitch::new(Deg(-self.input.mouse_v * *self.sensitivity));
         }
 
         self.input.scroll = 0.0;
@@ -427,13 +370,12 @@ impl SyncResource for Camera {
         let aspect = self.calculate_aspect(ctx.dimensions)?;
 
         let new_matrix = CameraMatrix::new(
-            self.position(),
-            self.yaw(),
-            self.pitch(),
+            self.position,
+            self.yaw,
+            self.pitch,
             self.fovy,
             aspect,
-            self.znear,
-            self.zfar,
+            self.clip,
         );
 
         let new_runtime = CameraRuntime {
@@ -450,34 +392,31 @@ impl SyncResource for Camera {
     fn needs_rebuild_from_others(&self, tracker: &SyncTracker) -> bool {
         self.dimension_id
             .map_or(false, |id| tracker.was_changed(id))
-            || self.current_speed.magnitude2() > 0.0
+            || self.current_speed.length_squared() > 0.0
             || self.input != CameraFrameInput::default()
     }
 }
 
 impl CameraMatrix {
     pub fn new(
-        position: Point3<f32>,
-        Rad(yaw): Rad<f32>,
-        Rad(pitch): Rad<f32>,
-        fovy: Rad<f32>,
+        position: Vec3,
+        Yaw(Rad(yaw)): Yaw,
+        Pitch(Rad(pitch)): Pitch,
+        Fov(Rad(fovy)): Fov,
         aspect: f32,
-        znear: f32,
-        zfar: f32,
+        ClipRange { zfar, znear }: ClipRange,
     ) -> Self {
-        let projection = OPENGL_TO_WGPU_MATRIX * cgmath::perspective(fovy, aspect, znear, zfar);
+        let projection = OPENGL_TO_WGPU_MATRIX * Mat4::perspective_rh_gl(fovy, aspect, znear, zfar);
         let (sin_pitch, cos_pitch) = pitch.sin_cos();
         let (sin_yaw, cos_yaw) = yaw.sin_cos();
 
-        let view = Matrix4::look_to_rh(
-            position,
-            Vector3::new(cos_pitch * cos_yaw, sin_pitch, cos_pitch * sin_yaw).normalize(),
-            Vector3::unit_y(),
-        );
+        let view_direction =
+            Vec3::new(cos_pitch * cos_yaw, sin_pitch, cos_pitch * sin_yaw).normalize();
+        let view = Mat4::look_at_rh(position, position + view_direction, Vec3::Y);
 
         let projection_view = projection * view;
-        let inv_proj = projection.invert().unwrap();
-        let inverse_view = view.invert().unwrap();
+        let inv_proj = projection.inverse();
+        let inverse_view = view.inverse();
 
         Self {
             projection,

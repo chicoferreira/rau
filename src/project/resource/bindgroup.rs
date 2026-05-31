@@ -1,4 +1,3 @@
-use egui_dnd::utils::shift_vec;
 use serde::{Deserialize, Serialize};
 use std::task::Poll;
 
@@ -10,6 +9,7 @@ use crate::{
         storage::RuntimeStorage,
         sync::{Revision, SyncOutcome, SyncResource, SyncTracker},
     },
+    resource_getters, resource_setters,
     utils::{async_job::AsyncJob, wgpu_error_scope::WgpuErrorScope},
 };
 
@@ -38,13 +38,9 @@ pub struct BindGroupRuntime {
     inner: wgpu::BindGroup,
 }
 
-pub type BindGroupEntryId = u64;
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BindGroupEntry {
-    // Used for stability in bind group entry reordering
-    pub id: BindGroupEntryId,
     pub visibility: wgpu::ShaderStages,
     pub resource: BindGroupResource,
 }
@@ -83,40 +79,15 @@ impl BindGroup {
         }
     }
 
-    pub fn label(&self) -> &str {
-        &self.label
+    resource_getters! {
+        pub fn label() -> &str;
+        pub fn entries() -> &[BindGroupEntry];
     }
 
-    pub fn entries(&self) -> &[BindGroupEntry] {
-        &self.entries
-    }
-
-    pub fn set_label(&mut self, label: String) {
-        self.label = label;
-        self.runtime_revision.increase();
-        self.project_revision.increase();
-    }
-
-    pub fn add_entry(&mut self, entry: BindGroupEntry) {
-        self.entries.push(entry);
-        self.runtime_revision.increase();
-        self.project_revision.increase();
-    }
-
-    pub fn remove_entry(&mut self, index: usize) {
-        if index < self.entries.len() {
-            self.entries.remove(index);
-            self.runtime_revision.increase();
-            self.project_revision.increase();
-        }
-    }
-
-    pub fn update_entry(&mut self, index: usize, entry: BindGroupEntry) {
-        if index < self.entries.len() {
-            self.entries[index] = entry;
-            self.runtime_revision.increase();
-            self.project_revision.increase();
-        }
+    resource_setters! {
+        increases: [project_revision, runtime_revision];
+        pub fn set_label(label: String);
+        pub fn set_entries(entries: Vec<BindGroupEntry>);
     }
 
     fn resolve_entries<'a>(
@@ -165,15 +136,6 @@ impl BindGroup {
 
         (layout, bind_group)
     }
-
-    pub fn reorder_entries(&mut self, from: usize, to: usize) {
-        if from == to {
-            return;
-        }
-        shift_vec(from, to, &mut self.entries);
-        self.runtime_revision.increase();
-        self.project_revision.increase();
-    }
 }
 
 impl BindGroupRuntime {
@@ -211,7 +173,6 @@ impl ProjectResource for BindGroup {
 impl BindGroupEntry {
     pub fn new(resource: BindGroupResource, visibility: wgpu::ShaderStages) -> Self {
         Self {
-            id: fastrand::u64(..),
             visibility,
             resource,
         }

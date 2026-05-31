@@ -10,6 +10,7 @@ use crate::{
         storage::{RuntimeStorage, Storage},
         sync::{Revision, SyncOutcome, SyncResource, SyncTracker},
     },
+    resource_getters, resource_setters,
     utils::{
         async_job::AsyncJob, vec_set_at_extension::VecSetAtExtension,
         wgpu_error_scope::WgpuErrorScope,
@@ -52,29 +53,6 @@ pub enum RenderDrawStrategy {
     },
 }
 
-macro_rules! change_tracking_setters {
-    (
-        increases: $revisions:tt;
-        $(
-            pub fn $setter:ident($field:ident: $ty:ty);
-        )*
-    ) => {
-        $(
-            pub fn $setter(&mut self, $field: $ty) {
-                if self.$field != $field {
-                    self.$field = $field;
-                    change_tracking_setters!(@increase self $revisions);
-                }
-            }
-        )*
-    };
-    (@increase $self:ident [$($revision:ident),* $(,)?]) => {
-        $(
-            $self.$revision.increase();
-        )*
-    };
-}
-
 impl RenderPipeline {
     pub fn new(
         label: impl Into<String>,
@@ -100,35 +78,17 @@ impl RenderPipeline {
         }
     }
 
-    pub fn static_bind_groups(&self) -> &[(u32, Option<BindGroupId>)] {
-        &self.static_bind_groups
+    resource_getters! {
+        pub fn static_bind_groups() -> &[(u32, Option<BindGroupId>)];
+        pub fn primitive_state() -> wgpu::PrimitiveState;
+        pub fn vertex_shader() -> Option<ShaderId>;
+        pub fn fragment_shader() -> Option<ShaderId>;
+        pub fn draw_strategy() -> &RenderDrawStrategy;
+        pub fn color_format() -> wgpu::TextureFormat;
+        pub fn depth_format() -> Option<wgpu::TextureFormat>;
     }
 
-    pub fn primitive_state(&self) -> wgpu::PrimitiveState {
-        self.primitive_state
-    }
-
-    pub fn vertex_shader(&self) -> Option<ShaderId> {
-        self.vertex_shader
-    }
-
-    pub fn fragment_shader(&self) -> Option<ShaderId> {
-        self.fragment_shader
-    }
-
-    pub fn draw_strategy(&self) -> &RenderDrawStrategy {
-        &self.draw_strategy
-    }
-
-    pub fn color_format(&self) -> wgpu::TextureFormat {
-        self.color_format
-    }
-
-    pub fn depth_format(&self) -> Option<wgpu::TextureFormat> {
-        self.depth_format
-    }
-
-    change_tracking_setters! {
+    resource_setters! {
         increases: [runtime_revision, project_revision];
         pub fn set_label(label: String);
         pub fn set_primitive_state(primitive_state: wgpu::PrimitiveState);

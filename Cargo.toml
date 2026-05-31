@@ -19,8 +19,7 @@ path = "src/main.rs"
 anyhow = "1.0.100"
 bitflags = "2.11.0"
 bytemuck = { version = "1.24.0", features = ["derive"] }
-cgmath = { version = "0.18.0", features = ["serde"] }
-derive_more = { version = "2.1.1", features = ["from"] }
+derive_more = { version = "2.1.1", features = ["add", "add_assign", "deref", "from"] }
 egui = "0.34.1"
 egui-wgpu = "0.34.1"
 egui-winit = { version = "0.34.1", default-features = false }
@@ -33,6 +32,7 @@ enumset = "1.1.10"
 env_logger = "0.11.8"
 fastrand = "2.3.0"
 futures-lite = "2.6.0"
+glam = { version = "0.33.0", features = ["serde"] }
 image = { version = "0.25", default-features = false, features = ["png", "jpeg", "hdr"] }
 instant = "0.1"
 log = "0.4.29"

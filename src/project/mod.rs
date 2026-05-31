@@ -15,6 +15,7 @@ use crate::{
     },
 };
 
+pub mod macros;
 pub mod paths;
 pub mod render;
 pub mod resource;

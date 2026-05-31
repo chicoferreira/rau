@@ -14,7 +14,12 @@ use crate::{
         storage::Storage,
     },
     ui::{
-        components::{hint::hint, inspector, selector::AsWidgetText},
+        components::{
+            draggable_list::{ListEdits, draggable_list},
+            hint::hint,
+            inspector,
+            selector::AsWidgetText,
+        },
         pane::StateSnapshot,
     },
 };
@@ -326,7 +331,6 @@ fn static_bind_groups_ui(
 ) {
     let before = render_pipeline.static_bind_groups().to_vec();
     let mut entries = before.clone();
-    let mut edits = Vec::new();
 
     CollapsingHeader::new(format!("Static Bind Groups ({})", entries.len()))
         .default_open(true)
@@ -335,43 +339,27 @@ fn static_bind_groups_ui(
                 ui.label("No static bind groups.");
             }
 
-            let response = egui_dnd::dnd(ui, (render_pipeline_id, "static_bind_groups"))
-                .show_custom(|ui, iter| {
-                    for (index, (slot, bind_group_id)) in entries.iter().copied().enumerate() {
-                        if index != 0 {
-                            ui.add_space(5.0);
-                        }
-
-                        ui.push_id((render_pipeline_id, "static_bind_group", index), |ui| {
-                            let item_id =
-                                egui::Id::new((render_pipeline_id, "static_bind_group", index));
-                            iter.next(ui, item_id, index, true, |ui, item_handle| {
-                                item_handle.ui(ui, |ui, handle, _state| {
-                                    static_bind_group_row_ui(
-                                        ui,
-                                        handle,
-                                        index,
-                                        slot,
-                                        bind_group_id,
-                                        bind_groups,
-                                        &mut edits,
-                                    );
-                                })
-                            });
-                        });
-                    }
-                });
-
-            if let Some(update) = response.final_update() {
-                edits.push(StaticBindGroupEdit::Reorder(update));
-            }
-
-            ui.add_space(6.0);
+            let id_source = (render_pipeline_id, "static_bind_groups");
+            let mut edits = draggable_list(
+                ui,
+                id_source,
+                &entries,
+                |ui, (slot, bind_group_id), index, handle, edits| {
+                    static_bind_group_row_ui(
+                        ui,
+                        handle,
+                        index,
+                        *slot,
+                        *bind_group_id,
+                        bind_groups,
+                        edits,
+                    );
+                },
+            );
 
             if ui.button("Add Bind Group").clicked() {
-                edits.push(StaticBindGroupEdit::Add(first_available_slot(
-                    entries.iter().map(|(slot, _)| *slot),
-                )));
+                let first_slot = first_available_slot(entries.iter().map(|(slot, _)| *slot));
+                edits.push_add_edit((first_slot, None));
             }
 
             if !entries.is_empty() {
@@ -382,13 +370,13 @@ fn static_bind_groups_ui(
                     ui.label("to remove it, or drag to reorder.");
                 }));
             }
+
+            edits.apply(&mut entries);
+
+            if entries != before {
+                render_pipeline.set_static_bind_groups(entries);
+            }
         });
-
-    apply_static_bind_group_edits(&mut entries, edits);
-
-    if entries != before {
-        render_pipeline.set_static_bind_groups(entries);
-    }
 }
 
 fn static_bind_group_row_ui(
@@ -398,7 +386,7 @@ fn static_bind_group_row_ui(
     slot: u32,
     bind_group_id: Option<BindGroupId>,
     bind_groups: &Storage<BindGroup>,
-    edits: &mut Vec<StaticBindGroupEdit>,
+    edits: &mut ListEdits<(u32, Option<BindGroupId>)>,
 ) {
     handle.ui(ui, |ui| {
         ui.add(
@@ -408,59 +396,31 @@ fn static_bind_group_row_ui(
         )
         .context_menu(|ui| {
             if ui.button("Remove Bind Group").clicked() {
-                edits.push(StaticBindGroupEdit::Remove(index));
+                edits.push_remove_edit(index);
                 ui.close();
             }
         });
-
-        ui.indent(("static_bind_group", index), |ui| {
-            let mut edited_slot = slot;
-            let mut edited_bind_group_id = bind_group_id;
-
-            inspector::field_grid(ui, ("static_bind_group_grid", index), |ui| {
-                inspector::u32_drag_row(ui, "Slot", &mut edited_slot, 0..=u32::MAX);
-                inspector::storage_opt_combo_row(
-                    ui,
-                    "Bind Group",
-                    "render_pipeline_static_bind_group",
-                    bind_groups,
-                    &mut edited_bind_group_id,
-                );
-            });
-
-            if (edited_slot, edited_bind_group_id) != (slot, bind_group_id) {
-                edits.push(StaticBindGroupEdit::Update(
-                    index,
-                    edited_slot,
-                    edited_bind_group_id,
-                ));
-            }
-        });
     });
-}
 
-fn apply_static_bind_group_edits(
-    entries: &mut Vec<(u32, Option<BindGroupId>)>,
-    edits: Vec<StaticBindGroupEdit>,
-) {
-    for edit in edits {
-        match edit {
-            StaticBindGroupEdit::Add(slot) => entries.push((slot, None)),
-            StaticBindGroupEdit::Update(index, slot, bind_group_id) => {
-                if let Some(entry) = entries.get_mut(index) {
-                    *entry = (slot, bind_group_id);
-                }
-            }
-            StaticBindGroupEdit::Remove(index) => {
-                if index < entries.len() {
-                    entries.remove(index);
-                }
-            }
-            StaticBindGroupEdit::Reorder(update) => {
-                egui_dnd::utils::shift_vec(update.from, update.to, entries);
-            }
+    ui.indent(("static_bind_group", index), |ui| {
+        let mut edited_slot = slot;
+        let mut edited_bind_group_id = bind_group_id;
+
+        inspector::field_grid(ui, ("static_bind_group_grid", index), |ui| {
+            inspector::u32_drag_row(ui, "Slot", &mut edited_slot, 0..=u32::MAX);
+            inspector::storage_opt_combo_row(
+                ui,
+                "Bind Group",
+                "render_pipeline_static_bind_group",
+                bind_groups,
+                &mut edited_bind_group_id,
+            );
+        });
+
+        if (edited_slot, edited_bind_group_id) != (slot, bind_group_id) {
+            edits.push_set_edit(index, (edited_slot, edited_bind_group_id));
         }
-    }
+    });
 }
 
 fn draw_strategy_ui(
@@ -566,12 +526,4 @@ fn first_available_slot(used: impl IntoIterator<Item = u32>) -> u32 {
     }
 
     candidate
-}
-
-// TOOD: make this generic for other list types and make a generic reorderable component
-enum StaticBindGroupEdit {
-    Add(u32),
-    Update(usize, u32, Option<BindGroupId>),
-    Remove(usize),
-    Reorder(egui_dnd::DragUpdate),
 }

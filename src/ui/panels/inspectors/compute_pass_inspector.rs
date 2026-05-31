@@ -1,13 +1,21 @@
-use egui::{CollapsingHeader, Grid, RichText};
+use egui::{CollapsingHeader, RichText};
 
 use crate::{
     project::{
         BindGroupId, ComputePassId,
-        resource::{bindgroup::BindGroup, compute_pass::ComputePass},
+        resource::{
+            bindgroup::BindGroup,
+            compute_pass::{ComputePass, WorkGroups},
+            shader::Shader,
+        },
         storage::Storage,
     },
     ui::{
-        components::{hint::hint, selector::ComboBoxExt},
+        components::{
+            draggable_list::{ListEdits, draggable_list},
+            hint::hint,
+            inspector,
+        },
         pane::StateSnapshot,
     },
 };
@@ -19,153 +27,104 @@ impl StateSnapshot<'_> {
             return;
         };
 
-        Grid::new("compute_pass_inspector_grid")
-            .num_columns(2)
-            .spacing([8.0, 4.0])
-            .show(ui, |ui| {
-                let shaders = &self.project.shaders;
-
-                ui.label("Shader");
-                let mut shader_id = compute_pass.shader();
-                egui::ComboBox::from_id_salt("compute_pass_shader")
-                    .selected_text_storage_opt(shaders, shader_id)
-                    .show_ui_storage_opt_with_none(ui, shaders, &mut shader_id);
-                ui.end_row();
-
-                if shader_id != compute_pass.shader() {
-                    compute_pass.set_shader(shader_id);
-                }
-
-                let (mut work_groups_x, mut work_groups_y, mut work_groups_z) =
-                    compute_pass.work_groups();
-
-                ui.label("Workgroups X");
-                ui.add(
-                    egui::DragValue::new(&mut work_groups_x)
-                        .range(1..=u32::MAX)
-                        .speed(1),
-                );
-                ui.end_row();
-
-                ui.label("Workgroups Y");
-                ui.add(
-                    egui::DragValue::new(&mut work_groups_y)
-                        .range(1..=u32::MAX)
-                        .speed(1),
-                );
-                ui.end_row();
-
-                ui.label("Workgroups Z");
-                ui.add(
-                    egui::DragValue::new(&mut work_groups_z)
-                        .range(1..=u32::MAX)
-                        .speed(1),
-                );
-                ui.end_row();
-
-                if (work_groups_x, work_groups_y, work_groups_z) != compute_pass.work_groups() {
-                    compute_pass.set_work_groups(work_groups_x, work_groups_y, work_groups_z);
-                }
-            });
-
+        compute_pass_fields_ui(ui, compute_pass, &self.project.shaders);
         ui.add_space(4.0);
 
-        let bind_group_count = compute_pass.bind_groups().len();
-
-        CollapsingHeader::new(format!("Bind Groups ({bind_group_count})"))
-            .default_open(true)
-            .show(ui, |ui| {
-                if compute_pass.bind_groups().is_empty() {
-                    ui.label("No bind groups in compute pass.");
-                }
-
-                let bind_groups = &self.project.bind_groups;
-                compute_pass_bind_group_list_ui(ui, compute_pass_id, compute_pass, bind_groups);
-
-                ui.add_space(6.0);
-
-                if ui.button("Add Bind Group").clicked() {
-                    compute_pass.add_bind_group(None);
-                }
-
-                if bind_group_count > 0 {
-                    ui.add_space(6.0);
-                    ui.add(hint(|ui| {
-                        ui.label("Right-click a");
-                        ui.label(RichText::new("Bind Group").strong());
-                        ui.label("to delete it, or drag it to reorder.");
-                    }));
-                }
-            });
+        compute_pass_bind_groups_ui(ui, compute_pass_id, compute_pass, &self.project.bind_groups);
     }
 }
 
-fn compute_pass_bind_group_list_ui(
+fn compute_pass_fields_ui(
+    ui: &mut egui::Ui,
+    compute_pass: &mut ComputePass,
+    shaders: &Storage<Shader>,
+) {
+    inspector::field_grid(ui, "compute_pass_inspector_grid", |ui| {
+        let mut shader_id = compute_pass.shader();
+        if inspector::storage_opt_combo_row(
+            ui,
+            "Shader",
+            "compute_pass_shader",
+            shaders,
+            &mut shader_id,
+        ) {
+            compute_pass.set_shader(shader_id);
+        }
+
+        let (mut x, mut y, mut z) = compute_pass.work_groups().into();
+
+        inspector::u32_drag_row(ui, "Workgroups X", &mut x, 1..=u32::MAX);
+        inspector::u32_drag_row(ui, "Workgroups Y", &mut y, 1..=u32::MAX);
+        inspector::u32_drag_row(ui, "Workgroups Z", &mut z, 1..=u32::MAX);
+
+        compute_pass.set_work_groups(WorkGroups::new(x, y, z));
+    });
+}
+
+fn compute_pass_bind_groups_ui(
     ui: &mut egui::Ui,
     compute_pass_id: ComputePassId,
     compute_pass: &mut ComputePass,
     bind_groups: &Storage<BindGroup>,
 ) {
-    let bind_group_slots = compute_pass.bind_groups().to_vec();
+    let before = compute_pass.bind_groups().to_vec();
+    let mut entries = before.clone();
 
-    let response =
-        egui_dnd::dnd(ui, (compute_pass_id, "compute_pass_bind_groups")).show_custom(|ui, iter| {
-            for (index, entry) in bind_group_slots.iter().copied().enumerate() {
-                if index != 0 {
-                    ui.add_space(5.0);
-                }
+    CollapsingHeader::new(format!("Bind Groups ({})", entries.len()))
+        .default_open(true)
+        .show(ui, |ui| {
+            if entries.is_empty() {
+                ui.label("No bind groups in compute pass.");
+            }
 
-                ui.push_id(entry.id(), |ui| {
-                    let item_id = egui::Id::new(entry.id());
-                    iter.next(ui, item_id, index, true, |ui, item_handle| {
-                        item_handle.ui(ui, |ui, handle, _state| {
-                            compute_pass_bind_group_row_ui(
-                                ui,
-                                handle,
-                                compute_pass,
-                                bind_groups,
-                                index,
-                                entry.bind_group_id(),
-                            );
-                        })
-                    });
-                });
+            let mut edits = draggable_list(
+                ui,
+                (compute_pass_id, "compute_pass_bind_groups"),
+                &entries,
+                |ui, bind_group_id, index, handle, edits| {
+                    compute_pass_bind_group_row_ui(
+                        ui,
+                        handle,
+                        bind_groups,
+                        index,
+                        *bind_group_id,
+                        edits,
+                    );
+                },
+            );
+
+            ui.add_space(6.0);
+
+            if ui.button("Add Bind Group").clicked() {
+                edits.push_add_edit(None);
+            }
+
+            if !entries.is_empty() {
+                ui.add_space(6.0);
+                ui.add(hint(|ui| {
+                    ui.label("Right-click a");
+                    ui.label(RichText::new("Bind Group").strong());
+                    ui.label("to delete it, or drag it to reorder.");
+                }));
+            }
+
+            edits.apply(&mut entries);
+
+            if entries != before {
+                compute_pass.set_bind_groups(entries);
             }
         });
-
-    if let Some(update) = response.final_update() {
-        compute_pass.reorder_bind_groups(update.from, update.to);
-    }
 }
 
 fn compute_pass_bind_group_row_ui(
     ui: &mut egui::Ui,
     handle: egui_dnd::Handle<'_>,
-    compute_pass: &mut ComputePass,
     bind_groups: &Storage<BindGroup>,
     index: usize,
     bind_group_id: Option<BindGroupId>,
+    edits: &mut ListEdits<Option<BindGroupId>>,
 ) {
     handle.ui(ui, |ui| {
-        compute_pass_bind_group_title_ui(ui, compute_pass, index);
-
-        ui.indent("entry", |ui| {
-            let mut selected_bind_group = bind_group_id;
-            bind_group_slot_ui(ui, bind_groups, index, &mut selected_bind_group);
-
-            if selected_bind_group != bind_group_id {
-                compute_pass.set_bind_group(index, selected_bind_group);
-            }
-        });
-    });
-}
-
-fn compute_pass_bind_group_title_ui(
-    ui: &mut egui::Ui,
-    compute_pass: &mut ComputePass,
-    index: usize,
-) {
-    ui.horizontal(|ui| {
         ui.add(
             egui::Label::new(format!("Bind Group {index}"))
                 .selectable(false)
@@ -173,10 +132,19 @@ fn compute_pass_bind_group_title_ui(
         )
         .context_menu(|ui| {
             if ui.button("Delete Bind Group").clicked() {
-                compute_pass.remove_bind_group(index);
+                edits.push_remove_edit(index);
                 ui.close();
             }
         });
+    });
+
+    ui.indent("entry", |ui| {
+        let mut selected_bind_group = bind_group_id;
+        bind_group_slot_ui(ui, bind_groups, index, &mut selected_bind_group);
+
+        if selected_bind_group != bind_group_id {
+            edits.push_set_edit(index, selected_bind_group);
+        }
     });
 }
 
@@ -186,14 +154,13 @@ fn bind_group_slot_ui(
     index: usize,
     bind_group_id: &mut Option<BindGroupId>,
 ) {
-    Grid::new(("compute_pass_bind_group_grid", index))
-        .num_columns(2)
-        .spacing([8.0, 4.0])
-        .show(ui, |ui| {
-            ui.label("Bind Group");
-            egui::ComboBox::from_id_salt(("compute_pass_bind_group", index))
-                .selected_text_storage_opt(bind_groups, *bind_group_id)
-                .show_ui_storage_opt_with_none(ui, bind_groups, bind_group_id);
-            ui.end_row();
-        });
+    inspector::field_grid(ui, ("compute_pass_bind_group_grid", index), |ui| {
+        inspector::storage_opt_combo_row(
+            ui,
+            "Bind Group",
+            ("compute_pass_bind_group", index),
+            bind_groups,
+            bind_group_id,
+        );
+    });
 }

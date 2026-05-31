@@ -60,7 +60,7 @@ pub fn calculate_tangents_and_bitangents(
     texture_coords: &[[f32; 2]],
     indices: &[u32],
 ) -> (Vec<[f32; 3]>, Vec<[f32; 3]>) {
-    use cgmath::{InnerSpace, Vector2, Vector3};
+    use glam::{Vec2, Vec3};
 
     let vertex_count = positions.len();
 
@@ -75,12 +75,12 @@ pub fn calculate_tangents_and_bitangents(
             continue;
         }
 
-        let p0: Vector3<_> = positions.get(i0).copied().unwrap_or([0.0, 0.0, 0.0]).into();
-        let p1: Vector3<_> = positions.get(i1).copied().unwrap_or([0.0, 0.0, 0.0]).into();
-        let p2: Vector3<_> = positions.get(i2).copied().unwrap_or([0.0, 0.0, 0.0]).into();
-        let uv0: Vector2<_> = texture_coords.get(i0).copied().unwrap_or([0.0, 0.0]).into();
-        let uv1: Vector2<_> = texture_coords.get(i1).copied().unwrap_or([0.0, 0.0]).into();
-        let uv2: Vector2<_> = texture_coords.get(i2).copied().unwrap_or([0.0, 0.0]).into();
+        let p0 = Vec3::from_array(positions.get(i0).copied().unwrap_or([0.0, 0.0, 0.0]));
+        let p1 = Vec3::from_array(positions.get(i1).copied().unwrap_or([0.0, 0.0, 0.0]));
+        let p2 = Vec3::from_array(positions.get(i2).copied().unwrap_or([0.0, 0.0, 0.0]));
+        let uv0 = Vec2::from_array(texture_coords.get(i0).copied().unwrap_or([0.0, 0.0]));
+        let uv1 = Vec2::from_array(texture_coords.get(i1).copied().unwrap_or([0.0, 0.0]));
+        let uv2 = Vec2::from_array(texture_coords.get(i2).copied().unwrap_or([0.0, 0.0]));
 
         let dp1 = p1 - p0;
         let dp2 = p2 - p0;
@@ -96,13 +96,13 @@ pub fn calculate_tangents_and_bitangents(
         let tangent = (dp1 * duv2.y - dp2 * duv1.y) * r;
         let bitangent = (dp2 * duv1.x - dp1 * duv2.x) * r;
 
-        tangents[i0] = (Vector3::from(tangents[i0]) + tangent).into();
-        tangents[i1] = (Vector3::from(tangents[i1]) + tangent).into();
-        tangents[i2] = (Vector3::from(tangents[i2]) + tangent).into();
+        tangents[i0] = (Vec3::from_array(tangents[i0]) + tangent).to_array();
+        tangents[i1] = (Vec3::from_array(tangents[i1]) + tangent).to_array();
+        tangents[i2] = (Vec3::from_array(tangents[i2]) + tangent).to_array();
 
-        bitangents[i0] = (Vector3::from(bitangents[i0]) + bitangent).into();
-        bitangents[i1] = (Vector3::from(bitangents[i1]) + bitangent).into();
-        bitangents[i2] = (Vector3::from(bitangents[i2]) + bitangent).into();
+        bitangents[i0] = (Vec3::from_array(bitangents[i0]) + bitangent).to_array();
+        bitangents[i1] = (Vec3::from_array(bitangents[i1]) + bitangent).to_array();
+        bitangents[i2] = (Vec3::from_array(bitangents[i2]) + bitangent).to_array();
 
         triangles_included[i0] += 1;
         triangles_included[i1] += 1;
@@ -116,16 +116,16 @@ pub fn calculate_tangents_and_bitangents(
         }
         let denom = 1.0 / n as f32;
 
-        let t = Vector3::from(tangents[i]) * denom;
-        let b = Vector3::from(bitangents[i]) * denom;
+        let t = Vec3::from_array(tangents[i]) * denom;
+        let b = Vec3::from_array(bitangents[i]) * denom;
 
-        tangents[i] = if t.magnitude2() > 0.0 {
-            t.normalize().into()
+        tangents[i] = if t.length_squared() > 0.0 {
+            t.normalize().to_array()
         } else {
             [0.0, 0.0, 0.0]
         };
-        bitangents[i] = if b.magnitude2() > 0.0 {
-            b.normalize().into()
+        bitangents[i] = if b.length_squared() > 0.0 {
+            b.normalize().to_array()
         } else {
             [0.0, 0.0, 0.0]
         };
