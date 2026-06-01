@@ -42,14 +42,14 @@ impl DeleteProjectConfirmationModal {
                 ui.label(message);
 
                 ui.horizontal(|ui| {
-                    if ui.button("Cancel").clicked() {
-                        result = Some(DeleteProjectConfirmationModalResponse::Cancel);
-                    }
-
                     if ui.button(confirm_button_label).clicked() {
                         result = Some(DeleteProjectConfirmationModalResponse::Confirm(
                             self.project_id.clone(),
                         ));
+                    }
+
+                    if ui.button("Cancel").clicked() {
+                        result = Some(DeleteProjectConfirmationModalResponse::Cancel);
                     }
                 });
             },
