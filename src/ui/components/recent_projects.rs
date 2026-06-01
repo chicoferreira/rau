@@ -6,6 +6,9 @@ use crate::{
         file_system::{AppFileSystem, AppFileSystemTrait},
         identifier::ProjectIdentifier,
     },
+    ui::components::delete_project_confirmation_modal::{
+        DeleteProjectConfirmationModal, DeleteProjectConfirmationModalResponse,
+    },
     utils::async_job::AsyncJob,
 };
 
@@ -13,6 +16,7 @@ use crate::{
 pub struct RecentProjectsState {
     load_state: RecentProjectLoadState,
     remove_job: Option<AsyncJob<AppResult<()>>>,
+    delete_confirmation_modal: Option<DeleteProjectConfirmationModal>,
 }
 
 #[derive(Default)]
@@ -62,10 +66,25 @@ impl RecentProjectsState {
                         _ => "Remove",
                     };
                     if ui.small_button(remove_recent_label).clicked() {
-                        self.remove_project(app_file_system, project);
+                        self.delete_confirmation_modal =
+                            Some(DeleteProjectConfirmationModal::new(project));
                     }
                 });
             });
+        }
+
+        if let Some(modal) = &mut self.delete_confirmation_modal {
+            if let Some(response) = modal.render_ui(ui) {
+                match response {
+                    DeleteProjectConfirmationModalResponse::Confirm(project_id) => {
+                        self.remove_project(app_file_system, project_id);
+                        self.delete_confirmation_modal = None;
+                    }
+                    DeleteProjectConfirmationModalResponse::Cancel => {
+                        self.delete_confirmation_modal = None;
+                    }
+                }
+            }
         }
 
         result
