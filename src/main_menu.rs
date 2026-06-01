@@ -50,7 +50,7 @@ impl MainMenu {
         }
 
         if let Some(modal) = &mut self.create_project_modal {
-            if let Some(response) = modal.render_ui(ui, &mut self.toasts) {
+            if let Some(response) = modal.render_ui(ui, app_fs, &mut self.toasts) {
                 match response {
                     CreateProjectModalResponse::Create { project_id, files } => {
                         self.open_project(app_fs.clone(), project_id, files);

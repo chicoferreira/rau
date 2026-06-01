@@ -1,9 +1,12 @@
+use std::task::Poll;
+
 use egui::{Ui, Widget};
 
 use crate::error::{AppError, AppResult};
 use crate::featured_projects::FeaturedProject;
 #[cfg(not(target_arch = "wasm32"))]
 use crate::file::absolute::AbsolutePathBuf;
+use crate::file::file_system::{AppFileSystem, AppFileSystemTrait, FutureResult};
 use crate::file::identifier::ProjectIdentifier;
 use crate::project::{Project, paths::FilePath};
 #[cfg(not(target_arch = "wasm32"))]
@@ -24,11 +27,12 @@ struct CreateProjectFormData {
     #[cfg(not(target_arch = "wasm32"))]
     project_path: Option<AbsolutePathBuf>,
     #[cfg(not(target_arch = "wasm32"))]
-    folder_picker_job: Option<AsyncJob<AppResult<Option<AbsolutePathBuf>>>>,
+    folder_picker_job: Option<FutureResult<Option<AbsolutePathBuf>>>,
 }
 
 enum CreateProjectModalState {
     Editing,
+    CheckingAvailability(ProjectAvailabilityTask),
     Downloading(ProjectDownloadTask),
 }
 
@@ -65,21 +69,46 @@ struct ProjectDownloadTask {
     task: github::download::DownloadTask,
 }
 
+enum PendingProjectCreation {
+    Empty(ProjectIdentifier),
+    Github(ProjectIdentifier, github::GitRepository, FilePath),
+}
+
+struct ProjectAvailabilityTask {
+    pending_creation: PendingProjectCreation,
+    task: FutureResult<()>,
+}
+
+impl PendingProjectCreation {
+    fn project_id(&self) -> &ProjectIdentifier {
+        match self {
+            Self::Empty(project_id) | Self::Github(project_id, ..) => project_id,
+        }
+    }
+}
+
+impl ProjectDownloadTask {
+    fn new(
+        project_id: ProjectIdentifier,
+        repository: github::GitRepository,
+        path: FilePath,
+    ) -> Self {
+        let task = github::download_files_under_path(&repository, &path);
+        Self { project_id, task }
+    }
+}
+
 impl CreateProjectModal {
     pub fn new(source: ProjectCreationSource) -> Self {
-        let project_name = match &source {
-            ProjectCreationSource::Empty => "Untitled Project".to_string(),
-            ProjectCreationSource::Github(_) => "".to_string(),
-        };
-
-        let kind = match source {
-            ProjectCreationSource::Empty => ProjectCreationKind::Empty,
-            ProjectCreationSource::Github(_) => ProjectCreationKind::Github,
-        };
-
-        let github_source = match source {
-            ProjectCreationSource::Empty => GithubProjectSource::default(),
-            ProjectCreationSource::Github(source) => source,
+        let (kind, github_source, project_name) = match source {
+            ProjectCreationSource::Empty => (
+                ProjectCreationKind::Empty,
+                GithubProjectSource::default(),
+                "Untitled Project".to_string(),
+            ),
+            ProjectCreationSource::Github(source) => {
+                (ProjectCreationKind::Github, source, String::new())
+            }
         };
 
         Self {
@@ -113,17 +142,18 @@ impl CreateProjectModal {
     pub fn render_ui(
         &mut self,
         ui: &mut egui::Ui,
+        app_file_system: &AppFileSystem,
         toasts: &mut egui_notify::Toasts,
     ) -> Option<CreateProjectModalResponse> {
         let mut result = None;
 
         let response =
             egui::Modal::new(egui::Id::new("create_project_modal")).show(ui.ctx(), |ui| {
-                let is_downloading = matches!(self.state, CreateProjectModalState::Downloading(_));
+                let is_busy = !matches!(self.state, CreateProjectModalState::Editing);
 
                 ui.heading("Creating new project");
 
-                ui.add_enabled_ui(!is_downloading, |ui| {
+                ui.add_enabled_ui(!is_busy, |ui| {
                     ui_form(ui, &mut self.form_data, toasts);
                 });
 
@@ -131,69 +161,15 @@ impl CreateProjectModal {
                     ui.colored_label(ui.visuals().error_fg_color, error.to_string());
                 }
 
-                let download_finished = ui_download(ui, &mut self.state);
+                result = self.tick_pending_state(ui);
 
-                if download_finished {
-                    let state =
-                        std::mem::replace(&mut self.state, CreateProjectModalState::Editing);
-                    if let CreateProjectModalState::Downloading(download_task) = state {
-                        match download_task.task {
-                            DownloadTask::Done { files } => {
-                                result = Some(CreateProjectModalResponse::Create {
-                                    project_id: download_task.project_id,
-                                    files,
-                                });
-                            }
-                            DownloadTask::Errored { error } => {
-                                self.form_data.error = Some(error);
-                            }
-                            _ => {}
-                        }
-                    }
+                if result.is_some() {
+                    return;
                 }
 
                 ui.add_enabled_ui(self.can_create_project(), |ui| {
-                    if !ui.button("Create Project").clicked() {
-                        return;
-                    }
-
-                    self.form_data.error = None;
-
-                    let project_id = match self.form_data.create_project_identifier() {
-                        Ok(id) => id,
-                        Err(error) => {
-                            self.form_data.error = Some(error);
-                            return;
-                        }
-                    };
-
-                    match self.form_data.kind {
-                        ProjectCreationKind::Empty => match Project::default().serialize() {
-                            Ok(bytes) => {
-                                result = Some(CreateProjectModalResponse::Create {
-                                    project_id,
-                                    files: vec![(FilePath::project_json(), bytes)],
-                                });
-                            }
-                            Err(error) => {
-                                self.form_data.error = Some(error);
-                            }
-                        },
-                        ProjectCreationKind::Github => {
-                            match self.form_data.github_source.create() {
-                                Ok((repository, path)) => {
-                                    let task =
-                                        github::download_files_under_path(&repository, &path);
-
-                                    let download_task = ProjectDownloadTask { project_id, task };
-                                    self.state =
-                                        CreateProjectModalState::Downloading(download_task);
-                                }
-                                Err(error) => {
-                                    self.form_data.error = Some(error);
-                                }
-                            }
-                        }
+                    if ui.button("Create Project").clicked() {
+                        self.start_project_creation(app_file_system);
                     }
                 });
             });
@@ -216,9 +192,115 @@ impl CreateProjectModal {
     fn can_create_project(&self) -> bool {
         matches!(self.state, CreateProjectModalState::Editing)
     }
+
+    fn start_project_creation(&mut self, app_file_system: &AppFileSystem) {
+        self.form_data.error = None;
+
+        let pending_creation = match self.form_data.pending_creation() {
+            Ok(pending_creation) => pending_creation,
+            Err(error) => {
+                self.form_data.error = Some(error);
+                return;
+            }
+        };
+
+        let task =
+            app_file_system.ensure_project_can_be_created(pending_creation.project_id().clone());
+        self.state = CreateProjectModalState::CheckingAvailability(ProjectAvailabilityTask {
+            pending_creation,
+            task,
+        });
+    }
+
+    fn tick_pending_state(&mut self, ui: &mut Ui) -> Option<CreateProjectModalResponse> {
+        match std::mem::replace(&mut self.state, CreateProjectModalState::Editing) {
+            CreateProjectModalState::Editing => None,
+            CreateProjectModalState::CheckingAvailability(mut availability_task) => {
+                match availability_task.task.try_resolve() {
+                    Poll::Pending => {
+                        self.state =
+                            CreateProjectModalState::CheckingAvailability(availability_task);
+                        None
+                    }
+                    Poll::Ready(Ok(())) => {
+                        self.create_available_project(availability_task.pending_creation)
+                    }
+                    Poll::Ready(Err(error)) => {
+                        self.form_data.error = Some(error);
+                        None
+                    }
+                }
+            }
+            CreateProjectModalState::Downloading(mut download_task) => {
+                if !ui_download(ui, &mut download_task) {
+                    self.state = CreateProjectModalState::Downloading(download_task);
+                    return None;
+                }
+
+                self.finish_download(download_task)
+            }
+        }
+    }
+
+    fn create_available_project(
+        &mut self,
+        pending_creation: PendingProjectCreation,
+    ) -> Option<CreateProjectModalResponse> {
+        match pending_creation {
+            PendingProjectCreation::Empty(project_id) => match Project::default().serialize() {
+                Ok(bytes) => Some(CreateProjectModalResponse::Create {
+                    project_id,
+                    files: vec![(FilePath::project_json(), bytes)],
+                }),
+                Err(error) => {
+                    self.form_data.error = Some(error);
+                    None
+                }
+            },
+            PendingProjectCreation::Github(project_id, repository, path) => {
+                self.state = CreateProjectModalState::Downloading(ProjectDownloadTask::new(
+                    project_id, repository, path,
+                ));
+                None
+            }
+        }
+    }
+
+    fn finish_download(
+        &mut self,
+        download_task: ProjectDownloadTask,
+    ) -> Option<CreateProjectModalResponse> {
+        let ProjectDownloadTask { project_id, task } = download_task;
+        match task {
+            DownloadTask::Done { files } => {
+                Some(CreateProjectModalResponse::Create { project_id, files })
+            }
+            DownloadTask::Errored { error } => {
+                self.form_data.error = Some(error);
+                None
+            }
+            task => {
+                self.state =
+                    CreateProjectModalState::Downloading(ProjectDownloadTask { project_id, task });
+                None
+            }
+        }
+    }
 }
 
 impl CreateProjectFormData {
+    fn pending_creation(&self) -> AppResult<PendingProjectCreation> {
+        let project_id = self.create_project_identifier()?;
+
+        match self.kind {
+            ProjectCreationKind::Empty => Ok(PendingProjectCreation::Empty(project_id)),
+            ProjectCreationKind::Github => {
+                let (repository, path) = self.github_source.create()?;
+                Ok(PendingProjectCreation::Github(project_id, repository, path))
+            }
+        }
+    }
+
     #[cfg(not(target_arch = "wasm32"))]
     fn create_project_identifier(&self) -> AppResult<ProjectIdentifier> {
         let project_name = self.valid_project_name()?;
@@ -264,31 +346,23 @@ impl CreateProjectFormData {
 
 impl GithubProjectSource {
     fn create(&self) -> AppResult<(github::GitRepository, FilePath)> {
-        let owner = self.owner.trim();
-        if owner.is_empty() {
-            return Err(AppError::InvalidCreateProjectForm(
-                "GitHub owner is required",
-            ));
-        }
-
-        let repo = self.repo.trim();
-        if repo.is_empty() {
-            return Err(AppError::InvalidCreateProjectForm(
-                "GitHub repository is required",
-            ));
-        }
-
-        let git_ref = self.git_ref.trim();
-        if git_ref.is_empty() {
-            return Err(AppError::InvalidCreateProjectForm(
-                "GitHub branch/Commit SHA is required",
-            ));
-        }
-
+        let owner = required_field(&self.owner, "GitHub owner is required")?;
+        let repo = required_field(&self.repo, "GitHub repository is required")?;
+        let git_ref = required_field(&self.git_ref, "GitHub branch/Commit SHA is required")?;
         let path = FilePath::from_str(self.path.trim())?;
         let repository = github::GitRepository::new(owner, repo, git_ref);
+
         Ok((repository, path))
     }
+}
+
+fn required_field<'a>(value: &'a str, message: &'static str) -> AppResult<&'a str> {
+    let value = value.trim();
+    if value.is_empty() {
+        return Err(AppError::InvalidCreateProjectForm(message));
+    }
+
+    Ok(value)
 }
 
 fn ui_form(
@@ -311,29 +385,25 @@ fn ui_form(
             ui.end_row();
 
             if form_data.kind == ProjectCreationKind::Github {
-                ui.label("Owner:");
-                egui::TextEdit::singleline(&mut form_data.github_source.owner)
-                    .hint_text("chicoferreira")
-                    .ui(ui);
-                ui.end_row();
-
-                ui.label("Repository:");
-                egui::TextEdit::singleline(&mut form_data.github_source.repo)
-                    .hint_text("rau")
-                    .ui(ui);
-                ui.end_row();
-
-                ui.label("Branch/Commit SHA:");
-                egui::TextEdit::singleline(&mut form_data.github_source.git_ref)
-                    .hint_text("main")
-                    .ui(ui);
-                ui.end_row();
-
-                ui.label("Folder in repository:");
-                egui::TextEdit::singleline(&mut form_data.github_source.path)
-                    .hint_text("optional folder path")
-                    .ui(ui);
-                ui.end_row();
+                text_edit_row(
+                    ui,
+                    "Owner:",
+                    &mut form_data.github_source.owner,
+                    "chicoferreira",
+                );
+                text_edit_row(ui, "Repository:", &mut form_data.github_source.repo, "rau");
+                text_edit_row(
+                    ui,
+                    "Branch/Commit SHA:",
+                    &mut form_data.github_source.git_ref,
+                    "main",
+                );
+                text_edit_row(
+                    ui,
+                    "Folder in repository:",
+                    &mut form_data.github_source.path,
+                    "optional folder path",
+                );
             }
         });
 
@@ -355,6 +425,12 @@ fn ui_form(
         });
 }
 
+fn text_edit_row(ui: &mut Ui, label: &str, value: &mut String, hint: &str) {
+    ui.label(label);
+    egui::TextEdit::singleline(value).hint_text(hint).ui(ui);
+    ui.end_row();
+}
+
 #[cfg(not(target_arch = "wasm32"))]
 fn folder_selector_controls_ui(
     ui: &mut egui::Ui,
@@ -362,7 +438,7 @@ fn folder_selector_controls_ui(
     toasts: &mut egui_notify::Toasts,
 ) {
     if let Some(job) = &mut form_data.folder_picker_job {
-        if let std::task::Poll::Ready(result) = job.try_resolve() {
+        if let Poll::Ready(result) = job.try_resolve() {
             match result {
                 Ok(Some(project_path)) => form_data.project_path = Some(project_path),
                 Ok(None) => {}
@@ -412,27 +488,23 @@ fn folder_selector_controls_ui(
     });
 }
 
-fn ui_download(ui: &mut Ui, state: &mut CreateProjectModalState) -> bool {
-    if let CreateProjectModalState::Downloading(download_task) = state {
-        download_task.task.tick();
+fn ui_download(ui: &mut Ui, download_task: &mut ProjectDownloadTask) -> bool {
+    download_task.task.tick();
 
-        if let Some((downloaded, total)) = download_task.task.file_count_progress() {
-            let progress = if total == 0 {
-                0.0
-            } else {
-                downloaded as f32 / total as f32
-            };
-            let text = format!("Downloading {downloaded} / {total} files...");
-            ui.add(egui::ProgressBar::new(progress).text(text));
+    if let Some((downloaded, total)) = download_task.task.file_count_progress() {
+        let progress = if total == 0 {
+            0.0
         } else {
-            ui.add(egui::ProgressBar::new(0.0).text("Listing files..."));
-        }
-
-        matches!(
-            download_task.task,
-            DownloadTask::Done { .. } | DownloadTask::Errored { .. }
-        )
+            downloaded as f32 / total as f32
+        };
+        let text = format!("Downloading {downloaded} / {total} files...");
+        ui.add(egui::ProgressBar::new(progress).text(text));
     } else {
-        false
+        ui.add(egui::ProgressBar::new(0.0).text("Listing files..."));
     }
+
+    matches!(
+        download_task.task,
+        DownloadTask::Done { .. } | DownloadTask::Errored { .. }
+    )
 }

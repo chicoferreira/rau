@@ -100,6 +100,31 @@ impl AppFileSystemTrait for AppFileSystem {
         AsyncJob::new(async move { Ok(()) })
     }
 
+    fn ensure_project_can_be_created(&self, id: ProjectIdentifier) -> FutureResult<()> {
+        let database = self.database.clone();
+
+        AsyncJob::new(async move {
+            let transaction =
+                ProjectFileSystem::entries_transaction(&database, TransactionMode::Readonly)?;
+            let files_store = ProjectFileSystem::files_store(&transaction)?;
+            let directories_store = ProjectFileSystem::directories_store(&transaction)?;
+
+            let (file_keys, directory_keys) = futures_lite::future::try_zip(
+                ProjectFileSystem::project_keys_in_store(&id, files_store),
+                ProjectFileSystem::project_keys_in_store(&id, directories_store),
+            )
+            .await?;
+
+            if !file_keys.is_empty() || !directory_keys.is_empty() {
+                return Err(AppError::ProjectNameAlreadyExists(
+                    id.project_name().to_string(),
+                ));
+            }
+
+            Ok(())
+        })
+    }
+
     fn remove_recent_project(&self, id: ProjectIdentifier) -> FutureResult<()> {
         // The wasm platform should actually delete the project instead of just removing it from a list.
         let database = self.database.clone();

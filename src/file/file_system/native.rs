@@ -120,6 +120,19 @@ impl AppFileSystemTrait for AppFileSystem {
         })
     }
 
+    fn ensure_project_can_be_created(&self, id: ProjectIdentifier) -> FutureResult<()> {
+        spawn_blocking(self.send_jobs.clone(), move || {
+            let project_path = id.project_path().as_path_buf();
+            let project_json_path = project_path.join(FilePath::project_json().to_string());
+
+            if project_json_path.try_exists()? {
+                return Err(AppError::ProjectJsonAlreadyExists(project_path));
+            }
+
+            Ok(())
+        })
+    }
+
     fn remember_project(&self, id: ProjectIdentifier) -> FutureResult<()> {
         let project_path = id.project_path().clone();
 

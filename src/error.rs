@@ -52,6 +52,12 @@ pub enum AppError {
     /// The file or directory already exists.
     #[error("path already exists: {0:?}")]
     PathAlreadyExists(FilePath),
+    #[cfg(not(target_arch = "wasm32"))]
+    #[error("project folder already contains project.json: {0:?}")]
+    ProjectJsonAlreadyExists(PathBuf),
+    #[cfg(target_arch = "wasm32")]
+    #[error("project name already exists: {0}")]
+    ProjectNameAlreadyExists(String),
     /// An image parse error occurred.
     #[error(transparent)]
     ImageParseError(#[from] image::ImageError),

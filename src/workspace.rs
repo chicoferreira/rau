@@ -94,6 +94,12 @@ impl Workspace {
         project_id: ProjectIdentifier,
         files: Vec<(FilePath, Vec<u8>)>,
     ) -> AppResult<Self> {
+        if !files.is_empty() {
+            app_fs
+                .ensure_project_can_be_created(project_id.clone())
+                .await?;
+        }
+
         let (file_system, file_watcher) = app_fs.mount_project(project_id.clone()).await?;
 
         let file_storage = FileStorage::new(project_id.clone(), file_system, file_watcher);

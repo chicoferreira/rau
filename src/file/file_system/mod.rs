@@ -33,6 +33,8 @@ pub trait AppFileSystemTrait: Clone + Sized {
 
     fn recent_projects(&self) -> FutureResult<Vec<ProjectIdentifier>>;
 
+    fn ensure_project_can_be_created(&self, id: ProjectIdentifier) -> FutureResult<()>;
+
     fn remember_project(&self, id: ProjectIdentifier) -> FutureResult<()>;
 
     fn remove_recent_project(&self, id: ProjectIdentifier) -> FutureResult<()>;
