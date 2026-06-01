@@ -1,6 +1,6 @@
-use crate::utils::winit_runner;
-
 use winit::event_loop::EventLoop;
+
+use crate::{app::App, file::identifier::ProjectIdentifier, utils::winit_runner};
 
 macro_rules! toasts_log_error {
     ($toasts:expr, $format:expr) => {
@@ -10,39 +10,42 @@ macro_rules! toasts_log_error {
     };
 }
 
-mod app;
-mod error;
-mod featured_projects;
-mod file;
-mod main_menu;
-mod project;
-mod scene;
-mod ui;
-mod utils;
-mod workspace;
+pub mod app;
+pub mod error;
+pub mod featured_projects;
+pub mod file;
+pub mod main_menu;
+pub mod project;
+pub mod scene;
+pub mod ui;
+pub mod utils;
+pub mod workspace;
 
-pub fn run() -> anyhow::Result<()> {
+#[derive(Default)]
+pub enum StartupAction {
+    #[default]
+    MainMenu,
+    OpenProject {
+        project_id: ProjectIdentifier,
+    },
+    CreateEmptyProject {
+        project_id: ProjectIdentifier,
+    },
+}
+
+pub fn run(startup_action: StartupAction) -> anyhow::Result<()> {
+    let event_loop = EventLoop::<App>::with_user_event().build()?;
+
     #[cfg(not(target_arch = "wasm32"))]
     {
-        env_logger::builder()
-            .parse_default_env()
-            .filter_level(log::LevelFilter::Info)
-            .init();
-
-        let event_loop = EventLoop::with_user_event().build()?;
-        let mut app = winit_runner::WinitRunner::<app::App>::new();
-
+        let mut app = winit_runner::WinitRunner::new(startup_action);
         event_loop.run_app(&mut app)?;
     }
     #[cfg(target_arch = "wasm32")]
     {
         use winit::platform::web::EventLoopExtWebSys;
 
-        console_log::init_with_level(log::Level::Info)?;
-
-        let event_loop = EventLoop::with_user_event().build()?;
-        let app = winit_runner::WinitRunner::<app::App>::new(&event_loop);
-
+        let app = winit_runner::WinitRunner::new(&event_loop, startup_action);
         event_loop.spawn_app(app)
     }
 
@@ -55,7 +58,9 @@ pub fn run_web() -> Result<(), wasm_bindgen::JsValue> {
     use wasm_bindgen::UnwrapThrowExt;
 
     console_error_panic_hook::set_once();
-    run().unwrap_throw();
+    console_log::init_with_level(log::Level::Info)?;
+
+    run(StartupAction::default()).unwrap_throw();
 
     Ok(())
 }

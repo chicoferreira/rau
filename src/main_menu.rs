@@ -1,9 +1,10 @@
 use crate::{
+    StartupAction,
     app::{AppEvent, State},
     error::AppResult,
     featured_projects::FEATURED_PROJECTS,
     file::{file_system::AppFileSystem, identifier::ProjectIdentifier},
-    project::paths::FilePath,
+    project::{Project, paths::FilePath},
     ui::components::{
         create_project_modal::{
             CreateProjectModal, CreateProjectModalResponse, ProjectCreationSource,
@@ -27,6 +28,30 @@ pub struct MainMenu {
 }
 
 impl MainMenu {
+    pub fn with_startup_action(app_fs: AppFileSystem, startup_action: StartupAction) -> Self {
+        let mut main_menu = Self::default();
+
+        match startup_action {
+            StartupAction::MainMenu => {}
+            StartupAction::OpenProject { project_id } => {
+                main_menu.open_project(app_fs, project_id, vec![])
+            }
+            StartupAction::CreateEmptyProject { project_id } => {
+                match Project::default().serialize() {
+                    Ok(bytes) => {
+                        let default_files = vec![(FilePath::project_json(), bytes)];
+                        main_menu.open_project(app_fs, project_id, default_files);
+                    }
+                    Err(err) => {
+                        toasts_log_error!(main_menu.toasts, "Failed to serialize project: {err:?}");
+                    }
+                }
+            }
+        }
+
+        main_menu
+    }
+
     pub fn render_ui(&mut self, ui: &mut egui::Ui, app_fs: &AppFileSystem) {
         self.toasts.show(ui.ctx());
 

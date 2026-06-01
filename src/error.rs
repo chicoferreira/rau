@@ -124,3 +124,9 @@ impl<T> RequiredFieldExt for Option<T> {
         self.ok_or_else(|| AppError::uninit_field(field))
     }
 }
+
+impl From<std::convert::Infallible> for AppError {
+    fn from(error: std::convert::Infallible) -> Self {
+        match error {}
+    }
+}

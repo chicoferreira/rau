@@ -56,6 +56,7 @@ egui-notify = "0.22.0"
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 # Enable default features for egui-winit
 egui-winit = { version = "0.34.1", default-features = true }
+clap = { version = "4.5", features = ["derive"] }
 pollster = "0.4.0"
 notify = "8.2.0"
 notify-debouncer-mini = "0.7.0"

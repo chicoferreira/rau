@@ -4,21 +4,24 @@ use winit::{application::ApplicationHandler, event::WindowEvent, event_loop::Act
 
 use crate::error::AppResult;
 
-pub struct WinitRunner<A: WindowApp + 'static> {
+pub struct WinitRunner<W: WindowApp<A> + 'static, A> {
     #[cfg(target_arch = "wasm32")]
-    proxy: Option<winit::event_loop::EventLoopProxy<A>>,
-    app: Option<A>,
+    proxy: Option<winit::event_loop::EventLoopProxy<W>>,
+    args: A,
+    app: Option<W>,
     pending_window_events: Vec<WindowEvent>,
 }
 
-impl<A: WindowApp + 'static> WinitRunner<A> {
+impl<W: WindowApp<A> + 'static, A> WinitRunner<W, A> {
     pub fn new(
-        #[cfg(target_arch = "wasm32")] event_loop: &winit::event_loop::EventLoop<A>,
+        #[cfg(target_arch = "wasm32")] event_loop: &winit::event_loop::EventLoop<W>,
+        args: A,
     ) -> Self {
         #[cfg(target_arch = "wasm32")]
         let proxy = Some(event_loop.create_proxy());
         Self {
             app: None,
+            args,
             #[cfg(target_arch = "wasm32")]
             proxy,
             pending_window_events: Vec::new(),
@@ -26,7 +29,7 @@ impl<A: WindowApp + 'static> WinitRunner<A> {
     }
 }
 
-impl<A: WindowApp + 'static> ApplicationHandler<A> for WinitRunner<A> {
+impl<W: WindowApp<A> + 'static, A: Default> ApplicationHandler<W> for WinitRunner<W, A> {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         #[allow(unused_mut)]
         let mut window_attributes = winit::window::Window::default_attributes();
@@ -47,17 +50,18 @@ impl<A: WindowApp + 'static> ApplicationHandler<A> for WinitRunner<A> {
         }
 
         let window = Arc::new(event_loop.create_window(window_attributes).unwrap());
+        let args = std::mem::take(&mut self.args);
 
         #[cfg(not(target_arch = "wasm32"))]
         {
-            self.app = Some(pollster::block_on(A::new(window)).expect("Failed creating app"));
+            self.app = Some(pollster::block_on(W::new(window, args)).expect("Failed creating app"));
         }
 
         #[cfg(target_arch = "wasm32")]
         {
             if let Some(proxy) = self.proxy.take() {
                 wasm_bindgen_futures::spawn_local(async move {
-                    let app = A::new(window).await.expect("Failed creating app");
+                    let app = W::new(window, args).await.expect("Failed creating app");
                     assert!(proxy.send_event(app).is_ok())
                 });
             }
@@ -65,7 +69,7 @@ impl<A: WindowApp + 'static> ApplicationHandler<A> for WinitRunner<A> {
     }
 
     #[allow(unused_mut)]
-    fn user_event(&mut self, event_loop: &ActiveEventLoop, mut app: A) {
+    fn user_event(&mut self, event_loop: &ActiveEventLoop, mut app: W) {
         let pending = self.pending_window_events.drain(..);
         for event in pending {
             app.handle_window_event(event_loop, event);
@@ -92,8 +96,8 @@ impl<A: WindowApp + 'static> ApplicationHandler<A> for WinitRunner<A> {
     }
 }
 
-pub trait WindowApp: Sized {
-    fn new(window: Arc<winit::window::Window>) -> impl Future<Output = AppResult<Self>>;
+pub trait WindowApp<A>: Sized {
+    fn new(window: Arc<winit::window::Window>, args: A) -> impl Future<Output = AppResult<Self>>;
 
     fn handle_window_event(&mut self, event_loop: &ActiveEventLoop, event: WindowEvent);
 }

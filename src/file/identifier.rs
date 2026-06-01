@@ -37,7 +37,13 @@ impl ProjectIdentifier {
     }
 
     #[cfg(not(target_arch = "wasm32"))]
-    pub fn extract_identifier(path: AbsolutePathBuf) -> AppResult<Self> {
+    pub fn extract_identifier<P>(path: P) -> AppResult<Self>
+    where
+        AbsolutePathBuf: TryFrom<P>,
+        AppError: From<<AbsolutePathBuf as TryFrom<P>>::Error>,
+    {
+        let path = AbsolutePathBuf::try_from(path)?;
+
         let project_name = path
             .as_ref()
             .file_name()

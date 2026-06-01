@@ -4,6 +4,7 @@ use wgpu::DownlevelFlags;
 use winit::{event::WindowEvent, window::Window};
 
 use crate::{
+    StartupAction,
     error::AppResult,
     file::file_system::{AppFileSystem, AppFileSystemTrait},
     main_menu::MainMenu,
@@ -38,8 +39,11 @@ pub enum State {
     Workspace(Workspace),
 }
 
-impl WindowApp for App {
-    async fn new(window: Arc<winit::window::Window>) -> AppResult<Self> {
+impl WindowApp<StartupAction> for App {
+    async fn new(
+        window: Arc<winit::window::Window>,
+        startup_action: StartupAction,
+    ) -> AppResult<Self> {
         let size = window.inner_size();
 
         let instance_descriptor = wgpu::InstanceDescriptor {
@@ -130,7 +134,8 @@ impl WindowApp for App {
         let egui_renderer = ui::renderer::EguiRenderer::new(&device, config.format, &window);
 
         let app_file_system = AppFileSystem::open().await?;
-        let state = State::MainMenu(MainMenu::default());
+        let main_menu = MainMenu::with_startup_action(app_file_system.clone(), startup_action);
+        let state = State::MainMenu(main_menu);
 
         Ok(Self {
             surface,
