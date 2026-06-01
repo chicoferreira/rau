@@ -1,6 +1,6 @@
 use winit::event_loop::EventLoop;
 
-use crate::{app::App, file::identifier::ProjectIdentifier, utils::winit_runner};
+use crate::{app::App, error::AppResult, file::identifier::ProjectIdentifier, utils::winit_runner};
 
 macro_rules! toasts_log_error {
     ($toasts:expr, $format:expr) => {
@@ -10,16 +10,18 @@ macro_rules! toasts_log_error {
     };
 }
 
-pub mod app;
-pub mod error;
-pub mod featured_projects;
-pub mod file;
-pub mod main_menu;
-pub mod project;
-pub mod scene;
-pub mod ui;
-pub mod utils;
-pub mod workspace;
+mod app;
+#[cfg(not(target_arch = "wasm32"))]
+pub mod cli;
+mod error;
+mod featured_projects;
+mod file;
+mod main_menu;
+mod project;
+mod scene;
+mod ui;
+mod utils;
+mod workspace;
 
 #[derive(Default)]
 pub enum StartupAction {
@@ -33,7 +35,7 @@ pub enum StartupAction {
     },
 }
 
-pub fn run(startup_action: StartupAction) -> anyhow::Result<()> {
+pub fn run(startup_action: StartupAction) -> AppResult<()> {
     let event_loop = EventLoop::<App>::with_user_event().build()?;
 
     #[cfg(not(target_arch = "wasm32"))]
@@ -58,7 +60,7 @@ pub fn run_web() -> Result<(), wasm_bindgen::JsValue> {
     use wasm_bindgen::UnwrapThrowExt;
 
     console_error_panic_hook::set_once();
-    console_log::init_with_level(log::Level::Info)?;
+    console_log::init_with_level(log::Level::Info).unwrap_throw();
 
     run(StartupAction::default()).unwrap_throw();
 

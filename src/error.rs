@@ -67,6 +67,8 @@ pub enum AppError {
     #[cfg(not(target_arch = "wasm32"))]
     #[error(transparent)]
     NotifyError(#[from] notify::Error),
+    #[error(transparent)]
+    WinitEventLoopError(#[from] winit::error::EventLoopError),
     #[cfg(target_arch = "wasm32")]
     #[error(transparent)]
     IndexedDbOpenDbError(#[from] indexed_db_futures::error::OpenDbError),

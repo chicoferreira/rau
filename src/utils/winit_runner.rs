@@ -29,7 +29,7 @@ impl<W: WindowApp<A> + 'static, A> WinitRunner<W, A> {
     }
 }
 
-impl<W: WindowApp<A> + 'static, A: Default> ApplicationHandler<W> for WinitRunner<W, A> {
+impl<W: WindowApp<A> + 'static, A: Default + 'static> ApplicationHandler<W> for WinitRunner<W, A> {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         #[allow(unused_mut)]
         let mut window_attributes = winit::window::Window::default_attributes();

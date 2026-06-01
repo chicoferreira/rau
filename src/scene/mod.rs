@@ -1,6 +1,6 @@
 use crate::{
     error::AppResult,
-    file::{file_storage::FileStorage, identifier::ProjectIdentifier},
+    file::file_storage::FileStorage,
     project::{
         Project,
         paths::FilePath,
@@ -36,6 +36,7 @@ pub async fn create_and_save_scene(
     use crate::file::{
         absolute::AbsolutePathBuf,
         file_system::{AppFileSystemTrait, ProjectFileSystemTrait},
+        identifier::ProjectIdentifier,
     };
 
     let project_id = ProjectIdentifier::new(
