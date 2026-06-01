@@ -18,7 +18,6 @@ pub struct BindGroupCreationContext<'a> {
     pub runtime_texture_views: &'a RuntimeStorage<TextureView>,
     pub runtime_samplers: &'a RuntimeStorage<Sampler>,
     pub device: &'a wgpu::Device,
-    pub limits: &'a wgpu::Limits,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -300,7 +299,8 @@ impl BindGroupResource {
                 access,
                 view_dimension,
             } => {
-                if ctx.limits.max_storage_textures_per_shader_stage == 0 {
+                let limits = ctx.device.limits();
+                if limits.max_storage_textures_per_shader_stage == 0 {
                     return Err(AppError::UnsupportedRendererFeature("Storage Textures"));
                 }
 

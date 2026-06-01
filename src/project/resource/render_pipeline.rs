@@ -12,8 +12,8 @@ use crate::{
     },
     resource_getters, resource_setters,
     utils::{
-        async_job::AsyncJob, vec_set_at_extension::VecSetAtExtension,
-        wgpu_error_scope::WgpuErrorScope,
+        async_job::AsyncJob, validate_bind_group_layouts::validate_bind_group_layouts,
+        vec_set_at_extension::VecSetAtExtension, wgpu_error_scope::WgpuErrorScope,
     },
 };
 
@@ -283,6 +283,8 @@ impl SyncResource for RenderPipeline {
 
             bind_group_layouts.push(result);
         }
+
+        validate_bind_group_layouts(&bind_group_layouts, &ctx.device.limits())?;
 
         let scope = WgpuErrorScope::push(ctx.device);
 

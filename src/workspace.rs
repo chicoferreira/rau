@@ -49,7 +49,6 @@ pub struct AppContext<'a> {
     pub encoder: &'a mut wgpu::CommandEncoder,
     pub egui_renderer: &'a mut ui::renderer::EguiRenderer,
     pub downlevel_flags: wgpu::DownlevelFlags,
-    pub limits: &'a wgpu::Limits,
     pub dt: instant::Duration,
 }
 
@@ -421,7 +420,6 @@ impl Workspace {
 
         let view = &mut BindGroupCreationContext {
             device: &ctx.device,
-            limits: ctx.limits,
             runtime_uniforms: &mut self.runtime_project.uniforms,
             runtime_texture_views: &mut self.runtime_project.texture_views,
             runtime_samplers: &mut self.runtime_project.samplers,
@@ -472,7 +470,6 @@ impl Workspace {
             encoder: &mut ctx.encoder,
             runtime_shaders: &mut self.runtime_project.shaders,
             runtime_bind_groups: &mut self.runtime_project.bind_groups,
-            limits: ctx.limits,
         };
         self.tracker.sync_storage(
             &mut self.project.compute_passes,

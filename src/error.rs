@@ -13,8 +13,8 @@ pub enum AppError {
     /// The resource has uninitialized fields.
     #[error("Resource has uninitialized fields: {0}")]
     UninitializedFields(String),
-    /// The render pipeline has more bind group layouts than wgpu supports.
-    #[error("bind group layout count {count} exceeds render pass bind group limit {max}")]
+    /// The pipeline has more bind group layouts than wgpu supports.
+    #[error("bind group layout count {count} exceeds device bind group limit {max}")]
     BindGroupLayoutLimitExceeded { count: usize, max: usize },
     #[error(
         "model {model_label:?} material {material_index} bind group layout does not match material {expected_material_index} bind group layout"

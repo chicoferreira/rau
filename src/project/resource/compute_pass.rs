@@ -11,7 +11,10 @@ use crate::{
         sync::{Revision, SyncOutcome, SyncResource, SyncTracker},
     },
     resource_getters, resource_setters,
-    utils::{async_job::AsyncJob, wgpu_error_scope::WgpuErrorScope},
+    utils::{
+        async_job::AsyncJob, validate_bind_group_layouts::validate_bind_group_layouts,
+        wgpu_error_scope::WgpuErrorScope,
+    },
 };
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -35,7 +38,6 @@ pub struct Context<'a> {
     pub encoder: &'a mut wgpu::CommandEncoder,
     pub runtime_shaders: &'a RuntimeStorage<Shader>,
     pub runtime_bind_groups: &'a RuntimeStorage<BindGroup>,
-    pub limits: &'a wgpu::Limits,
 }
 
 #[derive(Default)]
@@ -139,7 +141,9 @@ impl SyncResource for ComputePass {
     ) -> AppResult<SyncOutcome<Self::Runtime, Self::Job>> {
         match job {
             ComputePassJob::Start => {
-                if ctx.limits.max_compute_workgroups_per_dimension == 0 {
+                let limits = ctx.device.limits();
+
+                if limits.max_compute_workgroups_per_dimension == 0 {
                     return Err(AppError::UnsupportedRendererFeature("Compute Passes"));
                 }
 
@@ -160,13 +164,7 @@ impl SyncResource for ComputePass {
                     .map(|bg| Some(bg.inner_layout()))
                     .collect_vec();
 
-                let pipeline_layout =
-                    ctx.device
-                        .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-                            label: Some(&format!("{} (Pipeline Layout)", self.label)),
-                            bind_group_layouts: &bind_group_layouts,
-                            immediate_size: 0,
-                        });
+                validate_bind_group_layouts(&bind_group_layouts, &limits)?;
 
                 let shader_id = self.shader.ok_or(AppError::uninit_field("Shader"))?;
 
@@ -175,6 +173,14 @@ impl SyncResource for ComputePass {
                 };
 
                 let scope = WgpuErrorScope::push(ctx.device);
+
+                let pipeline_layout =
+                    ctx.device
+                        .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                            label: Some(&format!("{} (Pipeline Layout)", self.label)),
+                            bind_group_layouts: &bind_group_layouts,
+                            immediate_size: 0,
+                        });
 
                 let pipeline =
                     ctx.device

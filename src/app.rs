@@ -24,7 +24,6 @@ pub struct App {
     egui_renderer: ui::renderer::EguiRenderer,
     backend: wgpu::Backend,
     downlevel_flags: wgpu::DownlevelFlags,
-    limits: wgpu::Limits,
     app_file_system: AppFileSystem,
     state: State,
     event_queue: EventQueue<AppEvent>,
@@ -148,7 +147,6 @@ impl WindowApp<StartupAction> for App {
             egui_renderer,
             backend,
             downlevel_flags,
-            limits: adapter.limits(),
             app_file_system,
             state,
             event_queue: EventQueue::default(),
@@ -271,7 +269,6 @@ impl App {
                     egui_renderer: &mut self.egui_renderer,
                     encoder: &mut encoder,
                     downlevel_flags: self.downlevel_flags,
-                    limits: &self.limits,
                     dt,
                 };
                 workspace.render(&mut ctx);
