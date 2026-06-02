@@ -9,7 +9,7 @@ use crate::{
             model::Model,
             presentation::Presentation,
             render_pass::RenderPass,
-            render_pipeline::{RenderDrawStrategy, RenderPipeline},
+            render_pipeline::{BindGroupTarget, RenderDrawStrategy, RenderPipeline},
             texture_view::TextureView,
         },
         storage::{RuntimeStorage, Storage},
@@ -174,14 +174,23 @@ impl RenderPass {
 
             render_pass.set_pipeline(&pipeline_runtime.inner);
 
-            for &(slot, id) in pipeline.static_bind_groups() {
-                let Some(id) = id else {
-                    continue;
-                };
-                let Some(bind_group) = render_ctx.runtime_bind_groups.get_init(id)? else {
-                    return Ok(()); // Maybe return some kind of pending
-                };
-                render_pass.set_bind_group(slot, bind_group.inner(), &[]);
+            let mut material_bind_group_slots = vec![];
+            for (slot, bind_group_target) in pipeline.bind_groups().into_iter().enumerate() {
+                let slot = slot as u32;
+                match bind_group_target {
+                    BindGroupTarget::Empty => {
+                        render_pass.set_bind_group(slot, None, &[]);
+                    }
+                    BindGroupTarget::Static(id) => {
+                        let Some(bind_group) = render_ctx.runtime_bind_groups.get_init(*id)? else {
+                            return Ok(()); // Maybe return some kind of pending
+                        };
+                        render_pass.set_bind_group(slot, bind_group.inner(), &[]);
+                    }
+                    BindGroupTarget::ModelMaterial => {
+                        material_bind_group_slots.push(slot);
+                    }
+                }
             }
 
             match pipeline.draw_strategy() {
@@ -189,7 +198,6 @@ impl RenderPass {
                     model_id,
                     instances,
                     mesh_vertex_slot,
-                    material_bind_group_slot,
                 } => {
                     let model_id = model_id
                         .ok_or_uninit_field(format!("Pipeline {} Model Id", pipeline.label()))?;
@@ -206,7 +214,7 @@ impl RenderPass {
                         let index_buffer = mesh.index_buffer().inner().slice(..);
                         render_pass.set_index_buffer(index_buffer, wgpu::IndexFormat::Uint32);
 
-                        if let Some(mat_slot) = material_bind_group_slot {
+                        if !material_bind_group_slots.is_empty() {
                             let material_index = model
                                 .selected_material_index(mesh_index, mesh)
                                 .ok_or_uninit_field(format!(
@@ -230,7 +238,9 @@ impl RenderPass {
                                 return Ok(()); // Maybe return some kind of pending
                             };
 
-                            render_pass.set_bind_group(*mat_slot, bind_group.inner(), &[]);
+                            for slot in &material_bind_group_slots {
+                                render_pass.set_bind_group(*slot, bind_group.inner(), &[]);
+                            }
                         }
 
                         let index_num = mesh.indices().len() as u32;

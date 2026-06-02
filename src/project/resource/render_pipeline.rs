@@ -13,7 +13,7 @@ use crate::{
     resource_getters, resource_setters,
     utils::{
         async_job::AsyncJob, validate_bind_group_layouts::validate_bind_group_layouts,
-        vec_set_at_extension::VecSetAtExtension, wgpu_error_scope::WgpuErrorScope,
+        wgpu_error_scope::WgpuErrorScope,
     },
 };
 
@@ -25,7 +25,9 @@ pub struct RenderPipeline {
     vertex_shader: Option<ShaderId>,
     fragment_shader: Option<ShaderId>,
     draw_strategy: RenderDrawStrategy,
-    static_bind_groups: Vec<(u32, Option<BindGroupId>)>,
+    /// List of bind group targets to bind to the pipeline.
+    /// Index corresponds to the bind group slot in the shader.
+    bind_groups: Vec<BindGroupTarget>,
     color_format: wgpu::TextureFormat,
     depth_format: Option<wgpu::TextureFormat>,
     #[serde(skip)]
@@ -38,19 +40,27 @@ pub struct RenderPipeline {
 #[serde(tag = "type", rename_all = "camelCase")]
 pub enum RenderDrawStrategy {
     /// Loop through all the model's meshes, setting the mesh
-    /// material bind group at slot `material_bind_group_slot`
+    /// material bind group at every [`BindGroupTarget::ModelMaterial`] slot
     /// and drawing the vertices/instances from the mesh
     Model {
         model_id: Option<ModelId>,
         instances: Range<u32>,
         mesh_vertex_slot: u32,
-        material_bind_group_slot: Option<u32>,
     },
     /// Draw a number of vertices and instances directly without underlying buffers
     Direct {
         vertices: Range<u32>,
         instances: Range<u32>,
     },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum BindGroupTarget {
+    #[default]
+    Empty,
+    Static(BindGroupId),
+    ModelMaterial,
 }
 
 impl RenderPipeline {
@@ -60,7 +70,7 @@ impl RenderPipeline {
         vertex_shader: Option<ShaderId>,
         fragment_shader: Option<ShaderId>,
         draw_strategy: RenderDrawStrategy,
-        static_bind_groups: Vec<(u32, Option<BindGroupId>)>,
+        bind_groups: Vec<BindGroupTarget>,
         color_format: wgpu::TextureFormat,
         depth_format: Option<wgpu::TextureFormat>,
     ) -> Self {
@@ -70,7 +80,7 @@ impl RenderPipeline {
             vertex_shader,
             fragment_shader,
             draw_strategy,
-            static_bind_groups,
+            bind_groups,
             color_format,
             depth_format,
             runtime_revision: Default::default(),
@@ -79,7 +89,7 @@ impl RenderPipeline {
     }
 
     resource_getters! {
-        pub fn static_bind_groups() -> &[(u32, Option<BindGroupId>)];
+        pub fn bind_groups() -> &[BindGroupTarget];
         pub fn primitive_state() -> wgpu::PrimitiveState;
         pub fn vertex_shader() -> Option<ShaderId>;
         pub fn fragment_shader() -> Option<ShaderId>;
@@ -95,7 +105,7 @@ impl RenderPipeline {
         pub fn set_vertex_shader(vertex_shader: Option<ShaderId>);
         pub fn set_fragment_shader(fragment_shader: Option<ShaderId>);
         pub fn set_draw_strategy(draw_strategy: RenderDrawStrategy);
-        pub fn set_static_bind_groups(static_bind_groups: Vec<(u32, Option<BindGroupId>)>);
+        pub fn set_bind_groups(bind_groups: Vec<BindGroupTarget>);
         pub fn set_color_format(color_format: wgpu::TextureFormat);
         pub fn set_depth_format(depth_format: Option<wgpu::TextureFormat>);
     }
@@ -106,29 +116,26 @@ impl RenderPipeline {
     ) -> AppResult<Vec<Option<BindGroupId>>> {
         let mut bind_group_ids = vec![];
 
-        for (slot, id) in &self.static_bind_groups {
-            let bind_group_id = id.ok_or_uninit_field(format!("Bind Group Id at Slot {slot}"))?;
+        for target in &self.bind_groups {
+            let bind_group_id = match target {
+                BindGroupTarget::Empty => None,
+                BindGroupTarget::Static(id) => Some(*id),
+                BindGroupTarget::ModelMaterial
+                    if let RenderDrawStrategy::Model { model_id, .. } = &self.draw_strategy =>
+                {
+                    let model_id = model_id.ok_or_uninit_field("Render Draw Strategy Model Id")?;
 
-            bind_group_ids.set_at(*slot as usize, Some(bind_group_id));
-        }
+                    let model = models.get(model_id)?;
 
-        if let RenderDrawStrategy::Model {
-            model_id,
-            material_bind_group_slot,
-            ..
-        } = &self.draw_strategy
-        {
-            let model_id = model_id.ok_or_uninit_field("Render Draw Strategy Model Id")?;
+                    // Model already checks that all material bind group ids have the same layout when syncing
+                    let first_material_bg_id = model.get_material_bind_group_ids().first().cloned();
 
-            let model = models.get(model_id)?;
-
-            if let Some(slot) = material_bind_group_slot {
-                // Model already checks that all material bind group ids have the same layout when syncing
-                let first_material_bg_id = model.get_material_bind_group_ids().first().cloned();
-                if let Some(first_material_bind_group_id) = first_material_bg_id {
-                    bind_group_ids.set_at(*slot as usize, Some(first_material_bind_group_id));
+                    first_material_bg_id
                 }
-            }
+                BindGroupTarget::ModelMaterial => None,
+            };
+
+            bind_group_ids.push(bind_group_id);
         }
 
         Ok(bind_group_ids)
@@ -150,7 +157,7 @@ impl Creatable for RenderPipeline {
                 vertices: 0..3,
                 instances: 0..1,
             },
-            static_bind_groups: Vec::new(),
+            bind_groups: Vec::new(),
             color_format: wgpu::TextureFormat::Rgba8UnormSrgb,
             depth_format: None,
             runtime_revision: Revision::default(),
@@ -209,12 +216,15 @@ impl SyncResource for RenderPipeline {
             .into_iter()
             .any(|id| id.is_some_and(|id| tracker.was_changed(id)));
 
-        let static_bind_groups_needs_rebuild = self
-            .static_bind_groups
-            .iter()
-            .any(|(_, id)| id.is_some_and(|id| tracker.was_changed(id)));
+        let bind_groups_needs_rebuild = self.bind_groups.iter().any(|target| {
+            match target {
+                BindGroupTarget::Empty => false,
+                BindGroupTarget::Static(id) => tracker.was_changed(*id),
+                BindGroupTarget::ModelMaterial => false, // already handled by `draw_strategy_needs_rebuild`
+            }
+        });
 
-        draw_strategy_needs_rebuild || shaders_needs_rebuild || static_bind_groups_needs_rebuild
+        draw_strategy_needs_rebuild || shaders_needs_rebuild || bind_groups_needs_rebuild
     }
 
     fn sync<'a>(

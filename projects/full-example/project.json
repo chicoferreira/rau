@@ -542,12 +542,11 @@
           "type": "model",
           "model_id": { "idx": 1, "version": 1 },
           "instances": { "start": 0, "end": 1 },
-          "mesh_vertex_slot": 0,
-          "material_bind_group_slot": null
+          "mesh_vertex_slot": 0
         },
-        "staticBindGroups": [
-          [0, { "idx": 1, "version": 1 }],
-          [1, { "idx": 2, "version": 1 }]
+        "bindGroups": [
+          { "static": { "idx": 1, "version": 1 } },
+          { "static": { "idx": 2, "version": 1 } }
         ],
         "colorFormat": "rgba16float",
         "depthFormat": "depth32float"
@@ -572,13 +571,13 @@
           "type": "model",
           "model_id": { "idx": 1, "version": 1 },
           "instances": { "start": 0, "end": 100 },
-          "mesh_vertex_slot": 0,
-          "material_bind_group_slot": 0
+          "mesh_vertex_slot": 0
         },
-        "staticBindGroups": [
-          [1, { "idx": 1, "version": 1 }],
-          [2, { "idx": 2, "version": 1 }],
-          [3, { "idx": 6, "version": 1 }]
+        "bindGroups": [
+          "modelMaterial",
+          { "static": { "idx": 1, "version": 1 } },
+          { "static": { "idx": 2, "version": 1 } },
+          { "static": { "idx": 6, "version": 1 } }
         ],
         "colorFormat": "rgba16float",
         "depthFormat": "depth32float"
@@ -604,9 +603,9 @@
           "vertices": { "start": 0, "end": 3 },
           "instances": { "start": 0, "end": 1 }
         },
-        "staticBindGroups": [
-          [0, { "idx": 1, "version": 1 }],
-          [1, { "idx": 6, "version": 1 }]
+        "bindGroups": [
+          { "static": { "idx": 1, "version": 1 } },
+          { "static": { "idx": 6, "version": 1 } }
         ],
         "colorFormat": "rgba16float",
         "depthFormat": "depth32float"
@@ -632,7 +631,7 @@
           "vertices": { "start": 0, "end": 3 },
           "instances": { "start": 0, "end": 1 }
         },
-        "staticBindGroups": [[0, { "idx": 4, "version": 1 }]],
+        "bindGroups": [{ "static": { "idx": 4, "version": 1 } }],
         "colorFormat": "rgba8unorm-srgb",
         "depthFormat": null
       },

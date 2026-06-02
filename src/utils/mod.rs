@@ -10,6 +10,5 @@ pub mod obj;
 pub mod resizable_buffer;
 pub mod shader;
 pub mod validate_bind_group_layouts;
-pub mod vec_set_at_extension;
 pub mod wgpu_error_scope;
 pub mod winit_runner;

@@ -4,11 +4,11 @@ use egui::{CollapsingHeader, RichText};
 
 use crate::{
     project::{
-        BindGroupId, RenderPipelineId,
+        RenderPipelineId,
         resource::{
             bindgroup::BindGroup,
             model::Model,
-            render_pipeline::{RenderDrawStrategy, RenderPipeline},
+            render_pipeline::{BindGroupTarget, RenderDrawStrategy, RenderPipeline},
             shader::Shader,
         },
         storage::Storage,
@@ -48,7 +48,6 @@ impl DrawKind {
                 model_id: None,
                 instances: 0..1,
                 mesh_vertex_slot: 0,
-                material_bind_group_slot: None,
             },
         }
     }
@@ -183,7 +182,7 @@ impl StateSnapshot<'_> {
         primitive_state_ui(ui, render_pipeline_id, render_pipeline);
         ui.add_space(4.0);
 
-        static_bind_groups_ui(ui, render_pipeline_id, render_pipeline, bind_groups);
+        bind_groups_ui(ui, render_pipeline_id, render_pipeline, bind_groups);
         ui.add_space(4.0);
 
         draw_strategy_ui(ui, render_pipeline_id, render_pipeline, models);
@@ -323,43 +322,34 @@ fn primitive_state_ui(
         });
 }
 
-fn static_bind_groups_ui(
+fn bind_groups_ui(
     ui: &mut egui::Ui,
     render_pipeline_id: RenderPipelineId,
     render_pipeline: &mut RenderPipeline,
     bind_groups: &Storage<BindGroup>,
 ) {
-    let before = render_pipeline.static_bind_groups().to_vec();
+    let before = render_pipeline.bind_groups().to_vec();
     let mut entries = before.clone();
 
-    CollapsingHeader::new(format!("Static Bind Groups ({})", entries.len()))
+    CollapsingHeader::new(format!("Bind Groups ({})", entries.len()))
         .default_open(true)
         .show(ui, |ui| {
             if entries.is_empty() {
-                ui.label("No static bind groups.");
+                ui.label("No bind groups.");
             }
 
-            let id_source = (render_pipeline_id, "static_bind_groups");
+            let id_source = (render_pipeline_id, "bind_groups");
             let mut edits = draggable_list(
                 ui,
                 id_source,
                 &entries,
-                |ui, (slot, bind_group_id), index, handle, edits| {
-                    static_bind_group_row_ui(
-                        ui,
-                        handle,
-                        index,
-                        *slot,
-                        *bind_group_id,
-                        bind_groups,
-                        edits,
-                    );
+                |ui, target, index, handle, edits| {
+                    bind_group_row_ui(ui, handle, index, target, bind_groups, edits);
                 },
             );
 
             if ui.button("Add Bind Group").clicked() {
-                let first_slot = first_available_slot(entries.iter().map(|(slot, _)| *slot));
-                edits.push_add_edit((first_slot, None));
+                edits.push_add_edit(BindGroupTarget::default());
             }
 
             if !entries.is_empty() {
@@ -374,23 +364,22 @@ fn static_bind_groups_ui(
             edits.apply(&mut entries);
 
             if entries != before {
-                render_pipeline.set_static_bind_groups(entries);
+                render_pipeline.set_bind_groups(entries);
             }
         });
 }
 
-fn static_bind_group_row_ui(
+fn bind_group_row_ui(
     ui: &mut egui::Ui,
     handle: egui_dnd::Handle<'_>,
     index: usize,
-    slot: u32,
-    bind_group_id: Option<BindGroupId>,
+    target: &BindGroupTarget,
     bind_groups: &Storage<BindGroup>,
-    edits: &mut ListEdits<(u32, Option<BindGroupId>)>,
+    edits: &mut ListEdits<BindGroupTarget>,
 ) {
     handle.ui(ui, |ui| {
         ui.add(
-            egui::Label::new(format!("Slot {slot}"))
+            egui::Label::new(format!("Slot {index}"))
                 .selectable(false)
                 .sense(egui::Sense::click()),
         )
@@ -402,25 +391,53 @@ fn static_bind_group_row_ui(
         });
     });
 
-    ui.indent(("static_bind_group", index), |ui| {
-        let mut edited_slot = slot;
-        let mut edited_bind_group_id = bind_group_id;
+    ui.indent(("bind_group", index), |ui| {
+        let mut edited = target.clone();
 
-        inspector::field_grid(ui, ("static_bind_group_grid", index), |ui| {
-            inspector::u32_drag_row(ui, "Slot", &mut edited_slot, 0..=u32::MAX);
-            inspector::storage_opt_combo_row(
-                ui,
-                "Bind Group",
-                "render_pipeline_static_bind_group",
-                bind_groups,
-                &mut edited_bind_group_id,
-            );
+        inspector::field_grid(ui, ("bind_group_grid", index), |ui| {
+            inspector::row(ui, "Target", |ui| {
+                bind_group_target_combo(ui, index, bind_groups, &mut edited);
+            });
         });
 
-        if (edited_slot, edited_bind_group_id) != (slot, bind_group_id) {
-            edits.push_set_edit(index, (edited_slot, edited_bind_group_id));
+        if edited != *target {
+            edits.push_set_edit(index, edited);
         }
     });
+}
+
+fn bind_group_target_combo(
+    ui: &mut egui::Ui,
+    index: usize,
+    bind_groups: &Storage<BindGroup>,
+    target: &mut BindGroupTarget,
+) {
+    let selected_text: egui::WidgetText = match target {
+        BindGroupTarget::Empty => "Empty".into(),
+        BindGroupTarget::ModelMaterial => "Model Material".into(),
+        BindGroupTarget::Static(id) => match bind_groups.get_label(*id) {
+            Ok(label) => label.into(),
+            Err(_) => format!("Unknown {id:?}").into(),
+        },
+    };
+
+    egui::ComboBox::from_id_salt(("bind_group_target", index))
+        .selected_text(selected_text)
+        .show_ui(ui, |ui| {
+            ui.selectable_value(target, BindGroupTarget::Empty, "Empty");
+            ui.selectable_value(target, BindGroupTarget::ModelMaterial, "Model Material")
+                .on_hover_text(
+                    "Binds each mesh's active material bind group to this slot while drawing. \
+                     Only has an effect with a Model draw strategy.",
+                );
+            ui.separator();
+            for (id, bind_group) in bind_groups.list() {
+                let selected = *target == BindGroupTarget::Static(id);
+                if ui.selectable_label(selected, bind_group.label()).clicked() {
+                    *target = BindGroupTarget::Static(id);
+                }
+            }
+        });
 }
 
 fn draw_strategy_ui(
@@ -431,11 +448,6 @@ fn draw_strategy_ui(
 ) {
     let before = render_pipeline.draw_strategy().clone();
     let mut edited = before.clone();
-    let static_bind_group_slots = render_pipeline
-        .static_bind_groups()
-        .iter()
-        .map(|(slot, _)| *slot)
-        .collect::<Vec<_>>();
 
     CollapsingHeader::new("Draw")
         .default_open(true)
@@ -452,7 +464,7 @@ fn draw_strategy_ui(
                     edited = draw_kind.default_strategy();
                 }
 
-                draw_strategy_fields_ui(ui, models, &static_bind_group_slots, &mut edited);
+                draw_strategy_fields_ui(ui, models, &mut edited);
             });
         });
 
@@ -464,7 +476,6 @@ fn draw_strategy_ui(
 fn draw_strategy_fields_ui(
     ui: &mut egui::Ui,
     models: &Storage<Model>,
-    static_bind_group_slots: &[u32],
     draw_strategy: &mut RenderDrawStrategy,
 ) {
     match draw_strategy {
@@ -479,7 +490,6 @@ fn draw_strategy_fields_ui(
             model_id,
             instances,
             mesh_vertex_slot,
-            material_bind_group_slot,
         } => {
             inspector::storage_opt_combo_row(
                 ui,
@@ -490,16 +500,6 @@ fn draw_strategy_fields_ui(
             );
             inspector::row(ui, "Instances", |ui| range_u32_edit(ui, instances));
             inspector::u32_drag_row(ui, "Mesh Vertex Slot", mesh_vertex_slot, 0..=u32::MAX);
-
-            let mut material_enabled = material_bind_group_slot.is_some();
-            if inspector::checkbox_row(ui, "Material Bind Group", &mut material_enabled) {
-                *material_bind_group_slot = material_enabled
-                    .then(|| first_available_slot(static_bind_group_slots.iter().copied()));
-            }
-
-            if let Some(slot) = material_bind_group_slot {
-                inspector::u32_drag_row(ui, "Material Slot", slot, 0..=u32::MAX);
-            }
         }
     }
 }
@@ -510,20 +510,4 @@ fn range_u32_edit(ui: &mut egui::Ui, range: &mut Range<u32>) {
         ui.label("..");
         ui.add(egui::DragValue::new(&mut range.end).range(range.start..=u32::MAX));
     });
-}
-
-fn first_available_slot(used: impl IntoIterator<Item = u32>) -> u32 {
-    let mut used = used.into_iter().collect::<Vec<_>>();
-    used.sort_unstable();
-
-    let mut candidate = 0;
-    for slot in used {
-        if slot == candidate {
-            candidate += 1;
-        } else if slot > candidate {
-            break;
-        }
-    }
-
-    candidate
 }
