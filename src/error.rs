@@ -37,12 +37,14 @@ pub enum AppError {
     WgpuRequestAdapterError(#[from] wgpu::RequestAdapterError),
     #[error(transparent)]
     WgpuRequestDeviceError(#[from] wgpu::RequestDeviceError),
-    /// A shader parse error occurred.
-    #[error("shader parse error: {0}")]
-    ShaderParseError(#[from] naga::front::wgsl::ParseError),
-    /// A shader compilation error occurred.
-    #[error("shader compilation error: {0}")]
-    ShaderCompilationError(#[from] naga::WithSpan<naga::valid::ValidationError>),
+    /// A shader parse error occurred. Holds a message formatted with source
+    /// location (line numbers and offending source snippet).
+    #[error("shader parse error:\n{0}")]
+    ShaderParseError(String),
+    /// A shader validation error occurred. Holds a message formatted with source
+    /// location (line numbers and offending source snippet).
+    #[error("shader validation error:\n{0}")]
+    ShaderCompilationError(String),
     /// A file load error occurred.
     #[error("file load error: {0}")]
     FileLoadError(#[from] std::io::Error),

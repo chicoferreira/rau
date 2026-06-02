@@ -145,7 +145,9 @@ fn error_list_content(
                     }
 
                     ui.label(
-                        egui::RichText::new(error.to_string()).color(ui.visuals().error_fg_color),
+                        egui::RichText::new(error.to_string())
+                            .monospace()
+                            .color(ui.visuals().error_fg_color),
                     );
                 });
 
