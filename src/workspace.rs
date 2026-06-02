@@ -163,10 +163,13 @@ impl Workspace {
             camera.update(ctx.dt);
         }
 
-        self.tick_objects(ctx);
+        let resources_changed = self.tick_objects(ctx);
 
         let snapshot = self.project.snapshot();
-        if !self.runtime_project.poll_presentation_errors(snapshot) {
+        if !self
+            .runtime_project
+            .poll_presentation_errors(snapshot, resources_changed)
+        {
             return;
         }
 
@@ -395,7 +398,8 @@ impl Workspace {
         }
     }
 
-    fn tick_objects(&mut self, ctx: &mut AppContext) {
+    /// Syncs every resource for this frame, returning whether any runtime resource changed
+    fn tick_objects(&mut self, ctx: &mut AppContext) -> bool {
         self.tracker.sync_storage(
             &mut self.project.dimensions,
             &mut self.runtime_project.dimensions,
@@ -517,6 +521,8 @@ impl Workspace {
             view,
         );
 
+        let resources_changed = self.tracker.has_resource_changes();
         self.tracker.clear_changes();
+        resources_changed
     }
 }

@@ -51,7 +51,11 @@ impl PresentationRender {
 }
 
 impl RuntimeProject {
-    pub fn poll_presentation_errors(&mut self, current_snapshot: ProjectRevisionSnapshot) -> bool {
+    pub fn poll_presentation_errors(
+        &mut self,
+        current_snapshot: ProjectRevisionSnapshot,
+        runtime_resources_changed: bool,
+    ) -> bool {
         if let PresentationRender::Pending { job, snapshot } = &mut self.presentation_render {
             match job.try_resolve() {
                 Poll::Ready(Ok(())) => {
@@ -66,7 +70,7 @@ impl RuntimeProject {
         }
 
         if let PresentationRender::Errored { snapshot, .. } = &self.presentation_render {
-            if current_snapshot == *snapshot {
+            if current_snapshot == *snapshot && !runtime_resources_changed {
                 return false; // Shouldn't render the frame because it is still errored and nothing has changed
             }
             // A resource changed since the error: clear it and try rendering again.
