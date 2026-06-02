@@ -136,6 +136,7 @@ pub async fn create_scene(
     let light_uniform = Uniform::new(
         "light",
         vec![
+            UniformField::new("time", UniformFieldSource::new_time()),
             UniformField::new(
                 "position",
                 UniformFieldSource::new_user_defined(UniformFieldData::Vec3f([2.0, 2.0, 2.0])),

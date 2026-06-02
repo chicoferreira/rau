@@ -26,6 +26,7 @@ pub struct UniformCreationContext<'a> {
     pub cameras_runtime: &'a RuntimeStorage<Camera>,
     pub device: &'a wgpu::Device,
     pub queue: &'a wgpu::Queue,
+    pub time: f32,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -74,11 +75,13 @@ pub enum UniformFieldSource {
         camera_id: Option<CameraId>,
         field: CameraField,
     },
+    Time,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", tag = "data_type", content = "data")]
 pub enum UniformFieldData {
+    Float(f32),
     Vec2f([f32; 2]),
     Vec3f([f32; 3]),
     Vec4f([f32; 4]),
@@ -89,6 +92,7 @@ pub enum UniformFieldData {
 
 #[derive(Debug, Clone, Copy, PartialEq, strum::EnumIter, strum::Display)]
 pub enum UniformFieldDataKind {
+    Float,
     Vec2f,
     Vec3f,
     Vec4f,
@@ -315,6 +319,8 @@ impl UniformField {
 
                 tracker.was_changed(camera_id)
             }
+            // Time advances every frame, so the uniform must always be re-evaluated.
+            UniformFieldSource::Time => true,
         }
     }
 
@@ -335,6 +341,7 @@ impl UniformField {
                 };
                 Ok(Some(field.compute(camera, camera_runtime)))
             }
+            UniformFieldSource::Time => Ok(Some(UniformFieldData::Float(context.time))),
         }
     }
 }
@@ -347,11 +354,16 @@ impl UniformFieldSource {
     pub fn new_camera_sourced(camera_id: Option<CameraId>, field: CameraField) -> Self {
         Self::Camera { camera_id, field }
     }
+
+    pub fn new_time() -> Self {
+        Self::Time
+    }
 }
 
 impl UniformFieldData {
     pub fn from_kind(kind: UniformFieldDataKind) -> Self {
         match kind {
+            UniformFieldDataKind::Float => UniformFieldData::Float(0.0),
             UniformFieldDataKind::Vec2f => UniformFieldData::Vec2f([0.0; 2]),
             UniformFieldDataKind::Vec3f => UniformFieldData::Vec3f([0.0; 3]),
             UniformFieldDataKind::Vec4f => UniformFieldData::Vec4f([0.0; 4]),
@@ -363,6 +375,7 @@ impl UniformFieldData {
 
     pub fn kind(&self) -> UniformFieldDataKind {
         match self {
+            UniformFieldData::Float(_) => UniformFieldDataKind::Float,
             UniformFieldData::Vec2f(_) => UniformFieldDataKind::Vec2f,
             UniformFieldData::Vec3f(_) => UniformFieldDataKind::Vec3f,
             UniformFieldData::Vec4f(_) => UniformFieldDataKind::Vec4f,
@@ -376,6 +389,9 @@ impl UniformFieldData {
         let start = buf.len();
 
         match self {
+            UniformFieldData::Float(v) => {
+                buf.extend_from_slice(bytemuck::bytes_of(v));
+            }
             UniformFieldData::Vec2f(v) => {
                 buf.extend_from_slice(bytemuck::bytes_of(v));
             }
@@ -399,6 +415,7 @@ impl UniformFieldData {
 impl UniformFieldDataKind {
     pub fn layout(&self) -> (usize, usize) {
         match self {
+            UniformFieldDataKind::Float => (4, 4),
             UniformFieldDataKind::Vec2f => (8, 8),
             UniformFieldDataKind::Vec3f
             | UniformFieldDataKind::Rgb
@@ -410,6 +427,7 @@ impl UniformFieldDataKind {
 
     pub fn wgsl_type_label(&self) -> &'static str {
         match self {
+            UniformFieldDataKind::Float => "f32",
             UniformFieldDataKind::Vec2f => "vec2<f32>",
             UniformFieldDataKind::Vec3f => "vec3<f32>",
             UniformFieldDataKind::Vec4f => "vec4<f32>",

@@ -35,6 +35,7 @@ pub enum UniformFieldSourceKind {
     #[strum(to_string = "User Defined")]
     UserDefined,
     Camera,
+    Time,
 }
 
 impl UniformFieldSourceKind {
@@ -42,6 +43,7 @@ impl UniformFieldSourceKind {
         match source {
             UniformFieldSource::UserDefined { .. } => Self::UserDefined,
             UniformFieldSource::Camera { .. } => Self::Camera,
+            UniformFieldSource::Time => Self::Time,
         }
     }
 
@@ -51,6 +53,7 @@ impl UniformFieldSourceKind {
                 UniformFieldDataKind::Vec3f,
             )),
             Self::Camera => UniformFieldSource::new_camera_sourced(None, CameraField::Position),
+            Self::Time => UniformFieldSource::new_time(),
         }
     }
 }
@@ -259,6 +262,7 @@ fn ui_field_entry(
             (camera_id != camera_id_before || field != field_before)
                 .then_some(UniformFieldSource::new_camera_sourced(camera_id, field))
         }
+        UniformFieldSource::Time => None,
     };
 
     if let Some(new_source) = source_kind_changed
@@ -302,6 +306,7 @@ fn edit_uniform_field_data(ui: &mut egui::Ui, data: &mut uniform::UniformFieldDa
     };
 
     match data {
+        uniform::UniformFieldData::Float(value) => drag_value(ui, value),
         uniform::UniformFieldData::Vec4f(vec4) => ui_array_mut(ui, vec4, drag_value),
         uniform::UniformFieldData::Vec3f(vec3) => ui_array_mut(ui, vec3, drag_value),
         uniform::UniformFieldData::Vec2f(vec2) => ui_array_mut(ui, vec2, drag_value),
@@ -328,6 +333,7 @@ fn ui_uniform_field_data(ui: &mut egui::Ui, data: &uniform::UniformFieldData) {
     };
 
     match data {
+        uniform::UniformFieldData::Float(value) => label(ui, value),
         uniform::UniformFieldData::Vec4f(vec4) => ui_array(ui, vec4, label),
         uniform::UniformFieldData::Vec3f(vec3) => ui_array(ui, vec3, label),
         uniform::UniformFieldData::Vec2f(vec2) => ui_array(ui, vec2, label),

@@ -42,6 +42,7 @@ pub struct Workspace {
     inspector_tree_pane: TreePane<InspectorPane>,
     viewport_tree_pane: TreePane<ViewportPane>,
     dimension_owners: SecondaryMap<DimensionId, ViewportId>,
+    elapsed: instant::Duration,
 }
 
 pub struct AppContext<'a> {
@@ -140,10 +141,12 @@ impl Workspace {
             file_storage,
             project_save_state,
             dimension_owners: Default::default(),
+            elapsed: instant::Duration::ZERO,
         })
     }
 
     pub fn render(&mut self, ctx: &mut AppContext) {
+        self.elapsed += ctx.dt;
         self.handle_events();
         self.project_save_state
             .tick(&self.project, &mut self.file_storage);
@@ -440,6 +443,7 @@ impl Workspace {
             device: &ctx.device,
             queue: &ctx.queue,
             cameras_runtime: &mut self.runtime_project.cameras,
+            time: self.elapsed.as_secs_f32(),
         };
         self.tracker.sync_storage(
             &mut self.project.uniforms,

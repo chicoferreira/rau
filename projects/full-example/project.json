@@ -101,6 +101,7 @@
       "value": {
         "label": "light",
         "fields": [
+          { "label": "time", "source": { "type": "time" } },
           {
             "label": "position",
             "source": {

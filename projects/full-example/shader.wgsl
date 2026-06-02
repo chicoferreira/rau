@@ -11,6 +11,7 @@ struct Camera {
 var<uniform> camera: Camera;
 
 struct Light {
+    time: f32,
     position: vec3<f32>,
     color: vec3<f32>,
 }
@@ -103,7 +104,8 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     let tangent_normal = object_normal.xyz * 2.0 - 1.0;
     let world_normal = TBN * tangent_normal;
 
-    let light_dir = normalize(light.position - in.world_position);
+    let light_position = light.position + vec3<f32>(0.0, sin(light.time), 0.0);
+    let light_dir = normalize(light_position - in.world_position);
     let view_dir = normalize(in.world_view_position - in.world_position);
     let half_dir = normalize(view_dir + light_dir);
 

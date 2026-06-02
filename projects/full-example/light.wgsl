@@ -10,6 +10,7 @@ struct Camera {
 var<uniform> camera: Camera;
 
 struct Light {
+    time: f32,
     position: vec3<f32>,
     color: vec3<f32>,
 }
@@ -30,8 +31,9 @@ fn vs_main(
     model: VertexInput,
 ) -> VertexOutput {
     let scale = 0.25;
+    let light_position = light.position + vec3<f32>(0.0, sin(light.time), 0.0);
     var out: VertexOutput;
-    out.clip_position = camera.view_proj * vec4<f32>(model.position * scale + light.position, 1.0);
+    out.clip_position = camera.view_proj * vec4<f32>(model.position * scale + light_position, 1.0);
     out.color = light.color;
     return out;
 }
