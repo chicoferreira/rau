@@ -3,7 +3,7 @@ use std::fmt::Debug;
 use crate::{
     file::file_storage::OpenFileState,
     project::{
-        BindGroupId, CameraId, ComputePassId, DimensionId, PresentationId, ModelId, RenderPassId,
+        BindGroupId, CameraId, ComputePassId, DimensionId, ModelId, PresentationId, RenderPassId,
         RenderPipelineId, ResourceId, SamplerId, ShaderId, TextureId, TextureViewId, UniformId,
         ViewportId, paths::FilePath,
     },

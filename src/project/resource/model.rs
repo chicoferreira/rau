@@ -1,6 +1,7 @@
 use std::task::Poll;
 
 use serde::{Deserialize, Serialize};
+use slotmap::SecondaryMap;
 
 use crate::{
     error::{AppError, AppResult},
@@ -26,6 +27,7 @@ pub struct ModelCreationContext<'a> {
     pub queue: &'a wgpu::Queue,
     pub file_storage: &'a FileStorage,
     pub runtime_bind_groups: &'a RuntimeStorage<BindGroup>,
+    pub mtl_dependencies: &'a mut SecondaryMap<ModelId, Vec<FilePath>>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -52,7 +54,7 @@ pub struct ModelRuntime {
 pub enum ModelJob {
     #[default]
     Start,
-    Loading(AsyncJob<AppResult<ModelRuntime>>),
+    Loading(AsyncJob<AppResult<(ModelRuntime, Vec<FilePath>)>>),
 }
 
 pub struct Mesh {
@@ -217,6 +219,7 @@ impl SyncResource for Model {
 
     fn sync<'a>(
         &self,
+        id: Self::Id,
         ctx: &mut Self::Context<'a>,
         _previous: Option<Self::Runtime>,
         job: Self::Job,
@@ -242,28 +245,38 @@ impl SyncResource for Model {
                     return Ok(SyncOutcome::Pending(ModelJob::Start));
                 };
 
-                self.sync(
-                    ctx,
-                    None,
-                    ModelJob::Loading(AsyncJob::new(ModelRuntime::load_from_obj_file(
-                        source,
-                        ctx.file_storage,
-                        vertex_buffer_spec,
-                        device,
-                    ))),
-                )
+                let job = ModelJob::Loading(AsyncJob::new(ModelRuntime::load_from_obj_file(
+                    source.clone(),
+                    ctx.file_storage,
+                    vertex_buffer_spec,
+                    device,
+                )));
+
+                self.sync(id, ctx, None, job)
             }
             ModelJob::Loading(mut future) => match future.try_resolve() {
-                Poll::Ready(result) => result.map(SyncOutcome::Changed),
+                Poll::Ready(result) => {
+                    let (runtime, mtl_dependencies) = result?;
+                    ctx.mtl_dependencies.insert(id, mtl_dependencies);
+                    Ok(SyncOutcome::Changed(runtime))
+                }
                 Poll::Pending => Ok(SyncOutcome::Pending(ModelJob::Loading(future))),
             },
         }
     }
 
-    fn needs_rebuild_from_others(&self, tracker: &SyncTracker) -> bool {
-        self.source
+    fn needs_rebuild(&self, id: Self::Id, ctx: &Self::Context<'_>, tracker: &SyncTracker) -> bool {
+        let source_changed = self
+            .source
             .as_ref()
-            .is_some_and(|source| tracker.file_changed(source))
+            .is_some_and(|source| tracker.file_changed(source));
+
+        let mtl_changed = ctx
+            .mtl_dependencies
+            .get(id)
+            .is_some_and(|dependencies| dependencies.iter().any(|path| tracker.file_changed(path)));
+
+        source_changed || mtl_changed
     }
 }
 
@@ -273,12 +286,13 @@ impl ModelRuntime {
         file_storage: &FileStorage,
         vertex_buffer_spec: VertexBufferSpec,
         device: wgpu::Device,
-    ) -> AsyncJob<AppResult<Self>> {
+    ) -> AsyncJob<AppResult<(Self, Vec<FilePath>)>> {
         let file_system = file_storage.file_system.clone();
         AsyncJob::new(async move {
             let LoadedObj {
                 models,
                 materials: obj_materials,
+                mtl_dependencies,
             } = crate::utils::obj::load_obj(source, file_system).await?;
             let materials = obj_materials.into_iter().map(Into::into).collect();
 
@@ -292,7 +306,7 @@ impl ModelRuntime {
 
             let runtime = Self { meshes, materials };
 
-            Ok(runtime)
+            Ok((runtime, mtl_dependencies))
         })
     }
 

@@ -207,12 +207,15 @@ impl SyncResource for Uniform {
 
     fn sync<'a>(
         &self,
+        id: Self::Id,
         ctx: &mut Self::Context<'a>,
         previous: Option<Self::Runtime>,
         job: Self::Job,
     ) -> AppResult<SyncOutcome<Self::Runtime, Self::Job>> {
         match job {
-            UniformJob::Start => self.sync(ctx, None, UniformJob::WaitingForResources { previous }),
+            UniformJob::Start => {
+                self.sync(id, ctx, None, UniformJob::WaitingForResources { previous })
+            }
             UniformJob::WaitingForResources { previous } => {
                 let Some(fields) = self.runtime_fields(ctx)? else {
                     return Ok(SyncOutcome::Pending(UniformJob::WaitingForResources {
@@ -241,7 +244,8 @@ impl SyncResource for Uniform {
                         ) {
                             ChangeResult::Uploaded => Ok(SyncOutcome::Unchanged(runtime)),
                             ChangeResult::Recreated => {
-                                self.sync(ctx, None, UniformJob::Validation(runtime, scope.pop()))
+                                let job = UniformJob::Validation(runtime, scope.pop());
+                                self.sync(id, ctx, None, job)
                             }
                         }
                     }
@@ -249,7 +253,7 @@ impl SyncResource for Uniform {
                         let scope = WgpuErrorScope::push(ctx.device);
                         let buffer = ResizableBuffer::new(ctx.device, &self.label, usage, &content);
                         let runtime = UniformRuntime { fields, buffer };
-                        self.sync(ctx, None, UniformJob::Validation(runtime, scope.pop()))
+                        self.sync(id, ctx, None, UniformJob::Validation(runtime, scope.pop()))
                     }
                 }
             }
@@ -262,7 +266,7 @@ impl SyncResource for Uniform {
         }
     }
 
-    fn needs_rebuild_from_others(&self, tracker: &SyncTracker) -> bool {
+    fn needs_rebuild(&self, _: Self::Id, _: &Self::Context<'_>, tracker: &SyncTracker) -> bool {
         self.fields
             .iter()
             .any(|field| field.needs_rebuild_from_others(tracker))

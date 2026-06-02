@@ -179,7 +179,7 @@ pub async fn create_scene(
 
     let cube_source = FilePath::from_str("cube.obj")?;
     let mut cube_model = Model::new("cube", cube_source.clone());
-    let cube_model_runtime = ModelRuntime::load_from_obj_file(
+    let (cube_model_runtime, _) = ModelRuntime::load_from_obj_file(
         cube_source,
         &file_storage,
         cube_model.vertex_buffer_spec().clone(),

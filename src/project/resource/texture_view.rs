@@ -168,6 +168,7 @@ impl SyncResource for TextureView {
 
     fn sync<'a>(
         &self,
+        id: Self::Id,
         ctx: &mut Self::Context<'a>,
         previous: Option<Self::Runtime>,
         job: Self::Job,
@@ -176,6 +177,7 @@ impl SyncResource for TextureView {
             TextureViewJob::Start => {
                 let previous_egui_id = previous.as_ref().and_then(|runtime| runtime.egui_id);
                 self.sync(
+                    id,
                     ctx,
                     None,
                     TextureViewJob::PendingResource { previous_egui_id },
@@ -229,7 +231,8 @@ impl SyncResource for TextureView {
                 };
 
                 let runtime = TextureViewRuntime { inner, egui_id };
-                self.sync(ctx, None, TextureViewJob::Validation(runtime, scope.pop()))
+                let job = TextureViewJob::Validation(runtime, scope.pop());
+                self.sync(id, ctx, None, job)
             }
             TextureViewJob::Validation(runtime, mut future) => match future.try_resolve() {
                 Poll::Ready(result) => result.map(|()| SyncOutcome::Changed(runtime)),
@@ -240,7 +243,7 @@ impl SyncResource for TextureView {
         }
     }
 
-    fn needs_rebuild_from_others(&self, tracker: &SyncTracker) -> bool {
+    fn needs_rebuild(&self, _: Self::Id, _: &Self::Context<'_>, tracker: &SyncTracker) -> bool {
         let Some(texture_id) = self.texture_id else {
             return false;
         };

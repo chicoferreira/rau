@@ -1,9 +1,7 @@
 use egui::RichText;
 
 use crate::{
-    project::{
-        ProjectResource, RenderPassId, resource::render_pass::RenderPass, storage::Storage,
-    },
+    project::{ProjectResource, RenderPassId, resource::render_pass::RenderPass, storage::Storage},
     ui::{
         components::{
             draggable_list::{ListEdits, draggable_list},
@@ -17,15 +15,15 @@ use crate::{
 impl StateSnapshot<'_> {
     pub fn presentation_inspector_ui(&mut self, ui: &mut egui::Ui) {
         inspector::field_grid(ui, "presentation_inspector_grid", |ui| {
-            let mut main_viewport_id = self.project.presentation.main_viewport();
+            let mut id = self.project.presentation.main_viewport();
             if inspector::storage_opt_combo_row(
                 ui,
                 "Main Viewport",
                 "presentation_main_viewport",
                 &self.project.viewports,
-                &mut main_viewport_id,
+                &mut id,
             ) {
-                self.project.presentation.set_main_viewport(main_viewport_id);
+                self.project.presentation.set_main_viewport(id);
             }
         });
 

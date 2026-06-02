@@ -10,6 +10,7 @@ use crate::{
 pub struct LoadedObj {
     pub models: Vec<tobj::Model>,
     pub materials: Vec<tobj::Material>,
+    pub mtl_dependencies: Vec<FilePath>,
 }
 
 pub async fn load_obj(obj_path: FilePath, file_system: ProjectFileSystem) -> AppResult<LoadedObj> {
@@ -22,11 +23,14 @@ pub async fn load_obj(obj_path: FilePath, file_system: ProjectFileSystem) -> App
             ..Default::default()
         };
 
+        let (mtl_tx, mtl_rx) = std::sync::mpsc::channel();
+
         let obj_reader = BufReader::new(Cursor::new(obj_bytes));
         let (models, materials) =
             tobj::futures::load_obj_buf(obj_reader, &load_options, move |material_path| {
                 let obj_path = obj_path.clone();
                 let file_system = file_system.clone();
+                let mtl_tx = mtl_tx.clone();
 
                 async move {
                     let relative_path = FilePath::from_relative_path(&material_path)
@@ -35,6 +39,8 @@ pub async fn load_obj(obj_path: FilePath, file_system: ProjectFileSystem) -> App
                         .parent()
                         .map(|parent| parent.join_path(&relative_path))
                         .unwrap_or(relative_path);
+
+                    let _ = mtl_tx.send(material_path.clone());
 
                     let mtl_bytes = file_system
                         .read(&material_path)
@@ -50,6 +56,7 @@ pub async fn load_obj(obj_path: FilePath, file_system: ProjectFileSystem) -> App
         Ok(LoadedObj {
             models,
             materials: materials?,
+            mtl_dependencies: mtl_rx.try_iter().collect(),
         })
     })
     .await

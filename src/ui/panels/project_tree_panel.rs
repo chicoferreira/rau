@@ -3,9 +3,9 @@ use egui_ltreeview::{Action, TreeView};
 
 use crate::{
     project::{
-        BindGroupId, CameraId, ComputePassId, DimensionId, PresentationId, ModelId, ProjectResource,
-        RenderPassId, RenderPipelineId, ResourceKind, SamplerId, ShaderId, TextureId,
-        TextureViewId, UniformId, ViewportId,
+        BindGroupId, CameraId, ComputePassId, DimensionId, ModelId, PresentationId,
+        ProjectResource, RenderPassId, RenderPipelineId, ResourceKind, SamplerId, ShaderId,
+        TextureId, TextureViewId, UniformId, ViewportId,
     },
     ui::{
         components::tree_node::{TreeNode, pending_create_node},
@@ -340,7 +340,10 @@ pub fn ui(state: &mut StateSnapshot, ui: &mut egui::Ui) -> Response {
             builder.close_dir();
 
             TreeNode::new(TreeNodeId::Presentation(PresentationId), "Presentation")
-                .with_event("Inspect", StateEvent::InspectResource(PresentationId.into()))
+                .with_event(
+                    "Inspect",
+                    StateEvent::InspectResource(PresentationId.into()),
+                )
                 .build_to(builder, state.event_queue, state.rename_state);
         });
 

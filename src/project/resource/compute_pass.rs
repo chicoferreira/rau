@@ -124,7 +124,7 @@ impl SyncResource for ComputePass {
         self.runtime_revision
     }
 
-    fn needs_rebuild_from_others(&self, tracker: &SyncTracker) -> bool {
+    fn needs_rebuild(&self, _: Self::Id, _: &Self::Context<'_>, tracker: &SyncTracker) -> bool {
         self.shader.is_some_and(|id| tracker.was_changed(id))
             || self
                 .bind_groups
@@ -135,6 +135,7 @@ impl SyncResource for ComputePass {
 
     fn sync<'a>(
         &self,
+        id: Self::Id,
         ctx: &mut Self::Context<'a>,
         _previous: Option<Self::Runtime>,
         job: Self::Job,
@@ -210,7 +211,7 @@ impl SyncResource for ComputePass {
 
                 drop(pass);
 
-                self.sync(ctx, None, ComputePassJob::Validation(scope.pop()))
+                self.sync(id, ctx, None, ComputePassJob::Validation(scope.pop()))
             }
             ComputePassJob::Validation(mut future) => match future.try_resolve() {
                 Poll::Ready(result) => result.map(|()| SyncOutcome::Changed(())),

@@ -9,7 +9,7 @@ use crate::{
         identifier::ProjectIdentifier,
     },
     project::{
-        DimensionId, Project, ResourceId, ResourceKind, RuntimeProject, ViewportId,
+        DimensionId, ModelId, Project, ResourceId, ResourceKind, RuntimeProject, ViewportId,
         paths::FilePath,
         render::{self, PresentationRender},
         resource::{
@@ -42,6 +42,11 @@ pub struct Workspace {
     inspector_tree_pane: TreePane<InspectorPane>,
     viewport_tree_pane: TreePane<ViewportPane>,
     dimension_owners: SecondaryMap<DimensionId, ViewportId>,
+    /// The model `.mtl` files each model depended on at its last successful load.
+    /// Needed because model `.mtl` files are not part of the runtime state and
+    /// need to be tracked separately to support reloading the `.obj` model when a
+    /// `.mtl` file changes.
+    mtl_dependencies: SecondaryMap<ModelId, Vec<FilePath>>,
     elapsed: instant::Duration,
 }
 
@@ -141,6 +146,7 @@ impl Workspace {
             file_storage,
             project_save_state,
             dimension_owners: Default::default(),
+            mtl_dependencies: SecondaryMap::default(),
             elapsed: instant::Duration::ZERO,
         })
     }
@@ -468,6 +474,7 @@ impl Workspace {
             queue: &ctx.queue,
             file_storage: &self.file_storage,
             runtime_bind_groups: &self.runtime_project.bind_groups,
+            mtl_dependencies: &mut self.mtl_dependencies,
         };
         self.tracker.sync_storage(
             &mut self.project.models,

@@ -29,10 +29,11 @@ pub trait SyncResource: ProjectResource {
 
     fn runtime_revision(&self) -> Revision;
 
-    fn needs_rebuild_from_others(&self, tracker: &SyncTracker) -> bool;
+    fn needs_rebuild(&self, id: Self::Id, ctx: &Self::Context<'_>, tracker: &SyncTracker) -> bool;
 
     fn sync<'a>(
         &self,
+        id: Self::Id,
         ctx: &mut Self::Context<'a>,
         previous: Option<Self::Runtime>,
         job: Self::Job,
@@ -121,11 +122,13 @@ impl SyncTracker {
 
     fn should_sync<R: SyncResource>(
         &self,
+        id: R::Id,
         resource: &R,
         cell: &RuntimeCell<R::Runtime, R::Job>,
+        ctx: &R::Context<'_>,
     ) -> bool {
         let current_revision = resource.runtime_revision();
-        let should_rebuild_from_others = resource.needs_rebuild_from_others(self);
+        let should_rebuild_from_others = resource.needs_rebuild(id, ctx, self);
 
         let should_rebuild = match cell {
             RuntimeCell::Created { revision, .. } => *revision != current_revision,
@@ -151,9 +154,8 @@ impl SyncTracker {
         ctx: &mut R::Context<'_>,
     ) -> AppResult<Option<&'a R::Runtime>> {
         let current_revision = resource.runtime_revision();
-        let id = id.into();
 
-        if self.should_sync(resource, cell) {
+        if self.should_sync(id, resource, cell, ctx) {
             let previous = match cell.take() {
                 RuntimeCell::Created { runtime, .. } => Some(runtime),
                 RuntimeCell::Errored { .. } | RuntimeCell::Pending { .. } | RuntimeCell::Empty => {
@@ -161,14 +163,14 @@ impl SyncTracker {
                 }
             };
 
-            let sync_result = resource.sync(ctx, previous, R::Job::default());
+            let sync_result = resource.sync(id, ctx, previous, R::Job::default());
             self.apply_sync_result::<R>(id, cell, current_revision, sync_result);
         } else if matches!(cell, RuntimeCell::Pending { .. }) {
             let RuntimeCell::Pending { job, .. } = cell.take() else {
                 unreachable!();
             };
 
-            let sync_result = resource.sync(ctx, None, job);
+            let sync_result = resource.sync(id, ctx, None, job);
             self.apply_sync_result::<R>(id, cell, current_revision, sync_result);
         }
 
@@ -182,7 +184,7 @@ impl SyncTracker {
 
     fn apply_sync_result<R: SyncResource>(
         &mut self,
-        id: ResourceId,
+        id: R::Id,
         cell: &mut RuntimeCell<R::Runtime, R::Job>,
         revision: Revision,
         sync_result: AppResult<SyncOutcome<R::Runtime, R::Job>>,
@@ -191,7 +193,7 @@ impl SyncTracker {
             Ok(SyncOutcome::Changed(runtime)) => {
                 *cell = RuntimeCell::Created { runtime, revision };
                 log::debug!("Recreated: {:?}", id);
-                self.resource_changes.push(id);
+                self.resource_changes.push(id.into());
             }
             Ok(SyncOutcome::Unchanged(runtime)) => {
                 *cell = RuntimeCell::Created { runtime, revision };
@@ -201,7 +203,7 @@ impl SyncTracker {
             }
             Err(err) => {
                 log::error!("Error while syncing {id:?}: {:?}", err);
-                self.resource_changes.push(id);
+                self.resource_changes.push(id.into());
                 *cell = RuntimeCell::Errored {
                     revision,
                     error: err,

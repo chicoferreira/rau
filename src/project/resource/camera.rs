@@ -363,6 +363,7 @@ impl SyncResource for Camera {
 
     fn sync<'a>(
         &self,
+        _id: Self::Id,
         ctx: &mut Self::Context<'a>,
         previous: Option<Self::Runtime>,
         _job: Self::Job,
@@ -389,7 +390,7 @@ impl SyncResource for Camera {
         }
     }
 
-    fn needs_rebuild_from_others(&self, tracker: &SyncTracker) -> bool {
+    fn needs_rebuild(&self, _: Self::Id, _: &Self::Context<'_>, tracker: &SyncTracker) -> bool {
         self.dimension_id
             .map_or(false, |id| tracker.was_changed(id))
             || self.current_speed.length_squared() > 0.0

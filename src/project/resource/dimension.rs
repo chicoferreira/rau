@@ -75,6 +75,7 @@ impl SyncResource for Dimension {
 
     fn sync<'a>(
         &self,
+        _id: Self::Id,
         _ctx: &mut Self::Context<'a>,
         _previous: Option<Self::Runtime>,
         _job: Self::Job,
@@ -82,7 +83,7 @@ impl SyncResource for Dimension {
         Ok(SyncOutcome::Changed(()))
     }
 
-    fn needs_rebuild_from_others(&self, _: &SyncTracker) -> bool {
+    fn needs_rebuild(&self, _: Self::Id, _: &Self::Context<'_>, _: &SyncTracker) -> bool {
         false
     }
 }

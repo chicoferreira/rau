@@ -139,6 +139,7 @@ impl SyncResource for Sampler {
 
     fn sync<'a>(
         &self,
+        id: Self::Id,
         ctx: &mut Self::Context<'a>,
         _previous: Option<Self::Runtime>,
         job: Self::Job,
@@ -149,7 +150,7 @@ impl SyncResource for Sampler {
                 let inner = Self::create_sampler(ctx, &self.label, &self.spec);
 
                 let runtime = SamplerRuntime { inner };
-                self.sync(ctx, None, SamplerJob::Validation(runtime, scope.pop()))
+                self.sync(id, ctx, None, SamplerJob::Validation(runtime, scope.pop()))
             }
             SamplerJob::Validation(runtime, mut future) => match future.try_resolve() {
                 Poll::Ready(result) => result.map(|()| SyncOutcome::Changed(runtime)),
@@ -160,7 +161,7 @@ impl SyncResource for Sampler {
         }
     }
 
-    fn needs_rebuild_from_others(&self, _: &SyncTracker) -> bool {
+    fn needs_rebuild(&self, _: Self::Id, _: &Self::Context<'_>, _: &SyncTracker) -> bool {
         false
     }
 }

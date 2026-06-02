@@ -197,7 +197,7 @@ impl SyncResource for RenderPipeline {
         self.runtime_revision
     }
 
-    fn needs_rebuild_from_others(&self, tracker: &SyncTracker) -> bool {
+    fn needs_rebuild(&self, _: Self::Id, _: &Self::Context<'_>, tracker: &SyncTracker) -> bool {
         let draw_strategy_needs_rebuild = match self.draw_strategy {
             RenderDrawStrategy::Model { model_id, .. } => {
                 model_id.is_some_and(|id| tracker.was_changed(id))
@@ -219,6 +219,7 @@ impl SyncResource for RenderPipeline {
 
     fn sync<'a>(
         &self,
+        _id: Self::Id,
         ctx: &mut Self::Context<'a>,
         _previous: Option<Self::Runtime>,
         job: Self::Job,

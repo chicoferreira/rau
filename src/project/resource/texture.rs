@@ -133,6 +133,7 @@ impl SyncResource for Texture {
 
     fn sync<'a>(
         &self,
+        id: Self::Id,
         ctx: &mut Self::Context<'a>,
         _previous: Option<Self::Runtime>,
         job: Self::Job,
@@ -174,7 +175,7 @@ impl SyncResource for Texture {
                     Some(bytes) => bytes,
                     None => {
                         let read_job = ctx.file_storage.read(path);
-                        return self.sync(ctx, None, TextureJob::ReadingImage(read_job));
+                        return self.sync(id, ctx, None, TextureJob::ReadingImage(read_job));
                     }
                 };
                 let dynamic_image = image::load_from_memory(&bytes)?;
@@ -232,10 +233,10 @@ impl SyncResource for Texture {
         }
 
         let runtime = TextureRuntime { inner: texture };
-        self.sync(ctx, None, TextureJob::Validation(runtime, scope.pop()))
+        self.sync(id, ctx, None, TextureJob::Validation(runtime, scope.pop()))
     }
 
-    fn needs_rebuild_from_others(&self, tracker: &SyncTracker) -> bool {
+    fn needs_rebuild(&self, _: Self::Id, _: &Self::Context<'_>, tracker: &SyncTracker) -> bool {
         match &self.source {
             TextureSource::Dimension(Some(dimension_id)) => tracker.was_changed(*dimension_id),
             TextureSource::Dimension(None) => false,

@@ -342,6 +342,7 @@ impl SyncResource for BindGroup {
 
     fn sync<'a>(
         &self,
+        id: Self::Id,
         ctx: &mut Self::Context<'a>,
         _previous: Option<Self::Runtime>,
         job: Self::Job,
@@ -368,7 +369,8 @@ impl SyncResource for BindGroup {
                     inner,
                 };
 
-                self.sync(ctx, None, BindGroupJob::Validation(runtime, scope.pop()))
+                let job = BindGroupJob::Validation(runtime, scope.pop());
+                self.sync(id, ctx, None, job)
             }
             BindGroupJob::Validation(runtime, mut future) => match future.try_resolve() {
                 Poll::Ready(result) => result.map(|()| SyncOutcome::Changed(runtime)),
@@ -379,7 +381,7 @@ impl SyncResource for BindGroup {
         }
     }
 
-    fn needs_rebuild_from_others(&self, tracker: &SyncTracker) -> bool {
+    fn needs_rebuild(&self, _: Self::Id, _: &Self::Context<'_>, tracker: &SyncTracker) -> bool {
         self.entries
             .iter()
             .any(|entry| entry.resource_recreated(tracker))
