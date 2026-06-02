@@ -1,9 +1,7 @@
 use crate::{
     file::file_storage::FileStorage,
-    project::{Project, ResourceId, paths::FilePath, sync::Revision},
+    project::{Project, ProjectRevisionSnapshot, paths::FilePath},
 };
-
-type ProjectRevisionSnapshot = Vec<(ResourceId, Revision)>;
 
 const PROJECT_SAVE_DEBOUNCE: instant::Duration = instant::Duration::from_millis(500);
 

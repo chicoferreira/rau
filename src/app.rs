@@ -9,7 +9,7 @@ use crate::{
     file::file_system::{AppFileSystem, AppFileSystemTrait},
     main_menu::MainMenu,
     ui::{self},
-    utils::{event_queue::EventQueue, winit_runner::WindowApp},
+    utils::{event_queue::EventQueue, wgpu_error_scope::WgpuErrorScope, winit_runner::WindowApp},
     workspace::{AppContext, Workspace},
 };
 
@@ -260,9 +260,13 @@ impl App {
             State::Workspace(workspace) => workspace.render_ui(ui, self.backend, app_event_queue),
         });
 
-        match &mut self.state {
-            State::MainMenu(main_menu) => main_menu.render(&mut self.event_queue, app_file_system),
+        let submit_scope = match &mut self.state {
+            State::MainMenu(main_menu) => {
+                main_menu.render(&mut self.event_queue, app_file_system);
+                None
+            }
             State::Workspace(workspace) => {
+                let scope = WgpuErrorScope::push(&self.device);
                 let mut ctx = AppContext {
                     device: &self.device,
                     queue: &self.queue,
@@ -272,8 +276,9 @@ impl App {
                     dt,
                 };
                 workspace.render(&mut ctx);
+                Some(scope)
             }
-        }
+        };
 
         self.egui_renderer.render_egui_frame(
             &frame,
@@ -284,15 +289,11 @@ impl App {
             &screen_descriptor,
         );
 
-        // TODO: add validation for the frame_plan
-        // let submit_scope = WgpuErrorScope::push(&self.device);
         self.queue.submit(std::iter::once(encoder.finish()));
-        // if let Err(error) = submit_scope.pop() {
-        //     self.runtime_project.frame_plan = RuntimeCell::Errored {
-        //         at_revision: self.project.frame_plan.revision(),
-        //         error,
-        //     };
-        // }
+
+        if let (Some(scope), State::Workspace(workspace)) = (submit_scope, &mut self.state) {
+            workspace.on_frame_submitted(scope.pop());
+        }
 
         output.present();
         self.window.request_redraw();

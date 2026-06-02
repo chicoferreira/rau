@@ -4,9 +4,10 @@ use slotmap::new_key_type;
 use crate::{
     error::{AppError, AppResult},
     project::{
+        render::PresentationRender,
         resource::{
             bindgroup::BindGroup, camera::Camera, compute_pass::ComputePass, dimension::Dimension,
-            frame_plan::FramePlan, model::Model, render_pass::RenderPass,
+            model::Model, presentation::Presentation, render_pass::RenderPass,
             render_pipeline::RenderPipeline, sampler::Sampler, shader::Shader, texture::Texture,
             texture_view::TextureView, uniform::Uniform, viewport::Viewport,
         },
@@ -14,6 +15,10 @@ use crate::{
         sync::Revision,
     },
 };
+
+/// A snapshot of every resource's project revision, used to detect when any
+/// resource has changed since a given point in time.
+pub type ProjectRevisionSnapshot = Vec<(ResourceId, Revision)>;
 
 pub mod macros;
 pub mod paths;
@@ -40,12 +45,12 @@ new_key_type! {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
-pub struct FramePlanId;
+pub struct PresentationId;
 
 #[derive(Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Project {
-    pub frame_plan: FramePlan,
+    pub presentation: Presentation,
     pub shaders: Storage<Shader>,
     pub viewports: Storage<Viewport>,
     pub uniforms: Storage<Uniform>,
@@ -59,7 +64,6 @@ pub struct Project {
     pub render_pipelines: Storage<RenderPipeline>,
     pub render_passes: Storage<RenderPass>,
     pub compute_passes: Storage<ComputePass>,
-    pub main_viewport: Option<ViewportId>,
 }
 
 #[derive(Default)]
@@ -74,8 +78,8 @@ pub struct RuntimeProject {
     pub cameras: RuntimeStorage<Camera>,
     pub models: RuntimeStorage<Model>,
     pub render_pipelines: RuntimeStorage<RenderPipeline>,
-    pub frame_plan: sync::RuntimeCell<(), <FramePlan as sync::SyncResource>::Job>,
     pub compute_passes: RuntimeStorage<ComputePass>,
+    pub presentation_render: PresentationRender,
 }
 
 impl Project {
@@ -93,7 +97,7 @@ impl Project {
             ResourceId::Dimension(id) => self.dimensions.get_label(id),
             ResourceId::Camera(id) => self.cameras.get_label(id),
             ResourceId::Model(id) => self.models.get_label(id),
-            ResourceId::FramePlan(_) => Ok("Frame Plan"),
+            ResourceId::Presentation(_) => Ok("Presentation"),
             ResourceId::ComputePass(id) => self.compute_passes.get_label(id),
         };
 
@@ -114,7 +118,7 @@ impl Project {
             ResourceKind::Model => self.models.create(label).into(),
             ResourceKind::RenderPipeline => self.render_pipelines.create(label).into(),
             ResourceKind::RenderPass => self.render_passes.create(label).into(),
-            ResourceKind::FramePlan => return None,
+            ResourceKind::Presentation => return None,
             ResourceKind::ComputePass => self.compute_passes.create(label).into(),
         };
         Some(id)
@@ -131,7 +135,7 @@ impl Project {
             ResourceId::Dimension(id) => self.dimensions.unregister(id),
             ResourceId::Camera(id) => self.cameras.unregister(id),
             ResourceId::Model(id) => self.models.unregister(id),
-            ResourceId::FramePlan(_) => {}
+            ResourceId::Presentation(_) => {}
             ResourceId::ComputePass(id) => self.compute_passes.unregister(id),
             ResourceId::Viewport(id) => self.viewports.unregister(id),
             ResourceId::RenderPipeline(id) => self.render_pipelines.unregister(id),
@@ -155,9 +159,13 @@ impl Project {
             .chain(self.render_passes.project_revisions())
             .chain(self.compute_passes.project_revisions())
             .chain(std::iter::once((
-                ResourceId::FramePlan(FramePlanId),
-                self.frame_plan.project_revision(),
+                ResourceId::Presentation(PresentationId),
+                self.presentation.project_revision(),
             )))
+    }
+
+    pub fn snapshot(&self) -> ProjectRevisionSnapshot {
+        self.project_revisions().collect()
     }
 
     pub fn serialize(&self) -> AppResult<Vec<u8>> {
@@ -183,7 +191,7 @@ impl RuntimeProject {
             ResourceId::Model(id) => self.models.unregister(id),
             ResourceId::RenderPipeline(id) => self.render_pipelines.unregister(id),
             ResourceId::RenderPass(_) => {}
-            ResourceId::FramePlan(_) => self.frame_plan = sync::RuntimeCell::Empty,
+            ResourceId::Presentation(_) => {}
             ResourceId::ComputePass(id) => self.compute_passes.unregister(id),
             ResourceId::Viewport(_) => {}
         };
@@ -202,7 +210,11 @@ impl RuntimeProject {
             .chain(self.models.get_errors())
             .chain(self.render_pipelines.get_errors())
             .chain(self.compute_passes.get_errors())
-            .chain(self.frame_plan.get_error(FramePlanId))
+            .chain(
+                self.presentation_render
+                    .error()
+                    .map(|error| (ResourceId::Presentation(PresentationId), error)),
+            )
     }
 }
 
@@ -220,7 +232,7 @@ pub enum ResourceId {
     Model(ModelId),
     RenderPipeline(RenderPipelineId),
     RenderPass(RenderPassId),
-    FramePlan(FramePlanId),
+    Presentation(PresentationId),
     ComputePass(ComputePassId),
 }
 
@@ -238,7 +250,7 @@ pub enum ResourceKind {
     Model,
     RenderPipeline,
     RenderPass,
-    FramePlan,
+    Presentation,
     ComputePass,
 }
 

@@ -3,7 +3,7 @@ use std::fmt::Debug;
 use crate::{
     file::file_storage::OpenFileState,
     project::{
-        BindGroupId, CameraId, ComputePassId, DimensionId, FramePlanId, ModelId, RenderPassId,
+        BindGroupId, CameraId, ComputePassId, DimensionId, PresentationId, ModelId, RenderPassId,
         RenderPipelineId, ResourceId, SamplerId, ShaderId, TextureId, TextureViewId, UniformId,
         ViewportId, paths::FilePath,
     },
@@ -25,7 +25,7 @@ pub enum InspectorPane {
     Model(ModelId),
     RenderPipeline(RenderPipelineId),
     RenderPass(RenderPassId),
-    FramePlan(FramePlanId),
+    Presentation(PresentationId),
     ComputePass(ComputePassId),
 }
 
@@ -66,7 +66,7 @@ impl Pane for InspectorPane {
             InspectorPane::Model(id) => resource_tab_title(*id, state).into(),
             InspectorPane::RenderPipeline(id) => resource_tab_title(*id, state).into(),
             InspectorPane::RenderPass(id) => resource_tab_title(*id, state).into(),
-            InspectorPane::FramePlan(id) => resource_tab_title(*id, state).into(),
+            InspectorPane::Presentation(id) => resource_tab_title(*id, state).into(),
             InspectorPane::ComputePass(id) => resource_tab_title(*id, state).into(),
         }
     }
@@ -119,8 +119,8 @@ impl Pane for InspectorPane {
                         InspectorPane::RenderPass(render_pass_id) => {
                             state.render_pass_inspector_ui(ui, *render_pass_id);
                         }
-                        InspectorPane::FramePlan(_) => {
-                            state.frame_plan_inspector_ui(ui);
+                        InspectorPane::Presentation(_) => {
+                            state.presentation_inspector_ui(ui);
                         }
                         InspectorPane::ComputePass(compute_pass_id) => {
                             state.compute_pass_inspector_ui(ui, *compute_pass_id);

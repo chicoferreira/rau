@@ -61,12 +61,14 @@ pub fn draggable_list<T: Hash>(
         .show_custom(|ui, iter| {
             for (i, entry) in entries.into_iter().enumerate() {
                 // this item_id needs te be unique and stable for the animations
-                let item_id = egui::Id::new((id_source, entry));
+                let item_id = egui::Id::new((id_source, entry, i));
 
-                iter.next(ui, item_id, i, true, |ui, item_handle| {
-                    item_handle.ui(ui, |ui, handle, _state| {
-                        render_item(ui, entry, i, handle, &mut edits);
-                    })
+                ui.push_id(item_id, |ui| {
+                    iter.next(ui, item_id, i, true, |ui, item_handle| {
+                        item_handle.ui(ui, |ui, handle, _state| {
+                            render_item(ui, entry, i, handle, &mut edits);
+                        })
+                    });
                 });
             }
         });

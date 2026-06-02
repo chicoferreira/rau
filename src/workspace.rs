@@ -9,13 +9,14 @@ use crate::{
         identifier::ProjectIdentifier,
     },
     project::{
-        DimensionId, FramePlanId, Project, ResourceId, ResourceKind, RuntimeProject, ViewportId,
+        DimensionId, Project, ResourceId, ResourceKind, RuntimeProject, ViewportId,
         paths::FilePath,
+        render::{self, PresentationRender},
         resource::{
             bindgroup::BindGroupCreationContext, camera::CameraCreationContext, compute_pass,
-            frame_plan::FramePlanContext, model::ModelCreationContext, render_pipeline,
-            shader::ShaderCreationContext, texture::TextureCreationContext,
-            texture_view::TextureViewCreationContext, uniform::UniformCreationContext,
+            model::ModelCreationContext, render_pipeline, shader::ShaderCreationContext,
+            texture::TextureCreationContext, texture_view::TextureViewCreationContext,
+            uniform::UniformCreationContext,
         },
         save::ProjectSaveState,
         sync::SyncTracker,
@@ -27,7 +28,7 @@ use crate::{
         rename::{RenameState, RenameTarget},
         size::Size2d,
     },
-    utils::{event_queue::EventQueue, key::KeyboardState},
+    utils::{async_job::AsyncJob, event_queue::EventQueue, key::KeyboardState},
 };
 
 pub struct Workspace {
@@ -122,7 +123,7 @@ impl Workspace {
         let inspector_tree_pane = TreePane::new("inspector");
         let mut viewport_tree_pane = TreePane::new("viewport");
 
-        if let Some(viewport_id) = project.main_viewport {
+        if let Some(viewport_id) = project.presentation.main_viewport() {
             viewport_tree_pane.add_pane(ViewportPane { viewport_id });
         }
 
@@ -154,6 +155,33 @@ impl Workspace {
         }
 
         self.tick_objects(ctx);
+
+        let snapshot = self.project.snapshot();
+        if !self.runtime_project.poll_presentation_errors(snapshot) {
+            return;
+        }
+
+        let render_ctx = render::RenderContext {
+            models: &self.project.models,
+            render_pipelines: &self.project.render_pipelines,
+            render_passes: &self.project.render_passes,
+            runtime_models: &self.runtime_project.models,
+            runtime_bind_groups: &self.runtime_project.bind_groups,
+            runtime_texture_views: &self.runtime_project.texture_views,
+            runtime_render_pipelines: &self.runtime_project.render_pipelines,
+        };
+
+        if let Err(error) = self.project.presentation.render(ctx.encoder, &render_ctx) {
+            let snapshot = self.project.snapshot();
+            let error = PresentationRender::Errored { error, snapshot };
+            self.runtime_project.presentation_render = error;
+        }
+    }
+
+    pub fn on_frame_submitted(&mut self, job: AsyncJob<AppResult<()>>) {
+        let current_snapshot = self.project.snapshot();
+        self.runtime_project
+            .on_frame_submitted(current_snapshot, job);
     }
 
     pub fn render_ui(
@@ -201,7 +229,7 @@ impl Workspace {
                         ResourceId::Model(id) => InspectorPane::Model(id),
                         ResourceId::RenderPipeline(id) => InspectorPane::RenderPipeline(id),
                         ResourceId::RenderPass(id) => InspectorPane::RenderPass(id),
-                        ResourceId::FramePlan(id) => InspectorPane::FramePlan(id),
+                        ResourceId::Presentation(id) => InspectorPane::Presentation(id),
                         ResourceId::ComputePass(id) => InspectorPane::ComputePass(id),
                     };
 
@@ -351,7 +379,8 @@ impl Workspace {
                     }
                 }
                 StateEvent::SetMainViewport(viewport_id) => {
-                    self.project.main_viewport = Some(viewport_id);
+                    let presentation = &mut self.project.presentation;
+                    presentation.set_main_viewport(Some(viewport_id));
                 }
             }
         }
@@ -474,25 +503,6 @@ impl Workspace {
         self.tracker.sync_storage(
             &mut self.project.compute_passes,
             &mut self.runtime_project.compute_passes,
-            view,
-        );
-
-        let view = &mut FramePlanContext {
-            device: &ctx.device,
-            encoder: &mut ctx.encoder,
-            render_passes: &self.project.render_passes,
-            models: &self.project.models,
-            runtime_models: &self.runtime_project.models,
-            runtime_shaders: &self.runtime_project.shaders,
-            runtime_texture_views: &self.runtime_project.texture_views,
-            runtime_bind_groups: &self.runtime_project.bind_groups,
-            render_pipelines: &self.project.render_pipelines,
-            runtime_render_pipelines: &self.runtime_project.render_pipelines,
-        };
-        let _ = self.tracker.sync_singleton(
-            FramePlanId,
-            &mut self.project.frame_plan,
-            &mut self.runtime_project.frame_plan,
             view,
         );
 

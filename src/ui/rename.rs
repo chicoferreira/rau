@@ -207,7 +207,7 @@ impl From<ResourceId> for Option<RenameTarget> {
             ResourceId::RenderPipeline(id) => Some(RenameTarget::RenderPipeline(id)),
             ResourceId::RenderPass(id) => Some(RenameTarget::RenderPass(id)),
             ResourceId::ComputePass(id) => Some(RenameTarget::ComputePass(id)),
-            ResourceId::FramePlan(_) => None,
+            ResourceId::Presentation(_) => None,
         }
     }
 }

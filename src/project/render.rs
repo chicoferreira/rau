@@ -1,25 +1,106 @@
+use std::task::Poll;
+
 use crate::{
-    error::{AppResult, RequiredFieldExt},
+    error::{AppError, AppResult, RequiredFieldExt},
     project::{
-        ProjectResource,
+        ProjectResource, ProjectRevisionSnapshot, RuntimeProject,
         resource::{
             bindgroup::BindGroup,
             model::Model,
+            presentation::Presentation,
             render_pass::RenderPass,
             render_pipeline::{RenderDrawStrategy, RenderPipeline},
             texture_view::TextureView,
         },
         storage::{RuntimeStorage, Storage},
     },
+    utils::async_job::AsyncJob,
 };
 
 pub struct RenderContext<'a> {
     pub models: &'a Storage<Model>,
     pub render_pipelines: &'a Storage<RenderPipeline>,
+    pub render_passes: &'a Storage<RenderPass>,
     pub runtime_models: &'a RuntimeStorage<Model>,
     pub runtime_bind_groups: &'a RuntimeStorage<BindGroup>,
     pub runtime_texture_views: &'a RuntimeStorage<TextureView>,
     pub runtime_render_pipelines: &'a RuntimeStorage<RenderPipeline>,
+}
+
+#[derive(Default)]
+pub enum PresentationRender {
+    #[default]
+    Idle,
+    Pending {
+        job: AsyncJob<AppResult<()>>,
+        snapshot: ProjectRevisionSnapshot,
+    },
+    Errored {
+        error: AppError,
+        snapshot: ProjectRevisionSnapshot,
+    },
+}
+
+impl PresentationRender {
+    pub fn error(&self) -> Option<&AppError> {
+        match self {
+            PresentationRender::Errored { error, .. } => Some(error),
+            PresentationRender::Idle | PresentationRender::Pending { .. } => None,
+        }
+    }
+}
+
+impl RuntimeProject {
+    pub fn poll_presentation_errors(&mut self, current_snapshot: ProjectRevisionSnapshot) -> bool {
+        if let PresentationRender::Pending { job, snapshot } = &mut self.presentation_render {
+            match job.try_resolve() {
+                Poll::Ready(Ok(())) => {
+                    self.presentation_render = PresentationRender::Idle;
+                }
+                Poll::Ready(Err(error)) => {
+                    let snapshot = std::mem::take(snapshot);
+                    self.presentation_render = PresentationRender::Errored { error, snapshot };
+                }
+                Poll::Pending => {}
+            }
+        }
+
+        if let PresentationRender::Errored { snapshot, .. } = &self.presentation_render {
+            if current_snapshot == *snapshot {
+                return false; // Shouldn't render the frame because it is still errored and nothing has changed
+            }
+            // A resource changed since the error: clear it and try rendering again.
+            self.presentation_render = PresentationRender::Idle;
+        }
+
+        true // Should render the frame
+    }
+
+    pub fn on_frame_submitted(
+        &mut self,
+        current_snapshot: ProjectRevisionSnapshot,
+        job: AsyncJob<AppResult<()>>,
+    ) {
+        if let PresentationRender::Idle = self.presentation_render {
+            let snapshot = current_snapshot;
+            self.presentation_render = PresentationRender::Pending { job, snapshot };
+        }
+    }
+}
+
+impl Presentation {
+    pub fn render(
+        &self,
+        encoder: &mut wgpu::CommandEncoder,
+        render_ctx: &RenderContext<'_>,
+    ) -> AppResult<()> {
+        for render_pass_id in self.render_passes() {
+            let render_pass = render_ctx.render_passes.get(*render_pass_id)?;
+            render_pass.submit(encoder, &render_ctx)?;
+        }
+
+        Ok(())
+    }
 }
 
 impl RenderPass {

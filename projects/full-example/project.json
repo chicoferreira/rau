@@ -1,9 +1,10 @@
 {
-  "framePlan": {
-    "entries": [
-      { "id": 6815097981440440610, "renderPassId": { "idx": 1, "version": 1 } },
-      { "id": 7236297203993788675, "renderPassId": { "idx": 2, "version": 1 } }
-    ]
+  "presentation": {
+    "renderPasses": [
+      { "idx": 1, "version": 1 },
+      { "idx": 2, "version": 1 }
+    ],
+    "mainViewport": { "idx": 2, "version": 1 }
   },
   "shaders": [
     { "value": null, "version": 0 },
@@ -682,6 +683,5 @@
       },
       "version": 1
     }
-  ],
-  "mainViewport": { "idx": 2, "version": 1 }
+  ]
 }

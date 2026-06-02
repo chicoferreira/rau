@@ -3,7 +3,7 @@ use egui_ltreeview::{Action, TreeView};
 
 use crate::{
     project::{
-        BindGroupId, CameraId, ComputePassId, DimensionId, FramePlanId, ModelId, ProjectResource,
+        BindGroupId, CameraId, ComputePassId, DimensionId, PresentationId, ModelId, ProjectResource,
         RenderPassId, RenderPipelineId, ResourceKind, SamplerId, ShaderId, TextureId,
         TextureViewId, UniformId, ViewportId,
     },
@@ -44,7 +44,7 @@ pub enum TreeNodeId {
     RenderPass(RenderPassId),
     ComputePassFolder,
     ComputePass(ComputePassId),
-    FramePlan(FramePlanId),
+    Presentation(PresentationId),
 }
 
 fn pending_resource_node(
@@ -115,7 +115,7 @@ pub fn ui(state: &mut StateSnapshot, ui: &mut egui::Ui) -> Response {
                 .build_to(builder, state.event_queue, state.rename_state);
             pending_resource_node(state, builder, ResourceKind::Viewport);
             for (id, viewport) in state.project.viewports.list_sorted() {
-                let is_main_viewport = state.project.main_viewport == Some(id);
+                let is_main_viewport = state.project.presentation.main_viewport() == Some(id);
                 TreeNode::new(TreeNodeId::Viewport(id), viewport.label())
                     .with_event("View", StateEvent::OpenViewport(id))
                     .with_event("Inspect", StateEvent::InspectResource(id.into()))
@@ -339,8 +339,8 @@ pub fn ui(state: &mut StateSnapshot, ui: &mut egui::Ui) -> Response {
             }
             builder.close_dir();
 
-            TreeNode::new(TreeNodeId::FramePlan(FramePlanId), "Frame Plan")
-                .with_event("Inspect", StateEvent::InspectResource(FramePlanId.into()))
+            TreeNode::new(TreeNodeId::Presentation(PresentationId), "Presentation")
+                .with_event("Inspect", StateEvent::InspectResource(PresentationId.into()))
                 .build_to(builder, state.event_queue, state.rename_state);
         });
 
@@ -362,7 +362,7 @@ pub fn ui(state: &mut StateSnapshot, ui: &mut egui::Ui) -> Response {
                         TreeNodeId::RenderPipeline(id) => StateEvent::InspectResource(id.into()),
                         TreeNodeId::RenderPass(id) => StateEvent::InspectResource(id.into()),
                         TreeNodeId::ComputePass(id) => StateEvent::InspectResource(id.into()),
-                        TreeNodeId::FramePlan(id) => StateEvent::InspectResource(id.into()),
+                        TreeNodeId::Presentation(id) => StateEvent::InspectResource(id.into()),
                         TreeNodeId::UniformFolder
                         | TreeNodeId::BindGroupFolder
                         | TreeNodeId::ViewportFolder

@@ -491,7 +491,6 @@ pub async fn create_scene(
     main_render_pass.set_pipelines(vec![light_pipeline_id, models_pipeline_id, sky_pipeline_id]);
 
     let main_render_pass_id = project.render_passes.register(main_render_pass);
-    project.frame_plan.add(Some(main_render_pass_id));
 
     let mut hdr_render_pass = RenderPass::new(
         "HDR render pass",
@@ -518,9 +517,10 @@ pub async fn create_scene(
     hdr_render_pass.set_pipelines(vec![hdr_pipeline_id]);
 
     let hdr_render_pass_id = project.render_passes.register(hdr_render_pass);
-    project.frame_plan.add(Some(hdr_render_pass_id));
 
-    project.main_viewport = Some(viewport_id);
+    let entries = vec![main_render_pass_id, hdr_render_pass_id];
+    project.presentation.set_render_passes(entries);
+    project.presentation.set_main_viewport(Some(viewport_id));
 
     Ok(project)
 }
