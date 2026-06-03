@@ -44,7 +44,6 @@ pub fn ui(
     let keyboard_state = if response.has_focus() {
         ui.input(|input| KeyboardState::from_egui_input(input))
     } else {
-        // TODO: remove me once camera gets refactored
         KeyboardState::empty()
     };
 

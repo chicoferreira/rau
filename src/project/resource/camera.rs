@@ -3,6 +3,7 @@ use std::f32::consts::FRAC_PI_2;
 use derive_more::{Add, AddAssign, Deref};
 use glam::{Mat4, Vec3, Vec4};
 use serde::{Deserialize, Serialize};
+use strum::{Display, EnumIter};
 
 use crate::{
     error::{AppError, AppResult},
@@ -25,6 +26,7 @@ pub const OPENGL_TO_WGPU_MATRIX: Mat4 = Mat4::from_cols(
 
 const MIN_ZNEAR: f32 = 0.0001;
 const Z_CLIP_GAP: f32 = 0.001;
+const MIN_LOOK_AT_DISTANCE: f32 = 0.1;
 const MIN_FOVY: Deg = Deg(1.0);
 const MAX_FOVY: Deg = Deg(179.0);
 const SAFE_FRAC_PI_2: f32 = FRAC_PI_2 - MIN_ZNEAR;
@@ -125,6 +127,32 @@ impl PositiveF32 {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Deref, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct LookAt(Vec3);
+
+impl LookAt {
+    pub fn new(eye: Vec3, target: Vec3) -> Self {
+        let offset = target - eye;
+        if offset.length() >= MIN_LOOK_AT_DISTANCE {
+            Self(target)
+        } else {
+            let direction = offset.try_normalize().unwrap_or(Vec3::Z);
+            Self(eye + direction * MIN_LOOK_AT_DISTANCE)
+        }
+    }
+}
+
+#[derive(Debug, Default, Clone, Copy, PartialEq, EnumIter, Display, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum CameraMode {
+    #[default]
+    #[strum(to_string = "First Person")]
+    FirstPerson,
+    #[strum(to_string = "Third Person")]
+    ThirdPerson,
+}
+
 pub struct CameraCreationContext<'a> {
     pub dimensions: &'a Storage<Dimension>,
     pub dt: instant::Duration,
@@ -141,6 +169,8 @@ pub struct Camera {
     fovy: Fov,
     #[serde(flatten)]
     clip: ClipRange,
+    mode: CameraMode,
+    looking_at: LookAt,
     current_speed: Vec3,
     max_speed: PositiveF32,
     acceleration: PositiveF32,
@@ -183,6 +213,18 @@ pub struct CameraFrameInput {
     pub scroll: f32,
 }
 
+fn direction_from_angles(yaw: f32, pitch: f32) -> Vec3 {
+    let (yaw_sin, yaw_cos) = yaw.sin_cos();
+    let (pitch_sin, pitch_cos) = pitch.sin_cos();
+    Vec3::new(pitch_cos * yaw_cos, pitch_sin, pitch_cos * yaw_sin)
+}
+
+fn angles_from_direction(direction: Vec3) -> (f32, f32) {
+    let yaw = direction.z.atan2(direction.x);
+    let pitch = direction.y.atan2(direction.x.hypot(direction.z));
+    (yaw, pitch)
+}
+
 impl Camera {
     pub fn new(label: String) -> Self {
         let position = Vec3::new(0.0, 0.0, -1.0);
@@ -198,6 +240,8 @@ impl Camera {
             yaw,
             dimension_id: None,
             fovy,
+            mode: CameraMode::default(),
+            looking_at: LookAt::new(position, Vec3::ZERO),
             max_speed: PositiveF32::new(20.0),
             clip,
             acceleration: PositiveF32::new(150.0),
@@ -215,6 +259,20 @@ impl Camera {
         &mut self.input
     }
 
+    pub fn handle_keyboard(&mut self, keyboard: &KeyboardState) {
+        if keyboard.just_pressed(Key::V) {
+            self.toggle_mode();
+        }
+        self.input.handle_keyboard(keyboard);
+    }
+
+    pub fn toggle_mode(&mut self) {
+        self.set_mode(match self.mode {
+            CameraMode::FirstPerson => CameraMode::ThirdPerson,
+            CameraMode::ThirdPerson => CameraMode::FirstPerson,
+        });
+    }
+
     resource_getters! {
         pub fn label() -> &str;
         pub fn position() -> Vec3;
@@ -229,6 +287,8 @@ impl Camera {
         pub fn scroll_speed() -> PositiveF32;
         pub fn dimension_id() -> Option<DimensionId>;
         pub fn drag() -> PositiveF32;
+        pub fn mode() -> CameraMode;
+        pub fn looking_at() -> LookAt;
     }
 
     resource_setters! {
@@ -249,6 +309,8 @@ impl Camera {
         pub fn set_drag_factor(drag: PositiveF32);
         pub fn set_sensitivity(sensitivity: PositiveF32);
         pub fn set_scroll_speed(scroll_speed: PositiveF32);
+        pub fn set_mode(mode: CameraMode);
+        pub fn set_looking_at(looking_at: LookAt);
     }
 
     fn calculate_aspect(&self, dimensions: &Storage<Dimension>) -> AppResult<f32> {
@@ -266,6 +328,7 @@ impl Camera {
         let previous_yaw = self.yaw;
         let previous_pitch = self.pitch;
         let previous_current_speed = self.current_speed;
+        let previous_looking_at = self.looking_at;
 
         let (yaw_sin, yaw_cos) = self.yaw.0.0.sin_cos();
         let forward = Vec3::new(yaw_cos, 0.0, yaw_sin).normalize();
@@ -297,17 +360,48 @@ impl Camera {
             self.current_speed *= *self.max_speed / speed;
         }
 
-        self.position += self.current_speed * dt;
+        let movement = self.current_speed * dt;
 
-        let (pitch_sin, pitch_cos) = (**self.pitch).sin_cos();
-        let front = Vec3::new(pitch_cos * yaw_cos, pitch_sin, pitch_cos * yaw_sin).normalize();
-        self.position += front * self.input.scroll * *self.scroll_speed;
+        match self.mode {
+            CameraMode::FirstPerson => {
+                if self.input.mouse_h != 0.0 {
+                    let diff = Rad::from(Deg(self.input.mouse_h * *self.sensitivity));
+                    self.yaw = Yaw::new(*self.yaw + diff);
+                }
+                if self.input.mouse_v != 0.0 {
+                    let diff = Rad::from(Deg(-self.input.mouse_v * *self.sensitivity));
+                    self.pitch = Pitch::new(*self.pitch + diff);
+                }
 
-        if self.input.mouse_h != 0.0 {
-            self.yaw += Yaw::new(Deg(self.input.mouse_h * *self.sensitivity));
-        }
-        if self.input.mouse_v != 0.0 {
-            self.pitch += Pitch::new(Deg(-self.input.mouse_v * *self.sensitivity));
+                let view_dir = direction_from_angles(self.yaw.0.0, **self.pitch);
+
+                self.position += movement;
+                self.position += view_dir * self.input.scroll * *self.scroll_speed;
+            }
+            CameraMode::ThirdPerson => {
+                self.position += movement;
+                let target = *self.looking_at + movement;
+
+                let offset = self.position - target;
+                let mut radius = offset.length().max(MIN_LOOK_AT_DISTANCE);
+                let (mut azimuth, mut polar) = angles_from_direction(offset);
+
+                let sensitivity = Rad::from(Deg(*self.sensitivity)).0;
+                azimuth += self.input.mouse_h * sensitivity;
+                polar = (polar + self.input.mouse_v * sensitivity)
+                    .clamp(-SAFE_FRAC_PI_2, SAFE_FRAC_PI_2);
+                radius =
+                    (radius - self.input.scroll * *self.scroll_speed).max(MIN_LOOK_AT_DISTANCE);
+
+                let direction = direction_from_angles(azimuth, polar);
+
+                self.position = target + direction * radius;
+                self.looking_at = LookAt::new(self.position, target);
+
+                let (yaw, pitch) = angles_from_direction(-direction);
+                self.yaw = Yaw::new(Rad(yaw));
+                self.pitch = Pitch::new(Rad(pitch));
+            }
         }
 
         self.input.scroll = 0.0;
@@ -318,6 +412,7 @@ impl Camera {
             || self.yaw != previous_yaw
             || self.pitch != previous_pitch
             || self.current_speed != previous_current_speed
+            || self.looking_at != previous_looking_at
         {
             self.runtime_revision.increase();
         }
@@ -408,11 +503,7 @@ impl CameraMatrix {
         ClipRange { zfar, znear }: ClipRange,
     ) -> Self {
         let projection = OPENGL_TO_WGPU_MATRIX * Mat4::perspective_rh_gl(fovy, aspect, znear, zfar);
-        let (sin_pitch, cos_pitch) = pitch.sin_cos();
-        let (sin_yaw, cos_yaw) = yaw.sin_cos();
-
-        let view_direction =
-            Vec3::new(cos_pitch * cos_yaw, sin_pitch, cos_pitch * sin_yaw).normalize();
+        let view_direction = direction_from_angles(yaw, pitch);
         let view = Mat4::look_at_rh(position, position + view_direction, Vec3::Y);
 
         let projection_view = projection * view;
@@ -430,7 +521,7 @@ impl CameraMatrix {
 }
 
 impl CameraFrameInput {
-    pub fn handle_keyboard(&mut self, keyboard: KeyboardState) {
+    pub fn handle_keyboard(&mut self, keyboard: &KeyboardState) {
         macro_rules! handle_keys {
             ($kb:expr, $( $field:ident => $($key:path),+ );+ $(;)?) => {
                 $(

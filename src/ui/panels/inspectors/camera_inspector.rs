@@ -4,7 +4,7 @@ use glam::Vec3;
 use crate::{
     project::{
         CameraId,
-        resource::camera::{Deg, Fov, Pitch, PositiveF32, Yaw},
+        resource::camera::{CameraMode, Deg, Fov, LookAt, Pitch, PositiveF32, Yaw},
     },
     ui::{
         components::{data_display::ui_mat4_grid, inspector},
@@ -25,21 +25,57 @@ impl StateSnapshot<'_> {
             .default_open(true)
             .show(ui, |ui| {
                 inspector::field_grid(ui, "camera_transform_grid", |ui| {
+                    let mut mode = camera.mode();
+                    let mode_changed = inspector::row(ui, "Mode", |ui| {
+                        ui.horizontal(|ui| {
+                            let first = ui
+                                .radio_value(&mut mode, CameraMode::FirstPerson, "First Person")
+                                .changed();
+                            let third = ui
+                                .radio_value(&mut mode, CameraMode::ThirdPerson, "Third Person")
+                                .changed();
+                            first || third
+                        })
+                        .inner
+                    });
+                    if mode_changed {
+                        camera.set_mode(mode);
+                    }
+
+                    let ui_position_drag = |ui: &mut egui::Ui, axis: &mut f32| {
+                        let drag_value = egui::DragValue::new(axis).speed(0.01).max_decimals(3);
+                        ui.add(drag_value).changed()
+                    };
+
+                    if camera.mode() == CameraMode::ThirdPerson {
+                        inspector::row(ui, "Looking At", |ui| {
+                            ui.horizontal(|ui| {
+                                let target = camera.looking_at();
+                                let (mut x, mut y, mut z) = (target.x, target.y, target.z);
+                                let cx = ui_position_drag(ui, &mut x);
+                                let cy = ui_position_drag(ui, &mut y);
+                                let cz = ui_position_drag(ui, &mut z);
+
+                                if cx || cy || cz {
+                                    let target = Vec3::new(x, y, z);
+                                    camera.set_looking_at(LookAt::new(camera.position(), target));
+                                }
+                            });
+                        });
+                    }
+
                     inspector::row(ui, "Position", |ui| {
-                        let pos = camera.position();
-                        let (mut x, mut y, mut z) = (pos.x, pos.y, pos.z);
-                        let cx = ui
-                            .add(egui::DragValue::new(&mut x).speed(0.01).max_decimals(3))
-                            .changed();
-                        let cy = ui
-                            .add(egui::DragValue::new(&mut y).speed(0.01).max_decimals(3))
-                            .changed();
-                        let cz = ui
-                            .add(egui::DragValue::new(&mut z).speed(0.01).max_decimals(3))
-                            .changed();
-                        if cx || cy || cz {
-                            camera.set_position(Vec3::new(x, y, z));
-                        }
+                        ui.horizontal(|ui| {
+                            let pos = camera.position();
+                            let (mut x, mut y, mut z) = (pos.x, pos.y, pos.z);
+                            let cx = ui_position_drag(ui, &mut x);
+                            let cy = ui_position_drag(ui, &mut y);
+                            let cz = ui_position_drag(ui, &mut z);
+                            
+                            if cx || cy || cz {
+                                camera.set_position(Vec3::new(x, y, z));
+                            }
+                        });
                     });
 
                     let Deg(mut yaw) = (*camera.yaw()).into();

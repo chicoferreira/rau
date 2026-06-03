@@ -384,7 +384,7 @@ impl Workspace {
                                 if let Some(camera_id) = viewport.controls_camera_id()
                                     && let Ok(camera) = self.project.cameras.get_mut(camera_id)
                                 {
-                                    camera.input_mut().handle_keyboard(keyboard_state);
+                                    camera.handle_keyboard(&keyboard_state);
                                 }
                             }
                         }

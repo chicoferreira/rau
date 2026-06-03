@@ -491,6 +491,8 @@
         "fovy": 1.0471976,
         "znear": 0.1,
         "zfar": 100.0,
+        "mode": "firstPerson",
+        "lookingAt": [0.0, 0.0, 0.0],
         "currentSpeed": [0.0, 0.0, 0.0],
         "maxSpeed": 20.0,
         "acceleration": 150.0,

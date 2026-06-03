@@ -12,36 +12,62 @@ pub enum Key {
     A,
     S,
     D,
+    V,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct KeyboardState {
-    pressed_keys: EnumSet<Key>,
+    /// Keys currently held down this frame.
+    pressed: EnumSet<Key>,
+    /// Keys that went down this frame.
+    just_pressed: EnumSet<Key>,
 }
 
 impl KeyboardState {
     pub fn empty() -> Self {
         Self {
-            pressed_keys: EnumSet::empty(),
+            pressed: EnumSet::empty(),
+            just_pressed: EnumSet::empty(),
         }
     }
 
     pub fn from_egui_input(input: &egui::InputState) -> Self {
-        let mut pressed_keys: EnumSet<Key> = input
+        let mut pressed: EnumSet<Key> = input
             .keys_down
             .iter()
             .filter_map(|k| Key::try_from(k).ok())
             .collect();
 
         if input.modifiers.shift {
-            pressed_keys.insert(Key::Shift);
+            pressed.insert(Key::Shift);
         }
 
-        Self { pressed_keys }
+        let just_pressed: EnumSet<Key> = input.events.iter().filter_map(has_just_pressed).collect();
+
+        Self {
+            pressed,
+            just_pressed,
+        }
     }
 
     pub fn is_pressed(&self, key: Key) -> bool {
-        self.pressed_keys.contains(key)
+        self.pressed.contains(key)
+    }
+
+    pub fn just_pressed(&self, key: Key) -> bool {
+        self.just_pressed.contains(key)
+    }
+}
+
+fn has_just_pressed(event: &egui::Event) -> Option<Key> {
+    match event {
+        egui::Event::Key {
+            key,
+            pressed: true,
+            repeat: false,
+            ..
+        } => Key::try_from(key).ok(),
+        _ => None,
     }
 }
 
@@ -59,6 +85,7 @@ impl TryFrom<&egui::Key> for Key {
             egui::Key::A => Ok(Key::A),
             egui::Key::S => Ok(Key::S),
             egui::Key::D => Ok(Key::D),
+            egui::Key::V => Ok(Key::V),
             _ => Err(()),
         }
     }
