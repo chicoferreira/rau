@@ -6,6 +6,8 @@ use syntect::{
     parsing::{SyntaxDefinition, SyntaxSetBuilder},
 };
 
+use crate::project::shader_code::{self, Language, ShaderGenCtx, ShaderInterface};
+
 static SYNTAX_SETTINGS: OnceLock<SyntectSettings> = OnceLock::new();
 
 fn syntax_settings() -> &'static SyntectSettings {
@@ -29,6 +31,47 @@ fn syntax_settings() -> &'static SyntectSettings {
             ts: ThemeSet::load_defaults(),
         }
     })
+}
+
+pub fn shader_code_section(
+    ui: &mut egui::Ui,
+    id_salt: impl std::hash::Hash,
+    item: &impl ShaderInterface,
+    ctx: &ShaderGenCtx,
+) {
+    egui::CollapsingHeader::new("Shader code")
+        .id_salt(id_salt)
+        .default_open(true)
+        .show(ui, |ui| {
+            let backend = Language::Wgsl;
+            let code = shader_code::render(item, ctx, backend);
+            code_view(ui, &code, backend.highlight_extension());
+        });
+}
+
+pub fn code_view(ui: &mut egui::Ui, code: &str, extension: &str) {
+    let theme = egui_extras::syntax_highlighting::CodeTheme::from_memory(ui.ctx(), ui.style());
+    let layout_job = egui_extras::syntax_highlighting::highlight_with(
+        ui.ctx(),
+        ui.style(),
+        &theme,
+        code,
+        extension,
+        syntax_settings(),
+    );
+
+    egui::Frame::group(ui.style())
+        .fill(ui.visuals().extreme_bg_color)
+        .show(ui, |ui| {
+            ui.horizontal(|ui| {
+                ui.add(egui::Label::new(layout_job).selectable(true));
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::TOP), |ui| {
+                    if ui.small_button("Copy").clicked() {
+                        ui.ctx().copy_text(code.to_owned());
+                    }
+                });
+            });
+        });
 }
 
 pub fn code_editor(ui: &mut egui::Ui, text: &mut String, extension: &str) -> egui::Response {

@@ -11,10 +11,12 @@ use crate::{
             render_pipeline::{BindGroupTarget, RenderDrawStrategy, RenderPipeline},
             shader::Shader,
         },
+        shader_code::ShaderGenCtx,
         storage::Storage,
     },
     ui::{
         components::{
+            code_editor::shader_code_section,
             draggable_list::{ListEdits, draggable_list},
             hint::hint,
             inspector,
@@ -186,6 +188,12 @@ impl StateSnapshot<'_> {
         ui.add_space(4.0);
 
         draw_strategy_ui(ui, render_pipeline_id, render_pipeline, models);
+
+        ui.add_space(4.0);
+        if let Ok(pipeline) = self.project.render_pipelines.get(render_pipeline_id) {
+            let ctx = ShaderGenCtx::from_project(self.project);
+            shader_code_section(ui, (render_pipeline_id, "shader_code"), pipeline, &ctx);
+        }
     }
 }
 

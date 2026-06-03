@@ -25,6 +25,7 @@ pub mod paths;
 pub mod render;
 pub mod resource;
 pub mod save;
+pub mod shader_code;
 pub mod storage;
 pub mod sync;
 

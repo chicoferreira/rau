@@ -11,10 +11,12 @@ use crate::{
                 UniformRuntimeField, camera::CameraField,
             },
         },
+        shader_code::ShaderGenCtx,
         storage::Storage,
     },
     ui::{
         components::{
+            code_editor::{code_view, shader_code_section},
             color_edit::color_edit_rgba,
             data_display::{ui_array, ui_array_mut},
             draggable_list::{ListEdits, draggable_list},
@@ -151,6 +153,11 @@ impl StateSnapshot<'_> {
                 ui.label(RichText::new("Label").strong());
                 ui.label("to remove it or drag it to reorder it.");
             }));
+        }
+
+        if let Ok(uniform) = self.project.uniforms.get(uniform_id) {
+            let ctx = ShaderGenCtx::from_project(self.project);
+            shader_code_section(ui, (uniform_id, "shader_code"), uniform, &ctx);
         }
     }
 }
@@ -292,9 +299,7 @@ fn ui_uniform_type_label(ui: &mut Ui, kind: UniformFieldDataKind) {
         });
         ui.horizontal(|ui| {
             ui.label("WGSL type");
-            // TODO: make this syntax highlight
-            let wgsl_type_label = kind.wgsl_type_label();
-            ui.label(egui::RichText::new(wgsl_type_label).monospace().strong());
+            code_view(ui, kind.wgsl_type_label(), "wgsl");
         });
     });
 }

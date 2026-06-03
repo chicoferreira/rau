@@ -8,10 +8,12 @@ use crate::{
             compute_pass::{ComputePass, WorkGroups},
             shader::Shader,
         },
+        shader_code::ShaderGenCtx,
         storage::Storage,
     },
     ui::{
         components::{
+            code_editor::shader_code_section,
             draggable_list::{ListEdits, draggable_list},
             hint::hint,
             inspector,
@@ -31,6 +33,12 @@ impl StateSnapshot<'_> {
         ui.add_space(4.0);
 
         compute_pass_bind_groups_ui(ui, compute_pass_id, compute_pass, &self.project.bind_groups);
+
+        ui.add_space(4.0);
+        if let Ok(pass) = self.project.compute_passes.get(compute_pass_id) {
+            let ctx = ShaderGenCtx::from_project(self.project);
+            shader_code_section(ui, (compute_pass_id, "shader_code"), pass, &ctx);
+        }
     }
 }
 

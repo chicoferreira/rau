@@ -3004,6 +3004,7 @@ dependencies = [
  "futures-lite",
  "glam",
  "glob",
+ "heck",
  "image",
  "indexed_db_futures",
  "instant",

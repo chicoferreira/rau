@@ -10,10 +10,12 @@ use crate::{
             texture_view::TextureView,
             uniform::Uniform,
         },
+        shader_code::{BindGroupAt, ShaderGenCtx},
         storage::Storage,
     },
     ui::{
         components::{
+            code_editor::shader_code_section,
             draggable_list::{ListEdits, draggable_list},
             flags_selector::flags_selector,
             hint::hint,
@@ -89,6 +91,13 @@ impl StateSnapshot<'_> {
         if bind_group.entries() != entries {
             bind_group.set_entries(entries);
         }
+
+        let Ok(bind_group) = self.project.bind_groups.get(bind_group_id) else {
+            return;
+        };
+        let ctx = ShaderGenCtx::from_project(self.project);
+        let item = BindGroupAt::new(None, &bind_group);
+        shader_code_section(ui, (bind_group_id, "shader_code"), &item, &ctx);
     }
 }
 

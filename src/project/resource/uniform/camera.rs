@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use strum::{Display, EnumIter};
 
 use crate::project::resource::camera::{Camera, CameraRuntime};
-use crate::project::resource::uniform::UniformFieldData;
+use crate::project::resource::uniform::{UniformFieldData, UniformFieldDataKind};
 
 #[derive(Debug, Clone, Copy, PartialEq, EnumIter, Display, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -19,6 +19,17 @@ pub enum CameraField {
 }
 
 impl CameraField {
+    pub fn kind(&self) -> UniformFieldDataKind {
+        match self {
+            CameraField::Position => UniformFieldDataKind::Vec4f,
+            CameraField::Projection
+            | CameraField::View
+            | CameraField::ProjectionView
+            | CameraField::InverseProjection
+            | CameraField::InverseView => UniformFieldDataKind::Mat4x4f,
+        }
+    }
+
     pub(super) fn compute(
         &self,
         camera: &Camera,

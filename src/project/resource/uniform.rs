@@ -313,6 +313,14 @@ impl UniformField {
         &self.source
     }
 
+    pub fn kind(&self) -> UniformFieldDataKind {
+        match &self.source {
+            UniformFieldSource::UserDefined(data) => data.kind(),
+            UniformFieldSource::Camera { field, .. } => field.kind(),
+            UniformFieldSource::Time => UniformFieldDataKind::Float,
+        }
+    }
+
     fn needs_rebuild_from_others(&self, tracker: &SyncTracker) -> bool {
         match &self.source {
             UniformFieldSource::UserDefined(_) => false,

@@ -12,10 +12,12 @@ use crate::{
                 vertex_buffer::{VertexBufferField, VertexBufferSpec},
             },
         },
+        shader_code::ShaderGenCtx,
         storage::Storage,
     },
     ui::{
         components::{
+            code_editor::shader_code_section,
             draggable_list::{ListEdits, draggable_list},
             hint::hint,
             inspector,
@@ -60,6 +62,11 @@ impl StateSnapshot<'_> {
         model.set_material_bind_group_ids(material_bind_group_ids);
         model.set_mesh_material_selections(mesh_material_selections);
         model.set_vertex_buffer_spec(vertex_buffer_spec);
+
+        if let Ok(model) = self.project.models.get(model_id) {
+            let ctx = ShaderGenCtx::from_project(self.project);
+            shader_code_section(ui, (model_id, "shader_code"), model, &ctx);
+        }
     }
 }
 
