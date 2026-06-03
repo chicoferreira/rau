@@ -15,7 +15,7 @@ pub fn field_grid<R>(
     Grid::new(id_salt)
         .num_columns(2)
         .spacing([8.0, 4.0])
-        .show(ui, |ui| ui.vertical(add_rows).inner)
+        .show(ui, add_rows)
 }
 
 pub fn row<R>(
@@ -23,13 +23,10 @@ pub fn row<R>(
     label: impl Into<WidgetText>,
     add_control: impl FnOnce(&mut Ui) -> R,
 ) -> R {
-    ui.horizontal(|ui| {
-        ui.label(label);
-        let result = add_control(ui);
-        ui.end_row();
-        result
-    })
-    .inner
+    ui.label(label);
+    let result = add_control(ui);
+    ui.end_row();
+    result
 }
 
 pub fn combo_row<T>(

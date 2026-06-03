@@ -148,23 +148,48 @@ impl Uniform {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UniformRuntimeLayout {
+    pub size: usize,
+    pub padding: usize,
+    pub field_paddings: Vec<usize>,
+}
+
 impl UniformRuntime {
     pub fn buffer(&self) -> &ResizableBuffer {
         &self.buffer
     }
 
-    pub fn layout(&self) -> (usize, usize) {
+    pub fn layout(&self) -> UniformRuntimeLayout {
         let mut size = 0usize;
         let mut struct_align = 1usize;
+        let mut field_paddings = Vec::with_capacity(self.fields.len());
+        let mut previous_end = None;
 
         for field in &self.fields {
-            let (align, field_size) = field.data.kind().layout();
-            struct_align = struct_align.max(align);
-            size = size.next_multiple_of(align);
-            size += field_size;
+            let (field_align, field_size) = field.data.kind().layout();
+            let start = size.next_multiple_of(field_align);
+
+            if let Some(previous_end) = previous_end {
+                field_paddings.push(start - previous_end);
+            }
+
+            size = start + field_size;
+            struct_align = struct_align.max(field_align);
+            previous_end = Some(size);
         }
 
-        (size.next_multiple_of(struct_align), struct_align)
+        let size = size.next_multiple_of(struct_align);
+        if let Some(previous_end) = previous_end {
+            field_paddings.push(size - previous_end);
+        }
+        let padding = field_paddings.iter().sum();
+
+        UniformRuntimeLayout {
+            size,
+            padding,
+            field_paddings,
+        }
     }
 
     pub fn fields(&self) -> &[UniformRuntimeField] {

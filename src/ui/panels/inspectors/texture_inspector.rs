@@ -104,14 +104,14 @@ impl StateSnapshot<'_> {
             inspector::row(ui, "Usage", |ui| {
                 flags_selector(ui, "texture_usage", &mut usage, TEXTURE_USAGES);
             });
-
-            ui_texture_source(
-                ui,
-                &mut source,
-                &self.project.dimensions,
-                self.file_storage.files(),
-            );
         });
+
+        ui_texture_source(
+            ui,
+            &mut source,
+            &self.project.dimensions,
+            self.file_storage.files(),
+        );
 
         ui.add_space(6.0);
 
@@ -142,62 +142,66 @@ fn ui_texture_source(
     let current_kind = TextureSourceKind::from_source(source);
     let mut selected_kind = current_kind;
 
-    if inspector::combo_row(
-        ui,
-        "Source",
-        "texture_source_kind",
-        SOURCE_KINDS,
-        &mut selected_kind,
-    ) {
-        *source = match selected_kind {
-            TextureSourceKind::Dimension => TextureSource::Dimension(None),
-            TextureSourceKind::Manual => TextureSource::Manual {
-                size: wgpu::Extent3d {
-                    width: 800,
-                    height: 400,
-                    depth_or_array_layers: 1,
+    inspector::field_grid(ui, "texture_source_grid", |ui| {
+        if inspector::combo_row(
+            ui,
+            "Source",
+            "texture_source_kind",
+            SOURCE_KINDS,
+            &mut selected_kind,
+        ) {
+            *source = match selected_kind {
+                TextureSourceKind::Dimension => TextureSource::Dimension(None),
+                TextureSourceKind::Manual => TextureSource::Manual {
+                    size: wgpu::Extent3d {
+                        width: 800,
+                        height: 400,
+                        depth_or_array_layers: 1,
+                    },
                 },
-            },
-            TextureSourceKind::Image => TextureSource::Image(None),
-        };
-    }
+                TextureSourceKind::Image => TextureSource::Image(None),
+            };
+        }
+    });
 
-    ui.indent("source_options", |ui| match source {
-        TextureSource::Dimension(dimension_id) => {
-            inspector::storage_opt_combo_row(
-                ui,
-                "Dimension",
-                "texture_source_dimension",
-                dimensions,
-                dimension_id,
-            );
-        }
-        TextureSource::Manual { size } => {
-            inspector::u32_drag_row(ui, "Width", &mut size.width, 1_u32..=u32::MAX);
-            inspector::u32_drag_row(ui, "Height", &mut size.height, 1_u32..=u32::MAX);
-            inspector::u32_drag_row(
-                ui,
-                "Layers",
-                &mut size.depth_or_array_layers,
-                1_u32..=u32::MAX,
-            );
-        }
-        TextureSource::Image(path) => {
-            if let Some(files) = files {
-                inspector::file_opt_combo_row(
+    ui.indent("source_options", |ui| {
+        inspector::field_grid(ui, "texture_source_options_grid", |ui| match source {
+            TextureSource::Dimension(dimension_id) => {
+                inspector::storage_opt_combo_row(
                     ui,
-                    "Image",
-                    "texture_source_image",
-                    files,
-                    path,
-                    is_image_file,
+                    "Dimension",
+                    "texture_source_dimension",
+                    dimensions,
+                    dimension_id,
                 );
-            } else {
-                inspector::row(ui, "Image", |ui| {
-                    ui.spinner();
-                });
             }
-        }
+            TextureSource::Manual { size } => {
+                inspector::u32_drag_row(ui, "Width", &mut size.width, 1_u32..=u32::MAX);
+                inspector::u32_drag_row(ui, "Height", &mut size.height, 1_u32..=u32::MAX);
+                inspector::u32_drag_row(
+                    ui,
+                    "Layers",
+                    &mut size.depth_or_array_layers,
+                    1_u32..=u32::MAX,
+                );
+            }
+            TextureSource::Image(path) => {
+                if let Some(files) = files {
+                    inspector::file_opt_combo_row(
+                        ui,
+                        "Image",
+                        "texture_source_image",
+                        files,
+                        path,
+                        is_image_file,
+                    );
+                } else {
+                    inspector::row(ui, "Image", |ui| {
+                        ui.spinner();
+                    });
+                }
+            }
+        });
     });
 }
 

@@ -33,6 +33,15 @@ fn syntax_settings() -> &'static SyntectSettings {
     })
 }
 
+fn layout_job(ui: &egui::Ui, code: &str, extension: &str) -> egui::text::LayoutJob {
+    use egui_extras::syntax_highlighting::highlight_with;
+    let theme = egui_extras::syntax_highlighting::CodeTheme::from_memory(ui.ctx(), ui.style());
+    let (ctx, style) = (ui.ctx(), ui.style());
+    let settings = syntax_settings();
+
+    highlight_with(ctx, style, &theme, code, extension, settings)
+}
+
 pub fn shader_code_section(
     ui: &mut egui::Ui,
     id_salt: impl std::hash::Hash,
@@ -49,16 +58,13 @@ pub fn shader_code_section(
         });
 }
 
+pub fn highlighted_label(ui: &mut egui::Ui, code: &str, extension: &str) -> egui::Response {
+    let layout_job = layout_job(ui, code, extension);
+    ui.add(egui::Label::new(layout_job).selectable(true))
+}
+
 pub fn code_view(ui: &mut egui::Ui, code: &str, extension: &str) {
-    let theme = egui_extras::syntax_highlighting::CodeTheme::from_memory(ui.ctx(), ui.style());
-    let layout_job = egui_extras::syntax_highlighting::highlight_with(
-        ui.ctx(),
-        ui.style(),
-        &theme,
-        code,
-        extension,
-        syntax_settings(),
-    );
+    let layout_job = layout_job(ui, code, extension);
 
     egui::Frame::group(ui.style())
         .fill(ui.visuals().extreme_bg_color)
@@ -75,17 +81,8 @@ pub fn code_view(ui: &mut egui::Ui, code: &str, extension: &str) {
 }
 
 pub fn code_editor(ui: &mut egui::Ui, text: &mut String, extension: &str) -> egui::Response {
-    let theme = egui_extras::syntax_highlighting::CodeTheme::from_memory(ui.ctx(), ui.style());
-
     let mut layouter = |ui: &egui::Ui, text: &dyn egui::TextBuffer, _wrap_width: f32| {
-        let mut layout_job = egui_extras::syntax_highlighting::highlight_with(
-            ui.ctx(),
-            ui.style(),
-            &theme,
-            text.as_str(),
-            extension,
-            syntax_settings(),
-        );
+        let mut layout_job = layout_job(ui, text.as_str(), extension);
 
         layout_job.wrap.max_rows = usize::MAX;
         ui.fonts_mut(|f| f.layout_job(layout_job))

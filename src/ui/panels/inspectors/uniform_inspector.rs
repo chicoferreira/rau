@@ -16,7 +16,7 @@ use crate::{
     },
     ui::{
         components::{
-            code_editor::{code_view, shader_code_section},
+            code_editor::{highlighted_label, shader_code_section},
             color_edit::color_edit_rgba,
             data_display::{ui_array, ui_array_mut},
             draggable_list::{ListEdits, draggable_list},
@@ -68,13 +68,22 @@ impl StateSnapshot<'_> {
         };
 
         let uniform_runtime = self.runtime_project.uniforms.get_init(uniform_id);
+        let uniform_layout = match &uniform_runtime {
+            Ok(Some(uniform_runtime)) => Ok(Some(uniform_runtime.layout())),
+            Ok(None) => Ok(None),
+            Err(err) => Err(err),
+        };
 
         ui.horizontal(|ui| {
             ui.label("Total size");
-            match &uniform_runtime {
-                Ok(Some(uniform_runtime)) => {
-                    let (total_size, _) = uniform_runtime.layout();
-                    ui.strong(format!("{total_size} bytes"));
+            match &uniform_layout {
+                Ok(Some(uniform_layout)) => {
+                    ui.strong(format!("{} bytes", uniform_layout.size));
+
+                    let padding = uniform_layout.padding;
+                    if padding > 0 {
+                        ui.weak(format!("({padding} bytes wasted on padding)"));
+                    }
                 }
                 Ok(None) => {
                     ui.spinner();
@@ -110,7 +119,14 @@ impl StateSnapshot<'_> {
                         ui_uniform_field_title(ui, &mut ctx, edits, uniform_id, index, field);
                     });
                     if let Some(runtime_field) = runtime_field {
-                        ui_uniform_type_label(ui, runtime_field.data().kind());
+                        let padding = match &uniform_layout {
+                            Ok(Some(uniform_layout)) => {
+                                let padding = uniform_layout.field_paddings.get(index);
+                                padding.copied().unwrap_or(0)
+                            }
+                            Ok(None) | Err(_) => 0,
+                        };
+                        ui_uniform_type_label(ui, runtime_field.data().kind(), padding);
                     }
                 });
 
@@ -281,7 +297,7 @@ fn ui_field_entry(
     }
 }
 
-fn ui_uniform_type_label(ui: &mut Ui, kind: UniformFieldDataKind) {
+fn ui_uniform_type_label(ui: &mut Ui, kind: UniformFieldDataKind, padding: usize) {
     let (align, size) = kind.layout();
     egui::Popup::from_toggle_button_response(
         &ui.label(egui::RichText::new(kind.to_string()).weak())
@@ -289,17 +305,19 @@ fn ui_uniform_type_label(ui: &mut Ui, kind: UniformFieldDataKind) {
     )
     .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside)
     .show(|ui| {
-        ui.horizontal(|ui| {
-            ui.label("Size");
-            ui.strong(format!("{size} bytes"));
-        });
-        ui.horizontal(|ui| {
-            ui.label("Alignment");
-            ui.strong(format!("{align} bytes"));
-        });
-        ui.horizontal(|ui| {
-            ui.label("WGSL type");
-            code_view(ui, kind.wgsl_type_label(), "wgsl");
+        inspector::field_grid(ui, "uniform_type_layout", |ui| {
+            inspector::row(ui, "Size", |ui| {
+                ui.strong(format!("{size} bytes"));
+            });
+            inspector::row(ui, "Alignment", |ui| {
+                ui.strong(format!("{align} bytes"));
+            });
+            inspector::row(ui, "Padding", |ui| {
+                ui.strong(format!("{padding} bytes"));
+            });
+            inspector::row(ui, "WGSL type", |ui| {
+                highlighted_label(ui, kind.wgsl_type_label(), "wgsl");
+            });
         });
     });
 }
