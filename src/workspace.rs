@@ -111,7 +111,7 @@ impl Workspace {
         let file_storage = FileStorage::new(project_id.clone(), file_system, file_watcher);
 
         for (file_path, data) in files {
-            file_storage.file_system.save(&file_path, data).await?;
+            file_storage.file_system.write(&file_path, data).await?;
         }
 
         let workspace = Self::open_project(file_storage).await?;

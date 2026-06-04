@@ -53,7 +53,7 @@ impl AppFileSystemTrait for AppFileSystem {
     fn mount_project(
         &self,
         id: ProjectIdentifier,
-    ) -> FutureResult<(ProjectFileSystem, FileWatcher)> {
+    ) -> FutureResult<(super::ProjectFileSystem, FileWatcher)> {
         let database = self.database.clone();
 
         AsyncJob::new(async move {
@@ -66,6 +66,7 @@ impl AppFileSystemTrait for AppFileSystem {
             };
             let file_watcher = FileWatcher::new(receiver);
 
+            let file_system = ProjectFileSystem::IndexedDb(file_system);
             Ok((file_system, file_watcher))
         })
     }
@@ -413,7 +414,7 @@ impl ProjectFileSystem {
 }
 
 impl ProjectFileSystemTrait for ProjectFileSystem {
-    fn save(&self, path: &FilePath, bytes: Vec<u8>) -> FutureResult<()> {
+    fn write(&self, path: &FilePath, bytes: Vec<u8>) -> FutureResult<()> {
         let database = self.database.clone();
         let id = self.id.clone();
         let sender = self.file_watcher_sender.clone();
@@ -462,55 +463,12 @@ impl ProjectFileSystemTrait for ProjectFileSystem {
         })
     }
 
-    fn create_empty_file(&self, path: &FilePath) -> FutureResult<()> {
-        let database = self.database.clone();
-        let id = self.id.clone();
-        let sender = self.file_watcher_sender.clone();
-        let path = path.clone();
-
-        AsyncJob::new(async move {
-            if Self::entry_exists(&database, &id, &path).await? {
-                return Err(AppError::PathAlreadyExists(path));
-            }
-
-            let transaction = Self::entries_transaction(&database, TransactionMode::Readwrite)?;
-            let files_store = Self::files_store(&transaction)?;
-            let directories_store = Self::directories_store(&transaction)?;
-
-            Self::ensure_parent_directories(&directories_store, &id, &path)?;
-
-            let key = Self::key(&id, &path);
-            files_store
-                .add(Uint8Array::from(Vec::new()))
-                .with_key(key)
-                .build()?;
-
-            transaction.commit().await?;
-
-            sender.send(path.clone()).expect("not disconnected");
-
-            Ok(())
-        })
-    }
-
     fn read(&self, path: &FilePath) -> FutureResult<Vec<u8>> {
         let id = self.id.clone();
         let database = self.database.clone();
         let path = path.clone();
 
         AsyncJob::new(Self::read_bytes(database, id, path))
-    }
-
-    fn read_to_string(&self, path: &FilePath) -> FutureResult<String> {
-        let database = self.database.clone();
-        let id = self.id.clone();
-        let path = path.clone();
-
-        AsyncJob::new(async move {
-            let bytes = Self::read_bytes(database, id, path.clone()).await?;
-
-            String::from_utf8(bytes).map_err(|_| AppError::FileNotValidUtf8(path))
-        })
     }
 
     fn exists(&self, path: &FilePath) -> FutureResult<bool> {

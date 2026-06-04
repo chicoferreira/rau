@@ -1,19 +1,33 @@
+mod ephemeral;
 #[cfg(not(target_arch = "wasm32"))]
 mod native;
 #[cfg(target_arch = "wasm32")]
 mod wasm;
 
+use enum_dispatch::enum_dispatch;
+
 use crate::{
-    error::AppResult,
+    error::{AppError, AppResult},
     file::{file_watcher::FileWatcher, identifier::ProjectIdentifier},
     project::paths::FilePath,
     utils::async_job::AsyncJob,
 };
 
+pub use ephemeral::EphemeralFileSystem;
 #[cfg(not(target_arch = "wasm32"))]
-pub use native::{AppFileSystem, ProjectFileSystem};
+pub use native::AppFileSystem;
 #[cfg(target_arch = "wasm32")]
-pub use wasm::{AppFileSystem, ProjectFileSystem};
+pub use wasm::AppFileSystem;
+
+#[derive(Clone)]
+#[enum_dispatch(ProjectFileSystemTrait)]
+pub enum ProjectFileSystem {
+    Ephemeral(EphemeralFileSystem),
+    #[cfg(not(target_arch = "wasm32"))]
+    Native(native::ProjectFileSystem),
+    #[cfg(target_arch = "wasm32")]
+    IndexedDb(wasm::ProjectFileSystem),
+}
 
 #[derive(Debug, Clone, Default)]
 pub struct FileSystemEntries {
@@ -40,10 +54,9 @@ pub trait AppFileSystemTrait: Clone + Sized {
     fn remove_recent_project(&self, id: ProjectIdentifier) -> FutureResult<()>;
 }
 
+#[enum_dispatch]
 pub trait ProjectFileSystemTrait: Clone + Sized {
     fn read(&self, path: &FilePath) -> FutureResult<Vec<u8>>;
-
-    fn read_to_string(&self, path: &FilePath) -> FutureResult<String>;
 
     fn exists(&self, path: &FilePath) -> FutureResult<bool>;
 
@@ -51,11 +64,34 @@ pub trait ProjectFileSystemTrait: Clone + Sized {
 
     fn create_directory(&self, path: &FilePath) -> FutureResult<()>;
 
-    fn save(&self, path: &FilePath, bytes: Vec<u8>) -> FutureResult<()>;
-
-    fn create_empty_file(&self, path: &FilePath) -> FutureResult<()>;
+    fn write(&self, path: &FilePath, bytes: Vec<u8>) -> FutureResult<()>;
 
     fn delete_path(&self, path: &FilePath) -> FutureResult<()>;
 
     fn move_path(&self, old: &FilePath, new: &FilePath) -> FutureResult<()>;
+}
+
+impl ProjectFileSystem {
+    pub fn ephemeral() -> Self {
+        Self::Ephemeral(EphemeralFileSystem::default())
+    }
+
+    pub fn read_to_string(&self, path: &FilePath) -> FutureResult<String> {
+        let (file_system, path) = (self.clone(), path.clone());
+        AsyncJob::new(async move {
+            let bytes = file_system.read(&path).await?;
+            String::from_utf8(bytes).map_err(|_| AppError::FileNotValidUtf8(path))
+        })
+    }
+
+    pub fn create_empty_file(&self, path: &FilePath) -> FutureResult<()> {
+        let (file_system, path) = (self.clone(), path.clone());
+        AsyncJob::new(async move {
+            if file_system.exists(&path).await? {
+                return Err(AppError::PathAlreadyExists(path));
+            }
+
+            file_system.write(&path, Vec::new()).await
+        })
+    }
 }

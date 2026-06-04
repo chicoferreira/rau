@@ -157,7 +157,7 @@ impl FileStorage {
     }
 
     pub fn save_in_background(&mut self, path: &FilePath, bytes: Vec<u8>) {
-        let task = self.file_system.save(path, bytes);
+        let task = self.file_system.write(path, bytes);
         self.current_tasks.push(FileStorageTask::SaveFile { task });
     }
 
@@ -189,7 +189,7 @@ impl FileStorage {
             }
 
             let bytes = file.read().await;
-            file_system.save(&file_path, bytes).await?;
+            file_system.write(&file_path, bytes).await?;
 
             Ok(true)
         });
@@ -210,7 +210,7 @@ impl FileStorage {
             };
 
             let bytes = file.read().await;
-            file_system.save(&file_path, bytes).await?;
+            file_system.write(&file_path, bytes).await?;
 
             Ok(true)
         });

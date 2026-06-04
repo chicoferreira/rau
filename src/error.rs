@@ -77,7 +77,6 @@ pub enum AppError {
     #[cfg(target_arch = "wasm32")]
     #[error(transparent)]
     IndexedDbError(#[from] indexed_db_futures::error::Error),
-    #[cfg(target_arch = "wasm32")]
     #[error("file not valid utf8: {0:?}")]
     FileNotValidUtf8(FilePath),
     #[cfg(target_arch = "wasm32")]

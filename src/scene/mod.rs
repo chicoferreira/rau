@@ -50,7 +50,7 @@ pub async fn create_and_save_scene(
     let project = create_scene(&device, Size2d::new(1080, 1080), &file_storage).await?;
 
     let bytes = project.serialize()?;
-    file_system.save(&FilePath::project_json(), bytes);
+    file_system.write(&FilePath::project_json(), bytes);
 
     Ok(())
 }
