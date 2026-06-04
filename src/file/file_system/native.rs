@@ -83,7 +83,7 @@ impl AppFileSystemTrait for AppFileSystem {
     fn mount_project(
         &self,
         id: ProjectIdentifier,
-    ) -> FutureResult<(ProjectFileSystem, FileWatcher)> {
+    ) -> FutureResult<(super::ProjectFileSystem, FileWatcher)> {
         let send_jobs = self.send_jobs.clone();
 
         AsyncJob::new(async move {
@@ -92,7 +92,7 @@ impl AppFileSystemTrait for AppFileSystem {
             let file_watcher = FileWatcher::new(id.project_path().clone())?;
             let file_system = ProjectFileSystem { id, send_jobs };
 
-            Ok((file_system, file_watcher))
+            Ok((super::ProjectFileSystem::Native(file_system), file_watcher))
         })
     }
 
@@ -191,14 +191,6 @@ impl ProjectFileSystemTrait for ProjectFileSystem {
         })
     }
 
-    fn read_to_string(&self, path: &FilePath) -> FutureResult<String> {
-        let path = self.resolve_exists(path);
-        self.run_blocking(|| {
-            let path = path?;
-            std::fs::read_to_string(&path).map_err(Into::into)
-        })
-    }
-
     fn exists(&self, path: &FilePath) -> FutureResult<bool> {
         let path = self.resolve(path);
 
@@ -232,7 +224,7 @@ impl ProjectFileSystemTrait for ProjectFileSystem {
         })
     }
 
-    fn save(&self, path: &FilePath, bytes: Vec<u8>) -> FutureResult<()> {
+    fn write(&self, path: &FilePath, bytes: Vec<u8>) -> FutureResult<()> {
         let path = self.resolve(path);
 
         self.run_blocking(|| {
@@ -241,33 +233,6 @@ impl ProjectFileSystemTrait for ProjectFileSystem {
             }
 
             std::fs::write(path, bytes).map_err(Into::into)
-        })
-    }
-
-    fn create_empty_file(&self, path: &FilePath) -> FutureResult<()> {
-        let resolved_path = self.resolve(path);
-        let path = path.clone();
-
-        self.run_blocking(|| {
-            if resolved_path.try_exists()? {
-                return Err(AppError::PathAlreadyExists(path.clone()));
-            }
-
-            if let Some(parent) = resolved_path.parent() {
-                std::fs::create_dir_all(parent)?;
-            }
-
-            match std::fs::OpenOptions::new()
-                .write(true)
-                .create_new(true)
-                .open(resolved_path)
-            {
-                Ok(_) => Ok(()),
-                Err(err) if err.kind() == std::io::ErrorKind::AlreadyExists => {
-                    Err(AppError::PathAlreadyExists(path))
-                }
-                Err(err) => Err(err.into()),
-            }
         })
     }
 
