@@ -228,7 +228,7 @@ impl SyncTracker {
         self.resource_changes.push(id);
     }
 
-    pub(crate) fn push_file_changes(&mut self, paths: Vec<FilePath>) {
+    pub(crate) fn push_file_changes(&mut self, paths: impl IntoIterator<Item = FilePath>) {
         self.file_changes.extend(paths);
     }
 }

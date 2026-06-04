@@ -13,14 +13,12 @@ impl StateSnapshot<'_> {
                     ui.spinner();
                 });
             }
-            OpenFileState::Loaded { text, saved_text }
-            | OpenFileState::Reloading {
-                text, saved_text, ..
-            } => {
+            OpenFileState::Loaded { text, saved }
+            | OpenFileState::Reloading { text, saved, .. } => {
                 let extension = file_path.extension().unwrap_or("");
-                if code_editor(ui, text, extension).changed() && text != saved_text {
-                    let bytes = text.clone().into_bytes();
-                    self.file_storage.save_in_background(file_path, bytes);
+                if code_editor(ui, text, extension).changed() && text != &saved.text {
+                    let contents = text.clone();
+                    self.file_storage.save_open_file(file_path, contents);
                 }
             }
             OpenFileState::Errored { error } => {

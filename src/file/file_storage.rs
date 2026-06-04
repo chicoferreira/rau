@@ -1,4 +1,8 @@
-use std::{collections::HashMap, task::Poll};
+use std::{
+    collections::{HashMap, hash_map::DefaultHasher},
+    hash::{Hash, Hasher},
+    task::Poll,
+};
 
 use crate::{
     error::{AppError, AppResult},
@@ -21,6 +25,7 @@ pub struct FileStorage {
     cached_files: Option<Vec<FilePath>>,
     cached_file_tree: Option<DirNode>,
     open_files: HashMap<FilePath, OpenFileState>,
+    pending_changes: Vec<FilePath>,
 }
 
 pub enum OpenFileState {
@@ -29,13 +34,26 @@ pub enum OpenFileState {
     /// The file is reloading from disk while keeping the previous text buffer visible.
     Reloading {
         text: String,
-        saved_text: String,
+        saved: SavedFileState,
         task: AsyncJob<AppResult<String>>,
     },
     /// The file has an editable text buffer and the last disk-backed text.
-    Loaded { text: String, saved_text: String },
+    Loaded { text: String, saved: SavedFileState },
     /// The file could not be loaded as text.
     Errored { error: String },
+}
+
+#[derive(Clone)]
+pub struct SavedFileState {
+    pub text: String,
+    hash: u64,
+}
+
+impl SavedFileState {
+    fn new(text: String) -> Self {
+        let hash = content_hash(text.as_bytes());
+        Self { text, hash }
+    }
 }
 
 enum FileStorageTask {
@@ -83,6 +101,7 @@ impl FileStorage {
             current_tasks: vec![],
             file_watcher,
             open_files: HashMap::new(),
+            pending_changes: Vec::new(),
         }
     }
 
@@ -127,12 +146,30 @@ impl FileStorage {
     }
 
     pub fn read_to_string(&self, path: &FilePath) -> AsyncJob<AppResult<String>> {
+        if let Some(OpenFileState::Loaded { saved, .. } | OpenFileState::Reloading { saved, .. }) =
+            self.open_files.get(path)
+        {
+            let text = saved.text.clone();
+            return AsyncJob::new(async move { Ok(text) });
+        }
+
         self.file_system.read_to_string(path)
     }
 
     pub fn save_in_background(&mut self, path: &FilePath, bytes: Vec<u8>) {
         let task = self.file_system.save(path, bytes);
         self.current_tasks.push(FileStorageTask::SaveFile { task });
+    }
+
+    pub fn save_open_file(&mut self, path: &FilePath, contents: String) {
+        if let Some(OpenFileState::Loaded { saved, .. } | OpenFileState::Reloading { saved, .. }) =
+            self.open_files.get_mut(path)
+        {
+            *saved = SavedFileState::new(contents.clone());
+        }
+
+        self.pending_changes.push(path.clone());
+        self.save_in_background(path, contents.into_bytes());
     }
 
     pub fn import_file_in_background(&mut self, parent_path: FilePath) {
@@ -246,12 +283,20 @@ impl FileStorage {
     }
 
     pub fn tick(&mut self, tracker: &mut SyncTracker) {
+        if !self.pending_changes.is_empty() {
+            tracker.push_file_changes(self.pending_changes.drain(..));
+        }
+
         // Handle file watcher events
         while let Some(result) = self.file_watcher.try_next() {
             match result {
                 Ok(paths) => {
                     self.reload_open_files(&paths);
-                    tracker.push_file_changes(paths);
+                    tracker.push_file_changes(
+                        paths
+                            .into_iter()
+                            .filter(|path| !self.open_files.contains_key(path)),
+                    );
                     self.refresh_file_system();
                 }
                 Err(e) => log::error!("File watcher error: {}", e),
@@ -309,7 +354,7 @@ impl FileStorage {
             self.refresh_file_system();
         }
 
-        self.tick_open_files();
+        self.tick_open_files(tracker);
     }
 
     fn reload_open_files(&mut self, paths: &[FilePath]) {
@@ -320,15 +365,11 @@ impl FileStorage {
 
             let task = self.file_system.read_to_string(path);
             match file {
-                OpenFileState::Loaded { text, saved_text }
-                | OpenFileState::Reloading {
-                    text, saved_text, ..
-                } => {
-                    let text = text.clone();
-                    let saved_text = saved_text.clone();
+                OpenFileState::Loaded { text, saved }
+                | OpenFileState::Reloading { text, saved, .. } => {
                     *file = OpenFileState::Reloading {
-                        text,
-                        saved_text,
+                        text: text.clone(),
+                        saved: saved.clone(),
                         task,
                     };
                 }
@@ -339,8 +380,8 @@ impl FileStorage {
         }
     }
 
-    fn tick_open_files(&mut self) {
-        for file in self.open_files.values_mut() {
+    fn tick_open_files(&mut self, tracker: &mut SyncTracker) {
+        for (path, file) in self.open_files.iter_mut() {
             match file {
                 OpenFileState::Loading { task } => {
                     let Poll::Ready(result) = task.try_resolve() else {
@@ -349,7 +390,7 @@ impl FileStorage {
 
                     *file = match result {
                         Ok(text) => OpenFileState::Loaded {
-                            saved_text: text.clone(),
+                            saved: SavedFileState::new(text.clone()),
                             text,
                         },
                         Err(error) => OpenFileState::Errored {
@@ -357,30 +398,31 @@ impl FileStorage {
                         },
                     };
                 }
-                OpenFileState::Reloading {
-                    text,
-                    saved_text,
-                    task,
-                } => {
+                OpenFileState::Reloading { text, saved, task } => {
                     let Poll::Ready(result) = task.try_resolve() else {
                         continue;
                     };
 
                     *file = match result {
                         Ok(disk_text) => {
+                            let saved_disk_text = SavedFileState::new(disk_text.clone());
+                            if saved.hash != saved_disk_text.hash {
+                                tracker.push_file_changes([path.clone()]);
+                            }
+
                             // A reload can finish after the user has already typed more text.
                             // If the buffer is still clean, accept the disk version into the editor.
-                            if text == saved_text {
+                            if text.as_str() == saved.text.as_str() {
                                 OpenFileState::Loaded {
-                                    saved_text: disk_text.clone(),
                                     text: disk_text,
+                                    saved: saved_disk_text,
                                 }
                             } else {
                                 // If the buffer is dirty, keep the user's in-memory edits,
                                 // while a background reload should be in progress.
                                 OpenFileState::Loaded {
                                     text: text.to_string(),
-                                    saved_text: disk_text,
+                                    saved: saved_disk_text,
                                 }
                             }
                         }
@@ -393,6 +435,12 @@ impl FileStorage {
             }
         }
     }
+}
+
+fn content_hash(bytes: &[u8]) -> u64 {
+    let mut hasher = DefaultHasher::new();
+    bytes.hash(&mut hasher);
+    hasher.finish()
 }
 
 fn consume_if_ready<T>(job: &mut AsyncJob<AppResult<T>>, name: &str, f: impl FnOnce(T)) -> bool {

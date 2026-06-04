@@ -39,11 +39,8 @@ fn file_tab_title(file_path: &FilePath, state: &StateSnapshot<'_>) -> String {
     // TODO: add loading indicator in case of loading/reloading
     match state.file_storage.get_open_file(file_path) {
         Some(
-            OpenFileState::Loaded { text, saved_text }
-            | OpenFileState::Reloading {
-                text, saved_text, ..
-            },
-        ) if text != saved_text => {
+            OpenFileState::Loaded { text, saved } | OpenFileState::Reloading { text, saved, .. },
+        ) if text != &saved.text => {
             format!("{} *", file_path)
         }
         _ => file_path.to_string(),
