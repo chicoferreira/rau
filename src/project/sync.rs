@@ -155,22 +155,34 @@ impl SyncTracker {
     ) -> AppResult<Option<&'a R::Runtime>> {
         let current_revision = resource.runtime_revision();
 
-        if self.should_sync(id, resource, cell, ctx) {
+        // An in-flight job whose resource is unchanged must be advanced, not restarted: on WASM,
+        // WGPU validation futures need to yield to the browser event loop, so an always-changing
+        // resource such as a time uniform would otherwise stay pending forever. A revision change
+        // makes the job obsolete, so let those fall through to `should_sync` and rebuild instead.
+        let advance_pending = matches!(
+            cell,
+            RuntimeCell::Pending { revision, .. } if *revision == current_revision
+        );
+
+        let action = if advance_pending {
+            let RuntimeCell::Pending { job, .. } = cell.take() else {
+                unreachable!();
+            };
+            Some((None, job))
+        } else if self.should_sync(id, resource, cell, ctx) {
             let previous = match cell.take() {
                 RuntimeCell::Created { runtime, .. } => Some(runtime),
                 RuntimeCell::Errored { .. } | RuntimeCell::Pending { .. } | RuntimeCell::Empty => {
                     None
                 }
             };
+            Some((previous, R::Job::default()))
+        } else {
+            None
+        };
 
-            let sync_result = resource.sync(id, ctx, previous, R::Job::default());
-            self.apply_sync_result::<R>(id, cell, current_revision, sync_result);
-        } else if matches!(cell, RuntimeCell::Pending { .. }) {
-            let RuntimeCell::Pending { job, .. } = cell.take() else {
-                unreachable!();
-            };
-
-            let sync_result = resource.sync(id, ctx, None, job);
+        if let Some((previous, job)) = action {
+            let sync_result = resource.sync(id, ctx, previous, job);
             self.apply_sync_result::<R>(id, cell, current_revision, sync_result);
         }
 

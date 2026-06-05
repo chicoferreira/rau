@@ -266,7 +266,7 @@ fn ui_field_entry(
             }
 
             inspector::row(ui, "Data", |ui| {
-                changed = edit_uniform_field_data(ui, &mut data);
+                changed |= edit_uniform_field_data(ui, &mut data);
             });
 
             changed.then_some(UniformFieldSource::UserDefined(data))
@@ -328,7 +328,7 @@ fn edit_uniform_field_data(ui: &mut egui::Ui, data: &mut uniform::UniformFieldDa
             .changed()
     };
 
-    match data {
+    ui.horizontal(|ui| match data {
         uniform::UniformFieldData::Float(value) => drag_value(ui, value),
         uniform::UniformFieldData::Vec4f(vec4) => ui_array_mut(ui, vec4, drag_value),
         uniform::UniformFieldData::Vec3f(vec3) => ui_array_mut(ui, vec3, drag_value),
@@ -347,7 +347,7 @@ fn edit_uniform_field_data(ui: &mut egui::Ui, data: &mut uniform::UniformFieldDa
         uniform::UniformFieldData::Rgb(color) => {
             egui::color_picker::color_edit_button_rgb(ui, color).changed()
         }
-    }
+    }).inner
 }
 
 fn ui_uniform_field_data(ui: &mut egui::Ui, data: &uniform::UniformFieldData) {
