@@ -176,7 +176,8 @@ pub struct Camera {
     acceleration: PositiveF32,
     drag: PositiveF32,
     sensitivity: PositiveF32,
-    scroll_speed: PositiveF32,
+    scroll_sensitivity: PositiveF32,
+    current_scroll_speed: f32,
     #[serde(skip)]
     input: CameraFrameInput,
     #[serde(skip)]
@@ -248,7 +249,8 @@ impl Camera {
             drag: PositiveF32::new(12.0),
             current_speed: Vec3::ZERO,
             sensitivity: PositiveF32::new(0.1),
-            scroll_speed: PositiveF32::new(0.05),
+            scroll_sensitivity: PositiveF32::new(0.6),
+            current_scroll_speed: 0.0,
             input: CameraFrameInput::default(),
             runtime_revision: Revision::default(),
             project_revision: Revision::default(),
@@ -277,6 +279,7 @@ impl Camera {
         pub fn label() -> &str;
         pub fn position() -> Vec3;
         pub fn current_speed() -> Vec3;
+        pub fn current_scroll_speed() -> f32;
         pub fn yaw() -> Yaw;
         pub fn pitch() -> Pitch;
         pub fn fovy() -> Fov;
@@ -284,7 +287,7 @@ impl Camera {
         pub fn max_speed() -> PositiveF32;
         pub fn acceleration() -> PositiveF32;
         pub fn sensitivity() -> PositiveF32;
-        pub fn scroll_speed() -> PositiveF32;
+        pub fn scroll_sensitivity() -> PositiveF32;
         pub fn dimension_id() -> Option<DimensionId>;
         pub fn drag() -> PositiveF32;
         pub fn mode() -> CameraMode;
@@ -308,7 +311,7 @@ impl Camera {
         pub fn set_acceleration(acceleration: PositiveF32);
         pub fn set_drag_factor(drag: PositiveF32);
         pub fn set_sensitivity(sensitivity: PositiveF32);
-        pub fn set_scroll_speed(scroll_speed: PositiveF32);
+        pub fn set_scroll_sensitivity(scroll_sensitivity: PositiveF32);
         pub fn set_mode(mode: CameraMode);
         pub fn set_looking_at(looking_at: LookAt);
     }
@@ -328,6 +331,7 @@ impl Camera {
         let previous_yaw = self.yaw;
         let previous_pitch = self.pitch;
         let previous_current_speed = self.current_speed;
+        let previous_current_scroll_speed = self.current_scroll_speed;
         let previous_looking_at = self.looking_at;
 
         let (yaw_sin, yaw_cos) = self.yaw.0.0.sin_cos();
@@ -344,6 +348,9 @@ impl Camera {
 
         self.current_speed -= self.current_speed * *self.drag * dt;
 
+        self.current_scroll_speed += self.input.scroll * *self.scroll_sensitivity;
+        self.current_scroll_speed -= self.current_scroll_speed * *self.drag * dt;
+
         const SPEED_EPSILON: f32 = 0.0005;
         if self.current_speed.x.abs() < SPEED_EPSILON {
             self.current_speed.x = 0.0;
@@ -354,6 +361,9 @@ impl Camera {
         if self.current_speed.z.abs() < SPEED_EPSILON {
             self.current_speed.z = 0.0;
         }
+        if self.current_scroll_speed.abs() < SPEED_EPSILON {
+            self.current_scroll_speed = 0.0;
+        }
 
         let speed = self.current_speed.length();
         if speed > *self.max_speed {
@@ -361,6 +371,7 @@ impl Camera {
         }
 
         let movement = self.current_speed * dt;
+        let scroll_movement = self.current_scroll_speed * dt;
 
         match self.mode {
             CameraMode::FirstPerson => {
@@ -376,7 +387,7 @@ impl Camera {
                 let view_dir = direction_from_angles(self.yaw.0.0, **self.pitch);
 
                 self.position += movement;
-                self.position += view_dir * self.input.scroll * *self.scroll_speed;
+                self.position += view_dir * scroll_movement;
             }
             CameraMode::ThirdPerson => {
                 self.position += movement;
@@ -390,8 +401,7 @@ impl Camera {
                 azimuth += self.input.mouse_h * sensitivity;
                 polar = (polar + self.input.mouse_v * sensitivity)
                     .clamp(-SAFE_FRAC_PI_2, SAFE_FRAC_PI_2);
-                radius =
-                    (radius - self.input.scroll * *self.scroll_speed).max(MIN_LOOK_AT_DISTANCE);
+                radius = (radius - scroll_movement).max(MIN_LOOK_AT_DISTANCE);
 
                 let direction = direction_from_angles(azimuth, polar);
 
@@ -412,6 +422,7 @@ impl Camera {
             || self.yaw != previous_yaw
             || self.pitch != previous_pitch
             || self.current_speed != previous_current_speed
+            || self.current_scroll_speed != previous_current_scroll_speed
             || self.looking_at != previous_looking_at
         {
             self.runtime_revision.increase();
@@ -489,6 +500,7 @@ impl SyncResource for Camera {
         self.dimension_id
             .map_or(false, |id| tracker.was_changed(id))
             || self.current_speed.length_squared() > 0.0
+            || self.current_scroll_speed != 0.0
             || self.input != CameraFrameInput::default()
     }
 }
@@ -545,7 +557,7 @@ impl CameraFrameInput {
         self.mouse_v = mouse_dy;
     }
 
-    pub fn handle_scroll_pixels(&mut self, scroll_pixels: f32) {
-        self.scroll = scroll_pixels;
+    pub fn handle_scroll(&mut self, scroll_delta: f32) {
+        self.scroll = scroll_delta;
     }
 }

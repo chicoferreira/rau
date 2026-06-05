@@ -1,5 +1,6 @@
 pub mod async_job;
 pub mod background_task;
+pub mod raw_scroll;
 #[cfg(target_arch = "wasm32")]
 pub mod browser;
 pub mod dir_node;

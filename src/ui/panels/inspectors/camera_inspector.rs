@@ -158,6 +158,11 @@ impl StateSnapshot<'_> {
                         ui.label(RichText::new(format!("{:.3}", s.z)).weak());
                     });
 
+                    inspector::row(ui, "Scroll Speed", |ui| {
+                        let s = camera.current_scroll_speed();
+                        ui.label(RichText::new(format!("{s:.3}")).weak());
+                    });
+
                     let mut max_speed = *camera.max_speed();
                     if inspector::f32_drag_row(
                         ui,
@@ -199,16 +204,16 @@ impl StateSnapshot<'_> {
                         camera.set_sensitivity(PositiveF32::new(sensitivity));
                     }
 
-                    let mut scroll_speed = *camera.scroll_speed();
+                    let mut scroll_sensitivity = *camera.scroll_sensitivity();
                     if inspector::f32_drag_row(
                         ui,
-                        "Scroll Speed",
-                        &mut scroll_speed,
+                        "Scroll Sensitivity",
+                        &mut scroll_sensitivity,
                         0.0..=f32::MAX,
                         0.01,
                         4,
                     ) {
-                        camera.set_scroll_speed(PositiveF32::new(scroll_speed));
+                        camera.set_scroll_sensitivity(PositiveF32::new(scroll_sensitivity));
                     }
                 });
             });

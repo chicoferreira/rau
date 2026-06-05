@@ -498,7 +498,8 @@
         "acceleration": 150.0,
         "drag": 12.0,
         "sensitivity": 0.1,
-        "scrollSpeed": 0.05
+        "scrollSensitivity": 0.6,
+        "currentScrollSpeed": 0.0
       },
       "version": 1
     }

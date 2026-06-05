@@ -3,7 +3,7 @@ use egui::Ui;
 use crate::{
     project::ViewportId,
     ui::size::Size2d,
-    utils::key::KeyboardState,
+    utils::{key::KeyboardState, raw_scroll},
     workspace::{StateEvent, ViewportEvent},
 };
 
@@ -72,13 +72,11 @@ pub fn ui(
     }
 
     if response.contains_pointer() {
-        let scroll_points = ui.input(|i| i.smooth_scroll_delta.y);
-        if scroll_points != 0.0 {
+        let scroll_delta = raw_scroll::read_raw_scroll(ui, size_points.y);
+        if scroll_delta != 0.0 {
             events.push(StateEvent::ViewportEvent(
                 viewport_id,
-                ViewportEvent::Scroll {
-                    delta_y_px: scroll_points * pixels_per_point,
-                },
+                ViewportEvent::Scroll { scroll_delta },
             ));
         }
     }

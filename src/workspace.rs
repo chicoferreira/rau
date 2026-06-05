@@ -62,7 +62,7 @@ pub struct AppContext<'a> {
 #[derive(Debug, Clone)]
 pub enum ViewportEvent {
     Resize { size: Size2d },
-    Scroll { delta_y_px: f32 },
+    Scroll { scroll_delta: f32 },
     Drag { mouse_dx: f32, mouse_dy: f32 },
     KeyboardKeys { keyboard_state: KeyboardState },
     Focus,
@@ -364,11 +364,11 @@ impl Workspace {
                                     }
                                 }
                             }
-                            ViewportEvent::Scroll { delta_y_px } => {
+                            ViewportEvent::Scroll { scroll_delta } => {
                                 if let Some(camera_id) = viewport.controls_camera_id()
                                     && let Ok(camera) = self.project.cameras.get_mut(camera_id)
                                 {
-                                    camera.input_mut().handle_scroll_pixels(delta_y_px);
+                                    camera.input_mut().handle_scroll(scroll_delta);
                                 }
                             }
                             ViewportEvent::Drag { mouse_dx, mouse_dy } => {
