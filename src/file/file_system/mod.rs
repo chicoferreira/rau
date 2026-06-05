@@ -8,16 +8,19 @@ use enum_dispatch::enum_dispatch;
 
 use crate::{
     error::{AppError, AppResult},
-    file::{file_watcher::FileWatcher, identifier::ProjectIdentifier},
+    file::{
+        file_system::ephemeral::EphemeralFileSystem,
+        file_watcher::FileWatcher,
+        identifier::{ProjectIdentifier, ProjectSource},
+    },
     project::paths::FilePath,
     utils::async_job::AsyncJob,
 };
 
-pub use ephemeral::EphemeralFileSystem;
 #[cfg(not(target_arch = "wasm32"))]
-pub use native::AppFileSystem;
+use native::AppFileSystem as BackendFileSystem;
 #[cfg(target_arch = "wasm32")]
-pub use wasm::AppFileSystem;
+use wasm::AppFileSystem as BackendFileSystem;
 
 #[derive(Clone)]
 #[enum_dispatch(ProjectFileSystemTrait)]
@@ -72,10 +75,6 @@ pub trait ProjectFileSystemTrait: Clone + Sized {
 }
 
 impl ProjectFileSystem {
-    pub fn ephemeral() -> Self {
-        Self::Ephemeral(EphemeralFileSystem::default())
-    }
-
     pub fn read_to_string(&self, path: &FilePath) -> FutureResult<String> {
         let (file_system, path) = (self.clone(), path.clone());
         AsyncJob::new(async move {
@@ -93,5 +92,61 @@ impl ProjectFileSystem {
 
             file_system.write(&path, Vec::new()).await
         })
+    }
+}
+
+#[derive(Clone)]
+pub struct AppFileSystem {
+    backend: BackendFileSystem,
+}
+
+impl AppFileSystem {
+    pub fn open() -> FutureResult<Self> {
+        let backend = BackendFileSystem::open();
+        AsyncJob::new(async move {
+            Ok(Self {
+                backend: backend.await?,
+            })
+        })
+    }
+
+    pub fn mount_project(
+        &self,
+        source: ProjectSource,
+    ) -> FutureResult<(ProjectFileSystem, FileWatcher)> {
+        match source {
+            ProjectSource::Ephemeral => AsyncJob::new(async move {
+                let (change_sender, file_watcher) = FileWatcher::manual();
+                let file_system =
+                    ProjectFileSystem::Ephemeral(EphemeralFileSystem::new(change_sender));
+                Ok((file_system, file_watcher))
+            }),
+            ProjectSource::Persistent(id) => self.backend.mount_project(id),
+        }
+    }
+
+    pub fn recent_projects(&self) -> FutureResult<Vec<ProjectIdentifier>> {
+        self.backend.recent_projects()
+    }
+
+    pub fn ensure_project_can_be_created(&self, source: ProjectSource) -> FutureResult<()> {
+        match source {
+            ProjectSource::Ephemeral => AsyncJob::new(async move { Ok(()) }),
+            ProjectSource::Persistent(id) => self.backend.ensure_project_can_be_created(id),
+        }
+    }
+
+    pub fn remember_project(&self, source: ProjectSource) -> FutureResult<()> {
+        match source {
+            ProjectSource::Ephemeral => AsyncJob::new(async move { Ok(()) }),
+            ProjectSource::Persistent(id) => self.backend.remember_project(id),
+        }
+    }
+
+    pub fn remove_recent_project(&self, source: ProjectSource) -> FutureResult<()> {
+        match source {
+            ProjectSource::Ephemeral => AsyncJob::new(async move { Ok(()) }),
+            ProjectSource::Persistent(id) => self.backend.remove_recent_project(id),
+        }
     }
 }

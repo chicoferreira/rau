@@ -6,8 +6,8 @@ use crate::error::{AppError, AppResult};
 use crate::featured_projects::FeaturedProject;
 #[cfg(not(target_arch = "wasm32"))]
 use crate::file::absolute::AbsolutePathBuf;
-use crate::file::file_system::{AppFileSystem, AppFileSystemTrait, FutureResult};
-use crate::file::identifier::ProjectIdentifier;
+use crate::file::file_system::{AppFileSystem, FutureResult};
+use crate::file::identifier::{ProjectIdentifier, ProjectSource};
 use crate::project::{Project, paths::FilePath};
 #[cfg(not(target_arch = "wasm32"))]
 use crate::utils::async_job::AsyncJob;
@@ -204,8 +204,8 @@ impl CreateProjectModal {
             }
         };
 
-        let task =
-            app_file_system.ensure_project_can_be_created(pending_creation.project_id().clone());
+        let source = ProjectSource::Persistent(pending_creation.project_id().clone());
+        let task = app_file_system.ensure_project_can_be_created(source);
         self.state = CreateProjectModalState::CheckingAvailability(ProjectAvailabilityTask {
             pending_creation,
             task,

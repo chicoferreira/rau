@@ -18,7 +18,7 @@ use crate::{
         file_system::{
             AppFileSystemTrait, FileSystemEntries, FutureResult, ProjectFileSystemTrait,
         },
-        file_watcher::FileWatcher,
+        file_watcher::{FileWatcher, send_all},
         identifier::ProjectIdentifier,
     },
     project::paths::FilePath,
@@ -38,7 +38,9 @@ pub struct AppFileSystem {
 pub struct ProjectFileSystem {
     id: ProjectIdentifier,
     database: Database,
-    file_watcher_sender: Sender<FilePath>,
+    /// Feeds the manual file watcher: IndexedDB has no change events, so each
+    /// write reports its own changed paths.
+    change_sender: Sender<FilePath>,
 }
 
 impl AppFileSystemTrait for AppFileSystem {
@@ -57,16 +59,14 @@ impl AppFileSystemTrait for AppFileSystem {
         let database = self.database.clone();
 
         AsyncJob::new(async move {
-            let (sender, receiver) = std::sync::mpsc::channel();
+            let (change_sender, file_watcher) = FileWatcher::manual();
 
             let file_system = ProjectFileSystem {
                 database,
                 id,
-                file_watcher_sender: sender,
+                change_sender,
             };
-            let file_watcher = FileWatcher::new(receiver);
-
-            let file_system = ProjectFileSystem::IndexedDb(file_system);
+            let file_system = super::ProjectFileSystem::IndexedDb(file_system);
             Ok((file_system, file_watcher))
         })
     }
@@ -417,7 +417,7 @@ impl ProjectFileSystemTrait for ProjectFileSystem {
     fn write(&self, path: &FilePath, bytes: Vec<u8>) -> FutureResult<()> {
         let database = self.database.clone();
         let id = self.id.clone();
-        let sender = self.file_watcher_sender.clone();
+        let change_sender = self.change_sender.clone();
         let path = path.clone();
 
         AsyncJob::new(async move {
@@ -436,7 +436,7 @@ impl ProjectFileSystemTrait for ProjectFileSystem {
 
             transaction.commit().await?;
 
-            sender.send(path.clone()).expect("not disconnected");
+            let _ = change_sender.send(path);
 
             Ok(())
         })
@@ -501,7 +501,7 @@ impl ProjectFileSystemTrait for ProjectFileSystem {
     fn delete_path(&self, path: &FilePath) -> FutureResult<()> {
         let database = self.database.clone();
         let id = self.id.clone();
-        let sender = self.file_watcher_sender.clone();
+        let change_sender = self.change_sender.clone();
         let path = path.clone();
 
         AsyncJob::new(async move {
@@ -519,24 +519,17 @@ impl ProjectFileSystemTrait for ProjectFileSystem {
             let files_store = Self::files_store(&transaction)?;
             let directories_store = Self::directories_store(&transaction)?;
 
-            let changed_path_files = file_entries.iter().map(|(_, path)| path.clone());
-            let changed_path_dirs = directory_entries.iter().map(|(_, path)| path.clone());
-
-            let mut files_found = false;
-            for path in changed_path_dirs.chain(changed_path_files) {
-                sender.send(path.clone()).expect("not disconnected");
-                files_found = true;
-            }
-
-            if !files_found {
+            if file_entries.is_empty() && directory_entries.is_empty() {
                 return Err(AppError::FileNotFound(path));
             }
 
-            for (key, _) in file_entries {
+            for (key, changed_path) in file_entries {
                 files_store.delete(key).build()?;
+                let _ = change_sender.send(changed_path);
             }
-            for (key, _) in directory_entries {
+            for (key, changed_path) in directory_entries {
                 directories_store.delete(key).build()?;
+                let _ = change_sender.send(changed_path);
             }
 
             transaction.commit().await?;
@@ -548,7 +541,7 @@ impl ProjectFileSystemTrait for ProjectFileSystem {
     fn move_path(&self, old: &FilePath, new: &FilePath) -> FutureResult<()> {
         let database = self.database.clone();
         let id = self.id.clone();
-        let sender = self.file_watcher_sender.clone();
+        let change_sender = self.change_sender.clone();
         let old = old.clone();
         let new = new.clone();
 
@@ -582,8 +575,7 @@ impl ProjectFileSystemTrait for ProjectFileSystem {
 
                     transaction.commit().await?;
 
-                    sender.send(old).expect("not disconnected");
-                    sender.send(new).expect("not disconnected");
+                    send_all(&change_sender, [old, new]);
 
                     return Ok(());
                 }
@@ -603,22 +595,14 @@ impl ProjectFileSystemTrait for ProjectFileSystem {
             drop(transaction);
             let file_entries = Self::file_entries_under_path(&database, &id, &old).await?;
 
-            for (_, directory_path) in &directory_entries {
-                let path = directory_path.clone();
-                sender.send(path).expect("not disconnected");
-            }
-            for (_, file_path, _) in &file_entries {
-                let path = file_path.clone();
-                sender.send(path).expect("not disconnected");
-            }
-
             let mut moved_directories = Vec::with_capacity(directory_entries.len());
             for (key, directory_path) in directory_entries {
                 let moved_path = directory_path
                     .replace_prefix(&old, &new)
                     .expect("directory entry was collected from the old path");
 
-                sender.send(moved_path.clone()).expect("not disconnected");
+                let _ = change_sender.send(directory_path);
+                let _ = change_sender.send(moved_path.clone());
                 moved_directories.push((key, moved_path));
             }
 
@@ -628,7 +612,8 @@ impl ProjectFileSystemTrait for ProjectFileSystem {
                     .replace_prefix(&old, &new)
                     .expect("file entry was collected from the old path");
 
-                sender.send(moved_path.clone()).expect("not disconnected");
+                let _ = change_sender.send(file_path);
+                let _ = change_sender.send(moved_path.clone());
                 moved_files.push((key, moved_path, bytes));
             }
 

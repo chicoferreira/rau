@@ -3,8 +3,8 @@ use std::task::Poll;
 use crate::{
     error::AppResult,
     file::{
-        file_system::{AppFileSystem, AppFileSystemTrait},
-        identifier::ProjectIdentifier,
+        file_system::AppFileSystem,
+        identifier::{ProjectIdentifier, ProjectSource},
     },
     ui::components::delete_project_confirmation_modal::{
         DeleteProjectConfirmationModal, DeleteProjectConfirmationModalResponse,
@@ -99,7 +99,8 @@ impl RecentProjectsState {
             return;
         }
 
-        self.remove_job = Some(app_file_system.remove_recent_project(project_id));
+        let source = ProjectSource::Persistent(project_id.clone());
+        self.remove_job = Some(app_file_system.remove_recent_project(source));
     }
 
     pub fn tick(&mut self, app_file_system: &AppFileSystem, toasts: &mut egui_notify::Toasts) {

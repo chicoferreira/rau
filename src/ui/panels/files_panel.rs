@@ -53,7 +53,7 @@ fn pending_folder_node(
 pub fn ui(state: &mut StateSnapshot, ui: &mut egui::Ui) -> Response {
     let project_name = state
         .file_storage
-        .project_identifier()
+        .project_source()
         .project_name()
         .to_string();
 

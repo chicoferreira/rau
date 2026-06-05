@@ -3,7 +3,7 @@ use crate::{
     app::{AppEvent, State},
     error::AppResult,
     featured_projects::FEATURED_PROJECTS,
-    file::{file_system::AppFileSystem, identifier::ProjectIdentifier},
+    file::{file_system::AppFileSystem, identifier::ProjectSource},
     project::{Project, paths::FilePath},
     ui::components::{
         create_project_modal::{
@@ -34,13 +34,14 @@ impl MainMenu {
         match startup_action {
             StartupAction::MainMenu => {}
             StartupAction::OpenProject { project_id } => {
-                main_menu.open_project(app_fs, project_id, vec![])
+                main_menu.open_project(app_fs, ProjectSource::Persistent(project_id), vec![])
             }
             StartupAction::CreateEmptyProject { project_id } => {
                 match Project::default().serialize() {
                     Ok(bytes) => {
                         let default_files = vec![(FilePath::project_json(), bytes)];
-                        main_menu.open_project(app_fs, project_id, default_files);
+                        let source = ProjectSource::Persistent(project_id);
+                        main_menu.open_project(app_fs, source, default_files);
                     }
                     Err(err) => {
                         toasts_log_error!(main_menu.toasts, "Failed to serialize project: {err:?}");
@@ -62,7 +63,8 @@ impl MainMenu {
         ui.add_enabled_ui(!self.should_disable_ui(), |ui| {
             self.open_or_import_project.render_ui(ui);
             if let Some(project_id) = self.recent_projects_state.render_ui(ui, app_fs) {
-                self.open_project(app_fs.clone(), project_id, vec![]);
+                let source = ProjectSource::Persistent(project_id);
+                self.open_project(app_fs.clone(), source, vec![]);
             }
         });
 
@@ -78,7 +80,9 @@ impl MainMenu {
             if let Some(response) = modal.render_ui(ui, app_fs, &mut self.toasts) {
                 match response {
                     CreateProjectModalResponse::Create { project_id, files } => {
-                        self.open_project(app_fs.clone(), project_id, files);
+                        let source = ProjectSource::Persistent(project_id);
+                        // TODO: modify this once the UI lets users create ephemeral projects
+                        self.open_project(app_fs.clone(), source, files);
                         self.create_project_modal = None;
                     }
                     CreateProjectModalResponse::Close => {
@@ -92,10 +96,10 @@ impl MainMenu {
     fn open_project(
         &mut self,
         app_fs: AppFileSystem,
-        project_id: ProjectIdentifier,
+        source: ProjectSource,
         files: Vec<(FilePath, Vec<u8>)>,
     ) {
-        let workspace_job = Workspace::open_project_and_save_files(app_fs, project_id, files);
+        let workspace_job = Workspace::open_project_and_save_files(app_fs, source, files);
         let workspace_job = AsyncJob::new(workspace_job);
         self.open_workspace_job = Some(AsyncJob::new(workspace_job));
     }
@@ -114,11 +118,13 @@ impl MainMenu {
                 Ok(project_import) => {
                     let project_id = project_import.project_id;
                     let files = project_import.files;
-                    self.open_project(app_file_system.clone(), project_id, files);
+                    let source = ProjectSource::Persistent(project_id);
+                    self.open_project(app_file_system.clone(), source, files);
                 }
                 #[cfg(not(target_arch = "wasm32"))]
                 Ok(project_id) => {
-                    self.open_project(app_file_system.clone(), project_id, vec![]);
+                    let source = ProjectSource::Persistent(project_id);
+                    self.open_project(app_file_system.clone(), source, vec![]);
                 }
                 Err(error) => {
                     toasts_log_error!(self.toasts, "Failed to pick project folder: {error:?}");

@@ -6,7 +6,7 @@ use winit::{event::WindowEvent, window::Window};
 use crate::{
     StartupAction,
     error::AppResult,
-    file::file_system::{AppFileSystem, AppFileSystemTrait},
+    file::file_system::AppFileSystem,
     main_menu::MainMenu,
     ui::{self},
     utils::{event_queue::EventQueue, wgpu_error_scope::WgpuErrorScope, winit_runner::WindowApp},

@@ -1,13 +1,100 @@
+use std::sync::mpsc::Sender;
+
 use crate::{error::AppResult, project::paths::FilePath};
 
-#[cfg(not(target_arch = "wasm32"))]
-pub use native::FileWatcher;
+/// Watches a project's files for changes.
+///
+/// Native persistent projects are backed by an operating-system watcher.
+/// Backends where the app is the sole writer of its own storage (IndexedDB,
+/// ephemeral) feed a [`manual`] watcher directly from their write operations.
+pub enum FileWatcher {
+    #[cfg(not(target_arch = "wasm32"))]
+    Os(os::OsWatcher),
+    Manual(manual::ManualWatcher),
+}
 
-#[cfg(target_arch = "wasm32")]
-pub use wasm::FileWatcher;
+impl FileWatcher {
+    /// Creates a watcher that is fed manually through the returned sender.
+    ///
+    /// Used by backends that are the only mutator of their own storage
+    /// (IndexedDB, ephemeral). The sender lives in the *file system*, not in
+    /// `FileStorage`, because only the file system knows the exact paths an
+    /// operation touched — a folder move, for instance, rewrites every
+    /// descendant, which `FileStorage` never sees.
+    ///
+    /// Events may be sent before the write is committed: they are only drained
+    /// on a later `FileStorage` tick and consumers react by re-reading, so a
+    /// failed write reconciles on its own.
+    pub fn manual() -> (Sender<FilePath>, Self) {
+        let (sender, watcher) = manual::ManualWatcher::new();
+        (sender, Self::Manual(watcher))
+    }
+
+    pub fn try_next(&mut self) -> Option<AppResult<Vec<FilePath>>> {
+        match self {
+            #[cfg(not(target_arch = "wasm32"))]
+            Self::Os(watcher) => watcher.try_next(),
+            Self::Manual(watcher) => watcher.try_next(),
+        }
+    }
+}
+
+pub(crate) fn send_all(sender: &Sender<FilePath>, paths: impl IntoIterator<Item = FilePath>) {
+    for path in paths {
+        let _ = sender.send(path);
+    }
+}
 
 #[cfg(not(target_arch = "wasm32"))]
-mod native {
+impl FileWatcher {
+    /// Creates an operating-system watcher observing `root` recursively.
+    pub fn os(root: crate::file::absolute::AbsolutePathBuf) -> AppResult<Self> {
+        Ok(Self::Os(os::OsWatcher::new(root)?))
+    }
+}
+
+mod manual {
+    use std::sync::mpsc::{self, Receiver, Sender, TryRecvError};
+
+    use super::*;
+
+    /// A watcher with no operating-system backing: change events are pushed in
+    /// manually through its sender by whoever performs the writes.
+    pub struct ManualWatcher {
+        rx: Receiver<FilePath>,
+    }
+
+    impl ManualWatcher {
+        pub fn new() -> (Sender<FilePath>, Self) {
+            let (tx, rx) = mpsc::channel();
+            (tx, Self { rx })
+        }
+
+        pub fn try_next(&mut self) -> Option<AppResult<Vec<FilePath>>> {
+            let mut result = vec![];
+
+            loop {
+                match self.rx.try_recv() {
+                    Ok(path) => result.push(path),
+                    Err(TryRecvError::Empty) => break,
+                    // The sender lives in the file system, which is dropped
+                    // alongside this watcher; a disconnect just means no more
+                    // events will arrive.
+                    Err(TryRecvError::Disconnected) => break,
+                }
+            }
+
+            if result.is_empty() {
+                None
+            } else {
+                Some(Ok(result))
+            }
+        }
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+mod os {
     use std::{
         collections::HashMap,
         sync::mpsc::{self, TryRecvError},
@@ -22,14 +109,14 @@ mod native {
 
     const DEBOUNCE_DURATION: Duration = Duration::from_millis(200);
 
-    pub struct FileWatcher {
+    pub struct OsWatcher {
         rx: mpsc::Receiver<notify::Result<Event>>,
         root: AbsolutePathBuf,
         pending_events: HashMap<FilePath, Instant>,
         _watcher: RecommendedWatcher,
     }
 
-    impl FileWatcher {
+    impl OsWatcher {
         pub fn new(root: AbsolutePathBuf) -> AppResult<Self> {
             let (tx, rx) = mpsc::channel();
 
@@ -113,43 +200,6 @@ mod native {
             };
 
             Some(path)
-        }
-    }
-}
-
-#[cfg(target_arch = "wasm32")]
-mod wasm {
-    use std::sync::mpsc::{Receiver, TryRecvError};
-
-    use super::*;
-
-    // In the case of wasm, instead of being an actual operating system file watcher,
-    // we will send events through a sender when we modify the IndexedDB database.
-    pub struct FileWatcher {
-        rx: Receiver<FilePath>,
-    }
-
-    impl FileWatcher {
-        pub fn new(rx: Receiver<FilePath>) -> Self {
-            Self { rx }
-        }
-
-        pub fn try_next(&mut self) -> Option<AppResult<Vec<FilePath>>> {
-            let mut result = vec![];
-
-            loop {
-                match self.rx.try_recv() {
-                    Ok(events) => result.push(events),
-                    Err(TryRecvError::Empty) => break,
-                    Err(TryRecvError::Disconnected) => panic!("Filewatcher channel closed"),
-                }
-            }
-
-            if result.is_empty() {
-                None
-            } else {
-                Some(Ok(result))
-            }
         }
     }
 }
