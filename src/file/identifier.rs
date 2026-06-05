@@ -57,14 +57,14 @@ impl ProjectIdentifier {
 
 #[derive(Clone, Debug)]
 pub enum ProjectSource {
-    Ephemeral,
+    Ephemeral { project_name: String },
     Persistent(ProjectIdentifier),
 }
 
 impl ProjectSource {
     pub fn project_name(&self) -> &str {
         match self {
-            Self::Ephemeral => "Untitled",
+            Self::Ephemeral { project_name } => project_name,
             Self::Persistent(identifier) => identifier.project_name(),
         }
     }

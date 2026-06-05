@@ -21,6 +21,7 @@ pub struct CreateProjectModal {
 
 struct CreateProjectFormData {
     kind: ProjectCreationKind,
+    storage: ProjectCreationStorage,
     github_source: GithubProjectSource,
     project_name: String,
     error: Option<AppError>,
@@ -48,6 +49,12 @@ enum ProjectCreationKind {
     Github,
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum ProjectCreationStorage {
+    Persistent,
+    Temporary,
+}
+
 #[derive(Clone, Default)]
 pub struct GithubProjectSource {
     owner: String,
@@ -58,20 +65,20 @@ pub struct GithubProjectSource {
 
 pub enum CreateProjectModalResponse {
     Create {
-        project_id: ProjectIdentifier,
+        source: ProjectSource,
         files: Vec<(FilePath, Vec<u8>)>,
     },
     Close,
 }
 
 struct ProjectDownloadTask {
-    project_id: ProjectIdentifier,
+    source: ProjectSource,
     task: github::download::DownloadTask,
 }
 
 enum PendingProjectCreation {
-    Empty(ProjectIdentifier),
-    Github(ProjectIdentifier, github::GitRepository, FilePath),
+    Empty(ProjectSource),
+    Github(ProjectSource, github::GitRepository, FilePath),
 }
 
 struct ProjectAvailabilityTask {
@@ -80,21 +87,17 @@ struct ProjectAvailabilityTask {
 }
 
 impl PendingProjectCreation {
-    fn project_id(&self) -> &ProjectIdentifier {
+    fn source(&self) -> &ProjectSource {
         match self {
-            Self::Empty(project_id) | Self::Github(project_id, ..) => project_id,
+            Self::Empty(source) | Self::Github(source, ..) => source,
         }
     }
 }
 
 impl ProjectDownloadTask {
-    fn new(
-        project_id: ProjectIdentifier,
-        repository: github::GitRepository,
-        path: FilePath,
-    ) -> Self {
+    fn new(source: ProjectSource, repository: github::GitRepository, path: FilePath) -> Self {
         let task = github::download_files_under_path(&repository, &path);
-        Self { project_id, task }
+        Self { source, task }
     }
 }
 
@@ -114,6 +117,7 @@ impl CreateProjectModal {
         Self {
             form_data: CreateProjectFormData {
                 kind,
+                storage: ProjectCreationStorage::Persistent,
                 github_source,
                 project_name,
                 error: None,
@@ -184,7 +188,7 @@ impl CreateProjectModal {
     #[cfg(not(target_arch = "wasm32"))]
     fn can_create_project(&self) -> bool {
         matches!(self.state, CreateProjectModalState::Editing)
-            && self.form_data.project_path.is_some()
+            && (!self.form_data.requires_project_path() || self.form_data.project_path.is_some())
             && self.form_data.folder_picker_job.is_none()
     }
 
@@ -204,8 +208,7 @@ impl CreateProjectModal {
             }
         };
 
-        let source = ProjectSource::Persistent(pending_creation.project_id().clone());
-        let task = app_file_system.ensure_project_can_be_created(source);
+        let task = app_file_system.ensure_project_can_be_created(pending_creation.source().clone());
         self.state = CreateProjectModalState::CheckingAvailability(ProjectAvailabilityTask {
             pending_creation,
             task,
@@ -247,9 +250,9 @@ impl CreateProjectModal {
         pending_creation: PendingProjectCreation,
     ) -> Option<CreateProjectModalResponse> {
         match pending_creation {
-            PendingProjectCreation::Empty(project_id) => match Project::default().serialize() {
+            PendingProjectCreation::Empty(source) => match Project::default().serialize() {
                 Ok(bytes) => Some(CreateProjectModalResponse::Create {
-                    project_id,
+                    source,
                     files: vec![(FilePath::project_json(), bytes)],
                 }),
                 Err(error) => {
@@ -257,10 +260,9 @@ impl CreateProjectModal {
                     None
                 }
             },
-            PendingProjectCreation::Github(project_id, repository, path) => {
-                self.state = CreateProjectModalState::Downloading(ProjectDownloadTask::new(
-                    project_id, repository, path,
-                ));
+            PendingProjectCreation::Github(source, repository, path) => {
+                let task = ProjectDownloadTask::new(source, repository, path);
+                self.state = CreateProjectModalState::Downloading(task);
                 None
             }
         }
@@ -270,18 +272,18 @@ impl CreateProjectModal {
         &mut self,
         download_task: ProjectDownloadTask,
     ) -> Option<CreateProjectModalResponse> {
-        let ProjectDownloadTask { project_id, task } = download_task;
+        let ProjectDownloadTask { source, task } = download_task;
         match task {
             DownloadTask::Done { files } => {
-                Some(CreateProjectModalResponse::Create { project_id, files })
+                Some(CreateProjectModalResponse::Create { source, files })
             }
             DownloadTask::Errored { error } => {
                 self.form_data.error = Some(error);
                 None
             }
             task => {
-                self.state =
-                    CreateProjectModalState::Downloading(ProjectDownloadTask { project_id, task });
+                let task = ProjectDownloadTask { source, task };
+                self.state = CreateProjectModalState::Downloading(task);
                 None
             }
         }
@@ -290,27 +292,36 @@ impl CreateProjectModal {
 
 impl CreateProjectFormData {
     fn pending_creation(&self) -> AppResult<PendingProjectCreation> {
-        let project_id = self.create_project_identifier()?;
+        let source = self.create_project_source()?;
 
         match self.kind {
-            ProjectCreationKind::Empty => Ok(PendingProjectCreation::Empty(project_id)),
+            ProjectCreationKind::Empty => Ok(PendingProjectCreation::Empty(source)),
             ProjectCreationKind::Github => {
                 let (repository, path) = self.github_source.create()?;
-                Ok(PendingProjectCreation::Github(project_id, repository, path))
+                Ok(PendingProjectCreation::Github(source, repository, path))
             }
         }
     }
 
-    #[cfg(not(target_arch = "wasm32"))]
-    fn create_project_identifier(&self) -> AppResult<ProjectIdentifier> {
+    fn create_project_source(&self) -> AppResult<ProjectSource> {
         let project_name = self.valid_project_name()?;
-        let project_path = self.get_actual_project_path()?;
+
+        match self.storage {
+            ProjectCreationStorage::Persistent => Ok(ProjectSource::Persistent(
+                self.create_project_identifier(project_name)?,
+            )),
+            ProjectCreationStorage::Temporary => Ok(ProjectSource::Ephemeral { project_name }),
+        }
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    fn create_project_identifier(&self, project_name: String) -> AppResult<ProjectIdentifier> {
+        let project_path = self.get_actual_project_path(&project_name)?;
         Ok(ProjectIdentifier::new(project_name, project_path))
     }
 
     #[cfg(target_arch = "wasm32")]
-    fn create_project_identifier(&self) -> AppResult<ProjectIdentifier> {
-        let project_name = self.valid_project_name()?;
+    fn create_project_identifier(&self, project_name: String) -> AppResult<ProjectIdentifier> {
         Ok(ProjectIdentifier::new(project_name))
     }
 
@@ -326,7 +337,7 @@ impl CreateProjectFormData {
 
     /// Returns the project path appended with the project name if the folder does not end with the project name.
     #[cfg(not(target_arch = "wasm32"))]
-    fn get_actual_project_path(&self) -> AppResult<AbsolutePathBuf> {
+    fn get_actual_project_path(&self, project_name: &str) -> AppResult<AbsolutePathBuf> {
         let project_path = self
             .project_path
             .as_ref()
@@ -334,13 +345,18 @@ impl CreateProjectFormData {
                 "project folder is required",
             ))?;
         let path = project_path.as_path_buf();
-        if path.ends_with(&self.project_name) {
+        if path.ends_with(project_name) {
             return Ok(project_path.clone());
         }
 
-        let path_with_name = path.join(&self.project_name);
+        let path_with_name = path.join(project_name);
 
         AbsolutePathBuf::new(path_with_name)
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    fn requires_project_path(&self) -> bool {
+        self.storage == ProjectCreationStorage::Persistent
     }
 }
 
@@ -412,12 +428,27 @@ fn ui_form(
     egui::Grid::new("create_project_form_name_and_folder")
         .num_columns(2)
         .show(ui, |ui| {
+            ui.label("Storage:");
+            ui.horizontal(|ui| {
+                ui.selectable_value(
+                    &mut form_data.storage,
+                    ProjectCreationStorage::Persistent,
+                    "Persistent",
+                );
+                ui.selectable_value(
+                    &mut form_data.storage,
+                    ProjectCreationStorage::Temporary,
+                    "Temporary",
+                );
+            });
+            ui.end_row();
+
             ui.label("Project Name:");
             ui.text_edit_singleline(&mut form_data.project_name);
             ui.end_row();
 
             #[cfg(not(target_arch = "wasm32"))]
-            {
+            if form_data.requires_project_path() {
                 ui.label("Project Folder:");
                 folder_selector_controls_ui(ui, form_data, toasts);
                 ui.end_row();
@@ -452,7 +483,7 @@ fn folder_selector_controls_ui(
 
     ui.horizontal(|ui| {
         let path_str = form_data
-            .get_actual_project_path()
+            .get_actual_project_path(&form_data.project_name)
             .ok()
             .map(|path| path.as_ref().display().to_string())
             .unwrap_or_else(|| "No folder selected".to_string());

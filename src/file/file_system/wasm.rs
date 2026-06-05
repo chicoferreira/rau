@@ -163,6 +163,10 @@ impl AppFileSystemTrait for AppFileSystem {
 }
 
 impl ProjectFileSystem {
+    pub fn database_name(&self) -> &'static str {
+        DB_NAME
+    }
+
     async fn open_database() -> AppResult<Database> {
         let database = Database::open(DB_NAME).await?;
 

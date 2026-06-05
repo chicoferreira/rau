@@ -156,6 +156,10 @@ impl AppFileSystemTrait for AppFileSystem {
 }
 
 impl ProjectFileSystem {
+    pub fn root(&self) -> &AbsolutePathBuf {
+        &self.root
+    }
+
     fn resolve(&self, file_path: &FilePath) -> PathBuf {
         let mut path_buf = self.root.as_path_buf();
         for segment in file_path.segments() {

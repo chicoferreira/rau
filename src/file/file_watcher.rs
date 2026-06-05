@@ -17,9 +17,11 @@ impl FileWatcher {
     /// Creates a watcher that is fed manually through the returned sender.
     ///
     /// Used by backends that are the only mutator of their own storage
-    /// (IndexedDB, ephemeral). The sender lives in the *file system*, not in
+    /// (IndexedDB, ephemeral). 
+    /// 
+    /// The sender lives in the *file system*, not in
     /// `FileStorage`, because only the file system knows the exact paths an
-    /// operation touched — a folder move, for instance, rewrites every
+    /// operation touched, a folder move, for instance, rewrites every
     /// descendant, which `FileStorage` never sees.
     ///
     /// Events may be sent before the write is committed: they are only drained
@@ -77,9 +79,6 @@ mod manual {
                 match self.rx.try_recv() {
                     Ok(path) => result.push(path),
                     Err(TryRecvError::Empty) => break,
-                    // The sender lives in the file system, which is dropped
-                    // alongside this watcher; a disconnect just means no more
-                    // events will arrive.
                     Err(TryRecvError::Disconnected) => break,
                 }
             }
