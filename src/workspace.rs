@@ -5,8 +5,8 @@ use crate::{
     error::AppResult,
     file::{
         file_storage::FileStorage,
-        file_system::{AppFileSystem, AppFileSystemTrait, ProjectFileSystemTrait},
-        identifier::ProjectIdentifier,
+        file_system::{AppFileSystem, ProjectFileSystemTrait},
+        identifier::ProjectSource,
     },
     project::{
         DimensionId, ModelId, Project, ResourceId, ResourceKind, RuntimeProject, ViewportId,
@@ -97,25 +97,23 @@ pub enum StateEvent {
 impl Workspace {
     pub async fn open_project_and_save_files(
         app_fs: AppFileSystem,
-        project_id: ProjectIdentifier,
+        source: ProjectSource,
         files: Vec<(FilePath, Vec<u8>)>,
     ) -> AppResult<Self> {
         if !files.is_empty() {
-            app_fs
-                .ensure_project_can_be_created(project_id.clone())
-                .await?;
+            app_fs.ensure_project_can_be_created(source.clone()).await?;
         }
 
-        let (file_system, file_watcher) = app_fs.mount_project(project_id.clone()).await?;
+        let (file_system, file_watcher) = app_fs.mount_project(source.clone()).await?;
 
-        let file_storage = FileStorage::new(project_id.clone(), file_system, file_watcher);
+        let file_storage = FileStorage::new(source.clone(), file_system, file_watcher);
 
         for (file_path, data) in files {
             file_storage.file_system.write(&file_path, data).await?;
         }
 
         let workspace = Self::open_project(file_storage).await?;
-        if let Err(error) = app_fs.remember_project(project_id).await {
+        if let Err(error) = app_fs.remember_project(source).await {
             log::error!("Failed to remember project: {error}");
         }
 

@@ -25,7 +25,7 @@ pub struct AppFileSystem {
 
 #[derive(Clone)]
 pub struct ProjectFileSystem {
-    id: ProjectIdentifier,
+    root: AbsolutePathBuf,
     send_jobs: std::sync::mpsc::Sender<FileSystemJob>,
 }
 
@@ -85,12 +85,13 @@ impl AppFileSystemTrait for AppFileSystem {
         id: ProjectIdentifier,
     ) -> FutureResult<(super::ProjectFileSystem, FileWatcher)> {
         let send_jobs = self.send_jobs.clone();
+        let root = id.project_path().clone();
 
         AsyncJob::new(async move {
-            std::fs::create_dir_all(id.project_path())?; // File watcher requires the directory to exist
+            std::fs::create_dir_all(&root)?; // File watcher requires the directory to exist
 
-            let file_watcher = FileWatcher::new(id.project_path().clone())?;
-            let file_system = ProjectFileSystem { id, send_jobs };
+            let file_watcher = FileWatcher::os(root.clone())?;
+            let file_system = ProjectFileSystem { root, send_jobs };
 
             Ok((super::ProjectFileSystem::Native(file_system), file_watcher))
         })
@@ -156,7 +157,7 @@ impl AppFileSystemTrait for AppFileSystem {
 
 impl ProjectFileSystem {
     fn resolve(&self, file_path: &FilePath) -> PathBuf {
-        let mut path_buf = self.id.project_path().as_path_buf();
+        let mut path_buf = self.root.as_path_buf();
         for segment in file_path.segments() {
             path_buf = path_buf.join(segment);
         }
@@ -198,7 +199,7 @@ impl ProjectFileSystemTrait for ProjectFileSystem {
     }
 
     fn list_entries(&self) -> FutureResult<FileSystemEntries> {
-        let root = self.id.project_path().as_path_buf();
+        let root = self.root.as_path_buf();
         self.run_blocking(move || {
             let mut files = Vec::new();
             let mut directories = Vec::new();
@@ -237,7 +238,7 @@ impl ProjectFileSystemTrait for ProjectFileSystem {
     }
 
     fn delete_path(&self, path: &FilePath) -> FutureResult<()> {
-        let root = self.id.project_path().as_path_buf();
+        let root = self.root.as_path_buf();
         let resolved_path = self.resolve_exists(path);
         let path = path.clone();
 

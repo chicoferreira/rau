@@ -35,17 +35,18 @@ pub async fn create_and_save_scene(
 
     use crate::file::{
         absolute::AbsolutePathBuf,
-        file_system::{AppFileSystemTrait, ProjectFileSystemTrait},
-        identifier::ProjectIdentifier,
+        file_system::ProjectFileSystemTrait,
+        identifier::{ProjectIdentifier, ProjectSource},
     };
 
     let project_id = ProjectIdentifier::new(
         "full-example",
         AbsolutePathBuf::new(PathBuf::from("projects/full-example"))?,
     );
-    let (file_system, file_watcher) = app_file_system.mount_project(project_id.clone()).await?;
+    let source = ProjectSource::Persistent(project_id);
+    let (file_system, file_watcher) = app_file_system.mount_project(source.clone()).await?;
 
-    let file_storage = FileStorage::new(project_id, file_system.clone(), file_watcher);
+    let file_storage = FileStorage::new(source, file_system.clone(), file_watcher);
 
     let project = create_scene(&device, Size2d::new(1080, 1080), &file_storage).await?;
 

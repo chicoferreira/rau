@@ -9,7 +9,7 @@ use crate::{
     file::{
         file_system::{FileSystemEntries, ProjectFileSystem, ProjectFileSystemTrait},
         file_watcher::FileWatcher,
-        identifier::ProjectIdentifier,
+        identifier::ProjectSource,
     },
     project::{paths::FilePath, sync::SyncTracker},
     utils::{async_job::AsyncJob, dir_node::DirNode},
@@ -19,7 +19,7 @@ use crate::{
 /// to display without having to poll the file system.
 pub struct FileStorage {
     pub file_system: ProjectFileSystem,
-    project_id: ProjectIdentifier,
+    source: ProjectSource,
     file_watcher: FileWatcher,
     current_tasks: Vec<FileStorageTask>,
     cached_files: Option<Vec<FilePath>>,
@@ -89,13 +89,13 @@ enum FileStorageTask {
 
 impl FileStorage {
     pub fn new(
-        project_identifier: ProjectIdentifier,
+        source: ProjectSource,
         file_system: ProjectFileSystem,
         file_watcher: FileWatcher,
     ) -> Self {
         Self {
             file_system,
-            project_id: project_identifier,
+            source,
             cached_files: None,
             cached_file_tree: None,
             current_tasks: vec![],
@@ -105,8 +105,8 @@ impl FileStorage {
         }
     }
 
-    pub fn project_identifier(&self) -> &ProjectIdentifier {
-        &self.project_id
+    pub fn project_source(&self) -> &ProjectSource {
+        &self.source
     }
 
     pub fn file_tree(&mut self) -> Option<&DirNode> {

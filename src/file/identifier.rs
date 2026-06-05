@@ -54,3 +54,18 @@ impl ProjectIdentifier {
         Ok(Self::new(project_name, path))
     }
 }
+
+#[derive(Clone, Debug)]
+pub enum ProjectSource {
+    Ephemeral,
+    Persistent(ProjectIdentifier),
+}
+
+impl ProjectSource {
+    pub fn project_name(&self) -> &str {
+        match self {
+            Self::Ephemeral => "Untitled",
+            Self::Persistent(identifier) => identifier.project_name(),
+        }
+    }
+}

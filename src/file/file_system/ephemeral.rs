@@ -1,18 +1,22 @@
 use std::{
     collections::{BTreeMap, BTreeSet},
-    sync::{Arc, Mutex},
+    sync::{Arc, Mutex, mpsc::Sender},
 };
 
 use crate::{
     error::{AppError, AppResult},
-    file::file_system::{FileSystemEntries, FutureResult, ProjectFileSystemTrait},
+    file::{
+        file_system::{FileSystemEntries, FutureResult, ProjectFileSystemTrait},
+        file_watcher::send_all,
+    },
     project::paths::FilePath,
     utils::async_job::AsyncJob,
 };
 
-#[derive(Clone, Default)]
+#[derive(Clone)]
 pub struct EphemeralFileSystem {
     state: Arc<Mutex<EphemeralFileSystemState>>,
+    change_sender: Sender<FilePath>,
 }
 
 #[derive(Default)]
@@ -40,6 +44,13 @@ impl EphemeralFileSystemState {
 }
 
 impl EphemeralFileSystem {
+    pub fn new(change_sender: Sender<FilePath>) -> Self {
+        Self {
+            state: Arc::default(),
+            change_sender,
+        }
+    }
+
     fn run<T: Send + 'static>(
         &self,
         function: impl FnOnce(&mut EphemeralFileSystemState) -> AppResult<T> + Send + 'static,
@@ -95,6 +106,7 @@ impl ProjectFileSystemTrait for EphemeralFileSystem {
 
     fn write(&self, path: &FilePath, bytes: Vec<u8>) -> FutureResult<()> {
         let path = path.clone();
+        let change_sender = self.change_sender.clone();
 
         self.run(move |state| {
             if state.directories.contains(&path) || path.segments().is_empty() {
@@ -102,28 +114,47 @@ impl ProjectFileSystemTrait for EphemeralFileSystem {
             }
 
             state.ensure_parent_directories(&path);
-            state.files.insert(path, bytes);
+            state.files.insert(path.clone(), bytes);
+            let _ = change_sender.send(path);
             Ok(())
         })
     }
 
     fn delete_path(&self, path: &FilePath) -> FutureResult<()> {
         let path = path.clone();
+        let change_sender = self.change_sender.clone();
 
         self.run(move |state| {
             if path.segments().is_empty() {
+                let removed = state.files.keys().chain(state.directories.iter()).cloned();
+                send_all(&change_sender, removed);
                 state.files.clear();
                 state.directories.clear();
                 return Ok(());
             }
 
             if state.files.remove(&path).is_some() {
+                let _ = change_sender.send(path);
                 return Ok(());
             }
 
             if !state.directories.contains(&path) {
                 return Err(AppError::FileNotFound(path));
             }
+
+            let removed = state
+                .files
+                .keys()
+                .filter(|file_path| file_path.starts_with(&path))
+                .chain(
+                    state
+                        .directories
+                        .iter()
+                        .filter(|directory_path| directory_path.starts_with(&path)),
+                )
+                .cloned();
+
+            send_all(&change_sender, removed);
 
             state
                 .files
@@ -138,6 +169,7 @@ impl ProjectFileSystemTrait for EphemeralFileSystem {
     fn move_path(&self, old: &FilePath, new: &FilePath) -> FutureResult<()> {
         let old = old.clone();
         let new = new.clone();
+        let change_sender = self.change_sender.clone();
 
         self.run(move |state| {
             if old == new {
@@ -150,7 +182,8 @@ impl ProjectFileSystemTrait for EphemeralFileSystem {
 
             if let Some(bytes) = state.files.remove(&old) {
                 state.ensure_parent_directories(&new);
-                state.files.insert(new, bytes);
+                state.files.insert(new.clone(), bytes);
+                send_all(&change_sender, [old, new]);
                 return Ok(());
             }
 
@@ -176,6 +209,15 @@ impl ProjectFileSystemTrait for EphemeralFileSystem {
                         .map(|moved_path| (path.clone(), moved_path))
                 })
                 .collect::<Vec<_>>();
+
+            for (path, moved_path, _) in &moved_files {
+                change_sender.send(path.clone()).ok();
+                change_sender.send(moved_path.clone()).ok();
+            }
+            for (path, moved_path) in &moved_directories {
+                change_sender.send(path.clone()).ok();
+                change_sender.send(moved_path.clone()).ok();
+            }
 
             for (path, _, _) in &moved_files {
                 state.files.remove(path);
