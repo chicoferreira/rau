@@ -22,3 +22,7 @@ pub fn compile_wgsl_shader(
         source: wgpu::ShaderSource::Naga(std::borrow::Cow::Owned(module)),
     }))
 }
+
+pub fn create_command_encoder(device: &wgpu::Device, label: &str) -> wgpu::CommandEncoder {
+    device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: Some(label) })
+}

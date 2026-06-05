@@ -9,7 +9,10 @@ use crate::{
     file::file_system::AppFileSystem,
     main_menu::MainMenu,
     ui::{self},
-    utils::{event_queue::EventQueue, wgpu_error_scope::WgpuErrorScope, winit_runner::WindowApp},
+    utils::{
+        event_queue::EventQueue, wgpu_error_scope::WgpuErrorScope,
+        wgpu_utils::create_command_encoder, winit_runner::WindowApp,
+    },
     workspace::{AppContext, Workspace},
 };
 
@@ -239,11 +242,12 @@ impl App {
             .texture
             .create_view(&wgpu::TextureViewDescriptor::default());
 
-        let mut encoder = self
-            .device
-            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                label: Some("Render Encoder"),
-            });
+        // Dedicated encoder for the egui UI only. The compute passes and the viewport render each
+        // use their own encoder inside `Workspace::render`, submitted before this one so egui
+        // samples the freshly rendered viewport texture. Keeping them separate lets the viewport
+        // encoder be dropped on a pending rebuild without taking the UI (or the compute work that
+        // generates textures such as the sky) down with it.
+        let mut egui_encoder = create_command_encoder(&self.device, "Egui Render Encoder");
 
         let screen_descriptor = egui_wgpu::ScreenDescriptor {
             size_in_pixels: [self.config.width, self.config.height],
@@ -271,7 +275,6 @@ impl App {
                     device: &self.device,
                     queue: &self.queue,
                     egui_renderer: &mut self.egui_renderer,
-                    encoder: &mut encoder,
                     downlevel_flags: self.downlevel_flags,
                     dt,
                 };
@@ -284,12 +287,12 @@ impl App {
             &frame,
             &self.device,
             &self.queue,
-            &mut encoder,
+            &mut egui_encoder,
             &view,
             &screen_descriptor,
         );
 
-        self.queue.submit(std::iter::once(encoder.finish()));
+        self.queue.submit([egui_encoder.finish()]);
 
         if let (Some(scope), State::Workspace(workspace)) = (submit_scope, &mut self.state) {
             workspace.on_frame_submitted(scope.pop());

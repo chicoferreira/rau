@@ -28,7 +28,10 @@ use crate::{
         rename::{RenameState, RenameTarget},
         size::Size2d,
     },
-    utils::{async_job::AsyncJob, event_queue::EventQueue, key::KeyboardState},
+    utils::{
+        async_job::AsyncJob, event_queue::EventQueue, key::KeyboardState,
+        wgpu_utils::create_command_encoder,
+    },
 };
 
 pub struct Workspace {
@@ -53,7 +56,6 @@ pub struct Workspace {
 pub struct AppContext<'a> {
     pub device: &'a wgpu::Device,
     pub queue: &'a wgpu::Queue,
-    pub encoder: &'a mut wgpu::CommandEncoder,
     pub egui_renderer: &'a mut ui::renderer::EguiRenderer,
     pub downlevel_flags: wgpu::DownlevelFlags,
     pub dt: instant::Duration,
@@ -161,7 +163,15 @@ impl Workspace {
             camera.update(ctx.dt);
         }
 
-        let resources_changed = self.tick_objects(ctx);
+        // Compute passes encode their dispatches into this encoder during `tick_objects`.
+        // It gets its own encoder that is *always* submitted, so the work reaches
+        // the GPU even on a frame where the viewport render bails out on a still-rebuilding
+        // resource. Sharing it with the viewport encoder would mean a dropped viewport frame also
+        // drops the compute pass dispatch, which never re-runs once the pass is built.
+        let mut compute_encoder = create_command_encoder(&ctx.device, "Compute Encoder");
+
+        let resources_changed = self.tick_objects(ctx, &mut compute_encoder);
+        ctx.queue.submit(std::iter::once(compute_encoder.finish()));
 
         let snapshot = self.project.snapshot();
         if !self
@@ -181,10 +191,24 @@ impl Workspace {
             runtime_render_pipelines: &self.runtime_project.render_pipelines,
         };
 
-        if let Err(error) = self.project.presentation.render(ctx.encoder, &render_ctx) {
-            let snapshot = self.project.snapshot();
-            let error = PresentationRender::Errored { error, snapshot };
-            self.runtime_project.presentation_render = error;
+        // The viewport render uses a separate, droppable encoder: if a render pass bails out
+        // because a resource is still rebuilding, we drop the whole encoder without finishing it.
+        //
+        // This avoids the flicker that would otherwise occur because of the pass LoadOp::Clear
+        // because of the `begin_render_pass` call.
+        let mut viewport_encoder = create_command_encoder(&ctx.device, "Viewport Render Encoder");
+
+        let presentation = &self.project.presentation;
+        match presentation.render(&mut viewport_encoder, &render_ctx) {
+            Ok(true) => {
+                ctx.queue.submit([viewport_encoder.finish()]);
+            }
+            Ok(false) => {} // A resource is still pending, drop the encoder without submitting
+            Err(error) => {
+                let snapshot = self.project.snapshot();
+                let error = PresentationRender::Errored { error, snapshot };
+                self.runtime_project.presentation_render = error;
+            }
         }
     }
 
@@ -396,8 +420,8 @@ impl Workspace {
         }
     }
 
-    /// Syncs every resource for this frame, returning whether any runtime resource changed
-    fn tick_objects(&mut self, ctx: &mut AppContext) -> bool {
+    /// Syncs every resource for this frame, returning whether any runtime resource changed.
+    fn tick_objects(&mut self, ctx: &mut AppContext, encoder: &mut wgpu::CommandEncoder) -> bool {
         self.tracker.sync_storage(
             &mut self.project.dimensions,
             &mut self.runtime_project.dimensions,
@@ -509,7 +533,7 @@ impl Workspace {
 
         let view = &mut compute_pass::Context {
             device: &ctx.device,
-            encoder: &mut ctx.encoder,
+            encoder,
             runtime_shaders: &mut self.runtime_project.shaders,
             runtime_bind_groups: &mut self.runtime_project.bind_groups,
         };

@@ -139,7 +139,7 @@ impl SyncResource for Shader {
         };
 
         let scope = WgpuErrorScope::push(ctx.device);
-        let inner = utils::shader::compile_wgsl_shader(ctx.device, &self.label, &source)?;
+        let inner = utils::wgpu_utils::compile_wgsl_shader(ctx.device, &self.label, &source)?;
 
         let runtime = ShaderRuntime { inner };
         self.sync(id, ctx, None, ShaderJob::Validation(runtime, scope.pop()))

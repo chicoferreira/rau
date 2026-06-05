@@ -9,7 +9,7 @@ pub mod github;
 pub mod key;
 pub mod obj;
 pub mod resizable_buffer;
-pub mod shader;
+pub mod wgpu_utils;
 pub mod validate_bind_group_layouts;
 pub mod wgpu_error_scope;
 pub mod winit_runner;

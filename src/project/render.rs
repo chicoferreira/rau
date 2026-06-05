@@ -93,26 +93,41 @@ impl RuntimeProject {
 }
 
 impl Presentation {
+    /// Encodes every render pass into `encoder`.
+    ///
+    /// Returns `Ok(false)` as soon as a pass bails out because one of its runtime
+    /// resources is still pending.
+    ///
+    /// The caller should drop the encoder without finishing it in that case,
+    /// so the half-encoded passes never reach the GPU and the viewport keeps the previous frame
+    /// instead of flickering the clear color.
     pub fn render(
         &self,
         encoder: &mut wgpu::CommandEncoder,
         render_ctx: &RenderContext<'_>,
-    ) -> AppResult<()> {
+    ) -> AppResult<bool> {
         for render_pass_id in self.render_passes() {
             let render_pass = render_ctx.render_passes.get(*render_pass_id)?;
-            render_pass.submit(encoder, &render_ctx)?;
+            if !render_pass.submit(encoder, &render_ctx)? {
+                return Ok(false);
+            }
         }
 
-        Ok(())
+        Ok(true)
     }
 }
 
 impl RenderPass {
+    /// Encodes this render pass into `encoder`.
+    ///
+    /// Returns `Ok(true)` once the pass is fully encoded, or `Ok(false)` if it bailed
+    /// out because a runtime resource (texture view, pipeline, bind group, model) is
+    /// still pending.
     pub fn submit(
         &self,
         encoder: &mut wgpu::CommandEncoder,
         render_ctx: &RenderContext<'_>,
-    ) -> AppResult<()> {
+    ) -> AppResult<bool> {
         let color_target = self.target();
         let target_texture_id = color_target
             .texture_view_id()
@@ -122,7 +137,7 @@ impl RenderPass {
             .runtime_texture_views
             .get_init(target_texture_id)?
         else {
-            return Ok(()); // Maybe return some kind of pending
+            return Ok(false); // pending: target texture view not ready
         };
 
         let view = target_texture_view.inner();
@@ -138,7 +153,7 @@ impl RenderPass {
                     .runtime_texture_views
                     .get_init(depth_texture_id)?
                 else {
-                    return Ok(()); // Maybe return some kind of pending
+                    return Ok(false); // pending: depth texture view not ready
                 };
 
                 Some(wgpu::RenderPassDepthStencilAttachment {
@@ -173,7 +188,7 @@ impl RenderPass {
         for id in self.pipelines() {
             let pipeline = render_ctx.render_pipelines.get(*id)?;
             let Some(pipeline_runtime) = render_ctx.runtime_render_pipelines.get_init(*id)? else {
-                return Ok(()); // Maybe return some kind of pending
+                return Ok(false); // pending: pipeline still rebuilding
             };
 
             render_pass.set_pipeline(&pipeline_runtime.inner);
@@ -187,7 +202,7 @@ impl RenderPass {
                     }
                     BindGroupTarget::Static(id) => {
                         let Some(bind_group) = render_ctx.runtime_bind_groups.get_init(*id)? else {
-                            return Ok(()); // Maybe return some kind of pending
+                            return Ok(false); // pending: static bind group not ready
                         };
                         render_pass.set_bind_group(slot, bind_group.inner(), &[]);
                     }
@@ -208,7 +223,7 @@ impl RenderPass {
 
                     let model = render_ctx.models.get(model_id)?;
                     let Some(model_runtime) = render_ctx.runtime_models.get_init(model_id)? else {
-                        return Ok(()); // Maybe return some kind of pending
+                        return Ok(false); // pending: model not ready
                     };
 
                     for (mesh_index, mesh) in model_runtime.meshes().iter().enumerate() {
@@ -239,7 +254,7 @@ impl RenderPass {
                             let Some(bind_group) =
                                 render_ctx.runtime_bind_groups.get_init(bind_group_id)?
                             else {
-                                return Ok(()); // Maybe return some kind of pending
+                                return Ok(false); // pending: material bind group not ready
                             };
 
                             for slot in &material_bind_group_slots {
@@ -258,6 +273,6 @@ impl RenderPass {
             }
         }
 
-        Ok(())
+        Ok(true)
     }
 }
