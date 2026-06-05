@@ -115,7 +115,7 @@ impl AppFileSystem {
         source: ProjectSource,
     ) -> FutureResult<(ProjectFileSystem, FileWatcher)> {
         match source {
-            ProjectSource::Ephemeral => AsyncJob::new(async move {
+            ProjectSource::Ephemeral { .. } => AsyncJob::new(async move {
                 let (change_sender, file_watcher) = FileWatcher::manual();
                 let file_system =
                     ProjectFileSystem::Ephemeral(EphemeralFileSystem::new(change_sender));
@@ -131,21 +131,21 @@ impl AppFileSystem {
 
     pub fn ensure_project_can_be_created(&self, source: ProjectSource) -> FutureResult<()> {
         match source {
-            ProjectSource::Ephemeral => AsyncJob::new(async move { Ok(()) }),
+            ProjectSource::Ephemeral { .. } => AsyncJob::new(async move { Ok(()) }),
             ProjectSource::Persistent(id) => self.backend.ensure_project_can_be_created(id),
         }
     }
 
     pub fn remember_project(&self, source: ProjectSource) -> FutureResult<()> {
         match source {
-            ProjectSource::Ephemeral => AsyncJob::new(async move { Ok(()) }),
+            ProjectSource::Ephemeral { .. } => AsyncJob::new(async move { Ok(()) }),
             ProjectSource::Persistent(id) => self.backend.remember_project(id),
         }
     }
 
     pub fn remove_recent_project(&self, source: ProjectSource) -> FutureResult<()> {
         match source {
-            ProjectSource::Ephemeral => AsyncJob::new(async move { Ok(()) }),
+            ProjectSource::Ephemeral { .. } => AsyncJob::new(async move { Ok(()) }),
             ProjectSource::Persistent(id) => self.backend.remove_recent_project(id),
         }
     }

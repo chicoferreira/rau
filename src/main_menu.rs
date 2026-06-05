@@ -79,9 +79,7 @@ impl MainMenu {
         if let Some(modal) = &mut self.create_project_modal {
             if let Some(response) = modal.render_ui(ui, app_fs, &mut self.toasts) {
                 match response {
-                    CreateProjectModalResponse::Create { project_id, files } => {
-                        let source = ProjectSource::Persistent(project_id);
-                        // TODO: modify this once the UI lets users create ephemeral projects
+                    CreateProjectModalResponse::Create { source, files } => {
                         self.open_project(app_fs.clone(), source, files);
                         self.create_project_modal = None;
                     }
