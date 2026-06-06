@@ -1,6 +1,12 @@
 use winit::event_loop::EventLoop;
 
-use crate::{app::App, error::AppResult, file::identifier::ProjectIdentifier, utils::winit_runner};
+use crate::{
+    app::App,
+    error::AppResult,
+    file::identifier::{ProjectIdentifier, ProjectSource},
+    ui::components::create_project_modal::ProjectCreationSource,
+    utils::winit_runner,
+};
 
 macro_rules! toasts_log_error {
     ($toasts:expr, $format:expr) => {
@@ -30,8 +36,9 @@ pub enum StartupAction {
     OpenProject {
         project_id: ProjectIdentifier,
     },
-    CreateEmptyProject {
-        project_id: ProjectIdentifier,
+    CreateProject {
+        source: ProjectSource,
+        creation: ProjectCreationSource,
     },
 }
 

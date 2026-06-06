@@ -36,18 +36,21 @@ impl MainMenu {
             StartupAction::OpenProject { project_id } => {
                 main_menu.open_project(app_fs, ProjectSource::Persistent(project_id), vec![])
             }
-            StartupAction::CreateEmptyProject { project_id } => {
-                match Project::default().serialize() {
+            StartupAction::CreateProject { source, creation } => match creation {
+                ProjectCreationSource::Empty => match Project::default().serialize() {
                     Ok(bytes) => {
                         let default_files = vec![(FilePath::project_json(), bytes)];
-                        let source = ProjectSource::Persistent(project_id);
                         main_menu.open_project(app_fs, source, default_files);
                     }
                     Err(err) => {
                         toasts_log_error!(main_menu.toasts, "Failed to serialize project: {err:?}");
                     }
+                },
+                ProjectCreationSource::Github(github) => {
+                    let modal = CreateProjectModal::from_cli(&app_fs, source, github);
+                    main_menu.create_project_modal = Some(modal);
                 }
-            }
+            },
         }
 
         main_menu

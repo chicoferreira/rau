@@ -43,6 +43,17 @@ pub enum ProjectCreationSource {
     Github(GithubProjectSource),
 }
 
+impl ProjectCreationSource {
+    /// The project name to fall back to when none is provided (the repo name for
+    /// GitHub sources, nothing for empty projects).
+    pub fn default_project_name(&self) -> Option<String> {
+        match self {
+            Self::Empty => None,
+            Self::Github(source) => Some(source.repo.clone()),
+        }
+    }
+}
+
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum ProjectCreationKind {
     Empty,
@@ -57,10 +68,10 @@ enum ProjectCreationStorage {
 
 #[derive(Clone, Default)]
 pub struct GithubProjectSource {
-    owner: String,
-    repo: String,
-    git_ref: String,
-    path: String,
+    pub owner: String,
+    pub repo: String,
+    pub git_ref: String,
+    pub path: String,
 }
 
 pub enum CreateProjectModalResponse {
@@ -140,6 +151,17 @@ impl CreateProjectModal {
 
         let mut modal = Self::new(ProjectCreationSource::Github(github_project_source));
         modal.form_data.project_name = project.id.to_string();
+        modal
+    }
+
+    pub fn from_cli(
+        app_file_system: &AppFileSystem,
+        source: ProjectSource,
+        github: GithubProjectSource,
+    ) -> Self {
+        let mut modal = Self::new(ProjectCreationSource::Github(github));
+        modal.form_data.apply_source(source);
+        modal.start_project_creation(app_file_system);
         modal
     }
 
@@ -299,6 +321,23 @@ impl CreateProjectFormData {
             ProjectCreationKind::Github => {
                 let (repository, path) = self.github_source.create()?;
                 Ok(PendingProjectCreation::Github(source, repository, path))
+            }
+        }
+    }
+
+    fn apply_source(&mut self, source: ProjectSource) {
+        match source {
+            ProjectSource::Ephemeral { project_name } => {
+                self.storage = ProjectCreationStorage::Temporary;
+                self.project_name = project_name;
+            }
+            ProjectSource::Persistent(identifier) => {
+                self.storage = ProjectCreationStorage::Persistent;
+                self.project_name = identifier.project_name().to_string();
+                #[cfg(not(target_arch = "wasm32"))]
+                {
+                    self.project_path = Some(identifier.project_path().clone());
+                }
             }
         }
     }
