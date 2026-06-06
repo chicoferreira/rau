@@ -90,6 +90,8 @@ pub enum AppError {
     InvalidPathSegment(String),
     #[error("invalid create project form: {0}")]
     InvalidCreateProjectForm(&'static str),
+    #[error("viewport capture error: {0}")]
+    CaptureError(String),
     #[cfg(not(target_arch = "wasm32"))]
     #[error("config directory unavailable")]
     ConfigDirectoryUnavailable,

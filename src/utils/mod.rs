@@ -1,6 +1,5 @@
 pub mod async_job;
 pub mod background_task;
-pub mod raw_scroll;
 #[cfg(target_arch = "wasm32")]
 pub mod browser;
 pub mod dir_node;
@@ -8,8 +7,10 @@ pub mod event_queue;
 pub mod github;
 pub mod key;
 pub mod obj;
+pub mod raw_scroll;
 pub mod resizable_buffer;
-pub mod wgpu_utils;
+pub mod texture_capture;
 pub mod validate_bind_group_layouts;
 pub mod wgpu_error_scope;
+pub mod wgpu_utils;
 pub mod winit_runner;

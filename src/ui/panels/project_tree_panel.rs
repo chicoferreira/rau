@@ -231,6 +231,7 @@ pub fn ui(state: &mut StateSnapshot, ui: &mut egui::Ui) -> Response {
             for (id, texture) in state.project.textures.list_sorted() {
                 TreeNode::new(TreeNodeId::Texture(id), texture.label())
                     .with_event("Inspect", StateEvent::InspectResource(id.into()))
+                    .with_event("Save as Image", StateEvent::DownloadTextureImage(id))
                     .with_rename_event("Rename", RenameTarget::Texture(id))
                     .with_event("Delete", StateEvent::DeleteResource(id.into()))
                     .with_separator()

@@ -9,7 +9,8 @@ use crate::{
         identifier::ProjectSource,
     },
     project::{
-        DimensionId, ModelId, Project, ResourceId, ResourceKind, RuntimeProject, ViewportId,
+        DimensionId, ModelId, Project, ResourceId, ResourceKind, RuntimeProject, TextureId,
+        ViewportId,
         paths::FilePath,
         render::{self, PresentationRender},
         resource::{
@@ -30,7 +31,7 @@ use crate::{
     },
     utils::{
         async_job::AsyncJob, event_queue::EventQueue, key::KeyboardState,
-        wgpu_utils::create_command_encoder,
+        texture_capture::TextureCaptures, wgpu_utils::create_command_encoder,
     },
 };
 
@@ -51,6 +52,8 @@ pub struct Workspace {
     /// `.mtl` file changes.
     mtl_dependencies: SecondaryMap<ModelId, Vec<FilePath>>,
     elapsed: instant::Duration,
+    texture_captures: TextureCaptures,
+    toasts: egui_notify::Toasts,
 }
 
 pub struct AppContext<'a> {
@@ -94,6 +97,7 @@ pub enum StateEvent {
         new_path: FilePath,
     },
     SetMainViewport(ViewportId),
+    DownloadTextureImage(TextureId),
 }
 
 impl Workspace {
@@ -148,6 +152,8 @@ impl Workspace {
             dimension_owners: Default::default(),
             mtl_dependencies: SecondaryMap::default(),
             elapsed: instant::Duration::ZERO,
+            texture_captures: TextureCaptures::default(),
+            toasts: egui_notify::Toasts::default(),
         })
     }
 
@@ -158,6 +164,14 @@ impl Workspace {
             .tick(&self.project, &mut self.file_storage);
 
         self.file_storage.tick(&mut self.tracker);
+
+        self.texture_captures.tick(
+            &self.project,
+            &self.runtime_project,
+            ctx.device,
+            ctx.queue,
+            &mut self.toasts,
+        );
 
         for (_, camera) in self.project.cameras.list_mut() {
             camera.update(ctx.dt);
@@ -224,6 +238,8 @@ impl Workspace {
         backend: wgpu::Backend,
         app_event_queue: &mut EventQueue<AppEvent>,
     ) {
+        self.toasts.show(ui.ctx());
+
         let mut snapshot = ui::pane::StateSnapshot {
             event_queue: &mut self.event_queue,
             app_event_queue,
@@ -415,6 +431,9 @@ impl Workspace {
                 StateEvent::SetMainViewport(viewport_id) => {
                     let presentation = &mut self.project.presentation;
                     presentation.set_main_viewport(Some(viewport_id));
+                }
+                StateEvent::DownloadTextureImage(texture_id) => {
+                    self.texture_captures.request(texture_id);
                 }
             }
         }
