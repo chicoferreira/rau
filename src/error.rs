@@ -90,6 +90,9 @@ pub enum AppError {
     InvalidPathSegment(String),
     #[error("invalid create project form: {0}")]
     InvalidCreateProjectForm(&'static str),
+    #[cfg(target_arch = "wasm32")]
+    #[error("invalid url parameters: {0}")]
+    InvalidUrlParameters(String),
     #[error("viewport capture error: {0}")]
     CaptureError(String),
     #[cfg(not(target_arch = "wasm32"))]

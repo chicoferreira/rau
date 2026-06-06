@@ -1,5 +1,6 @@
 pub mod file_download;
 pub mod folder_picker;
+pub mod url;
 
 use wasm_bindgen::JsValue;
 use web_sys::js_sys::Reflect;

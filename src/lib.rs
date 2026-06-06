@@ -17,14 +17,13 @@ macro_rules! toasts_log_error {
 }
 
 mod app;
-#[cfg(not(target_arch = "wasm32"))]
-pub mod cli;
 mod error;
 mod featured_projects;
 mod file;
 mod main_menu;
 mod project;
 mod scene;
+pub mod startup;
 mod ui;
 mod utils;
 mod workspace;
@@ -69,7 +68,7 @@ pub fn run_web() -> Result<(), wasm_bindgen::JsValue> {
     console_error_panic_hook::set_once();
     console_log::init_with_level(log::Level::Info).unwrap_throw();
 
-    run(StartupAction::default()).unwrap_throw();
+    run(startup::url::startup_action_from_url()).unwrap_throw();
 
     Ok(())
 }
