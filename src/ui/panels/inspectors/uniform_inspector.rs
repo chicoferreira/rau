@@ -347,7 +347,8 @@ fn edit_uniform_field_data(ui: &mut egui::Ui, data: &mut uniform::UniformFieldDa
         uniform::UniformFieldData::Rgb(color) => {
             egui::color_picker::color_edit_button_rgb(ui, color).changed()
         }
-    }).inner
+    })
+    .inner
 }
 
 fn ui_uniform_field_data(ui: &mut egui::Ui, data: &uniform::UniformFieldData) {

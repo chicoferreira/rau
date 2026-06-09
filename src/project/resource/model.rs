@@ -300,6 +300,7 @@ impl ModelRuntime {
     ) -> AsyncJob<AppResult<(Self, Vec<FilePath>)>> {
         let file_system = file_storage.file_system.clone();
         AsyncJob::new(async move {
+            let base_path = source.parent();
             let LoadedObj {
                 models,
                 materials: obj_materials,
@@ -307,7 +308,7 @@ impl ModelRuntime {
             } = crate::utils::obj::load_obj(source, file_system).await?;
             let materials = obj_materials
                 .into_iter()
-                .map(TryInto::try_into)
+                .map(|material| Material::from_obj_material(material, base_path.as_ref()))
                 .collect::<AppResult<Vec<Material>>>()?;
 
             let scope = WgpuErrorScope::push(&device);
@@ -337,10 +338,11 @@ impl ModelRuntime {
     }
 }
 
-impl TryFrom<tobj::Material> for Material {
-    type Error = AppError;
-
-    fn try_from(material: tobj::Material) -> AppResult<Material> {
+impl Material {
+    fn from_obj_material(
+        material: tobj::Material,
+        base_path: Option<&FilePath>,
+    ) -> AppResult<Material> {
         let label = material.name;
         let texture_paths = [
             (TextureType::Ambient, material.ambient_texture),
@@ -352,7 +354,11 @@ impl TryFrom<tobj::Material> for Material {
         ]
         .into_iter()
         .filter_map(|(tex_type, path)| path.map(|p| (tex_type, p)))
-        .map(|(tex_type, path)| Ok((tex_type, FilePath::from_str(path)?)))
+        .map(|(tex_type, path)| {
+            let path = FilePath::from_str(path)?;
+            let path = base_path.map(|base| base.join_path(&path)).unwrap_or(path);
+            Ok((tex_type, path))
+        })
         .collect::<AppResult<Vec<_>>>()?;
 
         Ok(Material {

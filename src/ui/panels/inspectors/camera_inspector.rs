@@ -71,7 +71,7 @@ impl StateSnapshot<'_> {
                             let cx = ui_position_drag(ui, &mut x);
                             let cy = ui_position_drag(ui, &mut y);
                             let cz = ui_position_drag(ui, &mut z);
-                            
+
                             if cx || cy || cz {
                                 camera.set_position(Vec3::new(x, y, z));
                             }

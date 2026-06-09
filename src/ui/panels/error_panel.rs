@@ -42,12 +42,7 @@ pub fn ui(state: &mut StateSnapshot, ui: &mut egui::Ui) {
     egui::Panel::bottom("status_panel")
         .resizable(false)
         .show_inside(ui, |ui| {
-            status_bar_content(
-                ui,
-                &errors,
-                state.backend,
-                &state.file_storage.file_system,
-            );
+            status_bar_content(ui, &errors, state.backend, &state.file_storage.file_system);
         });
 
     if show_error_list && !errors.is_empty() {
@@ -111,15 +106,13 @@ fn storage_status_ui(ui: &mut egui::Ui, project_file_system: &ProjectFileSystem)
         }
         #[cfg(not(target_arch = "wasm32"))]
         ProjectFileSystem::Native(file_system) => {
-            let response =
-                ui.colored_label(ui.visuals().weak_text_color(), "Persistent Storage");
+            let response = ui.colored_label(ui.visuals().weak_text_color(), "Persistent Storage");
             response.on_hover_text(file_system.root().as_ref().display().to_string());
         }
 
         #[cfg(target_arch = "wasm32")]
         ProjectFileSystem::IndexedDb(file_system) => {
-            let response =
-                ui.colored_label(ui.visuals().weak_text_color(), "Persistent Storage");
+            let response = ui.colored_label(ui.visuals().weak_text_color(), "Persistent Storage");
             let hover_text = format!("IndexedDB with database {}", file_system.database_name());
             response.on_hover_text(hover_text);
         }

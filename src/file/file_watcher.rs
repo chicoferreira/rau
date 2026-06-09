@@ -17,8 +17,8 @@ impl FileWatcher {
     /// Creates a watcher that is fed manually through the returned sender.
     ///
     /// Used by backends that are the only mutator of their own storage
-    /// (IndexedDB, ephemeral). 
-    /// 
+    /// (IndexedDB, ephemeral).
+    ///
     /// The sender lives in the *file system*, not in
     /// `FileStorage`, because only the file system knows the exact paths an
     /// operation touched, a folder move, for instance, rewrites every
