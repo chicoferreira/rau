@@ -23,8 +23,9 @@ use crate::{
         },
     },
     ui::size::Size2d,
-    utils::derive_modal_material::{
-        MaterialBindGroupsConfig, SamplerSetting, default_texture_format,
+    utils::{
+        derive_modal_material::{MaterialBindGroupsConfig, SamplerSetting, default_texture_format},
+        texture_format::TextureFormat,
     },
 };
 
@@ -213,7 +214,7 @@ pub async fn create_scene(
 
     let cube_model_id = project.models.register(cube_model);
 
-    let hdr_texture_format = wgpu::TextureFormat::Rgba16Float;
+    let hdr_texture_format = TextureFormat::Rgba16Float;
     let hdr_texture = Texture::new(
         "Hdr Texture".to_string(),
         hdr_texture_format,
@@ -237,7 +238,7 @@ pub async fn create_scene(
     );
     let _ = project.viewports.register(hdr_viewport);
 
-    let viewport_texture_format = wgpu::TextureFormat::Rgba8UnormSrgb;
+    let viewport_texture_format = TextureFormat::Rgba8UnormSrgb;
 
     let hdr_bind_group = BindGroup::new(
         "HDR Bind Group",
@@ -258,7 +259,7 @@ pub async fn create_scene(
 
     let sky_texture = create_texture(
         FilePath::from_str("pure-sky.hdr")?,
-        wgpu::TextureFormat::Rgba32Float,
+        TextureFormat::Rgba32Float,
     )?;
     let sky_texture_id = project.textures.register(sky_texture);
 
@@ -267,7 +268,7 @@ pub async fn create_scene(
 
     let dst_size = 1080;
 
-    let texture_format = wgpu::TextureFormat::Rgba32Float;
+    let texture_format = TextureFormat::Rgba32Float;
 
     let dst_texture = Texture::new(
         "Sky Texture",
@@ -347,7 +348,7 @@ pub async fn create_scene(
 
     let environment_bind_group_id = project.bind_groups.register(environment_bind_group);
 
-    let depth_texture_format = wgpu::TextureFormat::Depth32Float;
+    let depth_texture_format = TextureFormat::Depth32Float;
     let depth_texture = Texture::new(
         "depth texture",
         depth_texture_format,
@@ -500,7 +501,7 @@ pub async fn create_scene(
     Ok(project)
 }
 
-pub fn create_texture(path: FilePath, format: wgpu::TextureFormat) -> AppResult<Texture> {
+pub fn create_texture(path: FilePath, format: TextureFormat) -> AppResult<Texture> {
     let label = path.to_string();
     let source = TextureSource::Image(Some(path));
 

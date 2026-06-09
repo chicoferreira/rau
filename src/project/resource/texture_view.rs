@@ -12,7 +12,7 @@ use crate::{
     },
     resource_getters, resource_setters,
     ui::renderer::EguiRenderer,
-    utils::{async_job::AsyncJob, wgpu_error_scope::WgpuErrorScope},
+    utils::{async_job::AsyncJob, texture_format::TextureFormat, wgpu_error_scope::WgpuErrorScope},
 };
 
 pub struct TextureViewCreationContext<'a> {
@@ -62,13 +62,6 @@ pub enum TextureViewFormat {
     Linear,
 }
 
-// TODO: change this to a better filter, i think it should work with every RGBA texture format
-const ALLOWED_EGUI_FORMATS: &[wgpu::TextureFormat] = &[
-    wgpu::TextureFormat::Rgba8UnormSrgb,
-    wgpu::TextureFormat::Rgba8Unorm,
-    wgpu::TextureFormat::Rgba16Float,
-];
-
 impl TextureView {
     pub fn new(
         label: impl Into<String>,
@@ -111,8 +104,12 @@ impl TextureView {
         let supports_view_formats = downlevel_flags.contains(wgpu::DownlevelFlags::VIEW_FORMATS);
 
         let wgpu_format = match (supports_view_formats, format) {
-            (true, Some(TextureViewFormat::Srgb)) => Some(texture.format().add_srgb_suffix()),
-            (true, Some(TextureViewFormat::Linear)) => Some(texture.format().remove_srgb_suffix()),
+            (true, Some(TextureViewFormat::Srgb)) => {
+                Some(texture.format().to_wgpu().add_srgb_suffix())
+            }
+            (true, Some(TextureViewFormat::Linear)) => {
+                Some(texture.format().to_wgpu().remove_srgb_suffix())
+            }
             _ => None,
         };
 
@@ -133,7 +130,8 @@ impl TextureViewRuntime {
     }
 
     /// Returns the egui texture ID.
-    /// Only returns `Some` if the texture format is `Rgba8UnormSrgb` due to egui texture format requirements.
+    /// Only returns `Some` for filterable RGBA color formats (see
+    /// [`is_filterable_rgba`]), due to egui texture requirements.
     pub fn egui_id(&self) -> Option<egui::TextureId> {
         self.egui_id
     }
@@ -206,7 +204,7 @@ impl SyncResource for TextureView {
                     ctx.downlevel_flags,
                 );
 
-                let has_correct_format = ALLOWED_EGUI_FORMATS.contains(&texture.format());
+                let has_correct_format = is_filterable_rgba(texture.format());
 
                 let egui_id = match (previous_egui_id, has_correct_format) {
                     (Some(egui_id), true) => {
@@ -249,4 +247,17 @@ impl SyncResource for TextureView {
         };
         tracker.was_changed(texture_id)
     }
+}
+
+/// Whether this format can back an egui preview texture.
+///
+/// egui samples the texture with a linear filter, so the format has to be a
+/// filterable RGBA color format. `Rgba32Float` is excluded because it is only
+/// filterable with the `FLOAT32_FILTERABLE` feature, and depth formats can't
+/// be sampled as color.
+fn is_filterable_rgba(format: TextureFormat) -> bool {
+    matches!(
+        format,
+        TextureFormat::Rgba8UnormSrgb | TextureFormat::Rgba8Unorm | TextureFormat::Rgba16Float
+    )
 }

@@ -139,6 +139,8 @@ impl WindowApp<StartupAction> for App {
         let main_menu = MainMenu::with_startup_action(app_file_system.clone(), startup_action);
         let state = State::MainMenu(main_menu);
 
+        // crate::scene::create_and_save_scene(&app_file_system, &device).await.unwrap();
+
         Ok(Self {
             surface,
             device,

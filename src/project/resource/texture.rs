@@ -13,7 +13,7 @@ use crate::{
         sync::{Revision, SyncOutcome, SyncResource, SyncTracker},
     },
     resource_getters, resource_setters,
-    utils::{async_job::AsyncJob, wgpu_error_scope::WgpuErrorScope},
+    utils::{async_job::AsyncJob, texture_format::TextureFormat, wgpu_error_scope::WgpuErrorScope},
 };
 
 #[derive(Clone, Copy)]
@@ -29,7 +29,7 @@ pub struct TextureCreationContext<'a> {
 #[serde(rename_all = "camelCase")]
 pub struct Texture {
     label: String,
-    format: wgpu::TextureFormat,
+    format: TextureFormat,
     usage: wgpu::TextureUsages,
     source: TextureSource,
     #[serde(skip)]
@@ -62,7 +62,7 @@ pub enum TextureSource {
 impl Texture {
     pub fn new(
         label: impl Into<String>,
-        format: wgpu::TextureFormat,
+        format: TextureFormat,
         usage: wgpu::TextureUsages,
         source: TextureSource,
     ) -> Texture {
@@ -77,7 +77,7 @@ impl Texture {
     }
 
     resource_getters! {
-        pub fn format() -> wgpu::TextureFormat;
+        pub fn format() -> TextureFormat;
         pub fn usage() -> wgpu::TextureUsages;
         pub fn source() -> &TextureSource;
     }
@@ -85,7 +85,7 @@ impl Texture {
     resource_setters! {
         increases: [runtime_revision, project_revision];
         pub fn set_label(label: String);
-        pub fn set_format(format: wgpu::TextureFormat);
+        pub fn set_format(format: TextureFormat);
         pub fn set_usage(usage: wgpu::TextureUsages);
         pub fn set_source(source: TextureSource);
     }
@@ -101,7 +101,7 @@ impl Creatable for Texture {
     fn create(label: String) -> Self {
         Self {
             label,
-            format: wgpu::TextureFormat::Rgba8UnormSrgb,
+            format: TextureFormat::Rgba8UnormSrgb,
             usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
             source: TextureSource::Image(None),
             runtime_revision: Revision::default(),
@@ -193,8 +193,8 @@ impl SyncResource for Texture {
             TextureSource::Manual { size } => *size,
         };
 
-        let non_srgb_format = self.format.remove_srgb_suffix();
-        let srgb_format = self.format.add_srgb_suffix();
+        let non_srgb_format = self.format.to_wgpu().remove_srgb_suffix();
+        let srgb_format = self.format.to_wgpu().add_srgb_suffix();
         let supports_view_formats = ctx
             .downlevel_flags
             .contains(wgpu::DownlevelFlags::VIEW_FORMATS);
@@ -213,19 +213,24 @@ impl SyncResource for Texture {
             mip_level_count: 1,
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
-            format: self.format,
+            format: self.format.to_wgpu(),
             usage: self.usage,
             view_formats: &view_formats,
         });
 
         if let Some(image_to_write) = image_to_write {
-            // TODO: Change this format to an enum that we list all supported formats, instead of relying on all wgpu formats
             match self.format {
-                wgpu::TextureFormat::Rgba32Float => {
+                TextureFormat::Rgba32Float => {
                     let rgba = image_to_write.to_rgba32f();
                     write_image_to_texture(ctx.queue, &texture, &rgba, size);
                 }
-                _ => {
+                TextureFormat::Rgba16Float => {
+                    let rgba = image_to_write.to_rgba16();
+                    write_image_to_texture(ctx.queue, &texture, &rgba, size);
+                }
+                TextureFormat::Rgba8UnormSrgb
+                | TextureFormat::Rgba8Unorm
+                | TextureFormat::Depth32Float => {
                     let rgba = image_to_write.to_rgba8();
                     write_image_to_texture(ctx.queue, &texture, &rgba, size);
                 }

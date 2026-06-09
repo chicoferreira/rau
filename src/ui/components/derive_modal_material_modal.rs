@@ -13,8 +13,9 @@ use crate::{
         storage::Storage,
     },
     ui::components::{inspector, selector::AsWidgetText},
-    utils::derive_modal_material::{
-        MaterialBindGroupsConfig, SamplerSetting, default_texture_format,
+    utils::{
+        derive_modal_material::{MaterialBindGroupsConfig, SamplerSetting, default_texture_format},
+        texture_format::TextureFormat,
     },
 };
 
@@ -37,7 +38,7 @@ struct TextureTypeRow {
     selected: bool,
     /// Format the created textures of this type will use. Defaults to a value
     /// derived from the texture type but is user-overridable.
-    format: wgpu::TextureFormat,
+    format: TextureFormat,
     /// Number of materials that reference a texture of this type.
     present_count: usize,
     /// Referenced texture files that don't exist in the project.
@@ -46,12 +47,7 @@ struct TextureTypeRow {
 
 /// Formats offered for material textures. Depth formats are intentionally left
 /// out since they don't make sense for sampled color/data textures.
-const MATERIAL_TEXTURE_FORMATS: [wgpu::TextureFormat; 4] = [
-    wgpu::TextureFormat::Rgba8UnormSrgb,
-    wgpu::TextureFormat::Rgba8Unorm,
-    wgpu::TextureFormat::Rgba16Float,
-    wgpu::TextureFormat::Rgba32Float,
-];
+const MATERIAL_TEXTURE_FORMATS: [TextureFormat; 4] = TextureFormat::COLOR;
 
 enum MaterialBindGroupsModalResponse {
     Create,

@@ -18,6 +18,7 @@ use crate::project::{
     },
     storage::Storage,
 };
+use crate::utils::texture_format::TextureFormat;
 
 pub struct ShaderGenCtx<'a> {
     pub bind_groups: &'a Storage<BindGroup>,
@@ -323,10 +324,7 @@ fn var_name_from_label(label: Option<&str>, binding: u32) -> String {
     }
 }
 
-fn resolve_texture_format(
-    id: Option<TextureViewId>,
-    ctx: &ShaderGenCtx,
-) -> Option<wgpu::TextureFormat> {
+fn resolve_texture_format(id: Option<TextureViewId>, ctx: &ShaderGenCtx) -> Option<TextureFormat> {
     let texture_view = ctx.texture_views.get(id?).ok()?;
     let texture = ctx.textures.get(texture_view.texture_id()?).ok()?;
     Some(texture.format())

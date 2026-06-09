@@ -24,6 +24,7 @@ use crate::{
         },
         pane::StateSnapshot,
     },
+    utils::texture_format::TextureFormat,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -122,19 +123,6 @@ impl AsWidgetText for wgpu::PolygonMode {
 }
 
 const DRAW_KINDS: [DrawKind; 2] = [DrawKind::Direct, DrawKind::Model];
-
-const COLOR_FORMATS: [wgpu::TextureFormat; 4] = [
-    wgpu::TextureFormat::Rgba8UnormSrgb,
-    wgpu::TextureFormat::Rgba8Unorm,
-    wgpu::TextureFormat::Rgba16Float,
-    wgpu::TextureFormat::Rgba32Float,
-];
-
-const DEPTH_FORMATS: [wgpu::TextureFormat; 3] = [
-    wgpu::TextureFormat::Depth32Float,
-    wgpu::TextureFormat::Depth24Plus,
-    wgpu::TextureFormat::Depth24PlusStencil8,
-];
 
 const TOPOLOGIES: [wgpu::PrimitiveTopology; 5] = [
     wgpu::PrimitiveTopology::PointList,
@@ -247,13 +235,13 @@ fn target_formats_ui(
                     ui,
                     "Color Format",
                     "render_pipeline_color_format",
-                    COLOR_FORMATS,
+                    TextureFormat::COLOR,
                     &mut color_format,
                 );
 
                 let mut depth_enabled = depth_format.is_some();
                 if inspector::checkbox_row(ui, "Depth", &mut depth_enabled) {
-                    depth_format = depth_enabled.then_some(wgpu::TextureFormat::Depth32Float);
+                    depth_format = depth_enabled.then_some(TextureFormat::Depth32Float);
                 }
 
                 if let Some(format) = &mut depth_format {
@@ -261,7 +249,7 @@ fn target_formats_ui(
                         ui,
                         "Depth Format",
                         "render_pipeline_depth_format",
-                        DEPTH_FORMATS,
+                        TextureFormat::DEPTH,
                         format,
                     );
                 }

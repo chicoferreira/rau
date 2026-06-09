@@ -12,8 +12,8 @@ use crate::{
     },
     resource_getters, resource_setters,
     utils::{
-        async_job::AsyncJob, validate_bind_group_layouts::validate_bind_group_layouts,
-        wgpu_error_scope::WgpuErrorScope,
+        async_job::AsyncJob, texture_format::TextureFormat,
+        validate_bind_group_layouts::validate_bind_group_layouts, wgpu_error_scope::WgpuErrorScope,
     },
 };
 
@@ -28,8 +28,8 @@ pub struct RenderPipeline {
     /// List of bind group targets to bind to the pipeline.
     /// Index corresponds to the bind group slot in the shader.
     bind_groups: Vec<BindGroupTarget>,
-    color_format: wgpu::TextureFormat,
-    depth_format: Option<wgpu::TextureFormat>,
+    color_format: TextureFormat,
+    depth_format: Option<TextureFormat>,
     #[serde(skip)]
     runtime_revision: Revision,
     #[serde(skip)]
@@ -71,8 +71,8 @@ impl RenderPipeline {
         fragment_shader: Option<ShaderId>,
         draw_strategy: RenderDrawStrategy,
         bind_groups: Vec<BindGroupTarget>,
-        color_format: wgpu::TextureFormat,
-        depth_format: Option<wgpu::TextureFormat>,
+        color_format: TextureFormat,
+        depth_format: Option<TextureFormat>,
     ) -> Self {
         Self {
             label: label.into(),
@@ -94,8 +94,8 @@ impl RenderPipeline {
         pub fn vertex_shader() -> Option<ShaderId>;
         pub fn fragment_shader() -> Option<ShaderId>;
         pub fn draw_strategy() -> &RenderDrawStrategy;
-        pub fn color_format() -> wgpu::TextureFormat;
-        pub fn depth_format() -> Option<wgpu::TextureFormat>;
+        pub fn color_format() -> TextureFormat;
+        pub fn depth_format() -> Option<TextureFormat>;
     }
 
     resource_setters! {
@@ -106,8 +106,8 @@ impl RenderPipeline {
         pub fn set_fragment_shader(fragment_shader: Option<ShaderId>);
         pub fn set_draw_strategy(draw_strategy: RenderDrawStrategy);
         pub fn set_bind_groups(bind_groups: Vec<BindGroupTarget>);
-        pub fn set_color_format(color_format: wgpu::TextureFormat);
-        pub fn set_depth_format(depth_format: Option<wgpu::TextureFormat>);
+        pub fn set_color_format(color_format: TextureFormat);
+        pub fn set_depth_format(depth_format: Option<TextureFormat>);
     }
 
     pub fn collect_bind_group_ids(
@@ -158,7 +158,7 @@ impl Creatable for RenderPipeline {
                 instances: 0..1,
             },
             bind_groups: Vec::new(),
-            color_format: wgpu::TextureFormat::Rgba8UnormSrgb,
+            color_format: TextureFormat::Rgba8UnormSrgb,
             depth_format: None,
             runtime_revision: Revision::default(),
             project_revision: Revision::default(),
@@ -320,7 +320,7 @@ impl SyncResource for RenderPipeline {
                 module: fragment_shader.inner(),
                 entry_point: None, // TODO: maybe allow for users to specify the entrypoint later?
                 targets: &[Some(wgpu::ColorTargetState {
-                    format: self.color_format,
+                    format: self.color_format.to_wgpu(),
                     blend: Some(wgpu::BlendState {
                         alpha: wgpu::BlendComponent::REPLACE,
                         color: wgpu::BlendComponent::REPLACE,
@@ -331,7 +331,7 @@ impl SyncResource for RenderPipeline {
             }),
             primitive: self.primitive_state,
             depth_stencil: self.depth_format.map(|format| wgpu::DepthStencilState {
-                format,
+                format: format.to_wgpu(),
                 depth_write_enabled: Some(true),
                 depth_compare: Some(wgpu::CompareFunction::LessEqual),
                 stencil: wgpu::StencilState::default(),

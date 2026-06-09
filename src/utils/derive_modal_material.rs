@@ -16,6 +16,7 @@ use crate::{
             texture_view::TextureView,
         },
     },
+    utils::texture_format::TextureFormat,
 };
 
 /// How the sampler binding (if any) is provided for the generated bind groups.
@@ -33,7 +34,7 @@ pub enum SamplerSetting {
 pub struct MaterialBindGroupsConfig {
     /// Texture types to include, paired with the format each created texture
     /// uses. Every material is expected to reference a texture for each type.
-    pub textures: Vec<(TextureType, wgpu::TextureFormat)>,
+    pub textures: Vec<(TextureType, TextureFormat)>,
     pub sampler: SamplerSetting,
 }
 
@@ -128,7 +129,7 @@ fn create_texture_and_view(
     project: &mut Project,
     material: &Material,
     texture_type: TextureType,
-    format: wgpu::TextureFormat,
+    format: TextureFormat,
     path: &FilePath,
 ) -> TextureViewId {
     let texture_label = project
@@ -163,13 +164,13 @@ fn texture_label(path: &FilePath, material: &Material, texture_type: TextureType
 
 /// Color textures get an srgb format, while data textures (normals, etc.)
 /// get a linear one.
-pub fn default_texture_format(texture_type: TextureType) -> wgpu::TextureFormat {
+pub fn default_texture_format(texture_type: TextureType) -> TextureFormat {
     match texture_type {
         TextureType::Ambient | TextureType::Diffuse | TextureType::Specular => {
-            wgpu::TextureFormat::Rgba8UnormSrgb
+            TextureFormat::Rgba8UnormSrgb
         }
         TextureType::Normal | TextureType::Shininess | TextureType::Dissolve => {
-            wgpu::TextureFormat::Rgba8Unorm
+            TextureFormat::Rgba8Unorm
         }
     }
 }

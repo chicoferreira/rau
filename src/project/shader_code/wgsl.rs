@@ -2,6 +2,7 @@ use super::backend::ShaderBackend;
 use super::ir::{
     Access, BindingKind, Sampled, ScalarKind, ShaderBinding, ShaderStruct, ShaderType, TexDim,
 };
+use crate::utils::texture_format::TextureFormat;
 
 pub struct WgslBackend;
 
@@ -34,9 +35,9 @@ impl WgslBackend {
         }
     }
 
-    /// WGSL storage texel formats match the lower-cased wgpu variant names
+    /// WGSL storage texel formats match the lower-cased format variant names
     /// (e.g. `Rgba8Unorm` → `rgba8unorm`); fall back to a common default.
-    fn texel_format(format: Option<wgpu::TextureFormat>) -> String {
+    fn texel_format(format: Option<TextureFormat>) -> String {
         format.map_or_else(
             || "rgba8unorm".to_string(),
             |format| format!("{format:?}").to_lowercase(),

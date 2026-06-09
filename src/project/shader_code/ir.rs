@@ -1,3 +1,5 @@
+use crate::utils::texture_format::TextureFormat;
+
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum ScalarKind {
     F32,
@@ -49,7 +51,7 @@ pub enum ShaderType {
     },
     StorageTexture {
         dim: TexDim,
-        format: Option<wgpu::TextureFormat>,
+        format: Option<TextureFormat>,
         access: Access,
     },
     Sampler {

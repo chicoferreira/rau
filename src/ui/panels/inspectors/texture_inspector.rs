@@ -1,3 +1,4 @@
+use strum::IntoEnumIterator;
 use wgpu::TextureUsages;
 
 use crate::{
@@ -11,6 +12,7 @@ use crate::{
         components::{flags_selector::flags_selector, hint, inspector, selector::AsWidgetText},
         pane::StateSnapshot,
     },
+    utils::texture_format::TextureFormat,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -41,16 +43,6 @@ impl AsWidgetText for TextureSourceKind {
     }
 }
 
-const TEXTURE_FORMATS: [wgpu::TextureFormat; 7] = [
-    wgpu::TextureFormat::Rgba8UnormSrgb,
-    wgpu::TextureFormat::Rgba8Unorm,
-    wgpu::TextureFormat::Rgba16Float,
-    wgpu::TextureFormat::Rgba32Float,
-    wgpu::TextureFormat::Depth32Float,
-    wgpu::TextureFormat::Depth24Plus,
-    wgpu::TextureFormat::Depth24PlusStencil8,
-];
-
 const TEXTURE_USAGES: &[(TextureUsages, &str)] = &[
     (TextureUsages::COPY_SRC, "Copy Source"),
     (TextureUsages::COPY_DST, "Copy Destination"),
@@ -67,18 +59,9 @@ const SOURCE_KINDS: [TextureSourceKind; 3] = [
     TextureSourceKind::Manual,
 ];
 
-impl AsWidgetText for wgpu::TextureFormat {
+impl AsWidgetText for TextureFormat {
     fn as_widget_text(&self) -> egui::WidgetText {
-        match self {
-            wgpu::TextureFormat::Rgba8UnormSrgb => "RGBA8 Unorm sRGB".into(),
-            wgpu::TextureFormat::Rgba8Unorm => "RGBA8 Unorm Linear".into(),
-            wgpu::TextureFormat::Rgba16Float => "RGBA16 Float".into(),
-            wgpu::TextureFormat::Rgba32Float => "RGBA32 Float".into(),
-            wgpu::TextureFormat::Depth32Float => "Depth32 Float".into(),
-            wgpu::TextureFormat::Depth24Plus => "Depth24 Plus".into(),
-            wgpu::TextureFormat::Depth24PlusStencil8 => "Depth24 Plus Stencil8".into(),
-            r => format!("{:?}", r).into(),
-        }
+        self.label().into()
     }
 }
 
@@ -99,7 +82,13 @@ impl StateSnapshot<'_> {
         let mut source = source_before.clone();
 
         inspector::field_grid(ui, "texture_inspector_grid", |ui| {
-            inspector::combo_row(ui, "Format", "texture_format", TEXTURE_FORMATS, &mut format);
+            inspector::combo_row(
+                ui,
+                "Format",
+                "texture_format",
+                TextureFormat::iter(),
+                &mut format,
+            );
 
             inspector::row(ui, "Usage", |ui| {
                 flags_selector(ui, "texture_usage", &mut usage, TEXTURE_USAGES);
