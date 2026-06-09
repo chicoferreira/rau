@@ -23,6 +23,9 @@ use crate::{
         },
     },
     ui::size::Size2d,
+    utils::derive_modal_material::{
+        MaterialBindGroupsConfig, SamplerSetting, default_texture_format,
+    },
 };
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -186,55 +189,26 @@ pub async fn create_scene(
         cube_model.vertex_buffer_spec().clone(),
         device.clone(),
     )
-    .await?; // temporary so we can set the material selection
-    let mut material_bind_group_ids = cube_model.material_bind_group_ids().to_vec();
-    for (material_index, material) in cube_model_runtime.materials().iter().enumerate() {
-        let diffuse_path = material
-            .get_texture_path(TextureType::Diffuse)
-            .expect("diffuse texture should exist");
-        let normal_path = material
-            .get_texture_path(TextureType::Normal)
-            .expect("normal texture should exist");
+    .await?; // temporary so we can build the material bind groups
 
-        let diffuse_format = wgpu::TextureFormat::Rgba8UnormSrgb;
-        let diffuse_texture = create_texture(diffuse_path.clone(), diffuse_format)?;
-        let diffuse_id = project.textures.register(diffuse_texture);
-
-        let normal_format = wgpu::TextureFormat::Rgba8Unorm;
-        let normal_texture = create_texture(normal_path.clone(), normal_format)?;
-        let normal_id = project.textures.register(normal_texture);
-
-        let diffuse_view = TextureView::new(diffuse_path.to_string(), Some(diffuse_id), None, None);
-        let normal_view = TextureView::new(normal_path.to_string(), Some(normal_id), None, None);
-
-        let diffuse_texture_view_id = project.texture_views.register(diffuse_view);
-        let normal_texture_view_id = project.texture_views.register(normal_view);
-
-        let entries = vec![
-            BindGroupEntry::new_vertex_fragment(BindGroupResource::Texture {
-                texture_view_id: Some(diffuse_texture_view_id),
-                view_dimension: wgpu::TextureViewDimension::D2,
-                sample_type: wgpu::TextureSampleType::Float { filterable: true },
-            }),
-            BindGroupEntry::new_vertex_fragment(BindGroupResource::Texture {
-                texture_view_id: Some(normal_texture_view_id),
-                view_dimension: wgpu::TextureViewDimension::D2,
-                sample_type: wgpu::TextureSampleType::Float { filterable: true },
-            }),
-            BindGroupEntry::new_vertex_fragment(BindGroupResource::Sampler {
-                sampler_id: Some(image_texture_sampler_id),
-                sampler_binding_type: wgpu::SamplerBindingType::Filtering,
-            }),
-        ];
-
-        let bind_group = BindGroup::new("cube bind group", entries);
-        let bind_group_id = project.bind_groups.register(bind_group);
-
-        if material_bind_group_ids.len() <= material_index {
-            material_bind_group_ids.resize(material_index + 1, None);
-        }
-        material_bind_group_ids[material_index] = Some(bind_group_id);
-    }
+    let material_bind_groups_config = MaterialBindGroupsConfig {
+        textures: vec![
+            (
+                TextureType::Diffuse,
+                default_texture_format(TextureType::Diffuse),
+            ),
+            (
+                TextureType::Normal,
+                default_texture_format(TextureType::Normal),
+            ),
+        ],
+        sampler: SamplerSetting::Existing(image_texture_sampler_id),
+    };
+    let material_bind_group_ids = material_bind_groups_config.create_bind_groups(
+        &mut project,
+        cube_model_runtime.materials(),
+        cube_model.label(),
+    )?;
     cube_model.set_material_bind_group_ids(material_bind_group_ids);
 
     let cube_model_id = project.models.register(cube_model);

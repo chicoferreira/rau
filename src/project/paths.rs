@@ -130,6 +130,13 @@ impl FilePath {
             .map(|(_, ext)| ext)
     }
 
+    /// Returns the file name without its extension, or the whole file name if it
+    /// has none.
+    pub fn file_stem(&self) -> Option<&str> {
+        self.file_name()
+            .map(|name| name.rsplit_once('.').map_or(name, |(stem, _)| stem))
+    }
+
     pub fn to_string(&self) -> String {
         self.segments.join("/")
     }

@@ -157,7 +157,7 @@
     },
     {
       "value": {
-        "label": "cube bind group",
+        "label": "cube Material.001 Bind Group",
         "entries": [
           {
             "visibility": "VERTEX | FRAGMENT",
@@ -288,7 +288,7 @@
     { "value": null, "version": 0 },
     {
       "value": {
-        "label": "cube-diffuse.jpg",
+        "label": "cube-diffuse",
         "format": "rgba8unorm-srgb",
         "usage": "COPY_DST | TEXTURE_BINDING",
         "source": { "type": "Image", "value": "cube-diffuse.jpg" }
@@ -297,7 +297,7 @@
     },
     {
       "value": {
-        "label": "cube-normal.png",
+        "label": "cube-normal",
         "format": "rgba8unorm",
         "usage": "COPY_DST | TEXTURE_BINDING",
         "source": { "type": "Image", "value": "cube-normal.png" }
@@ -359,7 +359,7 @@
     { "value": null, "version": 0 },
     {
       "value": {
-        "label": "cube-diffuse.jpg",
+        "label": "cube-diffuse View",
         "format": null,
         "dimension": null,
         "textureId": { "idx": 1, "version": 1 }
@@ -368,7 +368,7 @@
     },
     {
       "value": {
-        "label": "cube-normal.png",
+        "label": "cube-normal View",
         "format": null,
         "dimension": null,
         "textureId": { "idx": 2, "version": 1 }

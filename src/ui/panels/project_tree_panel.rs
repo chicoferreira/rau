@@ -274,6 +274,10 @@ pub fn ui(state: &mut StateSnapshot, ui: &mut egui::Ui) -> Response {
             for (id, model) in state.project.models.list_sorted() {
                 TreeNode::new(TreeNodeId::Model(id), model.label())
                     .with_event("Inspect", StateEvent::InspectResource(id.into()))
+                    .with_event(
+                        "Create Bind Groups from Materials",
+                        StateEvent::OpenMaterialBindGroupsModal(id),
+                    )
                     .with_rename_event("Rename", RenameTarget::Model(id))
                     .with_event("Delete", StateEvent::DeleteResource(id.into()))
                     .with_separator()

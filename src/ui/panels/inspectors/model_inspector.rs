@@ -25,6 +25,8 @@ use crate::{
         },
         pane::StateSnapshot,
     },
+    utils::event_queue::EventQueue,
+    workspace::StateEvent,
 };
 
 impl StateSnapshot<'_> {
@@ -51,6 +53,7 @@ impl StateSnapshot<'_> {
                     model_runtime,
                     &self.project.bind_groups,
                     &mut material_bind_group_ids,
+                    self.event_queue,
                 );
             }
             Ok(None) => {
@@ -357,6 +360,7 @@ fn materials_ui(
     model_runtime: &ModelRuntime,
     bind_groups: &Storage<BindGroup>,
     material_bind_group_ids: &mut Vec<Option<BindGroupId>>,
+    event_queue: &mut EventQueue<StateEvent>,
 ) {
     egui::CollapsingHeader::new(format!("Materials ({})", model_runtime.materials().len()))
         .default_open(true)
@@ -365,6 +369,11 @@ fn materials_ui(
                 ui.weak("No materials.");
                 return;
             }
+
+            if ui.button("Derive Bind Groups from Materials…").clicked() {
+                event_queue.add(StateEvent::OpenMaterialBindGroupsModal(model_id));
+            }
+            ui.add_space(6.0);
 
             for (mat_index, mat) in model_runtime.materials().iter().enumerate() {
                 let id = format!("model_material_{model_id:?}_{mat_index}");

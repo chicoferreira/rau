@@ -24,7 +24,7 @@ use crate::{
     },
     ui::{
         self,
-        components::tiles::TreePane,
+        components::{derive_modal_material_modal::MaterialBindGroupsModal, tiles::TreePane},
         panels::{inspector_pane::InspectorPane, viewport_pane::ViewportPane},
         rename::{RenameState, RenameTarget},
         size::Size2d,
@@ -54,6 +54,7 @@ pub struct Workspace {
     elapsed: instant::Duration,
     texture_captures: TextureCaptures,
     toasts: egui_notify::Toasts,
+    material_bind_groups_modal: Option<MaterialBindGroupsModal>,
 }
 
 pub struct AppContext<'a> {
@@ -98,6 +99,7 @@ pub enum StateEvent {
     },
     SetMainViewport(ViewportId),
     DownloadTextureImage(TextureId),
+    OpenMaterialBindGroupsModal(ModelId),
 }
 
 impl Workspace {
@@ -154,6 +156,7 @@ impl Workspace {
             elapsed: instant::Duration::ZERO,
             texture_captures: TextureCaptures::default(),
             toasts: egui_notify::Toasts::default(),
+            material_bind_groups_modal: None,
         })
     }
 
@@ -255,6 +258,21 @@ impl Workspace {
             &mut self.inspector_tree_pane,
             &mut self.viewport_tree_pane,
         );
+
+        self.material_bind_groups_modal_ui(ui);
+    }
+
+    fn material_bind_groups_modal_ui(&mut self, ui: &mut egui::Ui) {
+        let Some(modal) = self.material_bind_groups_modal.as_mut() else {
+            return;
+        };
+
+        let project = &mut self.project;
+        let keep_open = modal.show(ui, project, &self.runtime_project, &mut self.toasts);
+
+        if !keep_open {
+            self.material_bind_groups_modal = None;
+        }
     }
 
     fn handle_events(&mut self) {
@@ -434,6 +452,17 @@ impl Workspace {
                 }
                 StateEvent::DownloadTextureImage(texture_id) => {
                     self.texture_captures.request(texture_id);
+                }
+                StateEvent::OpenMaterialBindGroupsModal(model_id) => {
+                    if let Some(modal) = MaterialBindGroupsModal::open(
+                        &self.project,
+                        &self.runtime_project,
+                        self.file_storage.files(),
+                        &mut self.toasts,
+                        model_id,
+                    ) {
+                        self.material_bind_groups_modal = Some(modal);
+                    }
                 }
             }
         }
