@@ -8,7 +8,7 @@ use crate::{
         resource::{
             bindgroup::BindGroup,
             model::{
-                Material, Mesh, MeshMaterialSelection, Model, ModelRuntime,
+                Material, Mesh, MeshMaterialSelection, Model, ModelRuntime, TextureType,
                 vertex_buffer::{VertexBufferField, VertexBufferSpec},
             },
         },
@@ -411,20 +411,23 @@ fn material_bind_group_ui(
 }
 
 fn material_textures_ui(ui: &mut egui::Ui, mat: &Material) {
-    if mat.texture_paths().is_empty() {
-        ui.weak("No textures referenced.");
-        return;
-    }
-
     egui::CollapsingHeader::new("Textures")
         .default_open(true)
         .show(ui, |ui| {
-            for (tex_index, tex) in mat.texture_paths().iter().enumerate() {
-                ui.horizontal(|ui| {
-                    ui.weak(format!("{tex_index}"));
-                    ui.label(tex);
-                });
-            }
+            inspector::field_grid(ui, "model_material_textures_grid", |ui| {
+                for tex_type in TextureType::iter() {
+                    inspector::row(ui, tex_type.to_string(), |ui| {
+                        match mat.get_texture_path(tex_type) {
+                            Some(path) => {
+                                ui.label(path.to_string());
+                            }
+                            None => {
+                                ui.weak("—");
+                            }
+                        }
+                    });
+                }
+            });
         });
 }
 

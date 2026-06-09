@@ -9,7 +9,7 @@ use crate::{
             camera::{Camera, Deg, Pitch, Yaw},
             compute_pass::{ComputePass, WorkGroups},
             dimension::Dimension,
-            model::{Model, ModelRuntime},
+            model::{Model, ModelRuntime, TextureType},
             render_pass::{LoadOperation, RenderPass, RenderPassTarget},
             render_pipeline::{BindGroupTarget, RenderDrawStrategy, RenderPipeline},
             sampler::{Sampler, SamplerSpec},
@@ -189,23 +189,23 @@ pub async fn create_scene(
     .await?; // temporary so we can set the material selection
     let mut material_bind_group_ids = cube_model.material_bind_group_ids().to_vec();
     for (material_index, material) in cube_model_runtime.materials().iter().enumerate() {
-        let texture_paths = material.texture_paths();
-        let diffuse_path = texture_paths.get(0).cloned().unwrap_or_default();
-        let normal_path = texture_paths.get(1).cloned().unwrap_or_default();
-
-        let diffuse_file_path = FilePath::from_str(diffuse_path.clone())?;
-        let normal_file_path = FilePath::from_str(normal_path.clone())?;
+        let diffuse_path = material
+            .get_texture_path(TextureType::Diffuse)
+            .expect("diffuse texture should exist");
+        let normal_path = material
+            .get_texture_path(TextureType::Normal)
+            .expect("normal texture should exist");
 
         let diffuse_format = wgpu::TextureFormat::Rgba8UnormSrgb;
-        let diffuse_texture = create_texture(diffuse_file_path, diffuse_format)?;
+        let diffuse_texture = create_texture(diffuse_path.clone(), diffuse_format)?;
         let diffuse_id = project.textures.register(diffuse_texture);
 
         let normal_format = wgpu::TextureFormat::Rgba8Unorm;
-        let normal_texture = create_texture(normal_file_path, normal_format)?;
+        let normal_texture = create_texture(normal_path.clone(), normal_format)?;
         let normal_id = project.textures.register(normal_texture);
 
-        let diffuse_view = TextureView::new(diffuse_path, Some(diffuse_id), None, None);
-        let normal_view = TextureView::new(normal_path, Some(normal_id), None, None);
+        let diffuse_view = TextureView::new(diffuse_path.to_string(), Some(diffuse_id), None, None);
+        let normal_view = TextureView::new(normal_path.to_string(), Some(normal_id), None, None);
 
         let diffuse_texture_view_id = project.texture_views.register(diffuse_view);
         let normal_texture_view_id = project.texture_views.register(normal_view);

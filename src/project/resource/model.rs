@@ -2,6 +2,7 @@ use std::task::Poll;
 
 use serde::{Deserialize, Serialize};
 use slotmap::SecondaryMap;
+use strum::{Display, EnumIter};
 
 use crate::{
     error::{AppError, AppResult},
@@ -84,7 +85,17 @@ impl Default for MeshMaterialSelection {
 
 pub struct Material {
     label: String,
-    texture_paths: Vec<String>,
+    texture_paths: Vec<(TextureType, FilePath)>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, EnumIter, Display)]
+pub enum TextureType {
+    Ambient,
+    Diffuse,
+    Normal,
+    Specular,
+    Shininess,
+    Dissolve,
 }
 
 impl Model {
@@ -294,7 +305,10 @@ impl ModelRuntime {
                 materials: obj_materials,
                 mtl_dependencies,
             } = crate::utils::obj::load_obj(source, file_system).await?;
-            let materials = obj_materials.into_iter().map(Into::into).collect();
+            let materials = obj_materials
+                .into_iter()
+                .map(TryInto::try_into)
+                .collect::<AppResult<Vec<Material>>>()?;
 
             let scope = WgpuErrorScope::push(&device);
             let meshes = models
@@ -323,25 +337,28 @@ impl ModelRuntime {
     }
 }
 
-impl From<tobj::Material> for Material {
-    fn from(material: tobj::Material) -> Self {
+impl TryFrom<tobj::Material> for Material {
+    type Error = AppError;
+
+    fn try_from(material: tobj::Material) -> AppResult<Material> {
         let label = material.name;
         let texture_paths = [
-            material.ambient_texture,
-            material.diffuse_texture,
-            material.normal_texture,
-            material.specular_texture,
-            material.shininess_texture,
-            material.dissolve_texture,
+            (TextureType::Ambient, material.ambient_texture),
+            (TextureType::Diffuse, material.diffuse_texture),
+            (TextureType::Normal, material.normal_texture),
+            (TextureType::Specular, material.specular_texture),
+            (TextureType::Shininess, material.shininess_texture),
+            (TextureType::Dissolve, material.dissolve_texture),
         ]
         .into_iter()
-        .filter_map(|tex| tex)
-        .collect();
+        .filter_map(|(tex_type, path)| path.map(|p| (tex_type, p)))
+        .map(|(tex_type, path)| Ok((tex_type, FilePath::from_str(path)?)))
+        .collect::<AppResult<Vec<_>>>()?;
 
-        Material {
+        Ok(Material {
             label,
             texture_paths,
-        }
+        })
     }
 }
 
@@ -400,49 +417,29 @@ impl Mesh {
         })
     }
 
-    pub fn positions(&self) -> &[[f32; 3]] {
-        &self.positions
-    }
-
-    pub fn normals(&self) -> &[[f32; 3]] {
-        &self.normals
-    }
-
-    pub fn texture_coords(&self) -> &[[f32; 2]] {
-        &self.texture_coords
-    }
-
-    pub fn tangents(&self) -> &[[f32; 3]] {
-        &self.tangents
-    }
-
-    pub fn bitangents(&self) -> &[[f32; 3]] {
-        &self.bitangents
-    }
-
-    pub fn indices(&self) -> &[u32] {
-        &self.indices
-    }
-
-    pub fn material_index(&self) -> Option<usize> {
-        self.material_index
-    }
-
-    pub fn vertex_buffer(&self) -> &ResizableBuffer {
-        &self.vertex_buffer
-    }
-
-    pub fn index_buffer(&self) -> &ResizableBuffer {
-        &self.index_buffer
+    resource_getters! {
+        pub fn positions() -> &[[f32; 3]];
+        pub fn normals() -> &[[f32; 3]];
+        pub fn texture_coords() -> &[[f32; 2]];
+        pub fn tangents() -> &[[f32; 3]];
+        pub fn bitangents() -> &[[f32; 3]];
+        pub fn indices() -> &[u32];
+        pub fn material_index() -> Option<usize>;
+        pub fn vertex_buffer() -> &ResizableBuffer;
+        pub fn index_buffer() -> &ResizableBuffer;
     }
 }
 
 impl Material {
-    pub fn label(&self) -> &str {
-        &self.label
+    resource_getters! {
+        pub fn label() -> &str;
+        pub fn texture_paths() -> &[(TextureType, FilePath)];
     }
 
-    pub fn texture_paths(&self) -> &[String] {
-        &self.texture_paths
+    pub fn get_texture_path(&self, tex_type: TextureType) -> Option<&FilePath> {
+        self.texture_paths()
+            .iter()
+            .find(|(t, _)| *t == tex_type)
+            .map(|(_, path)| path)
     }
 }
