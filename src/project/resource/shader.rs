@@ -130,7 +130,7 @@ impl SyncResource for Shader {
             },
             ShaderJob::Validation(runtime, mut future) => {
                 return match future.try_resolve() {
-                    Poll::Ready(result) => result.map(|()| SyncOutcome::Changed(runtime)),
+                    Poll::Ready(result) => result.map(|()| SyncOutcome::Recreated(runtime)),
                     Poll::Pending => {
                         Ok(SyncOutcome::Pending(ShaderJob::Validation(runtime, future)))
                     }

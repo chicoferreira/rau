@@ -121,6 +121,22 @@
         ]
       },
       "version": 1
+    },
+    {
+      "value": {
+        "label": "Sky Color",
+        "fields": [
+          {
+            "label": "tint",
+            "source": {
+              "type": "userDefined",
+              "data_type": "rgb",
+              "data": [1.0, 1.0, 1.0]
+            }
+          }
+        ]
+      },
+      "version": 1
     }
   ],
   "bindGroups": [
@@ -248,6 +264,21 @@
                 "access": "write-only",
                 "view_dimension": "2d-array"
               }
+            }
+          }
+        ]
+      },
+      "version": 1
+    },
+    {
+      "value": {
+        "label": "sky color bind group",
+        "entries": [
+          {
+            "visibility": "COMPUTE",
+            "resource": {
+              "type": "uniform",
+              "value": { "idx": 3, "version": 1 }
             }
           }
         ]
@@ -580,7 +611,7 @@
           "modelMaterial",
           { "static": { "idx": 1, "version": 1 } },
           { "static": { "idx": 2, "version": 1 } },
-          { "static": { "idx": 6, "version": 1 } }
+          { "static": { "idx": 7, "version": 1 } }
         ],
         "colorFormat": "rgba16_float",
         "depthFormat": "depth32_float"
@@ -608,7 +639,7 @@
         },
         "bindGroups": [
           { "static": { "idx": 1, "version": 1 } },
-          { "static": { "idx": 6, "version": 1 } }
+          { "static": { "idx": 7, "version": 1 } }
         ],
         "colorFormat": "rgba16_float",
         "depthFormat": "depth32_float"
@@ -680,7 +711,10 @@
     {
       "value": {
         "label": "equirect_to_cube_map",
-        "bindGroups": [{ "idx": 5, "version": 1 }],
+        "bindGroups": [
+          { "idx": 5, "version": 1 },
+          { "idx": 6, "version": 1 }
+        ],
         "shader": { "idx": 1, "version": 1 },
         "workGroups": [68, 68, 6]
       },

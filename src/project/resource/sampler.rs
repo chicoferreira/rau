@@ -153,7 +153,7 @@ impl SyncResource for Sampler {
                 self.sync(id, ctx, None, SamplerJob::Validation(runtime, scope.pop()))
             }
             SamplerJob::Validation(runtime, mut future) => match future.try_resolve() {
-                Poll::Ready(result) => result.map(|()| SyncOutcome::Changed(runtime)),
+                Poll::Ready(result) => result.map(|()| SyncOutcome::Recreated(runtime)),
                 Poll::Pending => Ok(SyncOutcome::Pending(SamplerJob::Validation(
                     runtime, future,
                 ))),

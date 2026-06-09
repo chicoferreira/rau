@@ -269,7 +269,7 @@ impl SyncResource for Model {
                 Poll::Ready(result) => {
                     let (runtime, mtl_dependencies) = result?;
                     ctx.mtl_dependencies.insert(id, mtl_dependencies);
-                    Ok(SyncOutcome::Changed(runtime))
+                    Ok(SyncOutcome::Recreated(runtime))
                 }
                 Poll::Pending => Ok(SyncOutcome::Pending(ModelJob::Loading(future))),
             },

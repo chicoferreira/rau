@@ -492,13 +492,13 @@ impl SyncResource for Camera {
 
         match previous {
             Some(runtime) if runtime == new_runtime => Ok(SyncOutcome::Unchanged(runtime)),
-            _ => Ok(SyncOutcome::Changed(new_runtime)),
+            _ => Ok(SyncOutcome::Recreated(new_runtime)),
         }
     }
 
     fn needs_rebuild(&self, _: Self::Id, _: &Self::Context<'_>, tracker: &SyncTracker) -> bool {
         self.dimension_id
-            .map_or(false, |id| tracker.was_changed(id))
+            .is_some_and(|id| tracker.was_data_changed(id))
             || self.current_speed.length_squared() > 0.0
             || self.current_scroll_speed != 0.0
             || self.input != CameraFrameInput::default()

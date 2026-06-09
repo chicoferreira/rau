@@ -14,6 +14,14 @@ var src: texture_2d<f32>;
 @binding(1)
 var dst: texture_storage_2d_array<rgba32float, write>;
 
+struct SkyColor {
+    tint: vec3<f32>,
+}
+
+@group(1)
+@binding(0)
+var<uniform> sky_color: SkyColor;
+
 @compute
 @workgroup_size(16, 16, 1)
 fn compute_equirect_to_cubemap(
@@ -35,31 +43,31 @@ fn compute_equirect_to_cubemap(
             vec3(0.0, 0.0, -1.0), // right
         ),
         // FACES -X
-        Face (
+        Face(
             vec3(-1.0, 0.0, 0.0),
             vec3(0.0, 1.0, 0.0),
             vec3(0.0, 0.0, 1.0),
         ),
         // FACES +Y
-        Face (
+        Face(
             vec3(0.0, -1.0, 0.0),
             vec3(0.0, 0.0, 1.0),
             vec3(1.0, 0.0, 0.0),
         ),
         // FACES -Y
-        Face (
+        Face(
             vec3(0.0, 1.0, 0.0),
             vec3(0.0, 0.0, -1.0),
             vec3(1.0, 0.0, 0.0),
         ),
         // FACES +Z
-        Face (
+        Face(
             vec3(0.0, 0.0, 1.0),
             vec3(0.0, 1.0, 0.0),
             vec3(1.0, 0.0, 0.0),
         ),
         // FACES -Z
-        Face (
+        Face(
             vec3(0.0, 0.0, -1.0),
             vec3(0.0, 1.0, 0.0),
             vec3(-1.0, 0.0, 0.0),
@@ -81,6 +89,8 @@ fn compute_equirect_to_cubemap(
 
     // We use textureLoad() as textureSample() is not allowed in compute shaders
     var sample = textureLoad(src, eq_pixel, 0);
+
+    sample = vec4(sample.rgb * sky_color.tint, sample.a);
 
     textureStore(dst, gid.xy, gid.z, sample);
 }

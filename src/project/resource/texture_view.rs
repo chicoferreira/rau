@@ -233,7 +233,7 @@ impl SyncResource for TextureView {
                 self.sync(id, ctx, None, job)
             }
             TextureViewJob::Validation(runtime, mut future) => match future.try_resolve() {
-                Poll::Ready(result) => result.map(|()| SyncOutcome::Changed(runtime)),
+                Poll::Ready(result) => result.map(|()| SyncOutcome::Recreated(runtime)),
                 Poll::Pending => Ok(SyncOutcome::Pending(TextureViewJob::Validation(
                     runtime, future,
                 ))),
@@ -245,7 +245,20 @@ impl SyncResource for TextureView {
         let Some(texture_id) = self.texture_id else {
             return false;
         };
-        tracker.was_changed(texture_id)
+        tracker.was_recreated(texture_id)
+    }
+
+    /// A texture view exposes its texture's data: if the texture's contents change
+    /// without the texture object being recreated, the view's observable data
+    /// changed too.
+    fn forwards_data_changes(
+        &self,
+        _: Self::Id,
+        _: &Self::Context<'_>,
+        tracker: &SyncTracker,
+    ) -> bool {
+        self.texture_id
+            .is_some_and(|id| tracker.was_data_changed(id))
     }
 }
 

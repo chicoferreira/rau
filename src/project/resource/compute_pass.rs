@@ -125,12 +125,14 @@ impl SyncResource for ComputePass {
     }
 
     fn needs_rebuild(&self, _: Self::Id, _: &Self::Context<'_>, tracker: &SyncTracker) -> bool {
-        self.shader.is_some_and(|id| tracker.was_changed(id))
+        // A compute pass consumes the data of its inputs, so any data change
+        // may produce a different result and must re-dispatch.
+        self.shader.is_some_and(|id| tracker.was_data_changed(id))
             || self
                 .bind_groups
                 .iter()
                 .filter_map(|bind_group_id| *bind_group_id)
-                .any(|id| tracker.was_changed(id))
+                .any(|id| tracker.was_data_changed(id))
     }
 
     fn sync<'a>(
@@ -214,7 +216,7 @@ impl SyncResource for ComputePass {
                 self.sync(id, ctx, None, ComputePassJob::Validation(scope.pop()))
             }
             ComputePassJob::Validation(mut future) => match future.try_resolve() {
-                Poll::Ready(result) => result.map(|()| SyncOutcome::Changed(())),
+                Poll::Ready(result) => result.map(|()| SyncOutcome::Recreated(())),
                 Poll::Pending => Ok(SyncOutcome::Pending(ComputePassJob::Validation(future))),
             },
         }

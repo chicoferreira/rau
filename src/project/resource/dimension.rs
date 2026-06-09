@@ -80,7 +80,7 @@ impl SyncResource for Dimension {
         _previous: Option<Self::Runtime>,
         _job: Self::Job,
     ) -> AppResult<SyncOutcome<Self::Runtime, Self::Job>> {
-        Ok(SyncOutcome::Changed(()))
+        Ok(SyncOutcome::Recreated(()))
     }
 
     fn needs_rebuild(&self, _: Self::Id, _: &Self::Context<'_>, _: &SyncTracker) -> bool {

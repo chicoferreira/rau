@@ -314,10 +314,27 @@ pub async fn create_scene(
 
     let bind_group_id = project.bind_groups.register(bind_group);
 
+    let sky_color_uniform = Uniform::new(
+        "Sky Color",
+        vec![UniformField::new(
+            "tint",
+            UniformFieldSource::new_user_defined(UniformFieldData::Rgb([1.0, 1.0, 1.0])),
+        )],
+    );
+    let sky_color_uniform_id = project.uniforms.register(sky_color_uniform);
+
+    let sky_color_bind_group = BindGroup::new(
+        "sky color bind group",
+        vec![BindGroupEntry::new_compute(BindGroupResource::Uniform(
+            Some(sky_color_uniform_id),
+        ))],
+    );
+    let sky_color_bind_group_id = project.bind_groups.register(sky_color_bind_group);
+
     let num_workgroups = (dst_size + 15) / 16;
     let compute_pass = ComputePass::new(
         "equirect_to_cube_map",
-        vec![Some(bind_group_id)],
+        vec![Some(bind_group_id), Some(sky_color_bind_group_id)],
         Some(equirectengular_shader_id),
         WorkGroups::new(num_workgroups, num_workgroups, 6),
     );

@@ -267,7 +267,7 @@ impl SyncResource for Uniform {
                             &content,
                             usage,
                         ) {
-                            ChangeResult::Uploaded => Ok(SyncOutcome::Unchanged(runtime)),
+                            ChangeResult::Uploaded => Ok(SyncOutcome::DataChanged(runtime)),
                             ChangeResult::Recreated => {
                                 let job = UniformJob::Validation(runtime, scope.pop());
                                 self.sync(id, ctx, None, job)
@@ -283,7 +283,7 @@ impl SyncResource for Uniform {
                 }
             }
             UniformJob::Validation(runtime, mut future) => match future.try_resolve() {
-                Poll::Ready(result) => result.map(|()| SyncOutcome::Changed(runtime)),
+                Poll::Ready(result) => result.map(|()| SyncOutcome::Recreated(runtime)),
                 Poll::Pending => Ok(SyncOutcome::Pending(UniformJob::Validation(
                     runtime, future,
                 ))),
@@ -354,7 +354,7 @@ impl UniformField {
                     return false;
                 };
 
-                tracker.was_changed(camera_id)
+                tracker.was_data_changed(camera_id)
             }
             // Time advances every frame, so the uniform must always be re-evaluated.
             UniformFieldSource::Time => true,

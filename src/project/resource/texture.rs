@@ -148,7 +148,7 @@ impl SyncResource for Texture {
             },
             TextureJob::Validation(runtime, mut future) => {
                 return match future.try_resolve() {
-                    Poll::Ready(result) => result.map(|()| SyncOutcome::Changed(runtime)),
+                    Poll::Ready(result) => result.map(|()| SyncOutcome::Recreated(runtime)),
                     Poll::Pending => Ok(SyncOutcome::Pending(TextureJob::Validation(
                         runtime, future,
                     ))),
@@ -243,7 +243,7 @@ impl SyncResource for Texture {
 
     fn needs_rebuild(&self, _: Self::Id, _: &Self::Context<'_>, tracker: &SyncTracker) -> bool {
         match &self.source {
-            TextureSource::Dimension(Some(dimension_id)) => tracker.was_changed(*dimension_id),
+            TextureSource::Dimension(Some(dimension_id)) => tracker.was_data_changed(*dimension_id),
             TextureSource::Dimension(None) => false,
             TextureSource::Image(Some(path)) => tracker.file_changed(path),
             TextureSource::Image(None) => false,

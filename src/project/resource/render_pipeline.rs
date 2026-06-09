@@ -207,19 +207,19 @@ impl SyncResource for RenderPipeline {
     fn needs_rebuild(&self, _: Self::Id, _: &Self::Context<'_>, tracker: &SyncTracker) -> bool {
         let draw_strategy_needs_rebuild = match self.draw_strategy {
             RenderDrawStrategy::Model { model_id, .. } => {
-                model_id.is_some_and(|id| tracker.was_changed(id))
+                model_id.is_some_and(|id| tracker.was_recreated(id))
             }
             RenderDrawStrategy::Direct { .. } => false,
         };
 
         let shaders_needs_rebuild = [self.vertex_shader, self.fragment_shader]
             .into_iter()
-            .any(|id| id.is_some_and(|id| tracker.was_changed(id)));
+            .any(|id| id.is_some_and(|id| tracker.was_recreated(id)));
 
         let bind_groups_needs_rebuild = self.bind_groups.iter().any(|target| {
             match target {
                 BindGroupTarget::Empty => false,
-                BindGroupTarget::Static(id) => tracker.was_changed(*id),
+                BindGroupTarget::Static(id) => tracker.was_recreated(*id),
                 BindGroupTarget::ModelMaterial => false, // already handled by `draw_strategy_needs_rebuild`
             }
         });
@@ -240,7 +240,7 @@ impl SyncResource for RenderPipeline {
                     let job = RenderPipelineCreationJob::Validation(future, runtime);
                     Ok(SyncOutcome::Pending(job))
                 }
-                Poll::Ready(result) => result.map(|()| SyncOutcome::Changed(runtime)),
+                Poll::Ready(result) => result.map(|()| SyncOutcome::Recreated(runtime)),
             };
         }
 

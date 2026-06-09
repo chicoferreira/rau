@@ -4,7 +4,7 @@ use std::task::Poll;
 use crate::{
     error::{AppError, AppResult},
     project::{
-        BindGroupId, Creatable, ProjectResource, SamplerId, TextureViewId, UniformId,
+        BindGroupId, Creatable, ProjectResource, ResourceId, SamplerId, TextureViewId, UniformId,
         resource::{sampler::Sampler, texture_view::TextureView, uniform::Uniform},
         storage::RuntimeStorage,
         sync::{Revision, SyncOutcome, SyncResource, SyncTracker},
@@ -250,26 +250,33 @@ impl BindGroupEntry {
     }
 
     fn resource_recreated(&self, tracker: &SyncTracker) -> bool {
-        match self.resource {
-            BindGroupResource::Texture {
-                texture_view_id: Some(texture_view_id),
-                ..
-            } => tracker.was_changed(texture_view_id),
-            BindGroupResource::Sampler {
-                sampler_id: Some(sampler_id),
-                ..
-            } => tracker.was_changed(sampler_id),
-            BindGroupResource::Uniform(Some(uniform_id)) => tracker.was_changed(uniform_id),
-            BindGroupResource::StorageTexture {
-                texture_view_id: Some(texture_view_id),
-                ..
-            } => tracker.was_changed(texture_view_id),
-            _ => false,
-        }
+        self.resource
+            .id()
+            .is_some_and(|id| tracker.was_recreated(id))
+    }
+
+    fn resource_data_changed(&self, tracker: &SyncTracker) -> bool {
+        self.resource
+            .id()
+            .is_some_and(|id| tracker.was_data_changed(id))
     }
 }
 
 impl BindGroupResource {
+    /// The id of the resource this entry binds, if one is set.
+    pub fn id(&self) -> Option<ResourceId> {
+        match *self {
+            BindGroupResource::Texture {
+                texture_view_id, ..
+            }
+            | BindGroupResource::StorageTexture {
+                texture_view_id, ..
+            } => texture_view_id.map(Into::into),
+            BindGroupResource::Sampler { sampler_id, .. } => sampler_id.map(Into::into),
+            BindGroupResource::Uniform(uniform_id) => uniform_id.map(Into::into),
+        }
+    }
+
     fn to_wgpu_binding_type(
         self,
         binding: u32,
@@ -373,7 +380,7 @@ impl SyncResource for BindGroup {
                 self.sync(id, ctx, None, job)
             }
             BindGroupJob::Validation(runtime, mut future) => match future.try_resolve() {
-                Poll::Ready(result) => result.map(|()| SyncOutcome::Changed(runtime)),
+                Poll::Ready(result) => result.map(|()| SyncOutcome::Recreated(runtime)),
                 Poll::Pending => Ok(SyncOutcome::Pending(BindGroupJob::Validation(
                     runtime, future,
                 ))),
@@ -385,5 +392,16 @@ impl SyncResource for BindGroup {
         self.entries
             .iter()
             .any(|entry| entry.resource_recreated(tracker))
+    }
+
+    fn forwards_data_changes(
+        &self,
+        _: Self::Id,
+        _: &Self::Context<'_>,
+        tracker: &SyncTracker,
+    ) -> bool {
+        self.entries
+            .iter()
+            .any(|entry| entry.resource_data_changed(tracker))
     }
 }
