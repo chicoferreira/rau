@@ -2,6 +2,7 @@ pub mod async_job;
 pub mod background_task;
 #[cfg(target_arch = "wasm32")]
 pub mod browser;
+pub mod derive;
 pub mod derive_modal_material;
 pub mod dir_node;
 pub mod event_queue;

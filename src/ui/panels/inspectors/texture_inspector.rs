@@ -13,6 +13,7 @@ use crate::{
         pane::StateSnapshot,
     },
     utils::texture_format::TextureFormat,
+    workspace::StateEvent,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -107,6 +108,11 @@ impl StateSnapshot<'_> {
         ui.add(hint::hint(|ui| {
             ui.label("Create a Texture View to see the Texture contents.")
         }));
+
+        if ui.button("Derive Texture View").clicked() {
+            self.event_queue
+                .add(StateEvent::DeriveTextureView(texture_id));
+        }
 
         if format != format_before {
             texture.set_format(format);

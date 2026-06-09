@@ -378,7 +378,14 @@ fn materials_ui(
             for (mat_index, mat) in model_runtime.materials().iter().enumerate() {
                 let id = format!("model_material_{model_id:?}_{mat_index}");
                 ui.push_id(id, |ui| {
-                    material_ui(ui, mat_index, mat, bind_groups, material_bind_group_ids)
+                    material_ui(
+                        ui,
+                        mat_index,
+                        mat,
+                        bind_groups,
+                        material_bind_group_ids,
+                        event_queue,
+                    )
                 });
             }
         });
@@ -390,10 +397,11 @@ fn material_ui(
     mat: &Material,
     bind_groups: &Storage<BindGroup>,
     material_bind_group_ids: &mut Vec<Option<BindGroupId>>,
+    event_queue: &mut EventQueue<StateEvent>,
 ) {
     ui.collapsing(format!("Material {mat_index}: {}", mat.label()), |ui| {
         material_bind_group_ui(ui, mat_index, bind_groups, material_bind_group_ids);
-        material_textures_ui(ui, mat);
+        material_textures_ui(ui, mat, event_queue);
     });
 }
 
@@ -419,16 +427,31 @@ fn material_bind_group_ui(
     });
 }
 
-fn material_textures_ui(ui: &mut egui::Ui, mat: &Material) {
+fn material_textures_ui(
+    ui: &mut egui::Ui,
+    mat: &Material,
+    event_queue: &mut EventQueue<StateEvent>,
+) {
     egui::CollapsingHeader::new("Textures")
         .default_open(true)
         .show(ui, |ui| {
             inspector::field_grid(ui, "model_material_textures_grid", |ui| {
-                for tex_type in TextureType::iter() {
-                    inspector::row(ui, tex_type.to_string(), |ui| {
-                        match mat.get_texture_path(tex_type) {
+                for texture_type in TextureType::iter() {
+                    inspector::row(ui, texture_type.to_string(), |ui| {
+                        match mat.get_texture_path(texture_type) {
                             Some(path) => {
-                                ui.label(path.to_string());
+                                let label =
+                                    egui::Label::new(path.to_string()).sense(egui::Sense::click());
+                                ui.add(label).context_menu(|ui| {
+                                    if ui.button("Derive Texture").clicked() {
+                                        let event = StateEvent::DeriveTextureFromPath {
+                                            path: path.clone(),
+                                            texture_type,
+                                        };
+                                        event_queue.add(event);
+                                        ui.close();
+                                    }
+                                });
                             }
                             None => {
                                 ui.weak("—");

@@ -14,9 +14,14 @@ use crate::{
         paths::FilePath,
         render::{self, PresentationRender},
         resource::{
-            bindgroup::BindGroupCreationContext, camera::CameraCreationContext, compute_pass,
-            model::ModelCreationContext, render_pipeline, shader::ShaderCreationContext,
-            texture::TextureCreationContext, texture_view::TextureViewCreationContext,
+            bindgroup::BindGroupCreationContext,
+            camera::CameraCreationContext,
+            compute_pass,
+            model::{ModelCreationContext, TextureType},
+            render_pipeline,
+            shader::ShaderCreationContext,
+            texture::TextureCreationContext,
+            texture_view::TextureViewCreationContext,
             uniform::UniformCreationContext,
         },
         save::ProjectSaveState,
@@ -30,8 +35,12 @@ use crate::{
         size::Size2d,
     },
     utils::{
-        async_job::AsyncJob, event_queue::EventQueue, key::KeyboardState,
-        texture_capture::TextureCaptures, wgpu_utils::create_command_encoder,
+        async_job::AsyncJob,
+        derive::{derive_texture_from_material_path, derive_texture_view},
+        event_queue::EventQueue,
+        key::KeyboardState,
+        texture_capture::TextureCaptures,
+        wgpu_utils::create_command_encoder,
     },
 };
 
@@ -100,6 +109,13 @@ pub enum StateEvent {
     SetMainViewport(ViewportId),
     DownloadTextureImage(TextureId),
     OpenMaterialBindGroupsModal(ModelId),
+    /// Create a new texture view backed by the given texture.
+    DeriveTextureView(TextureId),
+    /// Create a new texture sourced from the given material image path.
+    DeriveTextureFromPath {
+        path: FilePath,
+        texture_type: TextureType,
+    },
 }
 
 impl Workspace {
@@ -463,6 +479,19 @@ impl Workspace {
                     ) {
                         self.material_bind_groups_modal = Some(modal);
                     }
+                }
+                StateEvent::DeriveTextureView(texture_id) => {
+                    if self.project.textures.get(texture_id).is_ok() {
+                        let texture_view_id = derive_texture_view(&mut self.project, texture_id);
+                        self.inspector_tree_pane
+                            .add_pane(InspectorPane::TextureView(texture_view_id));
+                    }
+                }
+                StateEvent::DeriveTextureFromPath { path, texture_type } => {
+                    let texture_id =
+                        derive_texture_from_material_path(&mut self.project, path, texture_type);
+                    self.inspector_tree_pane
+                        .add_pane(InspectorPane::Texture(texture_id));
                 }
             }
         }

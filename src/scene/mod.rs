@@ -24,7 +24,8 @@ use crate::{
     },
     ui::size::Size2d,
     utils::{
-        derive_modal_material::{MaterialBindGroupsConfig, SamplerSetting, default_texture_format},
+        derive::default_texture_format,
+        derive_modal_material::{MaterialBindGroupsConfig, SamplerSetting},
         texture_format::TextureFormat,
     },
 };

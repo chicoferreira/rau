@@ -14,7 +14,8 @@ use crate::{
     },
     ui::components::{inspector, selector::AsWidgetText},
     utils::{
-        derive_modal_material::{MaterialBindGroupsConfig, SamplerSetting, default_texture_format},
+        derive::default_texture_format,
+        derive_modal_material::{MaterialBindGroupsConfig, SamplerSetting},
         texture_format::TextureFormat,
     },
 };

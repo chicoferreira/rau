@@ -12,11 +12,12 @@ use crate::{
             bindgroup::{BindGroup, BindGroupEntry, BindGroupResource},
             model::{Material, TextureType},
             sampler::{Sampler, SamplerSpec},
-            texture::{Texture, TextureSource},
-            texture_view::TextureView,
         },
     },
-    utils::texture_format::TextureFormat,
+    utils::{
+        derive::{derive_texture, derive_texture_view, texture_label_from_path},
+        texture_format::TextureFormat,
+    },
 };
 
 /// How the sampler binding (if any) is provided for the generated bind groups.
@@ -89,8 +90,11 @@ impl MaterialBindGroupsConfig {
                 let texture_view_id = match texture_views_by_path.get(path) {
                     Some(texture_view_id) => *texture_view_id,
                     None => {
-                        let texture_view_id =
-                            create_texture_and_view(project, material, texture_type, format, path);
+                        let label = texture_label_from_path(path, || {
+                            format!("{} {texture_type}", material.label())
+                        });
+                        let texture_id = derive_texture(project, &label, format, path.clone());
+                        let texture_view_id = derive_texture_view(project, texture_id);
                         texture_views_by_path.insert(path.clone(), texture_view_id);
                         texture_view_id
                     }
@@ -122,55 +126,5 @@ impl MaterialBindGroupsConfig {
         }
 
         Ok(bind_group_ids)
-    }
-}
-
-fn create_texture_and_view(
-    project: &mut Project,
-    material: &Material,
-    texture_type: TextureType,
-    format: TextureFormat,
-    path: &FilePath,
-) -> TextureViewId {
-    let texture_label = project
-        .textures
-        .next_label(&texture_label(path, material, texture_type));
-
-    let texture = Texture::new(
-        texture_label.clone(),
-        format,
-        wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
-        TextureSource::Image(Some(path.clone())),
-    );
-    let texture_id = project.textures.register(texture);
-
-    let texture_view_label = project
-        .texture_views
-        .next_label(&format!("{texture_label} View"));
-    project.texture_views.register(TextureView::new(
-        texture_view_label,
-        Some(texture_id),
-        None,
-        None,
-    ))
-}
-
-fn texture_label(path: &FilePath, material: &Material, texture_type: TextureType) -> String {
-    path.file_stem()
-        .filter(|stem| !stem.is_empty())
-        .map(str::to_string)
-        .unwrap_or_else(|| format!("{} {texture_type}", material.label()))
-}
-
-/// Color textures get an srgb format, while data textures (normals, etc.)
-/// get a linear one.
-pub fn default_texture_format(texture_type: TextureType) -> TextureFormat {
-    match texture_type {
-        TextureType::Ambient | TextureType::Diffuse | TextureType::Specular => {
-            TextureFormat::Rgba8UnormSrgb
-        }
-        TextureType::Normal | TextureType::Shininess | TextureType::Dissolve => {
-            TextureFormat::Rgba8Unorm
-        }
     }
 }
