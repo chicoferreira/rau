@@ -38,7 +38,7 @@ heck = "0.5.0"
 image = { version = "0.25", default-features = false, features = ["png", "jpeg", "hdr"] }
 instant = "0.1"
 log = "0.4.29"
-naga = { version = "29.0.0", features = ["wgsl-in"] }
+naga = { version = "29.0.0", features = ["wgsl-in", "glsl-in"] }
 serde_json = "1.0.149"
 slotmap = { version = "1.0", features = ["serde"] }
 strum = { version = "0.28.0", features = ["derive"] }

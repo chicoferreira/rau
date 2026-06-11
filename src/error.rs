@@ -37,6 +37,8 @@ pub enum AppError {
     WgpuRequestAdapterError(#[from] wgpu::RequestAdapterError),
     #[error(transparent)]
     WgpuRequestDeviceError(#[from] wgpu::RequestDeviceError),
+    #[error("unsupported shader source extension {0:?} (expected .wgsl, .vert, .frag or .comp)")]
+    UnsupportedShaderExtension(String),
     /// A shader parse error occurred. Holds a message formatted with source
     /// location (line numbers and offending source snippet).
     #[error("shader parse error:\n{0}")]

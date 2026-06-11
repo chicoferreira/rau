@@ -1,6 +1,7 @@
 use crate::{
-    project::ShaderId,
+    project::{ShaderId, paths::FilePath},
     ui::{components::inspector, pane::StateSnapshot},
+    utils::wgpu_utils::ShaderSourceKind,
 };
 
 impl StateSnapshot<'_> {
@@ -16,13 +17,19 @@ impl StateSnapshot<'_> {
                 return;
             };
 
+            let is_shader_source = |path: &FilePath| {
+                path.extension()
+                    .and_then(ShaderSourceKind::from_extension)
+                    .is_some()
+            };
+
             if inspector::file_opt_combo_row(
                 ui,
                 "Source",
                 "shader_source",
                 &files,
                 &mut source,
-                |path| path.extension() == Some("wgsl"),
+                is_shader_source,
             ) {
                 shader.set_source(source);
             }

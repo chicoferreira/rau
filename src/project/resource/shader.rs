@@ -11,7 +11,9 @@ use crate::{
         sync::{Revision, SyncOutcome, SyncResource, SyncTracker},
     },
     resource_getters, resource_setters,
-    utils::{self, async_job::AsyncJob, wgpu_error_scope::WgpuErrorScope},
+    utils::{
+        self, async_job::AsyncJob, wgpu_error_scope::WgpuErrorScope, wgpu_utils::ShaderSourceKind,
+    },
 };
 
 #[derive(Serialize, Deserialize)]
@@ -138,8 +140,18 @@ impl SyncResource for Shader {
             }
         };
 
+        let path = self
+            .source
+            .as_ref()
+            .ok_or(AppError::uninit_field("Source"))?;
+        
+        let extension = path.extension().unwrap_or_default();
+
+        let kind = ShaderSourceKind::from_extension(extension)
+            .ok_or_else(|| AppError::UnsupportedShaderExtension(extension.to_string()))?;
+
         let scope = WgpuErrorScope::push(ctx.device);
-        let inner = utils::wgpu_utils::compile_wgsl_shader(ctx.device, &self.label, &source)?;
+        let inner = utils::wgpu_utils::compile_shader(ctx.device, &self.label, &source, kind)?;
 
         let runtime = ShaderRuntime { inner };
         self.sync(id, ctx, None, ShaderJob::Validation(runtime, scope.pop()))

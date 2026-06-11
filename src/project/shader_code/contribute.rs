@@ -81,25 +81,41 @@ impl ShaderInterface for BindGroupAt<'_> {
 impl ShaderInterface for RenderPipeline {
     fn contribute(&self, module: &mut ShaderModule, ctx: &ShaderGenCtx) {
         // A model draw strategy feeds the vertex shader, so surface its layout.
-        if let RenderDrawStrategy::Model {
-            model_id: Some(model_id),
-            ..
-        } = self.draw_strategy()
-            && let Ok(model) = ctx.models.get(*model_id)
-        {
+        let model = match self.draw_strategy() {
+            RenderDrawStrategy::Model {
+                model_id: Some(model_id),
+                ..
+            } => ctx.models.get(*model_id).ok(),
+            _ => None,
+        };
+        if let Some(model) = model {
             model.contribute(module, ctx);
         }
 
         for (group, target) in self.bind_groups().iter().enumerate() {
             let group = group as u32;
             match target {
-                BindGroupTarget::Empty => module.comment(format!("group {group} is empty")),
-                BindGroupTarget::ModelMaterial => module.comment(format!(
-                    "group {group} is bound to each mesh's material bind group"
-                )),
+                BindGroupTarget::Empty => module.comment(format!("group/set {group} is empty")),
+                BindGroupTarget::ModelMaterial => {
+                    module.comment(format!(
+                        "group/set {group} is bound to each mesh's material bind group"
+                    ));
+                    // Material bind group layouts are validated to match, so the
+                    // first one stands in for all of them.
+                    let material_bind_group = model.and_then(|model| {
+                        model
+                            .material_bind_group_ids()
+                            .iter()
+                            .flatten()
+                            .find_map(|id| ctx.bind_groups.get(*id).ok())
+                    });
+                    if let Some(bind_group) = material_bind_group {
+                        contribute_bind_group(module, Some(group), bind_group, ctx);
+                    }
+                }
                 BindGroupTarget::Static(id) => match ctx.bind_groups.get(*id) {
                     Ok(bind_group) => contribute_bind_group(module, Some(group), bind_group, ctx),
-                    Err(_) => module.comment(format!("group {group} is empty")),
+                    Err(_) => module.comment(format!("group/set {group} is empty")),
                 },
             }
         }

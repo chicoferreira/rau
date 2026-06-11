@@ -26,6 +26,7 @@ fn syntax_settings() -> &'static SyntectSettings {
         register_syntax!(builder, "syntaxes/WavefrontOBJ.sublime-syntax", "obj");
         register_syntax!(builder, "syntaxes/WavefrontMTL.sublime-syntax", "mtl");
         register_syntax!(builder, "syntaxes/JSON.sublime-syntax", "json");
+        register_syntax!(builder, "syntaxes/GLSL.sublime-syntax", "glsl");
         SyntectSettings {
             ps: builder.build(),
             ts: ThemeSet::load_defaults(),
@@ -52,32 +53,47 @@ pub fn shader_code_section(
         .id_salt(id_salt)
         .default_open(true)
         .show(ui, |ui| {
-            let backend = Language::Wgsl;
-            let code = shader_code::render(item, ctx, backend);
-            code_view(ui, &code, backend.highlight_extension());
+            let language_id = egui::Id::new("shader_code_language");
+            let language = ui
+                .ctx()
+                .data(|data| data.get_temp(language_id))
+                .unwrap_or(Language::Wgsl);
+
+            let code = shader_code::render(item, ctx, language);
+            let layout_job = layout_job(ui, &code, language.highlight_extension());
+
+            egui::Frame::group(ui.style())
+                .fill(ui.visuals().extreme_bg_color)
+                .show(ui, |ui| {
+                    ui.horizontal(|ui| {
+                        ui.add(egui::Label::new(layout_job).selectable(true));
+                        ui.with_layout(egui::Layout::right_to_left(egui::Align::TOP), |ui| {
+                            if ui.small_button("Copy").clicked() {
+                                ui.ctx().copy_text(code.clone());
+                            }
+
+                            let next = match language {
+                                Language::Wgsl => Language::Glsl,
+                                Language::Glsl => Language::Wgsl,
+                            };
+
+                            if ui
+                                .small_button(language.to_string())
+                                .on_hover_text(format!("Switch to {}", next))
+                                .clicked()
+                            {
+                                ui.ctx()
+                                    .data_mut(|data| data.insert_temp(language_id, next));
+                            }
+                        });
+                    });
+                });
         });
 }
 
 pub fn highlighted_label(ui: &mut egui::Ui, code: &str, extension: &str) -> egui::Response {
     let layout_job = layout_job(ui, code, extension);
     ui.add(egui::Label::new(layout_job).selectable(true))
-}
-
-pub fn code_view(ui: &mut egui::Ui, code: &str, extension: &str) {
-    let layout_job = layout_job(ui, code, extension);
-
-    egui::Frame::group(ui.style())
-        .fill(ui.visuals().extreme_bg_color)
-        .show(ui, |ui| {
-            ui.horizontal(|ui| {
-                ui.add(egui::Label::new(layout_job).selectable(true));
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::TOP), |ui| {
-                    if ui.small_button("Copy").clicked() {
-                        ui.ctx().copy_text(code.to_owned());
-                    }
-                });
-            });
-        });
 }
 
 pub fn code_editor(ui: &mut egui::Ui, text: &mut String, extension: &str) -> egui::Response {

@@ -4,12 +4,15 @@ use super::ir::{ShaderBinding, ShaderItem, ShaderModule, ShaderStruct, ShaderTyp
 pub enum Language {
     #[strum(to_string = "WGSL")]
     Wgsl,
+    #[strum(to_string = "GLSL")]
+    Glsl,
 }
 
 impl Language {
     pub fn highlight_extension(self) -> &'static str {
         match self {
             Language::Wgsl => "wgsl",
+            Language::Glsl => "glsl",
         }
     }
 }
