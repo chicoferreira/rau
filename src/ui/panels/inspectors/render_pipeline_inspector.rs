@@ -11,7 +11,6 @@ use crate::{
             render_pipeline::{BindGroupTarget, RenderDrawStrategy, RenderPipeline},
             shader::Shader,
         },
-        shader_code::ShaderGenCtx,
         storage::Storage,
     },
     ui::{
@@ -24,7 +23,7 @@ use crate::{
         },
         pane::StateSnapshot,
     },
-    utils::texture_format::TextureFormat,
+    utils::{shader_preview::ShaderGenCtx, texture_format::TextureFormat},
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

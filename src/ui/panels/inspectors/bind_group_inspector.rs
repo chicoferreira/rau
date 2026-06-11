@@ -10,7 +10,6 @@ use crate::{
             texture_view::TextureView,
             uniform::Uniform,
         },
-        shader_code::{BindGroupAt, ShaderGenCtx},
         storage::Storage,
     },
     ui::{
@@ -23,7 +22,7 @@ use crate::{
             selector::AsWidgetText,
         },
         pane::StateSnapshot,
-    },
+    }, utils::shader_preview::{BindGroupAt, ShaderGenCtx},
 };
 
 impl StateSnapshot<'_> {

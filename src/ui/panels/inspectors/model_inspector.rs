@@ -12,7 +12,6 @@ use crate::{
                 vertex_buffer::{VertexBufferField, VertexBufferSpec},
             },
         },
-        shader_code::ShaderGenCtx,
         storage::Storage,
     },
     ui::{
@@ -25,7 +24,7 @@ use crate::{
         },
         pane::StateSnapshot,
     },
-    utils::event_queue::EventQueue,
+    utils::{event_queue::EventQueue, shader_preview::ShaderGenCtx},
     workspace::StateEvent,
 };
 

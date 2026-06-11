@@ -6,7 +6,7 @@ use syntect::{
     parsing::{SyntaxDefinition, SyntaxSetBuilder},
 };
 
-use crate::project::shader_code::{self, Language, ShaderGenCtx, ShaderInterface};
+use crate::utils::shader_preview::{self, Language, ShaderGenCtx, ShaderInterface};
 
 static SYNTAX_SETTINGS: OnceLock<SyntectSettings> = OnceLock::new();
 
@@ -59,7 +59,7 @@ pub fn shader_code_section(
                 .data(|data| data.get_temp(language_id))
                 .unwrap_or(Language::Wgsl);
 
-            let code = shader_code::render(item, ctx, language);
+            let code = shader_preview::render(item, ctx, language);
             let layout_job = layout_job(ui, &code, language.highlight_extension());
 
             egui::Frame::group(ui.style())

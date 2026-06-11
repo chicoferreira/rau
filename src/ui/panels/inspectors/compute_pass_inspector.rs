@@ -8,7 +8,6 @@ use crate::{
             compute_pass::{ComputePass, WorkGroups},
             shader::Shader,
         },
-        shader_code::ShaderGenCtx,
         storage::Storage,
     },
     ui::{
@@ -19,7 +18,7 @@ use crate::{
             inspector,
         },
         pane::StateSnapshot,
-    },
+    }, utils::shader_preview::ShaderGenCtx,
 };
 
 impl StateSnapshot<'_> {
