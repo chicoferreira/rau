@@ -17,6 +17,10 @@ impl EguiRenderer {
         let egui_context = egui::Context::default();
         super::fonts::install(&egui_context);
 
+        // Disable the debug-build-only "widget rect changed id between passes" warning
+        #[cfg(debug_assertions)]
+        egui_context.all_styles_mut(|style| style.debug.warn_if_rect_changes_id = false);
+
         let egui_state = egui_winit::State::new(
             egui_context,
             egui::viewport::ViewportId::ROOT,
