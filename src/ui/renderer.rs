@@ -16,6 +16,7 @@ impl EguiRenderer {
     ) -> Self {
         let egui_context = egui::Context::default();
         super::fonts::install(&egui_context);
+        super::theme::install(&egui_context);
 
         // Disable the debug-build-only "widget rect changed id between passes" warning
         #[cfg(debug_assertions)]
@@ -85,12 +86,14 @@ impl EguiRenderer {
                 depth_slice: None,
                 resolve_target: None,
                 ops: wgpu::Operations {
-                    // TODO: change to egui actual background color
-                    load: wgpu::LoadOp::Clear(wgpu::Color {
-                        r: 27.0 / 255.0,
-                        g: 27.0 / 255.0,
-                        b: 27.0 / 255.0,
-                        a: 1.0,
+                    load: wgpu::LoadOp::Clear({
+                        let [r, g, b, _] = super::theme::CLEAR_COLOR.to_normalized_gamma_f32();
+                        wgpu::Color {
+                            r: r as f64,
+                            g: g as f64,
+                            b: b as f64,
+                            a: 1.0,
+                        }
                     }),
                     store: wgpu::StoreOp::Store,
                 },

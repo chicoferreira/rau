@@ -1,5 +1,3 @@
-use egui::Color32;
-
 use crate::{
     app::AppEvent,
     file::file_storage::FileStorage,
@@ -116,8 +114,7 @@ fn section_header(ui: &mut egui::Ui, title: &str) {
                     egui::Label::new(
                         egui::RichText::new(title.to_uppercase())
                             .size(11.0)
-                            .variation("wght", 600.0)
-                            .color(Color32::from_gray(200)),
+                            .variation("wght", 600.0),
                     )
                     .selectable(false),
                 );
