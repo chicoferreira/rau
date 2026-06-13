@@ -131,79 +131,71 @@ pub fn ui(state: &mut StateSnapshot, ui: &mut egui::Ui) -> Response {
         .row_layout(RowLayout::CompactAlignedLabels) // Align directory closers with leaf icons
         .override_indent(Some(25.0))
         .show(ui, |builder| {
-            resource_folder(TreeNodeId::UniformFolder, "Uniforms")
-                .with_label_suffix(count_suffix(state.project.uniforms.len()))
+            let presentation_error = state.runtime_project.get_error(PresentationId);
+            resource_leaf(
+                TreeNodeId::Presentation(PresentationId),
+                "Presentation",
+                presentation_error,
+            )
+            .with_event(
+                "Inspect",
+                StateEvent::InspectResource(PresentationId.into()),
+            )
+            .build_to(builder, state.event_queue, state.rename_state);
+
+            resource_folder(TreeNodeId::RenderPassFolder, "Render Passes")
+                .with_label_suffix(count_suffix(state.project.render_passes.len()))
+                .build_to(builder, state.event_queue, state.rename_state);
+            for (id, render_pass) in state.project.render_passes.list_sorted() {
+                let error = state.runtime_project.get_error(id);
+                resource_leaf(TreeNodeId::RenderPass(id), render_pass.label(), error)
+                    .with_event("Inspect", StateEvent::InspectResource(id.into()))
+                    .with_rename_event("Rename", RenameTarget::RenderPass(id))
+                    .build_to(builder, state.event_queue, state.rename_state);
+            }
+            builder.close_dir();
+
+            resource_folder(TreeNodeId::ComputePassFolder, "Compute Passes")
+                .with_label_suffix(count_suffix(state.project.compute_passes.len()))
                 .with_event(
-                    "Create New Uniform",
-                    StateEvent::CreateResource(ResourceKind::Uniform),
+                    "Create New Compute Pass",
+                    StateEvent::CreateResource(ResourceKind::ComputePass),
                 )
                 .build_to(builder, state.event_queue, state.rename_state);
-            pending_resource_node(state, builder, ResourceKind::Uniform);
-            for (id, uniform) in state.project.uniforms.list_sorted() {
+            pending_resource_node(state, builder, ResourceKind::ComputePass);
+            for (id, compute_pass) in state.project.compute_passes.list_sorted() {
                 let error = state.runtime_project.get_error(id);
-                resource_leaf(TreeNodeId::Uniform(id), uniform.label(), error)
+                resource_leaf(TreeNodeId::ComputePass(id), compute_pass.label(), error)
                     .with_event("Inspect", StateEvent::InspectResource(id.into()))
-                    .with_rename_event("Rename", RenameTarget::Uniform(id))
+                    .with_rename_event("Rename", RenameTarget::ComputePass(id))
                     .with_event("Delete", StateEvent::DeleteResource(id.into()))
                     .with_separator()
                     .with_event(
-                        "Create New Uniform",
-                        StateEvent::CreateResource(ResourceKind::Uniform),
+                        "Create New Compute Pass",
+                        StateEvent::CreateResource(ResourceKind::ComputePass),
                     )
                     .build_to(builder, state.event_queue, state.rename_state);
             }
             builder.close_dir();
 
-            resource_folder(TreeNodeId::BindGroupFolder, "Bind Groups")
-                .with_label_suffix(count_suffix(state.project.bind_groups.len()))
+            resource_folder(TreeNodeId::RenderPipelineFolder, "Render Pipelines")
+                .with_label_suffix(count_suffix(state.project.render_pipelines.len()))
                 .with_event(
-                    "Create New Bind Group",
-                    StateEvent::CreateResource(ResourceKind::BindGroup),
+                    "Create New Render Pipeline",
+                    StateEvent::CreateResource(ResourceKind::RenderPipeline),
                 )
                 .build_to(builder, state.event_queue, state.rename_state);
-            pending_resource_node(state, builder, ResourceKind::BindGroup);
-            for (id, bind_group) in state.project.bind_groups.list_sorted() {
+            pending_resource_node(state, builder, ResourceKind::RenderPipeline);
+            for (id, r_pipeline) in state.project.render_pipelines.list_sorted() {
                 let error = state.runtime_project.get_error(id);
-                resource_leaf(TreeNodeId::BindGroup(id), bind_group.label(), error)
+                resource_leaf(TreeNodeId::RenderPipeline(id), r_pipeline.label(), error)
                     .with_event("Inspect", StateEvent::InspectResource(id.into()))
-                    .with_rename_event("Rename", RenameTarget::BindGroup(id))
+                    .with_rename_event("Rename", RenameTarget::RenderPipeline(id))
                     .with_event("Delete", StateEvent::DeleteResource(id.into()))
                     .with_separator()
                     .with_event(
-                        "Create New Bind Group",
-                        StateEvent::CreateResource(ResourceKind::BindGroup),
-                    )
-                    .build_to(builder, state.event_queue, state.rename_state);
-            }
-            builder.close_dir();
-
-            resource_folder(TreeNodeId::ViewportFolder, "Viewports")
-                .with_label_suffix(count_suffix(state.project.viewports.len()))
-                .with_event(
-                    "Create New Viewport",
-                    StateEvent::CreateResource(ResourceKind::Viewport),
-                )
-                .build_to(builder, state.event_queue, state.rename_state);
-            pending_resource_node(state, builder, ResourceKind::Viewport);
-            for (id, viewport) in state.project.viewports.list_sorted() {
-                let is_main_viewport = state.project.presentation.main_viewport() == Some(id);
-                let error = state.runtime_project.get_error(id);
-                resource_leaf(TreeNodeId::Viewport(id), viewport.label(), error)
-                    .with_event("View", StateEvent::OpenViewport(id))
-                    .with_event("Inspect", StateEvent::InspectResource(id.into()))
-                    .with_rename_event("Rename", RenameTarget::Viewport(id))
-                    .with_event("Delete", StateEvent::DeleteResource(id.into()))
-                    .with_separator()
-                    .with_event_if(
-                        !is_main_viewport,
-                        "Set as Main Viewport",
-                        "Already set as main viewport",
-                        StateEvent::SetMainViewport(id),
-                    )
-                    .with_separator()
-                    .with_event(
-                        "Create New Viewport",
-                        StateEvent::CreateResource(ResourceKind::Viewport),
+                        "Create New Render Pipeline",
+                        StateEvent::CreateResource(ResourceKind::RenderPipeline),
                     )
                     .build_to(builder, state.event_queue, state.rename_state);
             }
@@ -232,70 +224,47 @@ pub fn ui(state: &mut StateSnapshot, ui: &mut egui::Ui) -> Response {
             }
             builder.close_dir();
 
-            resource_folder(TreeNodeId::CameraFolder, "Cameras")
-                .with_label_suffix(count_suffix(state.project.cameras.len()))
+            resource_folder(TreeNodeId::BindGroupFolder, "Bind Groups")
+                .with_label_suffix(count_suffix(state.project.bind_groups.len()))
                 .with_event(
-                    "Create New Camera",
-                    StateEvent::CreateResource(ResourceKind::Camera),
+                    "Create New Bind Group",
+                    StateEvent::CreateResource(ResourceKind::BindGroup),
                 )
                 .build_to(builder, state.event_queue, state.rename_state);
-            pending_resource_node(state, builder, ResourceKind::Camera);
-            for (id, camera) in state.project.cameras.list_sorted() {
+            pending_resource_node(state, builder, ResourceKind::BindGroup);
+            for (id, bind_group) in state.project.bind_groups.list_sorted() {
                 let error = state.runtime_project.get_error(id);
-                resource_leaf(TreeNodeId::Camera(id), camera.label(), error)
+                resource_leaf(TreeNodeId::BindGroup(id), bind_group.label(), error)
                     .with_event("Inspect", StateEvent::InspectResource(id.into()))
-                    .with_rename_event("Rename", RenameTarget::Camera(id))
+                    .with_rename_event("Rename", RenameTarget::BindGroup(id))
                     .with_event("Delete", StateEvent::DeleteResource(id.into()))
                     .with_separator()
                     .with_event(
-                        "Create New Camera",
-                        StateEvent::CreateResource(ResourceKind::Camera),
+                        "Create New Bind Group",
+                        StateEvent::CreateResource(ResourceKind::BindGroup),
                     )
                     .build_to(builder, state.event_queue, state.rename_state);
             }
             builder.close_dir();
 
-            resource_folder(TreeNodeId::DimensionFolder, "Dimensions")
-                .with_label_suffix(count_suffix(state.project.dimensions.len()))
+            resource_folder(TreeNodeId::UniformFolder, "Uniforms")
+                .with_label_suffix(count_suffix(state.project.uniforms.len()))
                 .with_event(
-                    "Create New Dimension",
-                    StateEvent::CreateResource(ResourceKind::Dimension),
+                    "Create New Uniform",
+                    StateEvent::CreateResource(ResourceKind::Uniform),
                 )
                 .build_to(builder, state.event_queue, state.rename_state);
-            pending_resource_node(state, builder, ResourceKind::Dimension);
-            for (id, dimension) in state.project.dimensions.list_sorted() {
+            pending_resource_node(state, builder, ResourceKind::Uniform);
+            for (id, uniform) in state.project.uniforms.list_sorted() {
                 let error = state.runtime_project.get_error(id);
-                resource_leaf(TreeNodeId::Dimension(id), dimension.label(), error)
+                resource_leaf(TreeNodeId::Uniform(id), uniform.label(), error)
                     .with_event("Inspect", StateEvent::InspectResource(id.into()))
-                    .with_rename_event("Rename", RenameTarget::Dimension(id))
+                    .with_rename_event("Rename", RenameTarget::Uniform(id))
                     .with_event("Delete", StateEvent::DeleteResource(id.into()))
                     .with_separator()
                     .with_event(
-                        "Create New Dimension",
-                        StateEvent::CreateResource(ResourceKind::Dimension),
-                    )
-                    .build_to(builder, state.event_queue, state.rename_state);
-            }
-            builder.close_dir();
-
-            resource_folder(TreeNodeId::SamplerFolder, "Samplers")
-                .with_label_suffix(count_suffix(state.project.samplers.len()))
-                .with_event(
-                    "Create New Sampler",
-                    StateEvent::CreateResource(ResourceKind::Sampler),
-                )
-                .build_to(builder, state.event_queue, state.rename_state);
-            pending_resource_node(state, builder, ResourceKind::Sampler);
-            for (id, sampler) in state.project.samplers.list_sorted() {
-                let error = state.runtime_project.get_error(id);
-                resource_leaf(TreeNodeId::Sampler(id), sampler.label(), error)
-                    .with_event("Inspect", StateEvent::InspectResource(id.into()))
-                    .with_rename_event("Rename", RenameTarget::Sampler(id))
-                    .with_event("Delete", StateEvent::DeleteResource(id.into()))
-                    .with_separator()
-                    .with_event(
-                        "Create New Sampler",
-                        StateEvent::CreateResource(ResourceKind::Sampler),
+                        "Create New Uniform",
+                        StateEvent::CreateResource(ResourceKind::Uniform),
                     )
                     .build_to(builder, state.event_queue, state.rename_state);
             }
@@ -349,6 +318,29 @@ pub fn ui(state: &mut StateSnapshot, ui: &mut egui::Ui) -> Response {
             }
             builder.close_dir();
 
+            resource_folder(TreeNodeId::SamplerFolder, "Samplers")
+                .with_label_suffix(count_suffix(state.project.samplers.len()))
+                .with_event(
+                    "Create New Sampler",
+                    StateEvent::CreateResource(ResourceKind::Sampler),
+                )
+                .build_to(builder, state.event_queue, state.rename_state);
+            pending_resource_node(state, builder, ResourceKind::Sampler);
+            for (id, sampler) in state.project.samplers.list_sorted() {
+                let error = state.runtime_project.get_error(id);
+                resource_leaf(TreeNodeId::Sampler(id), sampler.label(), error)
+                    .with_event("Inspect", StateEvent::InspectResource(id.into()))
+                    .with_rename_event("Rename", RenameTarget::Sampler(id))
+                    .with_event("Delete", StateEvent::DeleteResource(id.into()))
+                    .with_separator()
+                    .with_event(
+                        "Create New Sampler",
+                        StateEvent::CreateResource(ResourceKind::Sampler),
+                    )
+                    .build_to(builder, state.event_queue, state.rename_state);
+            }
+            builder.close_dir();
+
             resource_folder(TreeNodeId::ModelFolder, "Models")
                 .with_label_suffix(count_suffix(state.project.models.len()))
                 .with_event(
@@ -376,75 +368,83 @@ pub fn ui(state: &mut StateSnapshot, ui: &mut egui::Ui) -> Response {
             }
             builder.close_dir();
 
-            resource_folder(TreeNodeId::RenderPipelineFolder, "Render Pipelines")
-                .with_label_suffix(count_suffix(state.project.render_pipelines.len()))
+            resource_folder(TreeNodeId::CameraFolder, "Cameras")
+                .with_label_suffix(count_suffix(state.project.cameras.len()))
                 .with_event(
-                    "Create New Render Pipeline",
-                    StateEvent::CreateResource(ResourceKind::RenderPipeline),
+                    "Create New Camera",
+                    StateEvent::CreateResource(ResourceKind::Camera),
                 )
                 .build_to(builder, state.event_queue, state.rename_state);
-            pending_resource_node(state, builder, ResourceKind::RenderPipeline);
-            for (id, r_pipeline) in state.project.render_pipelines.list_sorted() {
+            pending_resource_node(state, builder, ResourceKind::Camera);
+            for (id, camera) in state.project.cameras.list_sorted() {
                 let error = state.runtime_project.get_error(id);
-                resource_leaf(TreeNodeId::RenderPipeline(id), r_pipeline.label(), error)
+                resource_leaf(TreeNodeId::Camera(id), camera.label(), error)
                     .with_event("Inspect", StateEvent::InspectResource(id.into()))
-                    .with_rename_event("Rename", RenameTarget::RenderPipeline(id))
+                    .with_rename_event("Rename", RenameTarget::Camera(id))
                     .with_event("Delete", StateEvent::DeleteResource(id.into()))
                     .with_separator()
                     .with_event(
-                        "Create New Render Pipeline",
-                        StateEvent::CreateResource(ResourceKind::RenderPipeline),
+                        "Create New Camera",
+                        StateEvent::CreateResource(ResourceKind::Camera),
                     )
                     .build_to(builder, state.event_queue, state.rename_state);
             }
             builder.close_dir();
 
-            resource_folder(TreeNodeId::RenderPassFolder, "Render Passes")
-                .with_label_suffix(count_suffix(state.project.render_passes.len()))
-                .build_to(builder, state.event_queue, state.rename_state);
-            for (id, render_pass) in state.project.render_passes.list_sorted() {
-                let error = state.runtime_project.get_error(id);
-                resource_leaf(TreeNodeId::RenderPass(id), render_pass.label(), error)
-                    .with_event("Inspect", StateEvent::InspectResource(id.into()))
-                    .with_rename_event("Rename", RenameTarget::RenderPass(id))
-                    .build_to(builder, state.event_queue, state.rename_state);
-            }
-            builder.close_dir();
-
-            resource_folder(TreeNodeId::ComputePassFolder, "Compute Passes")
-                .with_label_suffix(count_suffix(state.project.compute_passes.len()))
+            resource_folder(TreeNodeId::ViewportFolder, "Viewports")
+                .with_label_suffix(count_suffix(state.project.viewports.len()))
                 .with_event(
-                    "Create New Compute Pass",
-                    StateEvent::CreateResource(ResourceKind::ComputePass),
+                    "Create New Viewport",
+                    StateEvent::CreateResource(ResourceKind::Viewport),
                 )
                 .build_to(builder, state.event_queue, state.rename_state);
-            pending_resource_node(state, builder, ResourceKind::ComputePass);
-            for (id, compute_pass) in state.project.compute_passes.list_sorted() {
+            pending_resource_node(state, builder, ResourceKind::Viewport);
+            for (id, viewport) in state.project.viewports.list_sorted() {
+                let is_main_viewport = state.project.presentation.main_viewport() == Some(id);
                 let error = state.runtime_project.get_error(id);
-                resource_leaf(TreeNodeId::ComputePass(id), compute_pass.label(), error)
+                resource_leaf(TreeNodeId::Viewport(id), viewport.label(), error)
+                    .with_event("View", StateEvent::OpenViewport(id))
                     .with_event("Inspect", StateEvent::InspectResource(id.into()))
-                    .with_rename_event("Rename", RenameTarget::ComputePass(id))
+                    .with_rename_event("Rename", RenameTarget::Viewport(id))
                     .with_event("Delete", StateEvent::DeleteResource(id.into()))
                     .with_separator()
+                    .with_event_if(
+                        !is_main_viewport,
+                        "Set as Main Viewport",
+                        "Already set as main viewport",
+                        StateEvent::SetMainViewport(id),
+                    )
+                    .with_separator()
                     .with_event(
-                        "Create New Compute Pass",
-                        StateEvent::CreateResource(ResourceKind::ComputePass),
+                        "Create New Viewport",
+                        StateEvent::CreateResource(ResourceKind::Viewport),
                     )
                     .build_to(builder, state.event_queue, state.rename_state);
             }
             builder.close_dir();
 
-            let presentation_error = state.runtime_project.get_error(PresentationId);
-            resource_leaf(
-                TreeNodeId::Presentation(PresentationId),
-                "Presentation",
-                presentation_error,
-            )
-            .with_event(
-                "Inspect",
-                StateEvent::InspectResource(PresentationId.into()),
-            )
-            .build_to(builder, state.event_queue, state.rename_state);
+            resource_folder(TreeNodeId::DimensionFolder, "Dimensions")
+                .with_label_suffix(count_suffix(state.project.dimensions.len()))
+                .with_event(
+                    "Create New Dimension",
+                    StateEvent::CreateResource(ResourceKind::Dimension),
+                )
+                .build_to(builder, state.event_queue, state.rename_state);
+            pending_resource_node(state, builder, ResourceKind::Dimension);
+            for (id, dimension) in state.project.dimensions.list_sorted() {
+                let error = state.runtime_project.get_error(id);
+                resource_leaf(TreeNodeId::Dimension(id), dimension.label(), error)
+                    .with_event("Inspect", StateEvent::InspectResource(id.into()))
+                    .with_rename_event("Rename", RenameTarget::Dimension(id))
+                    .with_event("Delete", StateEvent::DeleteResource(id.into()))
+                    .with_separator()
+                    .with_event(
+                        "Create New Dimension",
+                        StateEvent::CreateResource(ResourceKind::Dimension),
+                    )
+                    .build_to(builder, state.event_queue, state.rename_state);
+            }
+            builder.close_dir();
         });
 
     for action in actions {
