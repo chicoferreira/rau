@@ -144,7 +144,7 @@ impl SyncResource for Shader {
             .source
             .as_ref()
             .ok_or(AppError::uninit_field("Source"))?;
-        
+
         let extension = path.extension().unwrap_or_default();
 
         let kind = ShaderSourceKind::from_extension(extension)

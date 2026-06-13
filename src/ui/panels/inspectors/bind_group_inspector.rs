@@ -22,7 +22,8 @@ use crate::{
             selector::AsWidgetText,
         },
         pane::StateSnapshot,
-    }, utils::shader_preview::{BindGroupAt, ShaderGenCtx},
+    },
+    utils::shader_preview::{BindGroupAt, ShaderGenCtx},
 };
 
 impl StateSnapshot<'_> {

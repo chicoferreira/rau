@@ -58,7 +58,7 @@ impl StateSnapshot<'_> {
                 let half_height = ui.available_height() * 0.5;
 
                 egui::Panel::top("files_panel")
-                    .frame(egui::Frame::new().inner_margin(0))
+                    .frame(egui::Frame::new().inner_margin(egui::Margin::symmetric(4, 0)))
                     .resizable(true)
                     .default_size(half_height)
                     .show_inside(ui, |ui| {
@@ -66,7 +66,7 @@ impl StateSnapshot<'_> {
                     });
 
                 egui::CentralPanel::default()
-                    .frame(egui::Frame::new().inner_margin(0))
+                    .frame(egui::Frame::new().inner_margin(egui::Margin::symmetric(4, 0)))
                     .show_inside(ui, |ui| {
                         section_panel(ui, "Project Resources", |ui| {
                             project_tree_panel::ui(self, ui)

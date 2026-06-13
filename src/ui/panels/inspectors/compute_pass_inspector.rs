@@ -18,7 +18,8 @@ use crate::{
             inspector,
         },
         pane::StateSnapshot,
-    }, utils::shader_preview::ShaderGenCtx,
+    },
+    utils::shader_preview::ShaderGenCtx,
 };
 
 impl StateSnapshot<'_> {

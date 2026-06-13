@@ -230,6 +230,24 @@ impl RuntimeProject {
                     .map(|error| (ResourceId::Presentation(PresentationId), error)),
             )
     }
+
+    pub fn get_error(&self, id: impl Into<ResourceId>) -> Option<&AppError> {
+        match id.into() {
+            ResourceId::Shader(id) => self.shaders.get_error(id),
+            ResourceId::Uniform(id) => self.uniforms.get_error(id),
+            ResourceId::BindGroup(id) => self.bind_groups.get_error(id),
+            ResourceId::Texture(id) => self.textures.get_error(id),
+            ResourceId::TextureView(id) => self.texture_views.get_error(id),
+            ResourceId::Sampler(id) => self.samplers.get_error(id),
+            ResourceId::Dimension(id) => self.dimensions.get_error(id),
+            ResourceId::Camera(id) => self.cameras.get_error(id),
+            ResourceId::Model(id) => self.models.get_error(id),
+            ResourceId::RenderPipeline(id) => self.render_pipelines.get_error(id),
+            ResourceId::ComputePass(id) => self.compute_passes.get_error(id),
+            ResourceId::Presentation(_) => self.presentation_render.error(),
+            ResourceId::Viewport(_) | ResourceId::RenderPass(_) => None,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, derive_more::From)]

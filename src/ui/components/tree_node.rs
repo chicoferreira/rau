@@ -15,6 +15,13 @@ use crate::{
 pub struct TreeNode<'a, T> {
     tree_id: T,
     label: &'a str,
+    /// Resolves the label color from the current theme at render time.
+    label_color: Option<Box<dyn Fn(&egui::Visuals) -> egui::Color32 + 'a>>,
+    icon: Option<&'a str>,
+    icon_color: Option<egui::Color32>,
+    closer_icons: Option<(&'a str, &'a str)>,
+    /// Extra content rendered after the label (e.g. a child count).
+    label_suffix: Option<Box<dyn FnMut(&mut egui::Ui) + 'a>>,
     events: Vec<ContextMenuEntity<'a>>,
     rename_target: Option<RenameTarget>,
     is_folder: bool,
@@ -61,6 +68,11 @@ where
         Self {
             tree_id,
             label,
+            label_color: None,
+            icon: None,
+            icon_color: None,
+            closer_icons: None,
+            label_suffix: None,
             events: Vec::new(),
             rename_target: None,
             is_folder: false,
@@ -71,10 +83,42 @@ where
         Self {
             tree_id,
             label,
+            label_color: None,
+            icon: None,
+            icon_color: None,
+            closer_icons: None,
+            label_suffix: None,
             events: Vec::new(),
             rename_target: None,
             is_folder: true,
         }
+    }
+
+    pub fn with_icon(mut self, icon: &'a str, color: [u8; 3]) -> Self {
+        self.icon = Some(icon);
+        self.icon_color = Some(egui::Color32::from_rgb(color[0], color[1], color[2]));
+        self
+    }
+
+    pub fn with_closer_icons(mut self, closed: &'a str, open: &'a str, color: [u8; 3]) -> Self {
+        self.closer_icons = Some((closed, open));
+        self.icon_color = Some(egui::Color32::from_rgb(color[0], color[1], color[2]));
+        self
+    }
+
+    /// Render extra content after the label (e.g. a child count or badge).
+    pub fn with_label_suffix(mut self, add: impl FnMut(&mut egui::Ui) + 'a) -> Self {
+        self.label_suffix = Some(Box::new(add));
+        self
+    }
+
+    /// Tint the label text with a color resolved from the theme at render time.
+    pub fn with_label_color(
+        mut self,
+        color: impl Fn(&egui::Visuals) -> egui::Color32 + 'a,
+    ) -> Self {
+        self.label_color = Some(Box::new(color));
+        self
     }
 
     pub fn with_event(mut self, label: &'a str, event: StateEvent) -> Self {
@@ -129,20 +173,67 @@ where
             NodeBuilder::leaf(self.tree_id)
         };
 
-        let mut node = node.label(self.label).label_ui(move |ui| {
-            let default_label = Label::new(self.label).selectable(false);
-
-            if let Some(rename_target) = self.rename_target.clone() {
-                let mut event_queue = label_event_queue.borrow_mut();
-                ui.add(renameable_label(
-                    default_label,
-                    &mut **event_queue,
-                    rename_state,
-                    rename_target,
-                ));
-            } else {
-                ui.add(default_label);
+        let node = match self.icon {
+            Some(icon) => {
+                let icon_color = self.icon_color;
+                node.icon(move |ui| {
+                    let mut text = egui::RichText::new(icon);
+                    if let Some(color) = icon_color {
+                        text = text.color(color);
+                    }
+                    ui.add(Label::new(text).selectable(false));
+                })
             }
+            None => node,
+        };
+
+        let node = match self.closer_icons {
+            Some((closed, open)) => {
+                let icon_color = self.icon_color;
+                node.closer(move |ui, state| {
+                    let glyph = if state.is_open { open } else { closed };
+                    let mut text = egui::RichText::new(glyph);
+                    if let Some(color) = icon_color {
+                        text = text.color(color);
+                    }
+                    ui.add(Label::new(text).selectable(false));
+                })
+            }
+            None => node,
+        };
+
+        let mut label_suffix = self.label_suffix;
+        let mut node = node.label(self.label).label_ui(move |ui| {
+            let has_glyph = self.icon.is_some() || self.closer_icons.is_some();
+            if has_glyph {
+                ui.add_space(2.0);
+            }
+
+            let mut label_text = egui::RichText::new(self.label);
+            if let Some(resolve) = &self.label_color {
+                label_text = label_text.color(resolve(ui.visuals()));
+            }
+            let default_label = Label::new(label_text).selectable(false);
+
+            ui.scope(|ui| {
+                ui.style_mut().spacing.item_spacing.x = 0.0;
+
+                if let Some(rename_target) = self.rename_target.clone() {
+                    let mut event_queue = label_event_queue.borrow_mut();
+                    ui.add(renameable_label(
+                        default_label,
+                        &mut **event_queue,
+                        rename_state,
+                        rename_target,
+                    ));
+                } else {
+                    ui.add(default_label);
+                }
+
+                if let Some(suffix) = &mut label_suffix {
+                    suffix(ui);
+                }
+            });
         });
 
         if !self.events.is_empty() {

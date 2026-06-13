@@ -11,6 +11,8 @@ pub fn install(ctx: &egui::Context) {
     add_font_definition(&mut fonts, "Geist", GEIST_FONT, Proportional);
     add_font_definition(&mut fonts, "Geist Mono", GEIST_MONO_FONT, Monospace);
 
+    egui_phosphor::add_to_fonts(&mut fonts, egui_phosphor::Variant::Regular);
+
     ctx.set_fonts(fonts);
 }
 

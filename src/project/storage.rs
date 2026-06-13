@@ -35,6 +35,10 @@ where
     R: ProjectResource,
     R::Id: slotmap::Key,
 {
+    pub fn len(&self) -> usize {
+        self.map.len()
+    }
+
     pub fn list_sorted(&self) -> impl Iterator<Item = (R::Id, &R)> + '_ {
         self.map
             .iter()
@@ -192,6 +196,13 @@ where
         self.map
             .values()
             .any(|cell| matches!(cell, RuntimeCell::Pending { .. }))
+    }
+
+    pub fn get_error(&self, key: R::Id) -> Option<&AppError> {
+        match self.map.get(key) {
+            Some(RuntimeCell::Errored { error, .. }) => Some(error),
+            _ => None,
+        }
     }
 
     pub fn get_errors(&self) -> impl Iterator<Item = (ResourceId, &AppError)> {
