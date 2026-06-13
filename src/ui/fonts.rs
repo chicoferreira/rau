@@ -1,23 +1,15 @@
 use std::sync::Arc;
 
+use egui::FontFamily::{Monospace, Proportional};
+
 const GEIST_FONT: &[u8] = include_bytes!("fonts/Geist[wght].ttf");
 const GEIST_MONO_FONT: &[u8] = include_bytes!("fonts/GeistMono[wght].ttf");
 
 pub fn install(ctx: &egui::Context) {
     let mut fonts = egui::FontDefinitions::default();
 
-    add_font_definition(
-        &mut fonts,
-        "Geist",
-        GEIST_FONT,
-        egui::FontFamily::Proportional,
-    );
-    add_font_definition(
-        &mut fonts,
-        "Geist Mono",
-        GEIST_MONO_FONT,
-        egui::FontFamily::Monospace,
-    );
+    add_font_definition(&mut fonts, "Geist", GEIST_FONT, Proportional);
+    add_font_definition(&mut fonts, "Geist Mono", GEIST_MONO_FONT, Monospace);
 
     ctx.set_fonts(fonts);
 }
