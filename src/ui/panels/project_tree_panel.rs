@@ -114,14 +114,11 @@ fn resource_leaf<'a>(
 fn count_suffix(count: usize) -> impl FnMut(&mut egui::Ui) {
     move |ui| {
         ui.add_space(3.0);
-        ui.add(
-            egui::Label::new(
-                egui::RichText::new(format!("({count})"))
-                    .variation("wght", 400.0)
-                    .size(12.0),
-            )
-            .selectable(false),
-        );
+        ui.add(egui::Label::new(
+            egui::RichText::new(format!("({count})"))
+                .variation("wght", 400.0)
+                .size(12.0),
+        ));
     }
 }
 

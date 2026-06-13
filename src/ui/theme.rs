@@ -32,6 +32,7 @@ pub const CLEAR_COLOR: Color32 = Palette::BG_BASE;
 pub fn install(ctx: &egui::Context) {
     ctx.global_style_mut(|style| {
         style.visuals = visuals();
+        style.interaction.selectable_labels = false;
         apply_spacing(style);
     });
 }

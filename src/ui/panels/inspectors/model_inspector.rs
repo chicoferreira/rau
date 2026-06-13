@@ -158,9 +158,7 @@ fn model_vertex_buffer_field_ui(
 ) {
     handle.ui(ui, |ui| {
         ui.add(
-            egui::Label::new(format!("Location {index}"))
-                .selectable(false)
-                .sense(egui::Sense::click()),
+            egui::Label::new(format!("Location {index}")).sense(egui::Sense::click()),
         )
         .context_menu(|ui| {
             if ui.button("Delete attribute").clicked() {

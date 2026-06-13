@@ -110,14 +110,11 @@ fn section_header(ui: &mut egui::Ui, title: &str) {
                 right: 4,
             })
             .show(ui, |ui| {
-                ui.add(
-                    egui::Label::new(
-                        egui::RichText::new(title.to_uppercase())
-                            .size(11.0)
-                            .variation("wght", 600.0),
-                    )
-                    .selectable(false),
-                );
+                ui.add(egui::Label::new(
+                    egui::RichText::new(title.to_uppercase())
+                        .size(11.0)
+                        .variation("wght", 600.0),
+                ));
             });
     });
 }

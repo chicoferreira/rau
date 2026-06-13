@@ -51,9 +51,7 @@ impl StateSnapshot<'_> {
             |ui, field, index, handle, edits| {
                 handle.ui(ui, |ui| {
                     ui.add(
-                        egui::Label::new(format!("Binding {index}"))
-                            .selectable(false)
-                            .sense(egui::Sense::click()),
+                        egui::Label::new(format!("Binding {index}")).sense(egui::Sense::click()),
                     )
                     .context_menu(|ui| {
                         if ui.button("Delete Entry").clicked() {

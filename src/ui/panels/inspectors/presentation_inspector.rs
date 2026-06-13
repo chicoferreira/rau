@@ -102,9 +102,7 @@ fn presentation_render_pass_row_ui(
 ) {
     handle.ui(ui, |ui| {
         ui.add(
-            egui::Label::new(format!("Step {}", index + 1))
-                .selectable(false)
-                .sense(egui::Sense::click()),
+            egui::Label::new(format!("Step {}", index + 1)).sense(egui::Sense::click()),
         )
         .context_menu(|ui| {
             if ui.button("Remove Render Pass").clicked() {

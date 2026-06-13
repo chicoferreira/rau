@@ -374,9 +374,7 @@ fn bind_group_row_ui(
 ) {
     handle.ui(ui, |ui| {
         ui.add(
-            egui::Label::new(format!("Slot {index}"))
-                .selectable(false)
-                .sense(egui::Sense::click()),
+            egui::Label::new(format!("Slot {index}")).sense(egui::Sense::click()),
         )
         .context_menu(|ui| {
             if ui.button("Remove Bind Group").clicked() {

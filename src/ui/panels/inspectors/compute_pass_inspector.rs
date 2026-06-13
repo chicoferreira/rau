@@ -134,9 +134,7 @@ fn compute_pass_bind_group_row_ui(
 ) {
     handle.ui(ui, |ui| {
         ui.add(
-            egui::Label::new(format!("Bind Group {index}"))
-                .selectable(false)
-                .sense(egui::Sense::click()),
+            egui::Label::new(format!("Bind Group {index}")).sense(egui::Sense::click()),
         )
         .context_menu(|ui| {
             if ui.button("Delete Bind Group").clicked() {

@@ -181,7 +181,7 @@ where
                     if let Some(color) = icon_color {
                         text = text.color(color);
                     }
-                    ui.add(Label::new(text).selectable(false));
+                    ui.add(Label::new(text));
                 })
             }
             None => node,
@@ -196,7 +196,7 @@ where
                     if let Some(color) = icon_color {
                         text = text.color(color);
                     }
-                    ui.add(Label::new(text).selectable(false));
+                    ui.add(Label::new(text));
                 })
             }
             None => node,
@@ -213,7 +213,7 @@ where
             if let Some(resolve) = &self.label_color {
                 label_text = label_text.color(resolve(ui.visuals()));
             }
-            let default_label = Label::new(label_text).selectable(false);
+            let default_label = Label::new(label_text);
 
             ui.scope(|ui| {
                 ui.style_mut().spacing.item_spacing.x = 0.0;

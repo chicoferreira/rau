@@ -193,9 +193,7 @@ fn ui_uniform_field_title(
 ) {
     let rename_target = RenameTarget::UniformField(uniform_id, index);
     ui.add(renameable_label(
-        Label::new(field.label())
-            .selectable(false)
-            .sense(Sense::click()),
+        Label::new(field.label()).sense(Sense::click()),
         ctx.event_queue,
         ctx.rename_state,
         rename_target.clone(),
