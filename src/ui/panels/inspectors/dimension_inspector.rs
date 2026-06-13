@@ -13,9 +13,11 @@ impl StateSnapshot<'_> {
         let mut width = dimension.size().width();
         let mut height = dimension.size().height();
 
-        inspector::field_grid(ui, "dimension_inspector_grid", |ui| {
-            inspector::u32_drag_row(ui, "Width", &mut width, 1_u32..=u32::MAX);
-            inspector::u32_drag_row(ui, "Height", &mut height, 1_u32..=u32::MAX);
+        inspector::section(ui, "Size", |ui| {
+            inspector::field_grid(ui, "dimension_inspector_grid", |ui| {
+                inspector::u32_drag_row(ui, "Width", &mut width, 1_u32..=u32::MAX);
+                inspector::u32_drag_row(ui, "Height", &mut height, 1_u32..=u32::MAX);
+            });
         });
 
         dimension.set_size(Size2d::new(width, height));

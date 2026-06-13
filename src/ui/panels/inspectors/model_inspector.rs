@@ -67,25 +67,32 @@ impl StateSnapshot<'_> {
 
         if let Ok(model) = self.project.models.get(model_id) {
             let ctx = ShaderGenCtx::from_project(self.project);
-            shader_code_section(ui, (model_id, "shader_code"), model, &ctx);
+            shader_code_section(ui, model, &ctx);
         }
     }
 }
 
 fn model_source_ui(ui: &mut egui::Ui, model: &mut Model, files: Option<&[FilePath]>) {
-    inspector::field_grid(ui, "model_inspector_grid", |ui| {
-        let mut source = model.source().cloned();
+    inspector::section(ui, "Source", |ui| {
+        inspector::field_grid(ui, "model_inspector_grid", |ui| {
+            let mut source = model.source().cloned();
 
-        let Some(files) = files else {
-            ui.spinner();
-            return;
-        };
+            let Some(files) = files else {
+                ui.spinner();
+                return;
+            };
 
-        if inspector::file_opt_combo_row(ui, "Source", "model_source", files, &mut source, |path| {
-            path.extension() == Some("obj")
-        }) {
-            model.set_source(source);
-        }
+            if inspector::file_opt_combo_row(
+                ui,
+                "Source",
+                "model_source",
+                files,
+                &mut source,
+                |path| path.extension() == Some("obj"),
+            ) {
+                model.set_source(source);
+            }
+        });
     });
 }
 
@@ -101,51 +108,49 @@ fn model_vertex_buffer_spec_inspector_ui(
         .enumerate()
         .collect::<Vec<(usize, VertexBufferField)>>();
 
-    egui::CollapsingHeader::new("Vertex Buffer Layout")
-        .default_open(false)
-        .show(ui, |ui| {
-            let mut list_edits = draggable_list(
-                ui,
-                ("model_vertex_buffer_spec", model_id),
-                &entries,
-                |ui, (entry_id, field), index, handle, list_edits| {
-                    model_vertex_buffer_field_ui(ui, handle, index, *entry_id, *field, list_edits);
-                },
-            );
+    inspector::section(ui, "Vertex Buffer Layout", |ui| {
+        let mut list_edits = draggable_list(
+            ui,
+            ("model_vertex_buffer_spec", model_id),
+            &entries,
+            |ui, (entry_id, field), index, handle, list_edits| {
+                model_vertex_buffer_field_ui(ui, handle, index, *entry_id, *field, list_edits);
+            },
+        );
 
-            ui.add_space(6.0);
+        ui.add_space(6.0);
 
-            ui.menu_button("Add attribute", |ui| {
-                for kind in VertexBufferField::iter() {
-                    if ui.button(kind.to_string()).clicked() {
-                        ui.close();
-                        let next_entry_id = entries
-                            .iter()
-                            .map(|(entry_id, _)| *entry_id)
-                            .max()
-                            .map(|entry_id| entry_id + 1)
-                            .unwrap_or_default();
-                        list_edits.push_add_edit((next_entry_id, kind));
-                    }
+        ui.menu_button("Add attribute", |ui| {
+            for kind in VertexBufferField::iter() {
+                if ui.button(kind.to_string()).clicked() {
+                    ui.close();
+                    let next_entry_id = entries
+                        .iter()
+                        .map(|(entry_id, _)| *entry_id)
+                        .max()
+                        .map(|entry_id| entry_id + 1)
+                        .unwrap_or_default();
+                    list_edits.push_add_edit((next_entry_id, kind));
                 }
-            });
-
-            if !entries.is_empty() {
-                ui.add_space(6.0);
-                ui.add(hint(|ui| {
-                    ui.label("Right-click a");
-                    ui.label(RichText::new("Location").strong());
-                    ui.label("label to remove an attribute, or drag it to reorder.");
-                }));
-            }
-
-            list_edits.apply(&mut entries);
-            let fields = entries.iter().map(|(_, field)| *field).collect::<Vec<_>>();
-
-            if fields != before {
-                vertex_buffer_spec.fields = fields;
             }
         });
+
+        if !entries.is_empty() {
+            ui.add_space(6.0);
+            ui.add(hint(|ui| {
+                ui.label("Right-click a");
+                ui.label(RichText::new("Location").strong());
+                ui.label("label to remove an attribute, or drag it to reorder.");
+            }));
+        }
+
+        list_edits.apply(&mut entries);
+        let fields = entries.iter().map(|(_, field)| *field).collect::<Vec<_>>();
+
+        if fields != before {
+            vertex_buffer_spec.fields = fields;
+        }
+    });
 }
 
 fn model_vertex_buffer_field_ui(
@@ -157,15 +162,13 @@ fn model_vertex_buffer_field_ui(
     list_edits: &mut ListEdits<(usize, VertexBufferField)>,
 ) {
     handle.ui(ui, |ui| {
-        ui.add(
-            egui::Label::new(format!("Location {index}")).sense(egui::Sense::click()),
-        )
-        .context_menu(|ui| {
-            if ui.button("Delete attribute").clicked() {
-                list_edits.push_remove_edit(index);
-                ui.close();
-            }
-        });
+        ui.add(egui::Label::new(format!("Location {index}")).sense(egui::Sense::click()))
+            .context_menu(|ui| {
+                if ui.button("Delete attribute").clicked() {
+                    list_edits.push_remove_edit(index);
+                    ui.close();
+                }
+            });
     });
 
     ui.indent(("model_vertex_buffer_field", index), |ui| {
@@ -192,9 +195,10 @@ fn meshes_ui(
     model_runtime: &ModelRuntime,
     mesh_material_selections: &mut Vec<MeshMaterialSelection>,
 ) {
-    egui::CollapsingHeader::new(format!("Meshes ({})", model_runtime.meshes().len()))
-        .default_open(true)
-        .show(ui, |ui| {
+    inspector::section(
+        ui,
+        &format!("Meshes ({})", model_runtime.meshes().len()),
+        |ui| {
             if model_runtime.meshes().is_empty() {
                 ui.weak("No meshes.");
                 return;
@@ -213,7 +217,8 @@ fn meshes_ui(
                     );
                 });
             }
-        });
+        },
+    );
 }
 
 fn mesh_ui(
@@ -359,9 +364,10 @@ fn materials_ui(
     material_bind_group_ids: &mut Vec<Option<BindGroupId>>,
     event_queue: &mut EventQueue<StateEvent>,
 ) {
-    egui::CollapsingHeader::new(format!("Materials ({})", model_runtime.materials().len()))
-        .default_open(true)
-        .show(ui, |ui| {
+    inspector::section(
+        ui,
+        &format!("Materials ({})", model_runtime.materials().len()),
+        |ui| {
             if model_runtime.materials().is_empty() {
                 ui.weak("No materials.");
                 return;
@@ -370,7 +376,8 @@ fn materials_ui(
             if ui.button("Derive Bind Groups from Materials…").clicked() {
                 event_queue.add(StateEvent::OpenMaterialBindGroupsModal(model_id));
             }
-            ui.add_space(6.0);
+
+            ui.add_space(3.0);
 
             for (mat_index, mat) in model_runtime.materials().iter().enumerate() {
                 let id = format!("model_material_{model_id:?}_{mat_index}");
@@ -385,7 +392,8 @@ fn materials_ui(
                     )
                 });
             }
-        });
+        },
+    );
 }
 
 fn material_ui(

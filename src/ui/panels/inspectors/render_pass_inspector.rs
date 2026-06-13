@@ -1,4 +1,4 @@
-use egui::{CollapsingHeader, RichText, Widget};
+use egui::{RichText, Widget};
 
 use crate::{
     project::{
@@ -57,33 +57,28 @@ impl StateSnapshot<'_> {
             return;
         };
 
-        CollapsingHeader::new("Color Target")
-            .default_open(true)
-            .show(ui, |ui| {
-                let target = render_pass.target();
-                let mut texture_view_id = target.texture_view_id();
-                let mut load_op = target.load_operation();
+        inspector::section(ui, "Color Target", |ui| {
+            let target = render_pass.target();
+            let mut texture_view_id = target.texture_view_id();
+            let mut load_op = target.load_operation();
 
-                if render_pass_target_ui(
-                    ui,
-                    "color_target",
-                    texture_views,
-                    &mut texture_view_id,
-                    &mut load_op,
-                    |ui, color| {
-                        color_edit_rgba(ui, &mut color.0);
-                    },
-                ) {
-                    render_pass.set_target(RenderPassTarget::new(texture_view_id, load_op));
-                }
-            });
+            if render_pass_target_ui(
+                ui,
+                "color_target",
+                texture_views,
+                &mut texture_view_id,
+                &mut load_op,
+                |ui, color| {
+                    color_edit_rgba(ui, &mut color.0);
+                },
+            ) {
+                render_pass.set_target(RenderPassTarget::new(texture_view_id, load_op));
+            }
+        });
 
-        ui.add_space(4.0);
-
-        CollapsingHeader::new("Depth Target")
-            .default_open(true)
-            .show(ui, |ui| {
-                let mut enabled = render_pass.depth_target().is_some();
+        inspector::section(ui, "Depth Target", |ui| {
+            let mut enabled = render_pass.depth_target().is_some();
+            ui.horizontal(|ui| {
                 if inspector::checkbox_row(ui, "Enabled", &mut enabled) {
                     if enabled {
                         render_pass.set_depth_target(Some(RenderPassTarget::default()));
@@ -91,39 +86,39 @@ impl StateSnapshot<'_> {
                         render_pass.set_depth_target(None);
                     }
                 }
-
-                let depth_target = render_pass
-                    .depth_target()
-                    .map(|target| (target.texture_view_id(), target.load_operation()));
-
-                if let Some((mut texture_view_id, mut load_op)) = depth_target
-                    && render_pass_target_ui(
-                        ui,
-                        "depth_target",
-                        texture_views,
-                        &mut texture_view_id,
-                        &mut load_op,
-                        |ui, value| {
-                            egui::DragValue::new(value)
-                                .speed(0.001)
-                                .range(0.0..=1.0)
-                                .max_decimals(4)
-                                .ui(ui);
-                        },
-                    )
-                {
-                    render_pass
-                        .set_depth_target(Some(RenderPassTarget::new(texture_view_id, load_op)));
-                }
             });
 
-        ui.add_space(4.0);
+            let depth_target = render_pass
+                .depth_target()
+                .map(|target| (target.texture_view_id(), target.load_operation()));
 
-        CollapsingHeader::new(format!("Pipelines ({})", render_pass.pipelines().len()))
-            .default_open(true)
-            .show(ui, |ui| {
+            if let Some((mut texture_view_id, mut load_op)) = depth_target
+                && render_pass_target_ui(
+                    ui,
+                    "depth_target",
+                    texture_views,
+                    &mut texture_view_id,
+                    &mut load_op,
+                    |ui, value| {
+                        egui::DragValue::new(value)
+                            .speed(0.001)
+                            .range(0.0..=1.0)
+                            .max_decimals(4)
+                            .ui(ui);
+                    },
+                )
+            {
+                render_pass.set_depth_target(Some(RenderPassTarget::new(texture_view_id, load_op)));
+            }
+        });
+
+        inspector::section(
+            ui,
+            &format!("Pipelines ({})", render_pass.pipelines().len()),
+            |ui| {
                 render_pass_pipeline_list_ui(ui, render_pass_id, render_pass, render_pipelines);
-            });
+            },
+        );
     }
 }
 
@@ -197,7 +192,7 @@ fn render_pass_pipeline_list_ui(
         },
     );
 
-    ui.add_space(6.0);
+    ui.add_space(3.0);
 
     ui.menu_button("Add Pipeline", |ui| {
         let mut has_pipelines = false;
@@ -239,15 +234,13 @@ fn render_pass_pipeline_row_ui(
     edits: &mut ListEdits<RenderPipelineId>,
 ) {
     handle.ui(ui, |ui| {
-        ui.add(
-            egui::Label::new(format!("Step {}", index + 1)).sense(egui::Sense::click()),
-        )
-        .context_menu(|ui| {
-            if ui.button("Remove Pipeline").clicked() {
-                edits.push_remove_edit(index);
-                ui.close();
-            }
-        });
+        ui.add(egui::Label::new(format!("Step {}", index + 1)).sense(egui::Sense::click()))
+            .context_menu(|ui| {
+                if ui.button("Remove Pipeline").clicked() {
+                    edits.push_remove_edit(index);
+                    ui.close();
+                }
+            });
     });
 
     let mut selected = pipeline_id;

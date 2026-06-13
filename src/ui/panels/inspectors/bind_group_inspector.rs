@@ -34,9 +34,6 @@ impl StateSnapshot<'_> {
         };
 
         let mut entries = bind_group.entries().to_vec();
-        if entries.is_empty() {
-            ui.label("No entries in bind group");
-        }
 
         let mut ctx = BindGroupUiContext {
             uniforms: &self.project.uniforms,
@@ -44,58 +41,67 @@ impl StateSnapshot<'_> {
             samplers: &self.project.samplers,
         };
 
-        let mut edits = draggable_list(
-            ui,
-            ("bind_group", bind_group_id),
-            &entries,
-            |ui, field, index, handle, edits| {
-                handle.ui(ui, |ui| {
-                    ui.add(
-                        egui::Label::new(format!("Binding {index}")).sense(egui::Sense::click()),
-                    )
-                    .context_menu(|ui| {
-                        if ui.button("Delete Entry").clicked() {
-                            edits.push_remove_edit(index);
-                            ui.close();
-                        }
+        inspector::section(ui, "Bindings", |ui| {
+            if entries.is_empty() {
+                ui.label("No entries in bind group");
+            }
+
+            let mut edits = draggable_list(
+                ui,
+                ("bind_group", bind_group_id),
+                &entries,
+                |ui, field, index, handle, edits| {
+                    handle.ui(ui, |ui| {
+                        ui.add(
+                            egui::Label::new(format!("Binding {index}"))
+                                .sense(egui::Sense::click()),
+                        )
+                        .context_menu(|ui| {
+                            if ui.button("Delete Entry").clicked() {
+                                edits.push_remove_edit(index);
+                                ui.close();
+                            }
+                        });
                     });
-                });
-                ui_entry_fields(ui, &mut ctx, edits, index, field);
-            },
-        );
+                    ui_entry_fields(ui, &mut ctx, edits, index, field);
+                },
+            );
 
-        ui.add_space(6.0);
+            ui.add_space(6.0);
 
-        ui.menu_button("Add Entry", |ui| {
-            for kind in ResourceKind::iter() {
-                if ui.button(kind.to_string()).clicked() {
-                    ui.close();
-                    edits.push_add_edit(BindGroupEntry::new_vertex_fragment(kind.default_value()));
+            ui.menu_button("Add Entry", |ui| {
+                for kind in ResourceKind::iter() {
+                    if ui.button(kind.to_string()).clicked() {
+                        ui.close();
+                        edits.push_add_edit(BindGroupEntry::new_vertex_fragment(
+                            kind.default_value(),
+                        ));
+                    }
                 }
+            });
+
+            if !entries.is_empty() {
+                ui.add_space(6.0);
+                ui.add(hint(|ui| {
+                    ui.label("Right-click a");
+                    ui.label(RichText::new("Binding").strong());
+                    ui.label("to remove it or drag it to reorder it.");
+                }));
+            }
+
+            edits.apply(&mut entries);
+
+            if bind_group.entries() != entries {
+                bind_group.set_entries(entries);
             }
         });
-
-        if !entries.is_empty() {
-            ui.add_space(6.0);
-            ui.add(hint(|ui| {
-                ui.label("Right-click a");
-                ui.label(RichText::new("Binding").strong());
-                ui.label("to remove it or drag it to reorder it.");
-            }));
-        }
-
-        edits.apply(&mut entries);
-
-        if bind_group.entries() != entries {
-            bind_group.set_entries(entries);
-        }
 
         let Ok(bind_group) = self.project.bind_groups.get(bind_group_id) else {
             return;
         };
         let ctx = ShaderGenCtx::from_project(self.project);
         let item = BindGroupAt::new(None, &bind_group);
-        shader_code_section(ui, (bind_group_id, "shader_code"), &item, &ctx);
+        shader_code_section(ui, &item, &ctx);
     }
 }
 

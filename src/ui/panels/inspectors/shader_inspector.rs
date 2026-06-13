@@ -10,29 +10,31 @@ impl StateSnapshot<'_> {
             return;
         };
 
-        inspector::field_grid(ui, "shader_inspector_grid", |ui| {
-            let mut source = shader.source().cloned();
-            let Some(files) = self.file_storage.files() else {
-                ui.spinner();
-                return;
-            };
+        inspector::section(ui, "Source", |ui| {
+            inspector::field_grid(ui, "shader_inspector_grid", |ui| {
+                let mut source = shader.source().cloned();
+                let Some(files) = self.file_storage.files() else {
+                    ui.spinner();
+                    return;
+                };
 
-            let is_shader_source = |path: &FilePath| {
-                path.extension()
-                    .and_then(ShaderSourceKind::from_extension)
-                    .is_some()
-            };
+                let is_shader_source = |path: &FilePath| {
+                    path.extension()
+                        .and_then(ShaderSourceKind::from_extension)
+                        .is_some()
+                };
 
-            if inspector::file_opt_combo_row(
-                ui,
-                "Source",
-                "shader_source",
-                &files,
-                &mut source,
-                is_shader_source,
-            ) {
-                shader.set_source(source);
-            }
+                if inspector::file_opt_combo_row(
+                    ui,
+                    "Source",
+                    "shader_source",
+                    &files,
+                    &mut source,
+                    is_shader_source,
+                ) {
+                    shader.set_source(source);
+                }
+            });
         });
     }
 }

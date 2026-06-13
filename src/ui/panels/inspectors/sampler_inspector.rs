@@ -91,58 +91,60 @@ impl StateSnapshot<'_> {
         let mut spec = sampler.spec().clone();
         let before = spec.clone();
 
-        inspector::field_grid(ui, "sampler_inspector_grid", |ui| {
-            inspector::combo_row(
-                ui,
-                "Address Mode",
-                "address_mode",
-                ADDRESS_MODES,
-                &mut spec.address_mode,
-            );
-            inspector::combo_row(
-                ui,
-                "Mag Filter",
-                "mag_filter",
-                FILTER_MODES,
-                &mut spec.mag_filter,
-            );
-            inspector::combo_row(
-                ui,
-                "Min Filter",
-                "min_filter",
-                FILTER_MODES,
-                &mut spec.min_filter,
-            );
-            inspector::combo_row(
-                ui,
-                "Mipmap Filter",
-                "mipmap_filter",
-                MIPMAP_FILTER_MODES,
-                &mut spec.mipmap_filter,
-            );
-            inspector::f32_drag_row(
-                ui,
-                "LOD Min Clamp",
-                &mut spec.lod_min_clamp,
-                0.0_f32..=f32::MAX,
-                0.1,
-                2,
-            );
-            inspector::f32_drag_row(
-                ui,
-                "LOD Max Clamp",
-                &mut spec.lod_max_clamp,
-                0.0_f32..=f32::MAX,
-                0.1,
-                2,
-            );
-            inspector::combo_row(
-                ui,
-                "Compare",
-                "compare",
-                COMPARE_FUNCTIONS,
-                &mut spec.compare,
-            );
+        inspector::section(ui, "Settings", |ui| {
+            inspector::field_grid(ui, "sampler_inspector_grid", |ui| {
+                inspector::combo_row(
+                    ui,
+                    "Address Mode",
+                    "address_mode",
+                    ADDRESS_MODES,
+                    &mut spec.address_mode,
+                );
+                inspector::combo_row(
+                    ui,
+                    "Mag Filter",
+                    "mag_filter",
+                    FILTER_MODES,
+                    &mut spec.mag_filter,
+                );
+                inspector::combo_row(
+                    ui,
+                    "Min Filter",
+                    "min_filter",
+                    FILTER_MODES,
+                    &mut spec.min_filter,
+                );
+                inspector::combo_row(
+                    ui,
+                    "Mipmap Filter",
+                    "mipmap_filter",
+                    MIPMAP_FILTER_MODES,
+                    &mut spec.mipmap_filter,
+                );
+                inspector::f32_drag_row(
+                    ui,
+                    "LOD Min Clamp",
+                    &mut spec.lod_min_clamp,
+                    0.0_f32..=f32::MAX,
+                    0.1,
+                    2,
+                );
+                inspector::f32_drag_row(
+                    ui,
+                    "LOD Max Clamp",
+                    &mut spec.lod_max_clamp,
+                    0.0_f32..=f32::MAX,
+                    0.1,
+                    2,
+                );
+                inspector::combo_row(
+                    ui,
+                    "Compare",
+                    "compare",
+                    COMPARE_FUNCTIONS,
+                    &mut spec.compare,
+                );
+            });
         });
 
         if before != spec {

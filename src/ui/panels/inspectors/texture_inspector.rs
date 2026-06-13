@@ -82,37 +82,39 @@ impl StateSnapshot<'_> {
         let source_before = texture.source().clone();
         let mut source = source_before.clone();
 
-        inspector::field_grid(ui, "texture_inspector_grid", |ui| {
-            inspector::combo_row(
-                ui,
-                "Format",
-                "texture_format",
-                TextureFormat::iter(),
-                &mut format,
-            );
+        inspector::section(ui, "Settings", |ui| {
+            inspector::field_grid(ui, "texture_inspector_grid", |ui| {
+                inspector::combo_row(
+                    ui,
+                    "Format",
+                    "texture_format",
+                    TextureFormat::iter(),
+                    &mut format,
+                );
 
-            inspector::row(ui, "Usage", |ui| {
-                flags_selector(ui, "texture_usage", &mut usage, TEXTURE_USAGES);
+                inspector::row(ui, "Usage", |ui| {
+                    flags_selector(ui, "texture_usage", &mut usage, TEXTURE_USAGES);
+                });
             });
+
+            ui_texture_source(
+                ui,
+                &mut source,
+                &self.project.dimensions,
+                self.file_storage.files(),
+            );
         });
 
-        ui_texture_source(
-            ui,
-            &mut source,
-            &self.project.dimensions,
-            self.file_storage.files(),
-        );
+        inspector::section(ui, "Texture View", |ui| {
+            ui.add(hint::hint(|ui| {
+                ui.label("Create a Texture View to see the Texture contents.")
+            }));
 
-        ui.add_space(6.0);
-
-        ui.add(hint::hint(|ui| {
-            ui.label("Create a Texture View to see the Texture contents.")
-        }));
-
-        if ui.button("Derive Texture View").clicked() {
-            self.event_queue
-                .add(StateEvent::DeriveTextureView(texture_id));
-        }
+            if ui.button("Derive Texture View").clicked() {
+                self.event_queue
+                    .add(StateEvent::DeriveTextureView(texture_id));
+            }
+        });
 
         if format != format_before {
             texture.set_format(format);

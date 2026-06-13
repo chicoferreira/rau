@@ -14,22 +14,24 @@ use crate::{
 
 impl StateSnapshot<'_> {
     pub fn presentation_inspector_ui(&mut self, ui: &mut egui::Ui) {
-        inspector::field_grid(ui, "presentation_inspector_grid", |ui| {
-            let mut id = self.project.presentation.main_viewport();
-            if inspector::storage_opt_combo_row(
-                ui,
-                "Main Viewport",
-                "presentation_main_viewport",
-                &self.project.viewports,
-                &mut id,
-            ) {
-                self.project.presentation.set_main_viewport(id);
-            }
+        inspector::section(ui, "Main Viewport", |ui| {
+            inspector::field_grid(ui, "presentation_inspector_grid", |ui| {
+                let mut id = self.project.presentation.main_viewport();
+                if inspector::storage_opt_combo_row(
+                    ui,
+                    "Main Viewport",
+                    "presentation_main_viewport",
+                    &self.project.viewports,
+                    &mut id,
+                ) {
+                    self.project.presentation.set_main_viewport(id);
+                }
+            });
         });
 
-        ui.add_space(4.0);
-
-        presentation_render_pass_list_ui(ui, self);
+        inspector::section(ui, "Render Passes", |ui| {
+            presentation_render_pass_list_ui(ui, self);
+        });
     }
 }
 
@@ -101,15 +103,13 @@ fn presentation_render_pass_row_ui(
     edits: &mut ListEdits<RenderPassId>,
 ) {
     handle.ui(ui, |ui| {
-        ui.add(
-            egui::Label::new(format!("Step {}", index + 1)).sense(egui::Sense::click()),
-        )
-        .context_menu(|ui| {
-            if ui.button("Remove Render Pass").clicked() {
-                edits.push_remove_edit(index);
-                ui.close();
-            }
-        });
+        ui.add(egui::Label::new(format!("Step {}", index + 1)).sense(egui::Sense::click()))
+            .context_menu(|ui| {
+                if ui.button("Remove Render Pass").clicked() {
+                    edits.push_remove_edit(index);
+                    ui.close();
+                }
+            });
     });
 
     let mut selected = render_pass_id;

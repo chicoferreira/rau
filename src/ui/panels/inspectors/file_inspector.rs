@@ -8,9 +8,14 @@ impl StateSnapshot<'_> {
     pub fn file_inspector_ui(&mut self, ui: &mut egui::Ui, file_path: &FilePath) {
         match self.file_storage.open_file(file_path) {
             OpenFileState::Loading { .. } => {
-                ui.horizontal(|ui| {
-                    ui.label("Loading...");
-                    ui.spinner();
+                let row_height = ui.text_style_height(&egui::TextStyle::Body);
+                let top_padding = (ui.available_height() - row_height).max(0.0) / 2.0;
+                ui.add_space(top_padding);
+                ui.vertical_centered(|ui| {
+                    ui.horizontal(|ui| {
+                        ui.add(egui::Spinner::new().size(row_height));
+                        ui.label("Loading...");
+                    });
                 });
             }
             OpenFileState::Loaded { text, saved }

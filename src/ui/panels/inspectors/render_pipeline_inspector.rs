@@ -1,6 +1,6 @@
 use std::ops::Range;
 
-use egui::{CollapsingHeader, RichText};
+use egui::RichText;
 
 use crate::{
     project::{
@@ -163,23 +163,18 @@ impl StateSnapshot<'_> {
         };
 
         shaders_ui(ui, render_pipeline_id, render_pipeline, shaders);
-        ui.add_space(4.0);
 
         target_formats_ui(ui, render_pipeline_id, render_pipeline);
-        ui.add_space(4.0);
 
         primitive_state_ui(ui, render_pipeline_id, render_pipeline);
-        ui.add_space(4.0);
 
         bind_groups_ui(ui, render_pipeline_id, render_pipeline, bind_groups);
-        ui.add_space(4.0);
 
         draw_strategy_ui(ui, render_pipeline_id, render_pipeline, models);
 
-        ui.add_space(4.0);
         if let Ok(pipeline) = self.project.render_pipelines.get(render_pipeline_id) {
             let ctx = ShaderGenCtx::from_project(self.project);
-            shader_code_section(ui, (render_pipeline_id, "shader_code"), pipeline, &ctx);
+            shader_code_section(ui, pipeline, &ctx);
         }
     }
 }
@@ -190,32 +185,30 @@ fn shaders_ui(
     render_pipeline: &mut RenderPipeline,
     shaders: &Storage<Shader>,
 ) {
-    CollapsingHeader::new("Shaders")
-        .default_open(true)
-        .show(ui, |ui| {
-            let mut vertex_shader = render_pipeline.vertex_shader();
-            let mut fragment_shader = render_pipeline.fragment_shader();
+    let mut vertex_shader = render_pipeline.vertex_shader();
+    let mut fragment_shader = render_pipeline.fragment_shader();
 
-            inspector::field_grid(ui, (render_pipeline_id, "shaders"), |ui| {
-                inspector::storage_opt_combo_row(
-                    ui,
-                    "Vertex Shader",
-                    "render_pipeline_vertex_shader",
-                    shaders,
-                    &mut vertex_shader,
-                );
-                inspector::storage_opt_combo_row(
-                    ui,
-                    "Fragment Shader",
-                    "render_pipeline_fragment_shader",
-                    shaders,
-                    &mut fragment_shader,
-                );
-            });
-
-            render_pipeline.set_vertex_shader(vertex_shader);
-            render_pipeline.set_fragment_shader(fragment_shader);
+    inspector::section(ui, "Shaders", |ui| {
+        inspector::field_grid(ui, (render_pipeline_id, "shaders"), |ui| {
+            inspector::storage_opt_combo_row(
+                ui,
+                "Vertex Shader",
+                "render_pipeline_vertex_shader",
+                shaders,
+                &mut vertex_shader,
+            );
+            inspector::storage_opt_combo_row(
+                ui,
+                "Fragment Shader",
+                "render_pipeline_fragment_shader",
+                shaders,
+                &mut fragment_shader,
+            );
         });
+    });
+
+    render_pipeline.set_vertex_shader(vertex_shader);
+    render_pipeline.set_fragment_shader(fragment_shader);
 }
 
 fn target_formats_ui(
@@ -223,40 +216,38 @@ fn target_formats_ui(
     render_pipeline_id: RenderPipelineId,
     render_pipeline: &mut RenderPipeline,
 ) {
-    CollapsingHeader::new("Target Formats")
-        .default_open(true)
-        .show(ui, |ui| {
-            let mut color_format = render_pipeline.color_format();
-            let mut depth_format = render_pipeline.depth_format();
+    let mut color_format = render_pipeline.color_format();
+    let mut depth_format = render_pipeline.depth_format();
 
-            inspector::field_grid(ui, (render_pipeline_id, "target_formats"), |ui| {
+    inspector::section(ui, "Target Formats", |ui| {
+        inspector::field_grid(ui, (render_pipeline_id, "target_formats"), |ui| {
+            inspector::combo_row(
+                ui,
+                "Color Format",
+                "render_pipeline_color_format",
+                TextureFormat::COLOR,
+                &mut color_format,
+            );
+
+            let mut depth_enabled = depth_format.is_some();
+            if inspector::checkbox_row(ui, "Depth", &mut depth_enabled) {
+                depth_format = depth_enabled.then_some(TextureFormat::Depth32Float);
+            }
+
+            if let Some(format) = &mut depth_format {
                 inspector::combo_row(
                     ui,
-                    "Color Format",
-                    "render_pipeline_color_format",
-                    TextureFormat::COLOR,
-                    &mut color_format,
+                    "Depth Format",
+                    "render_pipeline_depth_format",
+                    TextureFormat::DEPTH,
+                    format,
                 );
-
-                let mut depth_enabled = depth_format.is_some();
-                if inspector::checkbox_row(ui, "Depth", &mut depth_enabled) {
-                    depth_format = depth_enabled.then_some(TextureFormat::Depth32Float);
-                }
-
-                if let Some(format) = &mut depth_format {
-                    inspector::combo_row(
-                        ui,
-                        "Depth Format",
-                        "render_pipeline_depth_format",
-                        TextureFormat::DEPTH,
-                        format,
-                    );
-                }
-            });
-
-            render_pipeline.set_color_format(color_format);
-            render_pipeline.set_depth_format(depth_format);
+            }
         });
+    });
+
+    render_pipeline.set_color_format(color_format);
+    render_pipeline.set_depth_format(depth_format);
 }
 
 fn primitive_state_ui(
@@ -264,57 +255,51 @@ fn primitive_state_ui(
     render_pipeline_id: RenderPipelineId,
     render_pipeline: &mut RenderPipeline,
 ) {
-    CollapsingHeader::new("Primitive State")
-        .default_open(true)
-        .show(ui, |ui| {
-            let mut primitive_state = render_pipeline.primitive_state();
+    let mut primitive_state = render_pipeline.primitive_state();
 
-            inspector::field_grid(ui, (render_pipeline_id, "primitive_state"), |ui| {
-                inspector::combo_row(
-                    ui,
-                    "Topology",
-                    "render_pipeline_topology",
-                    TOPOLOGIES,
-                    &mut primitive_state.topology,
-                );
-                inspector::combo_row(
-                    ui,
-                    "Strip Index Format",
-                    "render_pipeline_strip_index_format",
-                    STRIP_INDEX_FORMATS,
-                    &mut primitive_state.strip_index_format,
-                );
-                inspector::combo_row(
-                    ui,
-                    "Front Face",
-                    "render_pipeline_front_face",
-                    FRONT_FACES,
-                    &mut primitive_state.front_face,
-                );
-                inspector::combo_row(
-                    ui,
-                    "Cull Mode",
-                    "render_pipeline_cull_mode",
-                    CULL_MODES,
-                    &mut primitive_state.cull_mode,
-                );
-                inspector::combo_row(
-                    ui,
-                    "Polygon Mode",
-                    "render_pipeline_polygon_mode",
-                    POLYGON_MODES,
-                    &mut primitive_state.polygon_mode,
-                );
-                inspector::checkbox_row(
-                    ui,
-                    "Unclipped Depth",
-                    &mut primitive_state.unclipped_depth,
-                );
-                inspector::checkbox_row(ui, "Conservative", &mut primitive_state.conservative);
-            });
-
-            render_pipeline.set_primitive_state(primitive_state);
+    inspector::section(ui, "Primitive State", |ui| {
+        inspector::field_grid(ui, (render_pipeline_id, "primitive_state"), |ui| {
+            inspector::combo_row(
+                ui,
+                "Topology",
+                "render_pipeline_topology",
+                TOPOLOGIES,
+                &mut primitive_state.topology,
+            );
+            inspector::combo_row(
+                ui,
+                "Strip Index Format",
+                "render_pipeline_strip_index_format",
+                STRIP_INDEX_FORMATS,
+                &mut primitive_state.strip_index_format,
+            );
+            inspector::combo_row(
+                ui,
+                "Front Face",
+                "render_pipeline_front_face",
+                FRONT_FACES,
+                &mut primitive_state.front_face,
+            );
+            inspector::combo_row(
+                ui,
+                "Cull Mode",
+                "render_pipeline_cull_mode",
+                CULL_MODES,
+                &mut primitive_state.cull_mode,
+            );
+            inspector::combo_row(
+                ui,
+                "Polygon Mode",
+                "render_pipeline_polygon_mode",
+                POLYGON_MODES,
+                &mut primitive_state.polygon_mode,
+            );
+            inspector::checkbox_row(ui, "Unclipped Depth", &mut primitive_state.unclipped_depth);
+            inspector::checkbox_row(ui, "Conservative", &mut primitive_state.conservative);
         });
+    });
+
+    render_pipeline.set_primitive_state(primitive_state);
 }
 
 fn bind_groups_ui(
@@ -326,42 +311,41 @@ fn bind_groups_ui(
     let before = render_pipeline.bind_groups().to_vec();
     let mut entries = before.clone();
 
-    CollapsingHeader::new(format!("Bind Groups ({})", entries.len()))
-        .default_open(true)
-        .show(ui, |ui| {
-            if entries.is_empty() {
-                ui.label("No bind groups.");
-            }
+    inspector::section(ui, &format!("Bind Groups ({})", entries.len()), |ui| {
+        if entries.is_empty() {
+            ui.label("No bind groups.");
+        }
 
-            let id_source = (render_pipeline_id, "bind_groups");
-            let mut edits = draggable_list(
-                ui,
-                id_source,
-                &entries,
-                |ui, target, index, handle, edits| {
-                    bind_group_row_ui(ui, handle, index, target, bind_groups, edits);
-                },
-            );
+        let id_source = (render_pipeline_id, "bind_groups");
+        let mut edits = draggable_list(
+            ui,
+            id_source,
+            &entries,
+            |ui, target, index, handle, edits| {
+                bind_group_row_ui(ui, handle, index, target, bind_groups, edits);
+            },
+        );
 
-            if ui.button("Add Bind Group").clicked() {
-                edits.push_add_edit(BindGroupTarget::default());
-            }
+        ui.add_space(3.0);
+        if ui.button("Add Bind Group").clicked() {
+            edits.push_add_edit(BindGroupTarget::default());
+        }
 
-            if !entries.is_empty() {
-                ui.add_space(6.0);
-                ui.add(hint(|ui| {
-                    ui.label("Right-click a");
-                    ui.label(RichText::new("Slot").strong());
-                    ui.label("to remove it, or drag to reorder.");
-                }));
-            }
+        if !entries.is_empty() {
+            ui.add_space(6.0);
+            ui.add(hint(|ui| {
+                ui.label("Right-click a");
+                ui.label(RichText::new("Slot").strong());
+                ui.label("to remove it, or drag to reorder.");
+            }));
+        }
 
-            edits.apply(&mut entries);
+        edits.apply(&mut entries);
 
-            if entries != before {
-                render_pipeline.set_bind_groups(entries);
-            }
-        });
+        if entries != before {
+            render_pipeline.set_bind_groups(entries);
+        }
+    });
 }
 
 fn bind_group_row_ui(
@@ -373,25 +357,19 @@ fn bind_group_row_ui(
     edits: &mut ListEdits<BindGroupTarget>,
 ) {
     handle.ui(ui, |ui| {
-        ui.add(
-            egui::Label::new(format!("Slot {index}")).sense(egui::Sense::click()),
-        )
-        .context_menu(|ui| {
-            if ui.button("Remove Bind Group").clicked() {
-                edits.push_remove_edit(index);
-                ui.close();
-            }
-        });
+        ui.add(egui::Label::new(format!("Slot {index}")).sense(egui::Sense::click()))
+            .context_menu(|ui| {
+                if ui.button("Remove Bind Group").clicked() {
+                    edits.push_remove_edit(index);
+                    ui.close();
+                }
+            });
     });
 
     ui.indent(("bind_group", index), |ui| {
         let mut edited = target.clone();
 
-        inspector::field_grid(ui, ("bind_group_grid", index), |ui| {
-            inspector::row(ui, "Target", |ui| {
-                bind_group_target_combo(ui, index, bind_groups, &mut edited);
-            });
-        });
+        bind_group_target_combo(ui, index, bind_groups, &mut edited);
 
         if edited != *target {
             edits.push_set_edit(index, edited);
@@ -442,24 +420,22 @@ fn draw_strategy_ui(
     let before = render_pipeline.draw_strategy().clone();
     let mut edited = before.clone();
 
-    CollapsingHeader::new("Draw")
-        .default_open(true)
-        .show(ui, |ui| {
-            inspector::field_grid(ui, (render_pipeline_id, "draw_strategy"), |ui| {
-                let mut draw_kind = DrawKind::from_strategy(&edited);
-                if inspector::combo_row(
-                    ui,
-                    "Draw Kind",
-                    "render_pipeline_draw_kind",
-                    DRAW_KINDS,
-                    &mut draw_kind,
-                ) {
-                    edited = draw_kind.default_strategy();
-                }
+    inspector::section(ui, "Draw", |ui| {
+        inspector::field_grid(ui, (render_pipeline_id, "draw_strategy"), |ui| {
+            let mut draw_kind = DrawKind::from_strategy(&edited);
+            if inspector::combo_row(
+                ui,
+                "Draw Kind",
+                "render_pipeline_draw_kind",
+                DRAW_KINDS,
+                &mut draw_kind,
+            ) {
+                edited = draw_kind.default_strategy();
+            }
 
-                draw_strategy_fields_ui(ui, models, &mut edited);
-            });
+            draw_strategy_fields_ui(ui, models, &mut edited);
         });
+    });
 
     if edited != before {
         render_pipeline.set_draw_strategy(edited);

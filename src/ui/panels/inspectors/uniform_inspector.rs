@@ -73,27 +73,27 @@ impl StateSnapshot<'_> {
             Err(err) => Err(err),
         };
 
-        ui.horizontal(|ui| {
-            ui.label("Total size");
-            match &uniform_layout {
-                Ok(Some(uniform_layout)) => {
-                    ui.strong(format!("{} bytes", uniform_layout.size));
+        inspector::section(ui, "Layout", |ui| {
+            ui.horizontal(|ui| {
+                ui.label("Total size");
+                match &uniform_layout {
+                    Ok(Some(uniform_layout)) => {
+                        ui.strong(format!("{} bytes", uniform_layout.size));
 
-                    let padding = uniform_layout.padding;
-                    if padding > 0 {
-                        ui.weak(format!("({padding} bytes wasted on padding)"));
+                        let padding = uniform_layout.padding;
+                        if padding > 0 {
+                            ui.weak(format!("({padding} bytes wasted on padding)"));
+                        }
+                    }
+                    Ok(None) => {
+                        ui.spinner();
+                    }
+                    Err(err) => {
+                        ui.colored_label(ui.visuals().error_fg_color, err.to_string());
                     }
                 }
-                Ok(None) => {
-                    ui.spinner();
-                }
-                Err(err) => {
-                    ui.colored_label(ui.visuals().error_fg_color, err.to_string());
-                }
-            }
+            });
         });
-
-        ui.add_space(6.0);
 
         let mut ctx = UniformUiContext {
             event_queue: &mut self.event_queue,
@@ -102,49 +102,64 @@ impl StateSnapshot<'_> {
         };
 
         let mut fields = uniform.fields().to_vec();
-
-        let mut edits = draggable_list(
-            ui,
-            ("uniform", uniform_id),
-            &fields,
-            |ui, field, index, handle, edits| {
-                let runtime_field = match &uniform_runtime {
-                    Ok(Some(uniform_runtime)) => uniform_runtime.fields().get(index),
-                    Ok(None) | Err(_) => None,
-                };
-
-                ui.horizontal(|ui| {
-                    handle.ui(ui, |ui| {
-                        ui_uniform_field_title(ui, &mut ctx, edits, uniform_id, index, field);
-                    });
-                    if let Some(runtime_field) = runtime_field {
-                        let padding = match &uniform_layout {
-                            Ok(Some(uniform_layout)) => {
-                                let padding = uniform_layout.field_paddings.get(index);
-                                padding.copied().unwrap_or(0)
-                            }
-                            Ok(None) | Err(_) => 0,
-                        };
-                        ui_uniform_type_label(ui, runtime_field.data().kind(), padding);
-                    }
-                });
-
-                ui_uniform_field_entry(ui, &mut ctx, edits, index, field, runtime_field);
-            },
-        );
-
-        ui.add_space(6.0);
-
         let mut rename_index: Option<usize> = None;
-
         const DEFAULT_NAME: &str = "Field";
 
-        ui.menu_button("Add Uniform", |ui| {
-            for kind in UniformFieldSourceKind::iter() {
-                if ui.button(kind.to_string()).clicked() {
-                    edits.push_add_edit(UniformField::new(DEFAULT_NAME, kind.into_source()));
-                    rename_index = Some(uniform.fields().len());
+        inspector::section(ui, "Fields", |ui| {
+            let mut edits = draggable_list(
+                ui,
+                ("uniform", uniform_id),
+                &fields,
+                |ui, field, index, handle, edits| {
+                    let runtime_field = match &uniform_runtime {
+                        Ok(Some(uniform_runtime)) => uniform_runtime.fields().get(index),
+                        Ok(None) | Err(_) => None,
+                    };
+
+                    ui.horizontal(|ui| {
+                        handle.ui(ui, |ui| {
+                            ui_uniform_field_title(ui, &mut ctx, edits, uniform_id, index, field);
+                        });
+                        if let Some(runtime_field) = runtime_field {
+                            let padding = match &uniform_layout {
+                                Ok(Some(uniform_layout)) => {
+                                    let padding = uniform_layout.field_paddings.get(index);
+                                    padding.copied().unwrap_or(0)
+                                }
+                                Ok(None) | Err(_) => 0,
+                            };
+                            ui_uniform_type_label(ui, runtime_field.data().kind(), padding);
+                        }
+                    });
+
+                    ui_uniform_field_entry(ui, &mut ctx, edits, index, field, runtime_field);
+                },
+            );
+
+            ui.add_space(6.0);
+
+            ui.menu_button("Add Uniform", |ui| {
+                for kind in UniformFieldSourceKind::iter() {
+                    if ui.button(kind.to_string()).clicked() {
+                        edits.push_add_edit(UniformField::new(DEFAULT_NAME, kind.into_source()));
+                        rename_index = Some(uniform.fields().len());
+                    }
                 }
+            });
+
+            edits.apply(&mut fields);
+
+            if &fields != uniform.fields() {
+                uniform.set_fields(fields);
+            }
+
+            if !uniform.fields().is_empty() {
+                ui.add_space(6.0);
+                ui.add(hint(|ui| {
+                    ui.label("Right-click a");
+                    ui.label(RichText::new("Label").strong());
+                    ui.label("to remove it or drag it to reorder it.");
+                }));
             }
         });
 
@@ -155,24 +170,9 @@ impl StateSnapshot<'_> {
             });
         }
 
-        edits.apply(&mut fields);
-
-        if &fields != uniform.fields() {
-            uniform.set_fields(fields);
-        }
-
-        if !uniform.fields().is_empty() {
-            ui.add_space(6.0);
-            ui.add(hint(|ui| {
-                ui.label("Right-click a");
-                ui.label(RichText::new("Label").strong());
-                ui.label("to remove it or drag it to reorder it.");
-            }));
-        }
-
         if let Ok(uniform) = self.project.uniforms.get(uniform_id) {
             let ctx = ShaderGenCtx::from_project(self.project);
-            shader_code_section(ui, (uniform_id, "shader_code"), uniform, &ctx);
+            shader_code_section(ui, uniform, &ctx);
         }
     }
 }

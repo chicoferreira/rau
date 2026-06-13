@@ -7,6 +7,33 @@ use crate::{
     ui::components::selector::{AsWidgetText, ComboBoxExt},
 };
 
+pub fn section<R>(ui: &mut Ui, title: &str, content: impl FnOnce(&mut Ui) -> R) -> R {
+    egui::Frame::new()
+        .inner_margin(egui::Margin {
+            top: 8,
+            left: 10,
+            bottom: 2,
+            right: 0,
+        })
+        .show(ui, |ui| {
+            ui.add(egui::Label::new(
+                egui::RichText::new(title.to_uppercase())
+                    .size(12.0)
+                    .variation("wght", 600.0),
+            ));
+        });
+
+    egui::Frame::new()
+        .inner_margin(egui::Margin {
+            top: 0,
+            left: 6,
+            bottom: 0,
+            right: 0,
+        })
+        .show(ui, |ui| ui.indent(title, content).inner)
+        .inner
+}
+
 pub fn field_grid<R>(
     ui: &mut Ui,
     id_salt: impl Hash,

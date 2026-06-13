@@ -6,6 +6,7 @@ use syntect::{
     parsing::{SyntaxDefinition, SyntaxSetBuilder},
 };
 
+use super::inspector;
 use crate::utils::shader_preview::{self, Language, ShaderGenCtx, ShaderInterface};
 
 static SYNTAX_SETTINGS: OnceLock<SyntectSettings> = OnceLock::new();
@@ -43,52 +44,44 @@ fn layout_job(ui: &egui::Ui, code: &str, extension: &str) -> egui::text::LayoutJ
     highlight_with(ctx, style, &theme, code, extension, settings)
 }
 
-pub fn shader_code_section(
-    ui: &mut egui::Ui,
-    id_salt: impl std::hash::Hash,
-    item: &impl ShaderInterface,
-    ctx: &ShaderGenCtx,
-) {
-    egui::CollapsingHeader::new("Shader code")
-        .id_salt(id_salt)
-        .default_open(true)
-        .show(ui, |ui| {
-            let language_id = egui::Id::new("shader_code_language");
-            let language = ui
-                .ctx()
-                .data(|data| data.get_temp(language_id))
-                .unwrap_or(Language::Wgsl);
+pub fn shader_code_section(ui: &mut egui::Ui, item: &impl ShaderInterface, ctx: &ShaderGenCtx) {
+    inspector::section(ui, "Shader Code", |ui| {
+        let language_id = egui::Id::new("shader_code_language");
+        let language = ui
+            .ctx()
+            .data(|data| data.get_temp(language_id))
+            .unwrap_or(Language::Wgsl);
 
-            let code = shader_preview::render(item, ctx, language);
-            let layout_job = layout_job(ui, &code, language.highlight_extension());
+        let code = shader_preview::render(item, ctx, language);
+        let layout_job = layout_job(ui, &code, language.highlight_extension());
 
-            egui::Frame::group(ui.style())
-                .fill(ui.visuals().extreme_bg_color)
-                .show(ui, |ui| {
-                    ui.horizontal(|ui| {
-                        ui.add(egui::Label::new(layout_job).selectable(true));
-                        ui.with_layout(egui::Layout::right_to_left(egui::Align::TOP), |ui| {
-                            if ui.small_button("Copy").clicked() {
-                                ui.ctx().copy_text(code.clone());
-                            }
+        egui::Frame::group(ui.style())
+            .fill(ui.visuals().extreme_bg_color)
+            .show(ui, |ui| {
+                ui.horizontal(|ui| {
+                    ui.add(egui::Label::new(layout_job).selectable(true));
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::TOP), |ui| {
+                        if ui.small_button("Copy").clicked() {
+                            ui.ctx().copy_text(code.clone());
+                        }
 
-                            let next = match language {
-                                Language::Wgsl => Language::Glsl,
-                                Language::Glsl => Language::Wgsl,
-                            };
+                        let next = match language {
+                            Language::Wgsl => Language::Glsl,
+                            Language::Glsl => Language::Wgsl,
+                        };
 
-                            if ui
-                                .small_button(language.to_string())
-                                .on_hover_text(format!("Switch to {}", next))
-                                .clicked()
-                            {
-                                ui.ctx()
-                                    .data_mut(|data| data.insert_temp(language_id, next));
-                            }
-                        });
+                        if ui
+                            .small_button(language.to_string())
+                            .on_hover_text(format!("Switch to {}", next))
+                            .clicked()
+                        {
+                            ui.ctx()
+                                .data_mut(|data| data.insert_temp(language_id, next));
+                        }
                     });
                 });
-        });
+            });
+    });
 }
 
 pub fn highlighted_label(ui: &mut egui::Ui, code: &str, extension: &str) -> egui::Response {
