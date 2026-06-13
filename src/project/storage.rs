@@ -188,6 +188,12 @@ where
             .ok_or_else(|| AppError::InvalidResource(key.into()))
     }
 
+    pub fn has_pending(&self) -> bool {
+        self.map
+            .values()
+            .any(|cell| matches!(cell, RuntimeCell::Pending { .. }))
+    }
+
     pub fn get_errors(&self) -> impl Iterator<Item = (ResourceId, &AppError)> {
         self.map.iter().filter_map(|(key, cell)| {
             if let RuntimeCell::Errored { error, .. } = cell {

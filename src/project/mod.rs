@@ -197,6 +197,20 @@ impl RuntimeProject {
         };
     }
 
+    pub fn is_rebuilding(&self) -> bool {
+        self.shaders.has_pending()
+            || self.uniforms.has_pending()
+            || self.bind_groups.has_pending()
+            || self.textures.has_pending()
+            || self.texture_views.has_pending()
+            || self.samplers.has_pending()
+            || self.dimensions.has_pending()
+            || self.cameras.has_pending()
+            || self.models.has_pending()
+            || self.render_pipelines.has_pending()
+            || self.compute_passes.has_pending()
+    }
+
     pub fn iter_errors(&self) -> impl Iterator<Item = (ResourceId, &AppError)> {
         self.shaders
             .get_errors()

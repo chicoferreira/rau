@@ -39,10 +39,18 @@ pub fn ui(state: &mut StateSnapshot, ui: &mut egui::Ui) {
         show_error_list = false;
     }
 
+    let is_rebuilding = state.runtime_project.is_rebuilding();
+
     egui::Panel::bottom("status_panel")
         .resizable(false)
         .show_inside(ui, |ui| {
-            status_bar_content(ui, &errors, state.backend, &state.file_storage.file_system);
+            status_bar_content(
+                ui,
+                &errors,
+                is_rebuilding,
+                state.backend,
+                &state.file_storage.file_system,
+            );
         });
 
     if show_error_list && !errors.is_empty() {
@@ -59,6 +67,7 @@ pub fn ui(state: &mut StateSnapshot, ui: &mut egui::Ui) {
 fn status_bar_content(
     ui: &mut egui::Ui,
     errors: &[(ResourceId, &AppError)],
+    is_rebuilding: bool,
     backend: wgpu::Backend,
     project_file_system: &ProjectFileSystem,
 ) {
@@ -83,6 +92,11 @@ fn status_bar_content(
             {
                 toggle_open(ui.ctx());
             }
+        }
+
+        if is_rebuilding {
+            ui.add(egui::Spinner::new().size(ui.text_style_height(&egui::TextStyle::Body)))
+                .on_hover_text("Rebuilding resources...");
         }
 
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
