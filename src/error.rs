@@ -51,13 +51,13 @@ pub enum AppError {
     #[error("Failed to load file: {0}")]
     FileLoadError(#[from] std::io::Error),
     /// The file was not found.
-    #[error("File not found: {0:?}.")]
+    #[error("File not found: {0}.")]
     FileNotFound(FilePath),
     /// The file or directory already exists.
-    #[error("Path already exists: {0:?}.")]
+    #[error("Path already exists: {0}.")]
     PathAlreadyExists(FilePath),
     #[cfg(not(target_arch = "wasm32"))]
-    #[error("This folder already contains a project.json: {0:?}.")]
+    #[error("This folder already contains a project.json: {0}.")]
     ProjectJsonAlreadyExists(PathBuf),
     #[cfg(target_arch = "wasm32")]
     #[error("A project named “{0}” already exists.")]
@@ -79,7 +79,7 @@ pub enum AppError {
     #[cfg(target_arch = "wasm32")]
     #[error(transparent)]
     IndexedDbError(#[from] indexed_db_futures::error::Error),
-    #[error("File contains invalid UTF-8: {0:?}.")]
+    #[error("File contains invalid UTF-8: {0}.")]
     FileNotValidUtf8(FilePath),
     #[cfg(target_arch = "wasm32")]
     #[error("Browser error: {0}")]

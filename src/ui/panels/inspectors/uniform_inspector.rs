@@ -88,7 +88,7 @@ impl StateSnapshot<'_> {
                         ui.spinner();
                     }
                     Err(err) => {
-                        ui.colored_label(ui.visuals().error_fg_color, err.to_string());
+                        inspector::error_label(ui, err.to_string());
                     }
                 }
             });

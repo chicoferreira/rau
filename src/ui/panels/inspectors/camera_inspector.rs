@@ -111,7 +111,7 @@ impl StateSnapshot<'_> {
                         ui.label(RichText::new(format!("{:.4}", camera_runtime.aspect())).weak())
                     }
                     Ok(None) => ui.spinner(),
-                    Err(err) => ui.colored_label(ui.visuals().error_fg_color, err.to_string()),
+                    Err(err) => inspector::error_label(ui, err.to_string()),
                 });
 
                 let mut current_dim_id = camera.dimension_id();
@@ -198,7 +198,7 @@ impl StateSnapshot<'_> {
                     return;
                 }
                 Err(err) => {
-                    ui.colored_label(ui.visuals().error_fg_color, err.to_string());
+                    inspector::error_label(ui, err.to_string());
                     return;
                 }
             };

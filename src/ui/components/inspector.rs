@@ -1,6 +1,8 @@
 use std::{hash::Hash, ops::RangeInclusive};
 
-use egui::{ComboBox, Grid, Ui, Widget, WidgetText};
+use egui::{
+    ComboBox, Direction, Grid, InnerResponse, Layout, Response, RichText, Ui, Widget, WidgetText,
+};
 
 use crate::{
     project::{ProjectResource, paths::FilePath, storage::Storage},
@@ -10,6 +12,22 @@ use crate::{
 /// Trait for types that can be rendered as the label of a combo box entry.
 pub trait AsWidgetText {
     fn as_widget_text(&self) -> WidgetText;
+}
+
+pub fn centered<R>(ui: &mut Ui, add_contents: impl FnOnce(&mut Ui) -> R) -> InnerResponse<R> {
+    ui.with_layout(
+        Layout::centered_and_justified(Direction::TopDown).with_cross_justify(false),
+        add_contents,
+    )
+}
+
+pub fn error_label(ui: &mut Ui, text: impl Into<RichText>) -> Response {
+    ui.colored_label(ui.visuals().error_fg_color, text)
+}
+
+pub fn centered_error(ui: &mut Ui, text: impl Into<RichText>) -> Response {
+    let text = text.into();
+    centered(ui, |ui| error_label(ui, text)).inner
 }
 
 pub fn section<R>(ui: &mut Ui, title: &str, content: impl FnOnce(&mut Ui) -> R) -> R {

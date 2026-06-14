@@ -9,6 +9,7 @@ use crate::file::absolute::AbsolutePathBuf;
 use crate::file::file_system::{AppFileSystem, FutureResult};
 use crate::file::identifier::{ProjectIdentifier, ProjectSource};
 use crate::project::{Project, paths::FilePath};
+use crate::ui::components::inspector;
 #[cfg(not(target_arch = "wasm32"))]
 use crate::utils::async_job::AsyncJob;
 use crate::utils::github;
@@ -184,7 +185,7 @@ impl CreateProjectModal {
                 });
 
                 if let Some(error) = &self.form_data.error {
-                    ui.colored_label(ui.visuals().error_fg_color, error.to_string());
+                    inspector::error_label(ui, error.to_string());
                 }
 
                 result = self.tick_pending_state(ui);
