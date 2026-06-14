@@ -10,7 +10,10 @@ use crate::{
         TextureId, TextureViewId, UniformId, ViewportId,
     },
     ui::{
-        components::tree_node::{TreeNode, pending_create_node},
+        components::{
+            resource_icons,
+            tree_node::{TreeNode, pending_create_node},
+        },
         pane::StateSnapshot,
         rename::RenameTarget,
     },
@@ -65,23 +68,24 @@ fn pending_resource_node(
 
 fn resource_icon(id: &TreeNodeId) -> (&'static str, [u8; 3]) {
     use TreeNodeId as N;
-    match id {
-        N::ShaderFolder | N::Shader(_) => (regular::CODE, [122, 158, 200]),
-        N::ViewportFolder | N::Viewport(_) => (regular::MONITOR, [120, 180, 195]),
-        N::UniformFolder | N::Uniform(_) => (regular::SLIDERS_HORIZONTAL, [122, 190, 170]),
-        N::BindGroupFolder | N::BindGroup(_) => (regular::LINK, [210, 160, 110]),
-        N::TextureFolder | N::Texture(_) => (regular::IMAGE, [184, 132, 184]),
-        N::TextureViewFolder | N::TextureView(_) => (regular::EYE, [200, 145, 175]),
-        N::SamplerFolder | N::Sampler(_) => (regular::EYEDROPPER, [175, 185, 120]),
-        N::DimensionFolder | N::Dimension(_) => (regular::RULER, [150, 175, 150]),
-        N::CameraFolder | N::Camera(_) => (regular::VIDEO_CAMERA, [170, 150, 210]),
-        N::ModelFolder | N::Model(_) => (regular::CUBE, [122, 176, 132]),
-        N::RenderPipelineFolder | N::RenderPipeline(_) => (regular::GRAPH, [200, 130, 130]),
-        N::RenderPassFolder | N::RenderPass(_) => (regular::PAINT_BRUSH, [210, 145, 120]),
-        N::ComputePassFolder | N::ComputePass(_) => (regular::CPU, [150, 150, 215]),
-        N::Presentation(_) => (regular::PRESENTATION, [198, 162, 96]),
-        N::PendingCreate(_) => (regular::FILE, [150, 150, 150]),
-    }
+    let kind = match id {
+        N::ShaderFolder | N::Shader(_) => ResourceKind::Shader,
+        N::ViewportFolder | N::Viewport(_) => ResourceKind::Viewport,
+        N::UniformFolder | N::Uniform(_) => ResourceKind::Uniform,
+        N::BindGroupFolder | N::BindGroup(_) => ResourceKind::BindGroup,
+        N::TextureFolder | N::Texture(_) => ResourceKind::Texture,
+        N::TextureViewFolder | N::TextureView(_) => ResourceKind::TextureView,
+        N::SamplerFolder | N::Sampler(_) => ResourceKind::Sampler,
+        N::DimensionFolder | N::Dimension(_) => ResourceKind::Dimension,
+        N::CameraFolder | N::Camera(_) => ResourceKind::Camera,
+        N::ModelFolder | N::Model(_) => ResourceKind::Model,
+        N::RenderPipelineFolder | N::RenderPipeline(_) => ResourceKind::RenderPipeline,
+        N::RenderPassFolder | N::RenderPass(_) => ResourceKind::RenderPass,
+        N::ComputePassFolder | N::ComputePass(_) => ResourceKind::ComputePass,
+        N::Presentation(_) => ResourceKind::Presentation,
+        N::PendingCreate(kind) => *kind,
+    };
+    resource_icons::resource_kind_icon(kind)
 }
 
 fn resource_folder(id: TreeNodeId, label: &str) -> TreeNode<'_, TreeNodeId> {

@@ -2,7 +2,10 @@ use std::{hash::Hash, ops::RangeInclusive};
 
 use egui::{ComboBox, Grid, Ui, Widget, WidgetText};
 
-use crate::project::{ProjectResource, paths::FilePath, storage::Storage};
+use crate::{
+    project::{ProjectResource, paths::FilePath, storage::Storage},
+    ui::components::resource_icons,
+};
 
 /// Trait for types that can be rendered as the label of a combo box entry.
 pub trait AsWidgetText {
@@ -109,18 +112,36 @@ where
 
 const SELECT_PLACEHOLDER: &str = "Select...";
 
-fn storage_label<R>(storage: &Storage<R>, id: Option<R::Id>, none_label: &str) -> WidgetText
+fn storage_entry_text<R>(ui: &Ui, id: R::Id, label: &str) -> WidgetText
+where
+    R: ProjectResource,
+    R::Id: slotmap::Key,
+{
+    let icon = resource_icons::resource_id_icon(id.into());
+    resource_icons::icon_text(ui, icon, label)
+}
+
+fn storage_label<R>(
+    ui: &Ui,
+    storage: &Storage<R>,
+    id: Option<R::Id>,
+    placeholder: WidgetText,
+) -> WidgetText
 where
     R: ProjectResource,
     R::Id: slotmap::Key,
 {
     match id {
         Some(id) => match storage.get_label(id) {
-            Ok(label) => label.into(),
+            Ok(label) => storage_entry_text::<R>(ui, id, label),
             Err(_) => format!("Unknown {id:?}").into(),
         },
-        None => none_label.into(),
+        None => placeholder,
     }
+}
+
+fn select_placeholder(ui: &Ui) -> WidgetText {
+    resource_icons::warning_text(ui, SELECT_PLACEHOLDER)
 }
 
 pub fn storage_opt_combo<R>(
@@ -135,11 +156,12 @@ where
 {
     let before = *current_value;
     ComboBox::from_id_salt(id_salt)
-        .selected_text(storage_label(storage, *current_value, "None"))
+        .selected_text(storage_label(ui, storage, *current_value, "None".into()))
         .show_ui(ui, |ui| {
             ui.selectable_value(current_value, None, "None");
             for (id, item) in storage.list_sorted() {
-                ui.selectable_value(current_value, Some(id), item.label());
+                let text = storage_entry_text::<R>(ui, id, item.label());
+                ui.selectable_value(current_value, Some(id), text);
             }
         });
     *current_value != before
@@ -173,10 +195,16 @@ where
 {
     let before = *current_value;
     ComboBox::from_id_salt(id_salt)
-        .selected_text(storage_label(storage, *current_value, SELECT_PLACEHOLDER))
+        .selected_text(storage_label(
+            ui,
+            storage,
+            *current_value,
+            select_placeholder(ui),
+        ))
         .show_ui(ui, |ui| {
             for (id, item) in storage.list_sorted() {
-                ui.selectable_value(current_value, Some(id), item.label());
+                let text = storage_entry_text::<R>(ui, id, item.label());
+                ui.selectable_value(current_value, Some(id), text);
             }
         });
     *current_value != before
@@ -211,13 +239,15 @@ where
     let before = *current_value;
     ComboBox::from_id_salt(id_salt)
         .selected_text(storage_label(
+            ui,
             storage,
             Some(*current_value),
-            SELECT_PLACEHOLDER,
+            select_placeholder(ui),
         ))
         .show_ui(ui, |ui| {
             for (id, item) in storage.list_sorted() {
-                ui.selectable_value(current_value, id, item.label());
+                let text = storage_entry_text::<R>(ui, id, item.label());
+                ui.selectable_value(current_value, id, text);
             }
         });
     *current_value != before
@@ -237,7 +267,8 @@ pub fn add_from_storage_menu<R>(
         let mut any = false;
         for (id, item) in storage.list_sorted() {
             any = true;
-            if ui.button(item.label()).clicked() {
+            let text = storage_entry_text::<R>(ui, id, item.label());
+            if ui.button(text).clicked() {
                 on_pick(id);
                 ui.close();
             }
@@ -248,7 +279,7 @@ pub fn add_from_storage_menu<R>(
     });
 }
 
-pub fn file_opt_combo_row(
+pub fn file_combo_row(
     ui: &mut Ui,
     label: impl Into<WidgetText>,
     id_salt: impl Hash,
@@ -258,19 +289,21 @@ pub fn file_opt_combo_row(
 ) -> bool {
     let before = current_value.clone();
 
-    let display_label = |path: &FilePath| path.to_string();
-
-    let selected_text = current_value
-        .as_ref()
-        .map_or_else(|| "None".into(), display_label);
+    let file_text = |ui: &Ui, path: &FilePath| {
+        resource_icons::icon_text(ui, resource_icons::file_icon(path), &path.to_string())
+    };
 
     row(ui, label, |ui| {
+        let selected_text = current_value
+            .as_ref()
+            .map_or_else(|| select_placeholder(ui), |path| file_text(ui, path));
+
         ComboBox::from_id_salt(id_salt)
             .selected_text(selected_text)
             .show_ui(ui, |ui| {
-                ui.selectable_value(current_value, None, "None");
                 for file in files.iter().filter(|file| file_filter(file)) {
-                    ui.selectable_value(current_value, Some(file.clone()), display_label(file));
+                    let text = file_text(ui, file);
+                    ui.selectable_value(current_value, Some(file.clone()), text);
                 }
             });
     });

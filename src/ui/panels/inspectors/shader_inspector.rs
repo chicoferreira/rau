@@ -24,7 +24,7 @@ impl StateSnapshot<'_> {
                         .is_some()
                 };
 
-                if inspector::file_opt_combo_row(
+                if inspector::file_combo_row(
                     ui,
                     "Source",
                     "shader_source",

@@ -4,7 +4,10 @@ use egui_ltreeview::{Action, DirPosition, DragAndDrop, RowLayout, TreeView, Tree
 use crate::{
     project::paths::FilePath,
     ui::{
-        components::tree_node::{TreeNode, pending_create_node},
+        components::{
+            resource_icons::{self, FOLDER_COLOR},
+            tree_node::{TreeNode, pending_create_node},
+        },
         pane::StateSnapshot,
         rename::{RenameState, RenameTarget},
     },
@@ -186,7 +189,7 @@ fn render_dir_nodes(
             unreachable!("A file path can't be the root")
         };
 
-        let (icon, icon_color) = file_icon(file_path);
+        let (icon, icon_color) = resource_icons::file_icon(file_path);
         let file_node = TreeNode::new(FileTreeNodeId::File(file_path.clone()), file_name)
             .with_icon(icon, icon_color)
             .with_event("Open File", StateEvent::OpenFile(file_path.clone()));
@@ -211,22 +214,6 @@ fn render_dir_nodes(
                 StateEvent::DeleteFile(file_path.clone()),
             )
             .build_to(builder, event_queue, rename_state);
-    }
-}
-
-const FOLDER_COLOR: [u8; 3] = [198, 162, 96];
-
-fn file_icon(file_path: &FilePath) -> (&'static str, [u8; 3]) {
-    use egui_phosphor::regular;
-
-    let extension = file_path.extension().map(str::to_ascii_lowercase);
-
-    match extension.as_deref() {
-        Some("wgsl" | "glsl" | "vert" | "frag" | "comp") => (regular::CODE, [122, 158, 200]),
-        Some("json" | "toml") => (regular::BRACKETS_CURLY, [198, 162, 96]),
-        Some("obj" | "gltf" | "glb") => (regular::CUBE, [122, 176, 132]),
-        Some("png" | "jpg" | "jpeg" | "hdr") => (regular::IMAGE, [184, 132, 184]),
-        _ => (regular::FILE, [150, 150, 150]),
     }
 }
 

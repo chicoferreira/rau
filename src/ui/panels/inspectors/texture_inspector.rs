@@ -188,7 +188,7 @@ fn ui_texture_source(
             }
             TextureSource::Image(path) => {
                 if let Some(files) = files {
-                    inspector::file_opt_combo_row(
+                    inspector::file_combo_row(
                         ui,
                         "Image",
                         "texture_source_image",

@@ -81,14 +81,9 @@ fn model_source_ui(ui: &mut egui::Ui, model: &mut Model, files: Option<&[FilePat
                 return;
             };
 
-            if inspector::file_opt_combo_row(
-                ui,
-                "Source",
-                "model_source",
-                files,
-                &mut source,
-                |path| path.extension() == Some("obj"),
-            ) {
+            if inspector::file_combo_row(ui, "Source", "model_source", files, &mut source, |path| {
+                path.extension() == Some("obj")
+            }) {
                 model.set_source(source);
             }
         });

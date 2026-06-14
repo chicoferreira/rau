@@ -190,56 +190,54 @@ impl StateSnapshot<'_> {
             });
         });
 
-        CollapsingHeader::new("Matrices")
-            .default_open(false)
-            .show(ui, |ui| {
-                let matrix = match &camera_runtime {
-                    Ok(Some(camera_runtime)) => camera_runtime.matrix(),
-                    Ok(None) => {
-                        ui.spinner();
-                        return;
-                    }
-                    Err(err) => {
-                        ui.colored_label(ui.visuals().error_fg_color, err.to_string());
-                        return;
-                    }
-                };
+        inspector::section(ui, "Matrices", |ui| {
+            let matrix = match &camera_runtime {
+                Ok(Some(camera_runtime)) => camera_runtime.matrix(),
+                Ok(None) => {
+                    ui.spinner();
+                    return;
+                }
+                Err(err) => {
+                    ui.colored_label(ui.visuals().error_fg_color, err.to_string());
+                    return;
+                }
+            };
 
-                CollapsingHeader::new("Projection")
-                    .id_salt("mat_projection")
-                    .default_open(false)
-                    .show(ui, |ui| {
-                        ui_mat4_grid(ui, &matrix.projection.to_cols_array_2d());
-                    });
+            CollapsingHeader::new("Projection")
+                .id_salt("mat_projection")
+                .default_open(false)
+                .show(ui, |ui| {
+                    ui_mat4_grid(ui, &matrix.projection.to_cols_array_2d());
+                });
 
-                CollapsingHeader::new("View")
-                    .id_salt("mat_view")
-                    .default_open(false)
-                    .show(ui, |ui| {
-                        ui_mat4_grid(ui, &matrix.view.to_cols_array_2d());
-                    });
+            CollapsingHeader::new("View")
+                .id_salt("mat_view")
+                .default_open(false)
+                .show(ui, |ui| {
+                    ui_mat4_grid(ui, &matrix.view.to_cols_array_2d());
+                });
 
-                CollapsingHeader::new("Projection View")
-                    .id_salt("mat_projection_view")
-                    .default_open(false)
-                    .show(ui, |ui| {
-                        ui_mat4_grid(ui, &matrix.projection_view.to_cols_array_2d());
-                    });
+            CollapsingHeader::new("Projection View")
+                .id_salt("mat_projection_view")
+                .default_open(false)
+                .show(ui, |ui| {
+                    ui_mat4_grid(ui, &matrix.projection_view.to_cols_array_2d());
+                });
 
-                CollapsingHeader::new("Inverse Projection")
-                    .id_salt("mat_inv_projection")
-                    .default_open(false)
-                    .show(ui, |ui| {
-                        ui_mat4_grid(ui, &matrix.inv_proj.to_cols_array_2d());
-                    });
+            CollapsingHeader::new("Inverse Projection")
+                .id_salt("mat_inv_projection")
+                .default_open(false)
+                .show(ui, |ui| {
+                    ui_mat4_grid(ui, &matrix.inv_proj.to_cols_array_2d());
+                });
 
-                CollapsingHeader::new("Inverse View")
-                    .id_salt("mat_inv_view")
-                    .default_open(false)
-                    .show(ui, |ui| {
-                        ui_mat4_grid(ui, &matrix.inverse_view.to_cols_array_2d());
-                    });
-            });
+            CollapsingHeader::new("Inverse View")
+                .id_salt("mat_inv_view")
+                .default_open(false)
+                .show(ui, |ui| {
+                    ui_mat4_grid(ui, &matrix.inverse_view.to_cols_array_2d());
+                });
+        });
     }
 }
 

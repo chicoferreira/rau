@@ -19,6 +19,7 @@ use crate::{
             draggable_list::{ListEdits, draggable_list},
             hint::hint,
             inspector::{self, AsWidgetText},
+            resource_icons,
         },
         pane::StateSnapshot,
     },
@@ -382,11 +383,15 @@ fn bind_group_target_combo(
     bind_groups: &Storage<BindGroup>,
     target: &mut BindGroupTarget,
 ) {
+    let bind_group_text = |ui: &egui::Ui, id: crate::project::BindGroupId, label: &str| {
+        resource_icons::icon_text(ui, resource_icons::resource_id_icon(id.into()), label)
+    };
+
     let selected_text: egui::WidgetText = match target {
         BindGroupTarget::Empty => "Empty".into(),
         BindGroupTarget::ModelMaterial => "Model Material".into(),
         BindGroupTarget::Static(id) => match bind_groups.get_label(*id) {
-            Ok(label) => label.into(),
+            Ok(label) => bind_group_text(ui, *id, label),
             Err(_) => format!("Unknown {id:?}").into(),
         },
     };
@@ -403,7 +408,8 @@ fn bind_group_target_combo(
             ui.separator();
             for (id, bind_group) in bind_groups.list() {
                 let selected = *target == BindGroupTarget::Static(id);
-                if ui.selectable_label(selected, bind_group.label()).clicked() {
+                let text = bind_group_text(ui, id, bind_group.label());
+                if ui.selectable_label(selected, text).clicked() {
                     *target = BindGroupTarget::Static(id);
                 }
             }
@@ -459,13 +465,7 @@ fn draw_strategy_fields_ui(
             instances,
             mesh_vertex_slot,
         } => {
-            inspector::storage_combo_row(
-                ui,
-                "Model",
-                "render_pipeline_model",
-                models,
-                model_id,
-            );
+            inspector::storage_combo_row(ui, "Model", "render_pipeline_model", models, model_id);
             inspector::row(ui, "Instances", |ui| range_u32_edit(ui, instances));
             inspector::u32_drag_row(ui, "Mesh Vertex Slot", mesh_vertex_slot, 0..=u32::MAX);
         }
