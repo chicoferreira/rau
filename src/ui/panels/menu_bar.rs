@@ -31,7 +31,7 @@ pub fn ui(state: &mut StateSnapshot, ui: &mut egui::Ui) {
     });
 }
 
-fn rau_menu(state: &mut StateSnapshot, ui: &mut egui::Ui) {
+fn rau_menu(_state: &mut StateSnapshot, ui: &mut egui::Ui) {
     use crate::built_info;
 
     ui.label(
@@ -70,7 +70,7 @@ fn rau_menu(state: &mut StateSnapshot, ui: &mut egui::Ui) {
     {
         ui.separator();
         if ui.button("Quit").clicked() {
-            state.app_event_queue.quit();
+            _state.app_event_queue.quit();
         }
     }
 }

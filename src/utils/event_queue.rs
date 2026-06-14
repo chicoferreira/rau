@@ -58,6 +58,7 @@ impl EventQueue<AppEvent> {
         self.add(AppEvent::SetState(State::MainMenu(MainMenu::default())));
     }
 
+    #[cfg(not(target_arch = "wasm32"))]
     pub fn quit(&mut self) {
         self.add(AppEvent::Quit);
     }

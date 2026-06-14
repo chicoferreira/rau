@@ -35,6 +35,7 @@ pub struct App {
 
 pub enum AppEvent {
     SetState(State),
+    #[cfg(not(target_arch = "wasm32"))]
     Quit,
 }
 
@@ -198,6 +199,7 @@ impl App {
                 AppEvent::SetState(state) => {
                     self.state = state;
                 }
+                #[cfg(not(target_arch = "wasm32"))]
                 AppEvent::Quit => {
                     self.quit_requested = true;
                 }
