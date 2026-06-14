@@ -1,5 +1,5 @@
 use egui::{
-    Color32, Ui, WidgetText,
+    Color32, FontId, Ui, WidgetText,
     text::{LayoutJob, TextFormat},
 };
 use egui_phosphor::regular;
@@ -66,30 +66,44 @@ pub fn file_icon(file_path: &FilePath) -> (&'static str, [u8; 3]) {
 }
 
 pub fn icon_text(ui: &Ui, icon: (&'static str, [u8; 3]), label: &str) -> WidgetText {
-    let [r, g, b] = icon.1;
+    let font_id = egui::TextStyle::Button.resolve(ui.style());
+    icon_glyph_text(font_id, icon, label, ui.visuals().text_color())
+}
+
+pub fn icon_tab_title(icon: (&'static str, [u8; 3]), label: &str) -> WidgetText {
+    let font_id = egui::FontId::proportional(13.0);
+    icon_glyph_text(font_id, icon, label, Color32::PLACEHOLDER)
+}
+
+fn icon_glyph_text(
+    font_id: FontId,
+    (icon, color): (&'static str, [u8; 3]),
+    label: &str,
+    label_color: Color32,
+) -> WidgetText {
+    let [r, g, b] = color;
     glyph_text(
-        ui,
-        icon.0,
+        font_id,
+        icon,
         Color32::from_rgb(r, g, b),
         label,
-        ui.visuals().text_color(),
+        label_color,
     )
 }
 
 pub fn warning_text(ui: &Ui, label: &str) -> WidgetText {
     let color = ui.visuals().warn_fg_color;
-    glyph_text(ui, regular::WARNING, color, label, color)
+    let font_id = egui::TextStyle::Button.resolve(ui.style());
+    glyph_text(font_id, regular::WARNING, color, label, color)
 }
 
 fn glyph_text(
-    ui: &Ui,
+    font_id: FontId,
     glyph: &str,
     glyph_color: Color32,
     label: &str,
     label_color: Color32,
 ) -> WidgetText {
-    let font_id = egui::TextStyle::Button.resolve(ui.style());
-
     let mut job = LayoutJob::default();
     job.append(
         glyph,

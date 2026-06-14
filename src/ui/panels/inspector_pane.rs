@@ -7,7 +7,13 @@ use crate::{
         RenderPipelineId, ResourceId, SamplerId, ShaderId, TextureId, TextureViewId, UniformId,
         ViewportId, paths::FilePath,
     },
-    ui::{components::tiles::Pane, pane::StateSnapshot},
+    ui::{
+        components::{
+            resource_icons::{file_icon, icon_tab_title, resource_id_icon},
+            tiles::Pane,
+        },
+        pane::StateSnapshot,
+    },
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -29,42 +35,46 @@ pub enum InspectorPane {
     ComputePass(ComputePassId),
 }
 
-fn resource_tab_title(id: impl Into<ResourceId>, state: &StateSnapshot<'_>) -> String {
+fn resource_tab_title(id: impl Into<ResourceId>, state: &StateSnapshot<'_>) -> egui::WidgetText {
     let id = id.into();
-    let label_opt = state.project.label(id).map(|l| l.to_string());
-    label_opt.unwrap_or_else(|| format!("Unknown {:?}", id))
+    let label = state
+        .project
+        .label(id)
+        .map(|l| l.to_string())
+        .unwrap_or_default();
+    icon_tab_title(resource_id_icon(id), &label)
 }
 
-fn file_tab_title(file_path: &FilePath, state: &StateSnapshot<'_>) -> String {
-    // TODO: add loading indicator in case of loading/reloading
-    match state.file_storage.get_open_file(file_path) {
+fn file_tab_title(file_path: &FilePath, state: &StateSnapshot<'_>) -> egui::WidgetText {
+    let label = match state.file_storage.get_open_file(file_path) {
         Some(
             OpenFileState::Loaded { text, saved } | OpenFileState::Reloading { text, saved, .. },
         ) if text != &saved.text => {
             format!("{} *", file_path)
         }
         _ => file_path.to_string(),
-    }
+    };
+    icon_tab_title(file_icon(file_path), &label)
 }
 
 impl Pane for InspectorPane {
     fn tab_title(&self, state: &StateSnapshot<'_>) -> egui::WidgetText {
         match self {
-            InspectorPane::File(file_path) => file_tab_title(file_path, state).into(),
-            InspectorPane::Uniform(id) => resource_tab_title(*id, state).into(),
-            InspectorPane::BindGroup(id) => resource_tab_title(*id, state).into(),
-            InspectorPane::Shader(id) => resource_tab_title(*id, state).into(),
-            InspectorPane::Camera(id) => resource_tab_title(*id, state).into(),
-            InspectorPane::Dimension(id) => resource_tab_title(*id, state).into(),
-            InspectorPane::Sampler(id) => resource_tab_title(*id, state).into(),
-            InspectorPane::Texture(id) => resource_tab_title(*id, state).into(),
-            InspectorPane::TextureView(id) => resource_tab_title(*id, state).into(),
-            InspectorPane::Viewport(id) => resource_tab_title(*id, state).into(),
-            InspectorPane::Model(id) => resource_tab_title(*id, state).into(),
-            InspectorPane::RenderPipeline(id) => resource_tab_title(*id, state).into(),
-            InspectorPane::RenderPass(id) => resource_tab_title(*id, state).into(),
-            InspectorPane::Presentation(id) => resource_tab_title(*id, state).into(),
-            InspectorPane::ComputePass(id) => resource_tab_title(*id, state).into(),
+            InspectorPane::File(file_path) => file_tab_title(file_path, state),
+            InspectorPane::Uniform(id) => resource_tab_title(*id, state),
+            InspectorPane::BindGroup(id) => resource_tab_title(*id, state),
+            InspectorPane::Shader(id) => resource_tab_title(*id, state),
+            InspectorPane::Camera(id) => resource_tab_title(*id, state),
+            InspectorPane::Dimension(id) => resource_tab_title(*id, state),
+            InspectorPane::Sampler(id) => resource_tab_title(*id, state),
+            InspectorPane::Texture(id) => resource_tab_title(*id, state),
+            InspectorPane::TextureView(id) => resource_tab_title(*id, state),
+            InspectorPane::Viewport(id) => resource_tab_title(*id, state),
+            InspectorPane::Model(id) => resource_tab_title(*id, state),
+            InspectorPane::RenderPipeline(id) => resource_tab_title(*id, state),
+            InspectorPane::RenderPass(id) => resource_tab_title(*id, state),
+            InspectorPane::Presentation(id) => resource_tab_title(*id, state),
+            InspectorPane::ComputePass(id) => resource_tab_title(*id, state),
         }
     }
 

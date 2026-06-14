@@ -1,6 +1,12 @@
 use crate::{
-    project::{ProjectResource, ViewportId},
-    ui::{components::tiles::Pane, pane::StateSnapshot},
+    project::{ProjectResource, ResourceKind, ViewportId},
+    ui::{
+        components::{
+            resource_icons::{icon_tab_title, resource_kind_icon},
+            tiles::Pane,
+        },
+        pane::StateSnapshot,
+    },
 };
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -80,12 +86,13 @@ impl Pane for ViewportPane {
     }
 
     fn tab_title(&self, state: &StateSnapshot<'_>) -> egui::WidgetText {
-        state
+        let label = state
             .project
             .viewports
             .get(self.viewport_id)
-            .map(|viewport| viewport.label().into())
-            .unwrap_or("Unknown Viewport".into())
+            .map(|viewport| viewport.label().to_string())
+            .unwrap_or_default();
+        icon_tab_title(resource_kind_icon(ResourceKind::Viewport), &label)
     }
 
     fn is_valid(&self, state: &StateSnapshot<'_>) -> bool {
