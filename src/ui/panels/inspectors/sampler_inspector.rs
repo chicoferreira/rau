@@ -1,7 +1,7 @@
 use crate::{
     project::SamplerId,
     ui::{
-        components::{inspector, selector::AsWidgetText},
+        components::inspector::{self, AsWidgetText},
         pane::StateSnapshot,
     },
 };

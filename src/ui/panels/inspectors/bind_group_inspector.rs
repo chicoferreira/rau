@@ -18,8 +18,7 @@ use crate::{
             draggable_list::{ListEdits, draggable_list},
             flags_selector::flags_selector,
             hint::hint,
-            inspector,
-            selector::AsWidgetText,
+            inspector::{self, AsWidgetText},
         },
         pane::StateSnapshot,
     },
@@ -182,7 +181,7 @@ fn ui_uniform_fields(
     mut uniform_id: Option<UniformId>,
 ) -> Option<BindGroupResource> {
     let before = uniform_id;
-    inspector::storage_opt_combo_row(ui, "Uniform", "uniform", ctx.uniforms, &mut uniform_id);
+    inspector::storage_combo_row(ui, "Uniform", "uniform", ctx.uniforms, &mut uniform_id);
     (uniform_id != before).then_some(BindGroupResource::Uniform(uniform_id))
 }
 
@@ -195,7 +194,7 @@ fn ui_texture_fields(
 ) -> Option<BindGroupResource> {
     let (tvid_before, vd_before, st_before) = (texture_view_id, view_dimension, sample_type);
 
-    inspector::storage_opt_combo_row(
+    inspector::storage_combo_row(
         ui,
         "Texture View",
         "texture view",
@@ -233,7 +232,7 @@ fn ui_sampler_fields(
 ) -> Option<BindGroupResource> {
     let (sid_before, sbt_before) = (sampler_id, sampler_binding_type);
 
-    inspector::storage_opt_combo_row(ui, "Sampler", "sampler", ctx.samplers, &mut sampler_id);
+    inspector::storage_combo_row(ui, "Sampler", "sampler", ctx.samplers, &mut sampler_id);
     inspector::combo_row(
         ui,
         "Binding Type",
@@ -259,7 +258,7 @@ fn ui_storage_texture_fields(
 ) -> Option<BindGroupResource> {
     let before = (texture_view_id, access, view_dimension);
 
-    inspector::storage_opt_combo_row(
+    inspector::storage_combo_row(
         ui,
         "Texture View",
         "storage_texture_view",

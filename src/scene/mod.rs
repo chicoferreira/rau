@@ -334,7 +334,7 @@ pub async fn create_scene(
     let num_workgroups = (dst_size + 15) / 16;
     let compute_pass = ComputePass::new(
         "equirect_to_cube_map",
-        vec![Some(bind_group_id), Some(sky_color_bind_group_id)],
+        vec![bind_group_id, sky_color_bind_group_id],
         Some(equirectengular_shader_id),
         WorkGroups::new(num_workgroups, num_workgroups, 6),
     );

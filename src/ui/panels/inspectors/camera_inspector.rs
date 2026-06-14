@@ -115,7 +115,7 @@ impl StateSnapshot<'_> {
                 });
 
                 let mut current_dim_id = camera.dimension_id();
-                if inspector::storage_opt_combo_row(
+                if inspector::storage_combo_row(
                     ui,
                     "Dimension",
                     "camera_aspect_source",

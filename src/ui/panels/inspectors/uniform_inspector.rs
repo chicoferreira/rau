@@ -20,9 +20,8 @@ use crate::{
             data_display::{ui_array, ui_array_mut},
             draggable_list::{ListEdits, draggable_list},
             hint::hint,
-            inspector,
+            inspector::{self, AsWidgetText},
             renameable_label::renameable_label,
-            selector::AsWidgetText,
         },
         pane::StateSnapshot,
         rename::{RenameState, RenameTarget},
@@ -273,7 +272,7 @@ fn ui_field_entry(
         } => {
             let mut camera_id = *camera_id;
             let camera_id_before = camera_id;
-            inspector::storage_opt_combo_row(ui, "Camera", "camera", &ctx.cameras, &mut camera_id);
+            inspector::storage_combo_row(ui, "Camera", "camera", &ctx.cameras, &mut camera_id);
 
             let mut field = field.clone();
             let field_before = field.clone();

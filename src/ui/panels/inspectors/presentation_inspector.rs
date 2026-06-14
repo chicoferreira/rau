@@ -1,7 +1,7 @@
 use egui::RichText;
 
 use crate::{
-    project::{ProjectResource, RenderPassId, resource::render_pass::RenderPass, storage::Storage},
+    project::{RenderPassId, resource::render_pass::RenderPass, storage::Storage},
     ui::{
         components::{
             draggable_list::{ListEdits, draggable_list},
@@ -63,20 +63,13 @@ fn presentation_render_pass_list_ui(ui: &mut egui::Ui, state: &mut StateSnapshot
 
     ui.add_space(6.0);
 
-    ui.menu_button("Add Render Pass", |ui| {
-        let mut has_render_passes = false;
-        for (id, render_pass) in render_pass_storage.list_sorted() {
-            has_render_passes = true;
-            if ui.button(render_pass.label()).clicked() {
-                edits.push_add_edit(id);
-                ui.close();
-            }
-        }
-
-        if !has_render_passes {
-            ui.label("No render passes.");
-        }
-    });
+    inspector::add_from_storage_menu(
+        ui,
+        "Add Render Pass",
+        render_pass_storage,
+        "No render passes.",
+        |id| edits.push_add_edit(id),
+    );
 
     if !render_passes.is_empty() {
         ui.add_space(6.0);
@@ -115,24 +108,15 @@ fn presentation_render_pass_row_ui(
     let mut selected = render_pass_id;
 
     ui.indent(("presentation_render_pass_select", index), |ui| {
-        // TODO: replace with one of the combobox components
-        egui::ComboBox::from_id_salt(("presentation_render_pass_select", index))
-            .selected_text(render_pass_label(render_passes, selected))
-            .show_ui(ui, |ui| {
-                for (id, render_pass) in render_passes.list_sorted() {
-                    ui.selectable_value(&mut selected, id, render_pass.label());
-                }
-            });
+        inspector::storage_id_combo(
+            ui,
+            ("presentation_render_pass_select", index),
+            render_passes,
+            &mut selected,
+        );
     });
 
     if selected != render_pass_id {
         edits.push_set_edit(index, selected);
     }
-}
-
-fn render_pass_label(render_passes: &Storage<RenderPass>, render_pass_id: RenderPassId) -> String {
-    render_passes
-        .get_label(render_pass_id)
-        .map(str::to_owned)
-        .unwrap_or_else(|_| format!("Unknown {render_pass_id:?}"))
 }

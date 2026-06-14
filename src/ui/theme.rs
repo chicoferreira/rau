@@ -112,6 +112,7 @@ fn visuals() -> egui::Visuals {
 
 fn apply_spacing(style: &mut egui::Style) {
     let spacing = &mut style.spacing;
+    spacing.button_padding.x = 6.0;
     spacing.menu_margin = egui::Margin::same(6);
 
     spacing.scroll.bar_width = 9.0;

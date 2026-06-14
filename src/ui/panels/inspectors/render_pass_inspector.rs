@@ -2,7 +2,7 @@ use egui::{RichText, Widget};
 
 use crate::{
     project::{
-        ProjectResource, RenderPassId, RenderPipelineId, TextureViewId,
+        RenderPassId, RenderPipelineId, TextureViewId,
         resource::{
             render_pass::{LoadOperation, RenderPass, RenderPassTarget},
             render_pipeline::RenderPipeline,
@@ -15,8 +15,7 @@ use crate::{
             color_edit::color_edit_rgba,
             draggable_list::{ListEdits, draggable_list},
             hint::hint,
-            inspector,
-            selector::{AsWidgetText, ComboBoxExt},
+            inspector::{self, AsWidgetText},
         },
         pane::StateSnapshot,
     },
@@ -136,7 +135,7 @@ where
     let before = (*texture_view_id, *load_op);
 
     inspector::field_grid(ui, (id_salt, "target_grid"), |ui| {
-        inspector::storage_opt_combo_row(
+        inspector::storage_combo_row(
             ui,
             "Texture View",
             (id_salt, "texture_view"),
@@ -149,9 +148,7 @@ where
             let mut kind = kind_before;
 
             ui.horizontal(|ui| {
-                egui::ComboBox::from_id_salt((id_salt, "load_operation"))
-                    .selected_text(kind.as_widget_text())
-                    .show_ui_list(ui, LOAD_OP_KINDS, &mut kind);
+                inspector::value_combo(ui, (id_salt, "load_operation"), LOAD_OP_KINDS, &mut kind);
 
                 if kind != kind_before {
                     *load_op = match kind {
@@ -194,27 +191,20 @@ fn render_pass_pipeline_list_ui(
 
     ui.add_space(3.0);
 
-    ui.menu_button("Add Pipeline", |ui| {
-        let mut has_pipelines = false;
-        for (id, pipeline) in render_pipelines.list_sorted() {
-            has_pipelines = true;
-            if ui.button(pipeline.label()).clicked() {
-                edits.push_add_edit(id);
-                ui.close();
-            }
-        }
-
-        if !has_pipelines {
-            ui.label("No render pipelines.");
-        }
-    });
+    inspector::add_from_storage_menu(
+        ui,
+        "Add Pipeline",
+        render_pipelines,
+        "No render pipelines.",
+        |id| edits.push_add_edit(id),
+    );
 
     if !pipelines.is_empty() {
         ui.add_space(6.0);
         ui.add(hint(|ui| {
             ui.label("Right-click a");
             ui.label(RichText::new("Pipeline").strong());
-            ui.label("to inspect or remove it, or drag to reorder.");
+            ui.label("to remove it, or drag to reorder.");
         }));
     }
 
@@ -246,27 +236,15 @@ fn render_pass_pipeline_row_ui(
     let mut selected = pipeline_id;
 
     ui.indent(("render_pass_pipeline_select", index), |ui| {
-        // TODO: replace with one of the combobox components
-        egui::ComboBox::from_id_salt(("render_pass_pipeline_select", index))
-            .selected_text(render_pipeline_label(render_pipelines, selected))
-            .show_ui(ui, |ui| {
-                for (id, pipeline) in render_pipelines.list_sorted() {
-                    ui.selectable_value(&mut selected, id, pipeline.label());
-                }
-            });
+        inspector::storage_id_combo(
+            ui,
+            ("render_pass_pipeline_select", index),
+            render_pipelines,
+            &mut selected,
+        );
     });
 
     if selected != pipeline_id {
         edits.push_set_edit(index, selected);
     }
-}
-
-fn render_pipeline_label(
-    render_pipelines: &Storage<RenderPipeline>,
-    pipeline_id: RenderPipelineId,
-) -> String {
-    render_pipelines
-        .get_label(pipeline_id)
-        .map(str::to_owned)
-        .unwrap_or_else(|_| format!("Unknown {pipeline_id:?}"))
 }

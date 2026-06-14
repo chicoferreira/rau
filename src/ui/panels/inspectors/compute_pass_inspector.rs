@@ -16,7 +16,6 @@ use crate::{
             draggable_list::{ListEdits, draggable_list},
             hint::hint,
             inspector,
-            selector::ComboBoxExt,
         },
         pane::StateSnapshot,
     },
@@ -49,7 +48,7 @@ fn compute_pass_fields_ui(
     inspector::section(ui, "Settings", |ui| {
         inspector::field_grid(ui, "compute_pass_inspector_grid", |ui| {
             let mut shader_id = compute_pass.shader();
-            if inspector::storage_opt_combo_row(
+            if inspector::storage_combo_row(
                 ui,
                 "Shader",
                 "compute_pass_shader",
@@ -102,9 +101,13 @@ fn compute_pass_bind_groups_ui(
 
         ui.add_space(6.0);
 
-        if ui.button("Add Bind Group").clicked() {
-            edits.push_add_edit(None);
-        }
+        inspector::add_from_storage_menu(
+            ui,
+            "Add Bind Group",
+            bind_groups,
+            "No bind groups.",
+            |id| edits.push_add_edit(id),
+        );
 
         if !entries.is_empty() {
             ui.add_space(6.0);
@@ -128,8 +131,8 @@ fn compute_pass_bind_group_row_ui(
     handle: egui_dnd::Handle<'_>,
     bind_groups: &Storage<BindGroup>,
     index: usize,
-    bind_group_id: Option<BindGroupId>,
-    edits: &mut ListEdits<Option<BindGroupId>>,
+    bind_group_id: BindGroupId,
+    edits: &mut ListEdits<BindGroupId>,
 ) {
     handle.ui(ui, |ui| {
         ui.add(egui::Label::new(format!("Slot {index}")).sense(egui::Sense::click()))
@@ -144,10 +147,12 @@ fn compute_pass_bind_group_row_ui(
     ui.indent("entry", |ui| {
         let mut selected_bind_group = bind_group_id;
 
-        // TODO: use something inside inspector.rs
-        egui::ComboBox::from_id_salt(("compute_pass_bind_group", index))
-            .selected_text_storage_opt(bind_groups, selected_bind_group)
-            .show_ui_storage_opt_with_none(ui, bind_groups, &mut selected_bind_group);
+        inspector::storage_id_combo(
+            ui,
+            ("compute_pass_bind_group", index),
+            bind_groups,
+            &mut selected_bind_group,
+        );
 
         if selected_bind_group != bind_group_id {
             edits.push_set_edit(index, selected_bind_group);

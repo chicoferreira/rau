@@ -9,7 +9,11 @@ use crate::{
         storage::Storage,
     },
     ui::{
-        components::{flags_selector::flags_selector, hint, inspector, selector::AsWidgetText},
+        components::{
+            flags_selector::flags_selector,
+            hint,
+            inspector::{self, AsWidgetText},
+        },
         pane::StateSnapshot,
     },
     utils::texture_format::TextureFormat,
@@ -164,7 +168,7 @@ fn ui_texture_source(
     ui.indent("source_options", |ui| {
         inspector::field_grid(ui, "texture_source_options_grid", |ui| match source {
             TextureSource::Dimension(dimension_id) => {
-                inspector::storage_opt_combo_row(
+                inspector::storage_combo_row(
                     ui,
                     "Dimension",
                     "texture_source_dimension",

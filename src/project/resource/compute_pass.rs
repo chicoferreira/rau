@@ -21,7 +21,7 @@ use crate::{
 #[serde(rename_all = "camelCase")]
 pub struct ComputePass {
     label: String,
-    bind_groups: Vec<Option<BindGroupId>>,
+    bind_groups: Vec<BindGroupId>,
     shader: Option<ShaderId>,
     work_groups: WorkGroups,
     #[serde(skip)]
@@ -63,7 +63,7 @@ impl Creatable for ComputePass {
 impl ComputePass {
     pub fn new(
         label: impl Into<String>,
-        bind_groups: Vec<Option<BindGroupId>>,
+        bind_groups: Vec<BindGroupId>,
         shader: Option<ShaderId>,
         work_groups: WorkGroups,
     ) -> Self {
@@ -79,7 +79,7 @@ impl ComputePass {
 
     resource_getters! {
         pub fn label() -> &str;
-        pub fn bind_groups() -> &[Option<BindGroupId>];
+        pub fn bind_groups() -> &[BindGroupId];
         pub fn shader() -> Option<ShaderId>;
         pub fn work_groups() -> WorkGroups;
     }
@@ -88,7 +88,7 @@ impl ComputePass {
         increases: [runtime_revision, project_revision];
         pub fn set_label(label: String);
         pub fn set_shader(shader: Option<ShaderId>);
-        pub fn set_bind_groups(bind_groups: Vec<Option<BindGroupId>>);
+        pub fn set_bind_groups(bind_groups: Vec<BindGroupId>);
         pub fn set_work_groups(work_groups: WorkGroups);
     }
 }
@@ -131,8 +131,7 @@ impl SyncResource for ComputePass {
             || self
                 .bind_groups
                 .iter()
-                .filter_map(|bind_group_id| *bind_group_id)
-                .any(|id| tracker.was_data_changed(id))
+                .any(|id| tracker.was_data_changed(*id))
     }
 
     fn sync<'a>(
@@ -151,10 +150,7 @@ impl SyncResource for ComputePass {
                 }
 
                 let mut bind_groups = vec![];
-                for (i, bind_group_id) in self.bind_groups.iter().copied().enumerate() {
-                    let id = bind_group_id
-                        .ok_or(AppError::uninit_field(format!("Bind Group {i} Id")))?;
-
+                for id in self.bind_groups.iter().copied() {
                     let Some(bind_group_runtime) = ctx.runtime_bind_groups.get_init(id)? else {
                         return Ok(SyncOutcome::Pending(ComputePassJob::Start));
                     };

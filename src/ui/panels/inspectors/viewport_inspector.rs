@@ -13,7 +13,7 @@ impl StateSnapshot<'_> {
         inspector::section(ui, "Settings", |ui| {
             inspector::field_grid(ui, "viewport_inspector_grid", |ui| {
                 let mut texture_view_id = viewport.texture_view_id();
-                if inspector::storage_opt_combo_row(
+                if inspector::storage_combo_row(
                     ui,
                     "Texture View",
                     "viewport_texture_view",

@@ -12,7 +12,7 @@ use crate::{
         },
         storage::Storage,
     },
-    ui::components::{inspector, selector::AsWidgetText},
+    ui::components::inspector,
     utils::{
         derive::default_texture_format,
         derive_modal_material::{MaterialBindGroupsConfig, SamplerSetting},
@@ -266,20 +266,12 @@ impl MaterialBindGroupsModal {
                              would make the material bind group layouts differ.",
                         );
 
-                        egui::ComboBox::from_id_salt((
-                            "material_bind_groups_modal_format",
-                            row.texture_type,
-                        ))
-                        .selected_text(row.format.as_widget_text())
-                        .show_ui(ui, |ui| {
-                            for format in MATERIAL_TEXTURE_FORMATS {
-                                ui.selectable_value(
-                                    &mut row.format,
-                                    format,
-                                    format.as_widget_text(),
-                                );
-                            }
-                        });
+                        inspector::value_combo(
+                            ui,
+                            ("material_bind_groups_modal_format", row.texture_type),
+                            MATERIAL_TEXTURE_FORMATS,
+                            &mut row.format,
+                        );
 
                         if !row.missing_files.is_empty() {
                             let missing = row

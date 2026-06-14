@@ -12,7 +12,6 @@ pub mod open_or_import_project;
 pub mod recent_projects;
 pub mod rename_text_edit;
 pub mod renameable_label;
-pub mod selector;
 pub mod tiles;
 pub mod tree_node;
 pub mod viewport;

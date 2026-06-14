@@ -19,8 +19,7 @@ use crate::{
             code_editor::shader_code_section,
             draggable_list::{ListEdits, draggable_list},
             hint::hint,
-            inspector,
-            selector::{AsWidgetText, ComboBoxExt},
+            inspector::{self, AsWidgetText},
         },
         pane::StateSnapshot,
     },
@@ -305,18 +304,13 @@ fn mesh_material_selection_ui(
     .into_iter()
     .chain((0..materials.len()).map(|i| MeshMaterialSelection::Material(Some(i))));
 
-    egui::ComboBox::from_id_salt(("mesh_material_selection", model_id, mesh_index))
-        .selected_text(material_selection_label(
-            &selection,
-            source_index,
-            materials,
-        ))
-        .show_ui_iter(
-            ui,
-            options,
-            |sel| material_selection_label(sel, source_index, materials).into(),
-            &mut selection,
-        );
+    inspector::value_combo_with(
+        ui,
+        ("mesh_material_selection", model_id, mesh_index),
+        options,
+        |sel| material_selection_label(sel, source_index, materials).into(),
+        &mut selection,
+    );
 
     if selection != current_selection {
         set_mesh_material_selection(mesh_material_selections, mesh_index, selection);

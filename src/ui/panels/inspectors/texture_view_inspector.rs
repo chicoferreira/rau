@@ -3,10 +3,7 @@ use egui::{Grid, load::SizedTexture};
 use crate::{
     project::{TextureViewId, resource::texture_view::TextureViewFormat},
     ui::{
-        components::{
-            inspector,
-            selector::{AsWidgetText, ComboBoxExt},
-        },
+        components::inspector::{self, AsWidgetText},
         pane::StateSnapshot,
     },
 };
@@ -26,9 +23,12 @@ impl StateSnapshot<'_> {
                     let mut texture_id = texture_view.texture_id();
                     let texture_before = texture_id;
 
-                    egui::ComboBox::from_id_salt("texture")
-                        .selected_text_storage_opt(&self.project.textures, texture_id)
-                        .show_ui_storage_opt_with_none(ui, &self.project.textures, &mut texture_id);
+                    inspector::storage_combo(
+                        ui,
+                        "texture",
+                        &self.project.textures,
+                        &mut texture_id,
+                    );
 
                     ui.end_row();
 
@@ -47,9 +47,7 @@ impl StateSnapshot<'_> {
                             Some(TextureViewFormat::Linear),
                         ];
 
-                        egui::ComboBox::from_id_salt("format")
-                            .selected_text(current_format.as_widget_text())
-                            .show_ui_list(ui, FORMAT_LIST, &mut current_format);
+                        inspector::value_combo(ui, "format", FORMAT_LIST, &mut current_format);
                     });
 
                     ui.end_row();
@@ -72,9 +70,7 @@ impl StateSnapshot<'_> {
                         Some(wgpu::TextureViewDimension::CubeArray),
                     ];
 
-                    egui::ComboBox::from_id_salt("dimension")
-                        .selected_text(current_dimension.as_widget_text())
-                        .show_ui_list(ui, DIMENSIONS, &mut current_dimension);
+                    inspector::value_combo(ui, "dimension", DIMENSIONS, &mut current_dimension);
 
                     ui.end_row();
 

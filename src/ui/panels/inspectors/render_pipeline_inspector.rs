@@ -18,8 +18,7 @@ use crate::{
             code_editor::shader_code_section,
             draggable_list::{ListEdits, draggable_list},
             hint::hint,
-            inspector,
-            selector::AsWidgetText,
+            inspector::{self, AsWidgetText},
         },
         pane::StateSnapshot,
     },
@@ -190,14 +189,14 @@ fn shaders_ui(
 
     inspector::section(ui, "Shaders", |ui| {
         inspector::field_grid(ui, (render_pipeline_id, "shaders"), |ui| {
-            inspector::storage_opt_combo_row(
+            inspector::storage_combo_row(
                 ui,
                 "Vertex Shader",
                 "render_pipeline_vertex_shader",
                 shaders,
                 &mut vertex_shader,
             );
-            inspector::storage_opt_combo_row(
+            inspector::storage_combo_row(
                 ui,
                 "Fragment Shader",
                 "render_pipeline_fragment_shader",
@@ -460,7 +459,7 @@ fn draw_strategy_fields_ui(
             instances,
             mesh_vertex_slot,
         } => {
-            inspector::storage_opt_combo_row(
+            inspector::storage_combo_row(
                 ui,
                 "Model",
                 "render_pipeline_model",

@@ -126,12 +126,9 @@ impl ShaderInterface for ComputePass {
     fn contribute(&self, module: &mut ShaderModule, ctx: &ShaderGenCtx) {
         for (group, id) in self.bind_groups().iter().enumerate() {
             let group = group as u32;
-            match id {
-                Some(id) => match ctx.bind_groups.get(*id) {
-                    Ok(bind_group) => contribute_bind_group(module, Some(group), bind_group, ctx),
-                    Err(_) => module.comment(format!("group {group} is empty")),
-                },
-                None => module.comment(format!("group {group} is empty")),
+            match ctx.bind_groups.get(*id) {
+                Ok(bind_group) => contribute_bind_group(module, Some(group), bind_group, ctx),
+                Err(_) => module.comment(format!("group {group} is empty")),
             }
         }
     }
