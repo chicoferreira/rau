@@ -146,12 +146,23 @@ pub fn ui(state: &mut StateSnapshot, ui: &mut egui::Ui) -> Response {
 
             resource_folder(TreeNodeId::RenderPassFolder, "Render Passes")
                 .with_label_suffix(count_suffix(state.project.render_passes.len()))
+                .with_event(
+                    "Create New Render Pass",
+                    StateEvent::CreateResource(ResourceKind::RenderPass),
+                )
                 .build_to(builder, state.event_queue, state.rename_state);
+            pending_resource_node(state, builder, ResourceKind::RenderPass);
             for (id, render_pass) in state.project.render_passes.list_sorted() {
                 let error = state.runtime_project.get_error(id);
                 resource_leaf(TreeNodeId::RenderPass(id), render_pass.label(), error)
                     .with_event("Inspect", StateEvent::InspectResource(id.into()))
                     .with_rename_event("Rename", RenameTarget::RenderPass(id))
+                    .with_event("Delete", StateEvent::DeleteResource(id.into()))
+                    .with_separator()
+                    .with_event(
+                        "Create New Render Pass",
+                        StateEvent::CreateResource(ResourceKind::RenderPass),
+                    )
                     .build_to(builder, state.event_queue, state.rename_state);
             }
             builder.close_dir();
