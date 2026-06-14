@@ -15,12 +15,22 @@ impl Pane for ViewportPane {
         ui: &mut egui::Ui,
     ) -> egui_tiles::UiResponse {
         let Ok(viewport) = state.project.viewports.get(self.viewport_id) else {
-            ui.label("Viewport couldn't be found.");
+            ui.centered_and_justified(|ui| {
+                ui.colored_label(
+                    ui.visuals().error_fg_color,
+                    "This viewport no longer exists.",
+                );
+            });
             return egui_tiles::UiResponse::None;
         };
 
         let Some(texture_view_id) = viewport.texture_view_id() else {
-            ui.label("Please assign a texture view to this viewport.");
+            ui.centered_and_justified(|ui| {
+                ui.colored_label(
+                    ui.visuals().error_fg_color,
+                    "No texture view is assigned to this viewport.\nAssign one to display its contents here.",
+                );
+            });
             return egui_tiles::UiResponse::None;
         };
 
@@ -32,17 +42,29 @@ impl Pane for ViewportPane {
         let runtime_texture_view = match runtime_texture_view {
             Ok(Some(runtime)) => runtime,
             Ok(None) => {
-                ui.spinner();
+                ui.centered_and_justified(|ui| {
+                    ui.add(egui::Spinner::new().size(ui.text_style_height(&egui::TextStyle::Body)));
+                });
                 return egui_tiles::UiResponse::None;
             }
             Err(err) => {
-                ui.colored_label(ui.visuals().error_fg_color, err.to_string());
+                ui.centered_and_justified(|ui| {
+                    ui.colored_label(
+                        ui.visuals().error_fg_color,
+                        format!("Couldn't initialize the texture view:\n{err}"),
+                    );
+                });
                 return egui_tiles::UiResponse::None;
             }
         };
 
         let Some(egui_id) = runtime_texture_view.egui_id() else {
-            ui.label("Viewport points to a texture view format other than Rgba8UnormSrgb.");
+            ui.centered_and_justified(|ui| {
+                ui.colored_label(
+                    ui.visuals().error_fg_color,
+                    "This texture view can't be displayed.\nOnly the Rgba8UnormSrgb format is supported in viewports.",
+                );
+            });
             return egui_tiles::UiResponse::None;
         };
 
