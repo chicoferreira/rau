@@ -57,4 +57,8 @@ impl EventQueue<AppEvent> {
     pub fn close_project(&mut self) {
         self.add(AppEvent::SetState(State::MainMenu(MainMenu::default())));
     }
+
+    pub fn quit(&mut self) {
+        self.add(AppEvent::Quit);
+    }
 }

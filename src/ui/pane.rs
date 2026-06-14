@@ -5,7 +5,7 @@ use crate::{
     ui::{
         components::tiles::TreePane,
         panels::{
-            error_panel, files_panel, inspector_pane::InspectorPane, project_tree_panel,
+            error_panel, files_panel, inspector_pane::InspectorPane, menu_bar, project_tree_panel,
             viewport_pane::ViewportPane,
         },
         rename::RenameState,
@@ -32,19 +32,7 @@ impl StateSnapshot<'_> {
         viewport_tree_pane: &mut TreePane<ViewportPane>,
     ) {
         egui::Panel::top("top_panel").show_inside(ui, |ui| {
-            egui::MenuBar::new().ui(ui, |ui| {
-                ui.menu_button("Rau", |ui| {
-                    if ui.button("Settings").clicked() {}
-                    if ui.button("Quit").clicked() {}
-                });
-
-                ui.menu_button("Project", |ui| {
-                    if ui.button("New").clicked() {}
-                    if ui.button("Close").clicked() {
-                        self.app_event_queue.close_project();
-                    }
-                });
-            });
+            menu_bar::ui(self, ui);
         });
 
         error_panel::ui(self, ui);

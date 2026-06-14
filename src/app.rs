@@ -30,10 +30,12 @@ pub struct App {
     app_file_system: AppFileSystem,
     state: State,
     event_queue: EventQueue<AppEvent>,
+    quit_requested: bool,
 }
 
 pub enum AppEvent {
     SetState(State),
+    Quit,
 }
 
 pub enum State {
@@ -155,6 +157,7 @@ impl WindowApp<StartupAction> for App {
             app_file_system,
             state,
             event_queue: EventQueue::default(),
+            quit_requested: false,
         })
     }
 
@@ -179,6 +182,9 @@ impl WindowApp<StartupAction> for App {
                     log::error!("Render error: {e:?}");
                     event_loop.exit();
                 }
+                if self.quit_requested {
+                    event_loop.exit();
+                }
             }
             _ => {}
         }
@@ -191,6 +197,9 @@ impl App {
             match event {
                 AppEvent::SetState(state) => {
                     self.state = state;
+                }
+                AppEvent::Quit => {
+                    self.quit_requested = true;
                 }
             }
         }

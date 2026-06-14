@@ -92,6 +92,4 @@ indexed_db_futures = { version = "0.6.4", features = ["typed-arrays"] }
 instant = { version = "0.1", features = [ "wasm-bindgen" ] }
 
 [build-dependencies]
-anyhow = "1.0"
-fs_extra = "1.2"
-glob = "0.3"
+built = { version = "0.7", features = ["chrono", "git2"] }
