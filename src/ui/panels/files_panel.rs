@@ -84,13 +84,13 @@ pub fn ui(state: &mut StateSnapshot, ui: &mut egui::Ui) -> Response {
                     egui_phosphor::regular::FOLDER_OPEN,
                     FOLDER_COLOR,
                 )
-                .with_event("Import File", StateEvent::ImportFile(FilePath::default()))
-                .with_separator()
                 .with_event("Create File", StateEvent::CreateFile(FilePath::default()))
                 .with_event(
                     "Create Folder",
                     StateEvent::CreateFolder(FilePath::default()),
                 )
+                .with_separator()
+                .with_event("Import File", StateEvent::ImportFile(FilePath::default()))
                 .build_to(builder, event_queue, rename_state);
 
             pending_file_node(builder, event_queue, rename_state, root_path.clone());
@@ -167,13 +167,13 @@ fn render_dir_nodes(
                 egui_phosphor::regular::FOLDER_OPEN,
                 FOLDER_COLOR,
             )
-            .with_event("Import File", StateEvent::ImportFile(path.clone()))
-            .with_separator()
             .with_event("Create File", StateEvent::CreateFile(path.clone()))
             .with_event("Create Folder", StateEvent::CreateFolder(path.clone()))
             .with_rename_event("Rename Folder", RenameTarget::FileOrFolder(path.clone()))
             .with_separator()
             .with_event("Delete Folder", StateEvent::DeleteFolder(path.clone()))
+            .with_separator()
+            .with_event("Import File", StateEvent::ImportFile(path.clone()))
             .build_to(builder, event_queue, rename_state);
 
         pending_file_node(builder, event_queue, rename_state, path.clone());
@@ -199,10 +199,6 @@ fn render_dir_nodes(
             file_node.with_event("Download File", StateEvent::DownloadFile(file_path.clone()));
 
         file_node
-            .with_separator()
-            .with_event("Import File", StateEvent::ImportFile(path.clone()))
-            .with_event("Replace File", StateEvent::ReplaceFile(file_path.clone()))
-            .with_separator()
             .with_event("Create File", StateEvent::CreateFile(path.clone()))
             .with_event("Create Folder", StateEvent::CreateFolder(path.clone()))
             .with_rename_event("Rename File", RenameTarget::FileOrFolder(file_path.clone()))
@@ -213,6 +209,9 @@ fn render_dir_nodes(
                 "You can't delete the project.json file",
                 StateEvent::DeleteFile(file_path.clone()),
             )
+            .with_separator()
+            .with_event("Import File", StateEvent::ImportFile(path.clone()))
+            .with_event("Replace File", StateEvent::ReplaceFile(file_path.clone()))
             .build_to(builder, event_queue, rename_state);
     }
 }
