@@ -65,4 +65,8 @@ impl Pane for ViewportPane {
             .map(|viewport| viewport.label().into())
             .unwrap_or("Unknown Viewport".into())
     }
+
+    fn is_valid(&self, state: &StateSnapshot<'_>) -> bool {
+        state.project.viewports.get(self.viewport_id).is_ok()
+    }
 }

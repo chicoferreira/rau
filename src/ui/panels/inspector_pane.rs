@@ -68,6 +68,29 @@ impl Pane for InspectorPane {
         }
     }
 
+    fn is_valid(&self, state: &StateSnapshot<'_>) -> bool {
+        let resource_id: ResourceId = match self {
+            InspectorPane::File(file_path) => {
+                return !state.file_storage.is_file_known_deleted(file_path);
+            }
+            InspectorPane::Uniform(id) => (*id).into(),
+            InspectorPane::BindGroup(id) => (*id).into(),
+            InspectorPane::Shader(id) => (*id).into(),
+            InspectorPane::Camera(id) => (*id).into(),
+            InspectorPane::Dimension(id) => (*id).into(),
+            InspectorPane::Sampler(id) => (*id).into(),
+            InspectorPane::Texture(id) => (*id).into(),
+            InspectorPane::TextureView(id) => (*id).into(),
+            InspectorPane::Viewport(id) => (*id).into(),
+            InspectorPane::Model(id) => (*id).into(),
+            InspectorPane::RenderPipeline(id) => (*id).into(),
+            InspectorPane::RenderPass(id) => (*id).into(),
+            InspectorPane::Presentation(id) => (*id).into(),
+            InspectorPane::ComputePass(id) => (*id).into(),
+        };
+        state.project.label(resource_id).is_some()
+    }
+
     fn pane_ui(
         &mut self,
         state: &mut StateSnapshot<'_>,

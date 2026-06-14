@@ -141,6 +141,16 @@ impl FileStorage {
             .map_or(false, |files| files.iter().any(|f| f == path))
     }
 
+    /// Returns true only once the file listing has loaded and the path is absent
+    /// from it. Unlike [`Self::exists_file_cached`], a not-yet-loaded listing
+    /// reports `false`, so callers don't treat files as deleted before the cache
+    /// is ready.
+    pub fn is_file_known_deleted(&self, path: &FilePath) -> bool {
+        self.cached_files
+            .as_ref()
+            .is_some_and(|files| !files.iter().any(|f| f == path))
+    }
+
     pub fn read(&self, path: &FilePath) -> AsyncJob<AppResult<Vec<u8>>> {
         self.file_system.read(path)
     }

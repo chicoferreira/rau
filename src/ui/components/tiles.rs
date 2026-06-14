@@ -12,7 +12,24 @@ impl<P: Pane> TreePane<P> {
     }
 
     pub fn ui(&mut self, state: &mut StateSnapshot, ui: &mut egui::Ui) {
+        self.close_invalid_panes(state);
         self.tree.ui(state, ui);
+    }
+
+    fn close_invalid_panes(&mut self, state: &StateSnapshot) {
+        let invalid: Vec<egui_tiles::TileId> = self
+            .tree
+            .tiles
+            .iter()
+            .filter_map(|(tile_id, tile)| match tile {
+                egui_tiles::Tile::Pane(pane) if !pane.is_valid(state) => Some(*tile_id),
+                _ => None,
+            })
+            .collect();
+
+        for tile_id in invalid {
+            self.tree.tiles.remove(tile_id);
+        }
     }
 
     pub fn add_pane(&mut self, inspector_pane: P)
@@ -35,6 +52,10 @@ pub trait Pane {
     ) -> egui_tiles::UiResponse;
 
     fn tab_title(&self, state: &StateSnapshot<'_>) -> egui::WidgetText;
+
+    /// Whether the resource or file this pane refers to still exists. Panes that
+    /// return `false` are closed automatically.
+    fn is_valid(&self, state: &StateSnapshot<'_>) -> bool;
 }
 
 impl<'a, P: Pane> egui_tiles::Behavior<P> for StateSnapshot<'a> {

@@ -134,7 +134,7 @@ where
     match id {
         Some(id) => match storage.get_label(id) {
             Ok(label) => storage_entry_text::<R>(ui, id, label),
-            Err(_) => format!("Unknown {id:?}").into(),
+            Err(_) => resource_icons::warning_text(ui, "Unknown"),
         },
         None => placeholder,
     }
@@ -294,9 +294,11 @@ pub fn file_combo_row(
     };
 
     row(ui, label, |ui| {
-        let selected_text = current_value
-            .as_ref()
-            .map_or_else(|| select_placeholder(ui), |path| file_text(ui, path));
+        let selected_text = match current_value.as_ref() {
+            Some(path) if files.iter().any(|file| file == path) => file_text(ui, path),
+            Some(path) => resource_icons::warning_text(ui, &path.to_string()),
+            None => select_placeholder(ui),
+        };
 
         ComboBox::from_id_salt(id_salt)
             .selected_text(selected_text)
