@@ -74,12 +74,20 @@ pub trait ProjectFileSystemTrait: Clone + Sized {
     fn move_path(&self, old: &FilePath, new: &FilePath) -> FutureResult<()>;
 }
 
+fn normalize_line_endings(text: String) -> String {
+    text.replace("\r\n", "\n").replace('\r', "\n")
+}
+
 impl ProjectFileSystem {
     pub fn read_to_string(&self, path: &FilePath) -> FutureResult<String> {
         let (file_system, path) = (self.clone(), path.clone());
         AsyncJob::new(async move {
             let bytes = file_system.read(&path).await?;
-            String::from_utf8(bytes).map_err(|_| AppError::FileNotValidUtf8(path))
+            let text = String::from_utf8(bytes).map_err(|_| AppError::FileNotValidUtf8(path))?;
+            // Needed because egui's `TextEdit` treats a lone `\r` as a character
+            // at the end of each line, which forces an extra keypress to navigate
+            // (see #122).
+            Ok(normalize_line_endings(text))
         })
     }
 
