@@ -6,8 +6,8 @@ use crate::{
     error::AppError,
     project::{
         BindGroupId, CameraId, ComputePassId, DimensionId, ModelId, PresentationId,
-        ProjectResource, RenderPassId, RenderPipelineId, ResourceKind, SamplerId, ShaderId,
-        TextureId, TextureViewId, UniformId, ViewportId,
+        ProjectResource, RenderPassId, RenderPipelineId, ResourceId, ResourceKind, SamplerId,
+        ShaderId, TextureId, TextureViewId, UniformId, ViewportId,
     },
     ui::{
         components::{
@@ -20,7 +20,7 @@ use crate::{
     workspace::StateEvent,
 };
 
-#[derive(Clone, PartialEq, Eq, Hash, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub enum TreeNodeId {
     PendingCreate(ResourceKind),
     UniformFolder,
@@ -66,7 +66,7 @@ fn pending_resource_node(
     );
 }
 
-fn resource_icon(id: &TreeNodeId) -> (&'static str, [u8; 3]) {
+fn resource_icon(id: TreeNodeId) -> (&'static str, [u8; 3]) {
     use TreeNodeId as N;
     let kind = match id {
         N::ShaderFolder | N::Shader(_) => ResourceKind::Shader,
@@ -83,13 +83,47 @@ fn resource_icon(id: &TreeNodeId) -> (&'static str, [u8; 3]) {
         N::RenderPassFolder | N::RenderPass(_) => ResourceKind::RenderPass,
         N::ComputePassFolder | N::ComputePass(_) => ResourceKind::ComputePass,
         N::Presentation(_) => ResourceKind::Presentation,
-        N::PendingCreate(kind) => *kind,
+        N::PendingCreate(kind) => kind,
     };
     resource_icons::resource_kind_icon(kind)
 }
 
+fn node_resource_id(id: TreeNodeId) -> Option<ResourceId> {
+    use TreeNodeId as N;
+    Some(match id {
+        N::Uniform(id) => id.into(),
+        N::BindGroup(id) => id.into(),
+        N::Viewport(id) => id.into(),
+        N::Shader(id) => id.into(),
+        N::Camera(id) => id.into(),
+        N::Dimension(id) => id.into(),
+        N::Sampler(id) => id.into(),
+        N::Texture(id) => id.into(),
+        N::TextureView(id) => id.into(),
+        N::Model(id) => id.into(),
+        N::RenderPipeline(id) => id.into(),
+        N::RenderPass(id) => id.into(),
+        N::ComputePass(id) => id.into(),
+        N::Presentation(id) => id.into(),
+        N::PendingCreate(_)
+        | N::UniformFolder
+        | N::BindGroupFolder
+        | N::ViewportFolder
+        | N::ShaderFolder
+        | N::CameraFolder
+        | N::DimensionFolder
+        | N::SamplerFolder
+        | N::TextureFolder
+        | N::TextureViewFolder
+        | N::ModelFolder
+        | N::RenderPipelineFolder
+        | N::RenderPassFolder
+        | N::ComputePassFolder => return None,
+    })
+}
+
 fn resource_folder(id: TreeNodeId, label: &str) -> TreeNode<'_, TreeNodeId> {
-    let color = resource_icon(&id).1;
+    let color = resource_icon(id).1;
     TreeNode::folder(id, label).with_closer_icons(regular::FOLDER, regular::FOLDER_OPEN, color)
 }
 
@@ -98,8 +132,12 @@ fn resource_leaf<'a>(
     label: &'a str,
     error: Option<&AppError>,
 ) -> TreeNode<'a, TreeNodeId> {
-    let (icon, color) = resource_icon(&id);
+    let (icon, color) = resource_icon(id);
     let node = TreeNode::new(id, label).with_icon(icon, color);
+    let node = match node_resource_id(id) {
+        Some(id) => node.with_hover_text(egui::RichText::new(format!("{id:?}")).monospace()),
+        None => node,
+    };
     match error {
         Some(error) => {
             let message = error.to_string();

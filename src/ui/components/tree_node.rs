@@ -22,6 +22,8 @@ pub struct TreeNode<'a, T> {
     closer_icons: Option<(&'a str, &'a str)>,
     /// Extra content rendered after the label (e.g. a child count).
     label_suffix: Option<Box<dyn FnMut(&mut egui::Ui) + 'a>>,
+    /// Tooltip shown when hovering the node label.
+    hover_text: Option<egui::WidgetText>,
     events: Vec<ContextMenuEntity<'a>>,
     rename_target: Option<RenameTarget>,
     is_folder: bool,
@@ -73,6 +75,7 @@ where
             icon_color: None,
             closer_icons: None,
             label_suffix: None,
+            hover_text: None,
             events: Vec::new(),
             rename_target: None,
             is_folder: false,
@@ -88,6 +91,7 @@ where
             icon_color: None,
             closer_icons: None,
             label_suffix: None,
+            hover_text: None,
             events: Vec::new(),
             rename_target: None,
             is_folder: true,
@@ -109,6 +113,11 @@ where
     /// Render extra content after the label (e.g. a child count or badge).
     pub fn with_label_suffix(mut self, add: impl FnMut(&mut egui::Ui) + 'a) -> Self {
         self.label_suffix = Some(Box::new(add));
+        self
+    }
+
+    pub fn with_hover_text(mut self, text: impl Into<egui::WidgetText>) -> Self {
+        self.hover_text = Some(text.into());
         self
     }
 
@@ -203,6 +212,7 @@ where
         };
 
         let mut label_suffix = self.label_suffix;
+        let hover_text = self.hover_text;
         let mut node = node.label(self.label).label_ui(move |ui| {
             let has_glyph = self.icon.is_some() || self.closer_icons.is_some();
             if has_glyph {
@@ -215,25 +225,31 @@ where
             }
             let default_label = Label::new(label_text);
 
-            ui.scope(|ui| {
-                ui.style_mut().spacing.item_spacing.x = 0.0;
+            let response = ui
+                .scope(|ui| {
+                    ui.style_mut().spacing.item_spacing.x = 0.0;
 
-                if let Some(rename_target) = self.rename_target.clone() {
-                    let mut event_queue = label_event_queue.borrow_mut();
-                    ui.add(renameable_label(
-                        default_label,
-                        &mut **event_queue,
-                        rename_state,
-                        rename_target,
-                    ));
-                } else {
-                    ui.add(default_label);
-                }
+                    if let Some(rename_target) = self.rename_target.clone() {
+                        let mut event_queue = label_event_queue.borrow_mut();
+                        ui.add(renameable_label(
+                            default_label,
+                            &mut **event_queue,
+                            rename_state,
+                            rename_target,
+                        ));
+                    } else {
+                        ui.add(default_label);
+                    }
 
-                if let Some(suffix) = &mut label_suffix {
-                    suffix(ui);
-                }
-            });
+                    if let Some(suffix) = &mut label_suffix {
+                        suffix(ui);
+                    }
+                })
+                .response;
+
+            if let Some(hover_text) = &hover_text {
+                response.on_hover_text(hover_text.clone());
+            }
         });
 
         if !self.events.is_empty() {
