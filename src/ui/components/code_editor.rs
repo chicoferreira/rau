@@ -97,12 +97,24 @@ pub fn code_editor(ui: &mut egui::Ui, text: &mut String, extension: &str) -> egu
         ui.fonts_mut(|f| f.layout_job(layout_job))
     };
 
+    let row_height = ui.text_style_height(&egui::TextStyle::Monospace);
+    let desired_rows = (ui.available_height() / row_height).ceil().max(1.0) as usize;
+
     ui.add(
         egui::TextEdit::multiline(text)
             .font(egui::TextStyle::Monospace)
             .code_editor()
-            .desired_rows(24)
             .desired_width(f32::INFINITY)
+            .desired_rows(desired_rows)
+            .min_size(ui.available_size())
+            .frame(
+                egui::Frame::new()
+                    .inner_margin(4)
+                    .outer_margin(0)
+                    .corner_radius(0)
+                    .fill(ui.visuals().text_edit_bg_color())
+                    .stroke(egui::Stroke::NONE),
+            )
             .lock_focus(true)
             .layouter(&mut layouter),
     )
