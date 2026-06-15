@@ -42,9 +42,7 @@ impl Pane for ViewportPane {
         let runtime_texture_view = match runtime_texture_view {
             Ok(Some(runtime)) => runtime,
             Ok(None) => {
-                inspector::centered(ui, |ui| {
-                    ui.add(egui::Spinner::new().size(ui.text_style_height(&egui::TextStyle::Body)));
-                });
+                inspector::centered(ui, inspector::spinner);
                 return egui_tiles::UiResponse::None;
             }
             Err(err) => {

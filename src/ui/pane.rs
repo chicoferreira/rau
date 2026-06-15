@@ -5,8 +5,8 @@ use crate::{
     ui::{
         components::tiles::TreePane,
         panels::{
-            error_panel, files_panel, inspector_pane::InspectorPane, menu_bar, project_tree_panel,
-            viewport_pane::ViewportPane,
+            error_panel::ErrorPanel, files_panel, inspector_pane::InspectorPane, menu_bar,
+            project_tree_panel, status_bar, viewport_pane::ViewportPane,
         },
         rename::RenameState,
     },
@@ -30,12 +30,19 @@ impl StateSnapshot<'_> {
         ui: &mut egui::Ui,
         inspector_tree_pane: &mut TreePane<InspectorPane>,
         viewport_tree_pane: &mut TreePane<ViewportPane>,
+        error_panel: &mut ErrorPanel,
     ) {
+        error_panel.tick(self.runtime_project);
+
         egui::Panel::top("top_panel").show_inside(ui, |ui| {
             menu_bar::ui(self, ui);
         });
 
-        error_panel::ui(self, ui);
+        egui::Panel::bottom("status_panel")
+            .resizable(false)
+            .show_inside(ui, |ui| {
+                status_bar::ui(self, ui, error_panel);
+            });
 
         egui::Panel::left("left_panel")
             .frame(egui::Frame::new().inner_margin(0))
@@ -66,6 +73,8 @@ impl StateSnapshot<'_> {
             .show_inside(ui, |ui| {
                 inspector_tree_pane.ui(self, ui);
             });
+
+        error_panel.ui(self, ui);
 
         viewport_tree_pane.ui(self, ui);
     }

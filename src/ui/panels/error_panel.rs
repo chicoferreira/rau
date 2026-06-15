@@ -1,201 +1,191 @@
-use egui::Context;
-use itertools::Itertools;
+use egui::{Frame, RichText, Stroke};
+use egui_phosphor::regular;
 
 use crate::{
-    error::AppError,
-    file::file_system::ProjectFileSystem,
-    project::{Project, ResourceId},
-    ui::pane::StateSnapshot,
+    project::{Project, ResourceId, RuntimeProject},
+    ui::{
+        components::{inspector, resource_icons},
+        pane::StateSnapshot,
+    },
     utils::event_queue::EventQueue,
     workspace::StateEvent,
 };
 
-const ERROR_PANEL_ID: &str = "error_panel_expanded";
-
-fn panel_id() -> egui::Id {
-    egui::Id::new(ERROR_PANEL_ID)
+#[derive(Default)]
+pub struct ErrorPanel {
+    open: bool,
+    errors: Vec<(ResourceId, String)>,
 }
 
-fn is_open(ctx: &Context) -> bool {
-    ctx.data(|d| d.get_temp::<bool>(panel_id()).unwrap_or(false))
-}
+impl ErrorPanel {
+    pub fn tick(&mut self, runtime_project: &RuntimeProject) {
+        let current: Vec<_> = runtime_project
+            .iter_errors()
+            .map(|(id, error)| (id, error.to_string()))
+            .collect();
 
-fn set_open(ctx: &Context, open: bool) {
-    ctx.data_mut(|d| d.insert_temp(panel_id(), open));
-}
+        if current.iter().any(|id| !self.errors.contains(id)) {
+            // Auto-open the panel if any resource becomes erroring that wasn't already erroring last frame.
+            self.open = true;
+        }
 
-fn toggle_open(ctx: &Context) {
-    let current = is_open(ctx);
-    set_open(ctx, !current);
-}
-
-pub fn ui(state: &mut StateSnapshot, ui: &mut egui::Ui) {
-    let mut show_error_list = is_open(ui.ctx());
-
-    let errors = state.runtime_project.iter_errors().collect_vec();
-
-    if errors.is_empty() && show_error_list {
-        set_open(ui.ctx(), false);
-        show_error_list = false;
+        self.errors = current;
     }
 
-    let is_rebuilding = state.runtime_project.is_rebuilding();
+    pub fn status_indicator(&mut self, ui: &mut egui::Ui) {
+        let caret = match self.open {
+            true => regular::CARET_DOWN,
+            false => regular::CARET_UP,
+        };
 
-    egui::Panel::bottom("status_panel")
-        .resizable(false)
-        .show_inside(ui, |ui| {
-            status_bar_content(
-                ui,
-                &errors,
-                is_rebuilding,
-                state.backend,
-                &state.file_storage.file_system,
-            );
-        });
+        let (text, color) = match self.errors.len() {
+            0 => (
+                format!("{} No errors {caret}", regular::CHECK_CIRCLE),
+                ui.visuals().weak_text_color(),
+            ),
+            count => (
+                format!(
+                    "{} {count} error{} {caret}",
+                    regular::WARNING,
+                    if count == 1 { "" } else { "s" },
+                ),
+                ui.visuals().error_fg_color,
+            ),
+        };
 
-    if show_error_list && !errors.is_empty() {
+        let clicked = ui
+            .add(egui::Button::new(RichText::new(text).color(color)).frame(false))
+            .on_hover_text(match self.open {
+                true => "Hide error list",
+                false => "Show error list",
+            })
+            .on_hover_cursor(egui::CursorIcon::PointingHand)
+            .clicked();
+
+        if clicked {
+            self.open = !self.open;
+        }
+    }
+
+    pub fn ui(&mut self, state: &mut StateSnapshot, ui: &mut egui::Ui) {
+        if !self.open {
+            return;
+        }
+
+        let open = &mut self.open;
+
         egui::Panel::bottom("error_list_panel")
             .resizable(true)
             .default_size(200.0)
             .min_size(80.0)
             .show_inside(ui, |ui| {
-                error_list_content(ui, state.project, &mut state.event_queue, &errors);
+                error_list_content(open, ui, state.project, state.event_queue, &self.errors);
             });
-    }
-}
-
-fn status_bar_content(
-    ui: &mut egui::Ui,
-    errors: &[(ResourceId, &AppError)],
-    is_rebuilding: bool,
-    backend: wgpu::Backend,
-    project_file_system: &ProjectFileSystem,
-) {
-    ui.horizontal(|ui| {
-        if errors.is_empty() {
-            ui.label(egui::RichText::new("No errors").color(ui.visuals().weak_text_color()));
-        } else {
-            let error_count = errors.len();
-            let label = format!(
-                "{} error{}",
-                error_count,
-                if error_count == 1 { "" } else { "s" }
-            );
-            let btn =
-                egui::Button::new(egui::RichText::new(label).color(ui.visuals().error_fg_color))
-                    .frame(false);
-            if ui
-                .add(btn)
-                .on_hover_text("Toggle error list")
-                .on_hover_cursor(egui::CursorIcon::PointingHand)
-                .clicked()
-            {
-                toggle_open(ui.ctx());
-            }
-        }
-
-        if is_rebuilding {
-            ui.add(egui::Spinner::new().size(ui.text_style_height(&egui::TextStyle::Body)))
-                .on_hover_text("Rebuilding resources...");
-        }
-
-        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            renderer_status_ui(ui, backend);
-            ui.separator();
-            storage_status_ui(ui, project_file_system);
-        });
-    });
-}
-
-fn storage_status_ui(ui: &mut egui::Ui, project_file_system: &ProjectFileSystem) {
-    match project_file_system {
-        ProjectFileSystem::Ephemeral(_) => {
-            ui.colored_label(ui.visuals().warn_fg_color, "Temporary Storage")
-                .on_hover_ui(|ui| {
-                    ui.colored_label(
-                        ui.visuals().warn_fg_color,
-                        "Changes won't be saved after closing this project.",
-                    );
-                });
-        }
-        #[cfg(not(target_arch = "wasm32"))]
-        ProjectFileSystem::Native(file_system) => {
-            let response = ui.colored_label(ui.visuals().weak_text_color(), "Persistent Storage");
-            response.on_hover_text(file_system.root().as_ref().display().to_string());
-        }
-
-        #[cfg(target_arch = "wasm32")]
-        ProjectFileSystem::IndexedDb(file_system) => {
-            let response = ui.colored_label(ui.visuals().weak_text_color(), "Persistent Storage");
-            let hover_text = format!("IndexedDB with database {}", file_system.database_name());
-            response.on_hover_text(hover_text);
-        }
-    }
-}
-
-fn renderer_status_ui(ui: &mut egui::Ui, backend: wgpu::Backend) {
-    let backend_str = match backend {
-        wgpu::Backend::Noop => "Noop",
-        wgpu::Backend::Vulkan => "Vulkan",
-        wgpu::Backend::Metal => "Metal",
-        wgpu::Backend::Dx12 => "DirectX 12",
-        wgpu::Backend::Gl => "GL (limited)",
-        wgpu::Backend::BrowserWebGpu => "WebGPU",
-    };
-
-    let text = format!("Backend: {}", backend_str);
-
-    if backend == wgpu::Backend::Gl {
-        ui.colored_label(ui.visuals().warn_fg_color, text)
-            .on_hover_ui(|ui| {
-                let text = r#"GL support is limited.
-
-Some features, including compute shaders, will not work.
-Please enable WebGPU for the full renderer feature set."#;
-
-                ui.colored_label(ui.visuals().warn_fg_color, text);
-            });
-    } else {
-        ui.colored_label(ui.visuals().weak_text_color(), text);
     }
 }
 
 fn error_list_content(
+    open: &mut bool,
     ui: &mut egui::Ui,
     project: &Project,
     event_queue: &mut EventQueue<StateEvent>,
-    errors: &[(ResourceId, &AppError)],
+    errors: &[(ResourceId, String)],
 ) {
+    ui.horizontal(|ui| {
+        ui.scope(|ui| {
+            ui.style_mut().spacing.item_spacing.x = 0.0;
+            ui.add(egui::Label::new(
+                RichText::new("ERRORS").size(11.0).variation("wght", 600.0),
+            ));
+            inspector::weak_label(ui, format!(" ({})", errors.len()));
+        });
+
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            let close = ui
+                .add(egui::Button::new(regular::X).frame(false))
+                .on_hover_text("Hide error list")
+                .on_hover_cursor(egui::CursorIcon::PointingHand)
+                .clicked();
+
+            if close {
+                *open = false;
+            }
+        });
+    });
+
+    ui.add_space(2.0);
+
     egui::ScrollArea::vertical()
         .auto_shrink(false)
         .show(ui, |ui| {
+            if errors.is_empty() {
+                inspector::centered(ui, |ui| {
+                    ui.label(
+                        RichText::new(format!("{} No errors", regular::CHECK_CIRCLE))
+                            .color(ui.visuals().weak_text_color()),
+                    );
+                });
+                return;
+            }
+
             for (id, error) in errors {
-                let id = *id;
-                ui.horizontal_wrapped(|ui| {
-                    let source_label = project.label(id).unwrap_or("Unknown");
+                error_card(ui, project, event_queue, *id, error);
+                ui.add_space(4.0);
+            }
+        });
+}
 
-                    let label_text = egui::RichText::new(format!("@{}", source_label))
-                        .strong()
-                        .underline()
-                        .color(ui.visuals().warn_fg_color);
+fn error_card(
+    ui: &mut egui::Ui,
+    project: &Project,
+    event_queue: &mut EventQueue<StateEvent>,
+    id: ResourceId,
+    error: &str,
+) {
+    let error_color = ui.visuals().error_fg_color;
 
-                    let response = ui.add(egui::Button::new(label_text).frame(false));
-                    if response
-                        .on_hover_text("Click to inspect source")
+    Frame::new()
+        .fill(ui.visuals().faint_bg_color)
+        .stroke(Stroke::new(1.0, error_color.gamma_multiply(0.35)))
+        .corner_radius(4.0)
+        .inner_margin(8.0)
+        .show(ui, |ui| {
+            ui.horizontal(|ui| {
+                let source_label = project.label(id).unwrap_or("Unknown");
+                let icon = resource_icons::resource_id_icon(id);
+                let label_text = resource_icons::icon_text(ui, icon, source_label);
+
+                let response = ui
+                    .add(egui::Label::new(label_text).sense(egui::Sense::click()))
+                    .on_hover_text("Click to open inspector")
+                    .on_hover_cursor(egui::CursorIcon::PointingHand);
+
+                if response.hovered() {
+                    let rect = response.rect;
+                    // Add underline when hovering over the label
+                    ui.painter().hline(
+                        rect.x_range(),
+                        rect.bottom(),
+                        Stroke::new(1.0, ui.visuals().text_color()),
+                    );
+                }
+
+                if response.clicked() {
+                    event_queue.inspect_resource(id);
+                }
+
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    if ui
+                        .add(egui::Button::new(regular::COPY).frame(false))
+                        .on_hover_text("Copy error message")
                         .on_hover_cursor(egui::CursorIcon::PointingHand)
                         .clicked()
                     {
-                        event_queue.inspect_resource(id);
+                        ui.ctx().copy_text(error.to_string());
                     }
-
-                    ui.label(
-                        egui::RichText::new(error.to_string())
-                            .monospace()
-                            .color(ui.visuals().error_fg_color),
-                    );
                 });
+            });
 
-                ui.separator();
-            }
+            inspector::error_label(ui, error);
         });
 }

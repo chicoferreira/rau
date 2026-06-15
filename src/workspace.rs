@@ -30,7 +30,9 @@ use crate::{
     ui::{
         self,
         components::{derive_modal_material_modal::MaterialBindGroupsModal, tiles::TreePane},
-        panels::{inspector_pane::InspectorPane, viewport_pane::ViewportPane},
+        panels::{
+            error_panel::ErrorPanel, inspector_pane::InspectorPane, viewport_pane::ViewportPane,
+        },
         rename::{RenameState, RenameTarget},
         size::Size2d,
     },
@@ -54,6 +56,7 @@ pub struct Workspace {
     event_queue: EventQueue<StateEvent>,
     inspector_tree_pane: TreePane<InspectorPane>,
     viewport_tree_pane: TreePane<ViewportPane>,
+    error_panel: ErrorPanel,
     dimension_owners: SecondaryMap<DimensionId, ViewportId>,
     /// The model `.mtl` files each model depended on at its last successful load.
     /// Needed because model `.mtl` files are not part of the runtime state and
@@ -162,6 +165,7 @@ impl Workspace {
             event_queue: EventQueue::default(),
             inspector_tree_pane,
             viewport_tree_pane,
+            error_panel: ErrorPanel::default(),
             project,
             runtime_project: RuntimeProject::default(),
             tracker: SyncTracker::default(),
@@ -273,6 +277,7 @@ impl Workspace {
             ui,
             &mut self.inspector_tree_pane,
             &mut self.viewport_tree_pane,
+            &mut self.error_panel,
         );
 
         self.material_bind_groups_modal_ui(ui);

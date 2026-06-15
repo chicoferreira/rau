@@ -22,7 +22,18 @@ pub fn centered<R>(ui: &mut Ui, add_contents: impl FnOnce(&mut Ui) -> R) -> Inne
 }
 
 pub fn error_label(ui: &mut Ui, text: impl Into<RichText>) -> Response {
-    ui.colored_label(ui.visuals().error_fg_color, text)
+    let text = text.into().color(ui.visuals().error_fg_color);
+    ui.add(egui::Label::new(text).selectable(true))
+}
+
+/// A small, de-emphasized label for counts and other secondary annotations.
+pub fn weak_label(ui: &mut Ui, text: impl Into<RichText>) -> Response {
+    ui.label(text.into().size(11.0).color(ui.visuals().weak_text_color()))
+}
+
+/// A spinner sized to match the body text height.
+pub fn spinner(ui: &mut Ui) -> Response {
+    ui.add(egui::Spinner::new().size(ui.text_style_height(&egui::TextStyle::Body)))
 }
 
 pub fn centered_error(ui: &mut Ui, text: impl Into<RichText>) -> Response {

@@ -11,9 +11,7 @@ impl StateSnapshot<'_> {
     pub fn file_inspector_ui(&mut self, ui: &mut egui::Ui, file_path: &FilePath) {
         match self.file_storage.open_file(file_path) {
             OpenFileState::Loading { .. } => {
-                inspector::centered(ui, |ui| {
-                    ui.add(egui::Spinner::new().size(ui.text_style_height(&egui::TextStyle::Body)));
-                });
+                inspector::centered(ui, inspector::spinner);
             }
             OpenFileState::Loaded { text, saved }
             | OpenFileState::Reloading { text, saved, .. } => {
