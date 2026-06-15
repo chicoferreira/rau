@@ -131,9 +131,9 @@ fn ui_entry_fields(
 
                 let mut visibility = entry.visibility;
                 const SHADER_STAGE_OPTIONS: &[(wgpu::ShaderStages, &str)] = &[
-                    (wgpu::ShaderStages::VERTEX, "COPY_SRC"),
-                    (wgpu::ShaderStages::FRAGMENT, "COPY_DST"),
-                    (wgpu::ShaderStages::COMPUTE, "TEXTURE_BINDING"),
+                    (wgpu::ShaderStages::VERTEX, "Vertex"),
+                    (wgpu::ShaderStages::FRAGMENT, "Fragment"),
+                    (wgpu::ShaderStages::COMPUTE, "Compute"),
                 ];
                 inspector::row(ui, "Visibility", |ui| {
                     flags_selector(ui, "visibility", &mut visibility, SHADER_STAGE_OPTIONS);
