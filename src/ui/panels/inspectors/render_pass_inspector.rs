@@ -1,4 +1,4 @@
-use egui::{RichText, Widget};
+use egui::Widget;
 
 use crate::{
     project::{
@@ -14,7 +14,7 @@ use crate::{
         components::{
             color_edit::color_edit_rgba,
             draggable_list::{ListEdits, draggable_list},
-            hint::hint,
+            field_docs::field_doc,
             inspector::{self, AsWidgetText},
         },
         pane::StateSnapshot,
@@ -56,64 +56,102 @@ impl StateSnapshot<'_> {
             return;
         };
 
-        inspector::section(ui, "Color Target", |ui| {
-            let target = render_pass.target();
-            let mut texture_view_id = target.texture_view_id();
-            let mut load_op = target.load_operation();
+        inspector::section_doc(
+            ui,
+            "Color Target",
+            field_doc!(
+                "The color attachment this pass draws into: a Texture View and how its existing \
+                contents are treated at the start of the pass.\n\n\
+                [WebGPU spec](https://www.w3.org/TR/webgpu/#dictdef-gpurenderpasscolorattachment)"
+            ),
+            |ui| {
+                let target = render_pass.target();
+                let mut texture_view_id = target.texture_view_id();
+                let mut load_op = target.load_operation();
 
-            if render_pass_target_ui(
-                ui,
-                "color_target",
-                texture_views,
-                &mut texture_view_id,
-                &mut load_op,
-                |ui, color| {
-                    color_edit_rgba(ui, &mut color.0);
-                },
-            ) {
-                render_pass.set_target(RenderPassTarget::new(texture_view_id, load_op));
-            }
-        });
-
-        inspector::section(ui, "Depth Target", |ui| {
-            let mut enabled = render_pass.depth_target().is_some();
-            ui.horizontal(|ui| {
-                if inspector::checkbox_row(ui, "Enabled", &mut enabled) {
-                    if enabled {
-                        render_pass.set_depth_target(Some(RenderPassTarget::default()));
-                    } else {
-                        render_pass.set_depth_target(None);
-                    }
-                }
-            });
-
-            let depth_target = render_pass
-                .depth_target()
-                .map(|target| (target.texture_view_id(), target.load_operation()));
-
-            if let Some((mut texture_view_id, mut load_op)) = depth_target
-                && render_pass_target_ui(
+                if render_pass_target_ui(
                     ui,
-                    "depth_target",
+                    "color_target",
                     texture_views,
                     &mut texture_view_id,
                     &mut load_op,
-                    |ui, value| {
-                        egui::DragValue::new(value)
-                            .speed(0.001)
-                            .range(0.0..=1.0)
-                            .max_decimals(4)
-                            .ui(ui);
+                    |ui, color| {
+                        color_edit_rgba(ui, &mut color.0);
                     },
-                )
-            {
-                render_pass.set_depth_target(Some(RenderPassTarget::new(texture_view_id, load_op)));
-            }
-        });
+                ) {
+                    render_pass.set_target(RenderPassTarget::new(texture_view_id, load_op));
+                }
+            },
+        );
 
-        inspector::section(
+        inspector::section_doc(
+            ui,
+            "Depth Target",
+            field_doc!(
+                "The optional depth attachment used for depth testing while this pass draws.\n\n\
+                [WebGPU spec](https://www.w3.org/TR/webgpu/#dictdef-gpurenderpassdepthstencilattachment)"
+            ),
+            |ui| {
+                let mut enabled = render_pass.depth_target().is_some();
+                ui.horizontal(|ui| {
+                    if inspector::checkbox_row_doc(
+                        ui,
+                        "Enabled",
+                        field_doc!("Whether this pass writes to and tests against a depth buffer."),
+                        &mut enabled,
+                    ) {
+                        if enabled {
+                            render_pass.set_depth_target(Some(RenderPassTarget::default()));
+                        } else {
+                            render_pass.set_depth_target(None);
+                        }
+                    }
+                });
+
+                let depth_target = render_pass
+                    .depth_target()
+                    .map(|target| (target.texture_view_id(), target.load_operation()));
+
+                if let Some((mut texture_view_id, mut load_op)) = depth_target
+                    && render_pass_target_ui(
+                        ui,
+                        "depth_target",
+                        texture_views,
+                        &mut texture_view_id,
+                        &mut load_op,
+                        |ui, value| {
+                            egui::DragValue::new(value)
+                                .speed(0.001)
+                                .range(0.0..=1.0)
+                                .max_decimals(4)
+                                .ui(ui);
+                        },
+                    )
+                {
+                    render_pass
+                        .set_depth_target(Some(RenderPassTarget::new(texture_view_id, load_op)));
+                }
+            },
+        );
+
+        inspector::section_doc_wide(
             ui,
             &format!("Pipelines ({})", render_pass.pipelines().len()),
+            field_doc!(
+                r"The Render Pipelines run by this pass, in order. Each step binds its pipeline and issues its draw.
+
+Roughly, the pass executes:
+
+```rs
+begin(color_target, depth_target)
+for pipeline in pipelines:
+  run(pipeline) // see the pipeline's 'Draw' section
+```
+
+Drag to reorder, right-click to remove.
+
+[wgpu RenderPass](https://docs.rs/wgpu/latest/wgpu/struct.RenderPass.html)"
+            ),
             |ui| {
                 render_pass_pipeline_list_ui(ui, render_pass_id, render_pass, render_pipelines);
             },
@@ -135,33 +173,55 @@ where
     let before = (*texture_view_id, *load_op);
 
     inspector::field_grid(ui, (id_salt, "target_grid"), |ui| {
-        inspector::storage_combo_row(
+        inspector::row_doc(
             ui,
             "Texture View",
-            (id_salt, "texture_view"),
-            texture_views,
-            texture_view_id,
+            field_doc!("The Texture View this target renders into."),
+            |ui| {
+                inspector::storage_combo(
+                    ui,
+                    (id_salt, "texture_view"),
+                    texture_views,
+                    texture_view_id,
+                )
+            },
         );
 
-        inspector::row(ui, "Load Operation", |ui| {
-            let kind_before = load_op_kind(load_op);
-            let mut kind = kind_before;
+        inspector::row_doc(
+            ui,
+            "Load Operation",
+            field_doc!(
+                "What happens to the target's existing contents at the **start** of the \
+                pass:\n\n\
+                - **Clear**: replace with the clear value (set alongside).\n\
+                - **Load**: keep the previous contents and draw over them.\n\n\
+                [WebGPU spec](https://www.w3.org/TR/webgpu/#enumdef-gpuloadop)"
+            ),
+            |ui| {
+                let kind_before = load_op_kind(load_op);
+                let mut kind = kind_before;
 
-            ui.horizontal(|ui| {
-                inspector::value_combo(ui, (id_salt, "load_operation"), LOAD_OP_KINDS, &mut kind);
+                ui.horizontal(|ui| {
+                    inspector::value_combo(
+                        ui,
+                        (id_salt, "load_operation"),
+                        LOAD_OP_KINDS,
+                        &mut kind,
+                    );
 
-                if kind != kind_before {
-                    *load_op = match kind {
-                        LoadOpKind::Clear => LoadOperation::default(),
-                        LoadOpKind::Load => LoadOperation::Load,
-                    };
-                }
+                    if kind != kind_before {
+                        *load_op = match kind {
+                            LoadOpKind::Clear => LoadOperation::default(),
+                            LoadOpKind::Load => LoadOperation::Load,
+                        };
+                    }
 
-                if let LoadOperation::Clear(value) = load_op {
-                    clear_value_ui(ui, value);
-                }
-            });
-        });
+                    if let LoadOperation::Clear(value) = load_op {
+                        clear_value_ui(ui, value);
+                    }
+                });
+            },
+        );
     });
 
     (*texture_view_id, *load_op) != before
@@ -198,15 +258,6 @@ fn render_pass_pipeline_list_ui(
         "No render pipelines.",
         |id| edits.push_add_edit(id),
     );
-
-    if !pipelines.is_empty() {
-        ui.add_space(6.0);
-        ui.add(hint(|ui| {
-            ui.label("Right-click a");
-            ui.label(RichText::new("Pipeline").strong());
-            ui.label("to remove it, or drag to reorder.");
-        }));
-    }
 
     edits.apply(&mut pipelines);
 

@@ -1,6 +1,9 @@
 use crate::{
     project::{ShaderId, paths::FilePath},
-    ui::{components::inspector, pane::StateSnapshot},
+    ui::{
+        components::{field_docs::field_doc, inspector},
+        pane::StateSnapshot,
+    },
     utils::wgpu_utils::ShaderSourceKind,
 };
 
@@ -24,13 +27,24 @@ impl StateSnapshot<'_> {
                         .is_some()
                 };
 
-                if inspector::file_combo_row(
+                if inspector::row_doc(
                     ui,
                     "Source",
-                    "shader_source",
-                    &files,
-                    &mut source,
-                    is_shader_source,
+                    field_doc!(
+                        "The source file that will be compiled into this shader.\n\n\
+                        Supports **WGSL** (`.wgsl`) and **GLSL** (`.vert`, `.frag`, `.comp`).\n\n\
+                        [WGSL spec](https://www.w3.org/TR/WGSL/) | \
+                        [GLSL spec](https://registry.khronos.org/OpenGL/specs/gl/GLSLangSpec.4.60.html)"
+                    ),
+                    |ui| {
+                        inspector::file_combo(
+                            ui,
+                            "shader_source",
+                            &files,
+                            &mut source,
+                            is_shader_source,
+                        )
+                    },
                 ) {
                     shader.set_source(source);
                 }

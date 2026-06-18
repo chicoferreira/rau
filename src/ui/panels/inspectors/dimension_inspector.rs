@@ -1,6 +1,10 @@
 use crate::{
     project::DimensionId,
-    ui::{components::inspector, pane::StateSnapshot, size::Size2d},
+    ui::{
+        components::{field_docs::field_doc, inspector},
+        pane::StateSnapshot,
+        size::Size2d,
+    },
 };
 
 impl StateSnapshot<'_> {
@@ -13,12 +17,34 @@ impl StateSnapshot<'_> {
         let mut width = dimension.size().width();
         let mut height = dimension.size().height();
 
-        inspector::section(ui, "Size", |ui| {
-            inspector::field_grid(ui, "dimension_inspector_grid", |ui| {
-                inspector::u32_drag_row(ui, "Width", &mut width, 1_u32..=u32::MAX);
-                inspector::u32_drag_row(ui, "Height", &mut height, 1_u32..=u32::MAX);
-            });
-        });
+        inspector::section_doc(
+            ui,
+            "Size",
+            field_doc!(
+                "A named **size** (width and height) shared by other resources.\n\n\
+                Textures, cameras and viewports that reference this Dimension all use this size \
+                and update together when it changes, either edited here or driven by a viewport \
+                bound to it."
+            ),
+            |ui| {
+                inspector::field_grid(ui, "dimension_inspector_grid", |ui| {
+                    inspector::u32_drag_row_doc(
+                        ui,
+                        "Width",
+                        field_doc!("The Dimension's **width**, in pixels."),
+                        &mut width,
+                        1_u32..=u32::MAX,
+                    );
+                    inspector::u32_drag_row_doc(
+                        ui,
+                        "Height",
+                        field_doc!("The Dimension's **height**, in pixels."),
+                        &mut height,
+                        1_u32..=u32::MAX,
+                    );
+                });
+            },
+        );
 
         dimension.set_size(Size2d::new(width, height));
     }

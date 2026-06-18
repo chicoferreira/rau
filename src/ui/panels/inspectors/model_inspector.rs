@@ -1,4 +1,3 @@
-use egui::RichText;
 use strum::IntoEnumIterator;
 
 use crate::{
@@ -18,7 +17,7 @@ use crate::{
         components::{
             code_editor::shader_code_section,
             draggable_list::{ListEdits, draggable_list},
-            hint::hint,
+            field_docs::field_doc,
             inspector::{self, AsWidgetText},
         },
         pane::StateSnapshot,
@@ -81,9 +80,20 @@ fn model_source_ui(ui: &mut egui::Ui, model: &mut Model, files: Option<&[FilePat
                 return;
             };
 
-            if inspector::file_combo_row(ui, "Source", "model_source", files, &mut source, |path| {
-                path.extension() == Some("obj")
-            }) {
+            if inspector::row_doc(
+                ui,
+                "Source",
+                field_doc!(
+                    "The model file to be loaded as geometry (meshes) and materials.\n\n\
+                    Only Wavefront `.obj` files are supported; an accompanying `.mtl` provides \
+                    the materials."
+                ),
+                |ui| {
+                    inspector::file_combo(ui, "model_source", files, &mut source, |path| {
+                        path.extension() == Some("obj")
+                    })
+                },
+            ) {
                 model.set_source(source);
             }
         });
@@ -102,49 +112,50 @@ fn model_vertex_buffer_spec_inspector_ui(
         .enumerate()
         .collect::<Vec<(usize, VertexBufferField)>>();
 
-    inspector::section(ui, "Vertex Buffer Layout", |ui| {
-        let mut list_edits = draggable_list(
-            ui,
-            ("model_vertex_buffer_spec", model_id),
-            &entries,
-            |ui, (entry_id, field), index, handle, list_edits| {
-                model_vertex_buffer_field_ui(ui, handle, index, *entry_id, *field, list_edits);
-            },
-        );
+    inspector::section_doc(
+        ui,
+        "Vertex Buffer Layout",
+        field_doc!(
+            "The per-vertex **attributes** passed to the vertex shader, in order.\n\n\
+            Each attribute maps to a `@location(n)` input in the shader (top to bottom: \
+            location 0, 1, and so on).\n\nDrag to reorder, right-click to remove.\n\n\
+            [WebGPU spec](https://www.w3.org/TR/webgpu/#dictdef-gpuvertexbufferlayout)"
+        ),
+        |ui| {
+            let mut list_edits = draggable_list(
+                ui,
+                ("model_vertex_buffer_spec", model_id),
+                &entries,
+                |ui, (entry_id, field), index, handle, list_edits| {
+                    model_vertex_buffer_field_ui(ui, handle, index, *entry_id, *field, list_edits);
+                },
+            );
 
-        ui.add_space(6.0);
-
-        ui.menu_button("Add attribute", |ui| {
-            for kind in VertexBufferField::iter() {
-                if ui.button(kind.to_string()).clicked() {
-                    ui.close();
-                    let next_entry_id = entries
-                        .iter()
-                        .map(|(entry_id, _)| *entry_id)
-                        .max()
-                        .map(|entry_id| entry_id + 1)
-                        .unwrap_or_default();
-                    list_edits.push_add_edit((next_entry_id, kind));
-                }
-            }
-        });
-
-        if !entries.is_empty() {
             ui.add_space(6.0);
-            ui.add(hint(|ui| {
-                ui.label("Right-click a");
-                ui.label(RichText::new("Location").strong());
-                ui.label("label to remove an attribute, or drag it to reorder.");
-            }));
-        }
 
-        list_edits.apply(&mut entries);
-        let fields = entries.iter().map(|(_, field)| *field).collect::<Vec<_>>();
+            ui.menu_button("Add attribute", |ui| {
+                for kind in VertexBufferField::iter() {
+                    if ui.button(kind.to_string()).clicked() {
+                        ui.close();
+                        let next_entry_id = entries
+                            .iter()
+                            .map(|(entry_id, _)| *entry_id)
+                            .max()
+                            .map(|entry_id| entry_id + 1)
+                            .unwrap_or_default();
+                        list_edits.push_add_edit((next_entry_id, kind));
+                    }
+                }
+            });
 
-        if fields != before {
-            vertex_buffer_spec.fields = fields;
-        }
-    });
+            list_edits.apply(&mut entries);
+            let fields = entries.iter().map(|(_, field)| *field).collect::<Vec<_>>();
+
+            if fields != before {
+                vertex_buffer_spec.fields = fields;
+            }
+        },
+    );
 }
 
 fn model_vertex_buffer_field_ui(
@@ -168,9 +179,13 @@ fn model_vertex_buffer_field_ui(
     ui.indent(("model_vertex_buffer_field", index), |ui| {
         let mut current = field;
         inspector::field_grid(ui, ("model_vertex_buffer_field_grid", index), |ui| {
-            inspector::combo_row(
+            inspector::combo_row_doc(
                 ui,
                 "Attribute",
+                field_doc!(
+                    "Which vertex attribute occupies this **location**: position, normal, UV, \
+                    tangent, and so on. Its type sets the shader input type and the slot's size."
+                ),
                 "vertex_buffer_field_kind",
                 VertexBufferField::iter(),
                 &mut current,
@@ -189,9 +204,14 @@ fn meshes_ui(
     model_runtime: &ModelRuntime,
     mesh_material_selections: &mut Vec<MeshMaterialSelection>,
 ) {
-    inspector::section(
+    inspector::section_doc(
         ui,
         &format!("Meshes ({})", model_runtime.meshes().len()),
+        field_doc!(
+            "The geometry loaded from the source file, split into meshes.\n\n\
+            Vertex counts and indices are read-only. For each mesh you can choose which \
+            **Material** it is drawn with."
+        ),
         |ui| {
             if model_runtime.meshes().is_empty() {
                 ui.weak("No meshes.");
@@ -266,16 +286,26 @@ fn mesh_info_ui(
         inspector::row(ui, "Triangles", |ui| {
             ui.strong((mesh.indices().len() / 3).to_string());
         });
-        inspector::row(ui, "Material", |ui| {
-            mesh_material_selection_ui(
-                ui,
-                model_id,
-                mesh_index,
-                mesh,
-                model_runtime,
-                mesh_material_selections,
-            );
-        });
+        inspector::row_doc(
+            ui,
+            "Material",
+            field_doc!(
+                "Which material this mesh is drawn with.\n\n\
+                - **From Source**: the material assigned in the model file.\n\
+                - **None**: no material.\n\
+                - Or pick a specific material from the list."
+            ),
+            |ui| {
+                mesh_material_selection_ui(
+                    ui,
+                    model_id,
+                    mesh_index,
+                    mesh,
+                    model_runtime,
+                    mesh_material_selections,
+                );
+            },
+        );
     });
 }
 
@@ -353,9 +383,15 @@ fn materials_ui(
     material_bind_group_ids: &mut Vec<Option<BindGroupId>>,
     event_queue: &mut EventQueue<StateEvent>,
 ) {
-    inspector::section(
+    inspector::section_doc(
         ui,
         &format!("Materials ({})", model_runtime.materials().len()),
+        field_doc!(
+            "The materials defined by the source file.\n\n\
+            Each can be wired to a **Bind Group** that supplies its textures and parameters to \
+            the shader.\n\n\
+            Use **Derive Bind Groups from Materials** to generate them automatically."
+        ),
         |ui| {
             if model_runtime.materials().is_empty() {
                 ui.weak("No materials.");
@@ -409,12 +445,22 @@ fn material_bind_group_ui(
         let current_bind_group_id = material_bind_group_id(material_bind_group_ids, mat_index);
         let mut bind_group_id = current_bind_group_id;
 
-        if inspector::storage_opt_combo_row(
+        if inspector::row_doc(
             ui,
             "Bind Group",
-            "model_material_bind_group",
-            bind_groups,
-            &mut bind_group_id,
+            field_doc!(
+                "The Bind Group used to draw meshes with this material. Its bindings (textures, \
+                samplers, uniforms) are exposed to the shader.\n\n\
+                Optional. Leave as **None** to use no bind group."
+            ),
+            |ui| {
+                inspector::storage_opt_combo(
+                    ui,
+                    "model_material_bind_group",
+                    bind_groups,
+                    &mut bind_group_id,
+                )
+            },
         ) {
             set_material_bind_group_id(material_bind_group_ids, mat_index, bind_group_id);
         }

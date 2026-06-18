@@ -1,4 +1,4 @@
-use egui::{Label, RichText, Sense, Ui};
+use egui::{Label, Sense, Ui};
 use strum::IntoEnumIterator;
 
 use crate::{
@@ -19,7 +19,7 @@ use crate::{
             color_edit::color_edit_rgba,
             data_display::{ui_array, ui_array_mut},
             draggable_list::{ListEdits, draggable_list},
-            hint::hint,
+            field_docs::field_doc,
             inspector::{self, AsWidgetText},
             renameable_label::renameable_label,
         },
@@ -72,27 +72,37 @@ impl StateSnapshot<'_> {
             Err(err) => Err(err),
         };
 
-        inspector::section(ui, "Layout", |ui| {
-            ui.horizontal(|ui| {
-                ui.label("Total size");
-                match &uniform_layout {
-                    Ok(Some(uniform_layout)) => {
-                        ui.strong(format!("{} bytes", uniform_layout.size));
+        inspector::section_doc(
+            ui,
+            "Layout",
+            field_doc!(
+                "How this uniform is packed into GPU memory. WGSL uniform buffers follow strict \
+                alignment rules, so fields may be separated by **padding**, which wastes space.\n\n\
+                Reorder fields (largest first) to reduce padding.\n\n\
+                [WGSL spec](https://www.w3.org/TR/WGSL/#alignment-and-size)"
+            ),
+            |ui| {
+                ui.horizontal(|ui| {
+                    ui.label("Total size");
+                    match &uniform_layout {
+                        Ok(Some(uniform_layout)) => {
+                            ui.strong(format!("{} bytes", uniform_layout.size));
 
-                        let padding = uniform_layout.padding;
-                        if padding > 0 {
-                            ui.weak(format!("({padding} bytes wasted on padding)"));
+                            let padding = uniform_layout.padding;
+                            if padding > 0 {
+                                ui.weak(format!("({padding} bytes wasted on padding)"));
+                            }
+                        }
+                        Ok(None) => {
+                            ui.spinner();
+                        }
+                        Err(err) => {
+                            inspector::error_label(ui, err.to_string());
                         }
                     }
-                    Ok(None) => {
-                        ui.spinner();
-                    }
-                    Err(err) => {
-                        inspector::error_label(ui, err.to_string());
-                    }
-                }
-            });
-        });
+                });
+            },
+        );
 
         let mut ctx = UniformUiContext {
             event_queue: &mut self.event_queue,
@@ -104,63 +114,68 @@ impl StateSnapshot<'_> {
         let mut rename_index: Option<usize> = None;
         const DEFAULT_NAME: &str = "Field";
 
-        inspector::section(ui, "Fields", |ui| {
-            let mut edits = draggable_list(
-                ui,
-                ("uniform", uniform_id),
-                &fields,
-                |ui, field, index, handle, edits| {
-                    let runtime_field = match &uniform_runtime {
-                        Ok(Some(uniform_runtime)) => uniform_runtime.fields().get(index),
-                        Ok(None) | Err(_) => None,
-                    };
+        inspector::section_doc(
+            ui,
+            "Fields",
+            field_doc!(
+                "The ordered list of values packed into this uniform buffer and exposed to \
+                shaders.\n\n\
+                Each field has a **source** (a constant value, a Camera property, or time) and \
+                is written to the GPU every frame. Drag to reorder, right-click to rename or \
+                remove."
+            ),
+            |ui| {
+                let mut edits = draggable_list(
+                    ui,
+                    ("uniform", uniform_id),
+                    &fields,
+                    |ui, field, index, handle, edits| {
+                        let runtime_field = match &uniform_runtime {
+                            Ok(Some(uniform_runtime)) => uniform_runtime.fields().get(index),
+                            Ok(None) | Err(_) => None,
+                        };
 
-                    ui.horizontal(|ui| {
-                        handle.ui(ui, |ui| {
-                            ui_uniform_field_title(ui, &mut ctx, edits, uniform_id, index, field);
+                        ui.horizontal(|ui| {
+                            handle.ui(ui, |ui| {
+                                ui_uniform_field_title(
+                                    ui, &mut ctx, edits, uniform_id, index, field,
+                                );
+                            });
+                            if let Some(runtime_field) = runtime_field {
+                                let padding = match &uniform_layout {
+                                    Ok(Some(uniform_layout)) => {
+                                        let padding = uniform_layout.field_paddings.get(index);
+                                        padding.copied().unwrap_or(0)
+                                    }
+                                    Ok(None) | Err(_) => 0,
+                                };
+                                ui_uniform_type_label(ui, runtime_field.data().kind(), padding);
+                            }
                         });
-                        if let Some(runtime_field) = runtime_field {
-                            let padding = match &uniform_layout {
-                                Ok(Some(uniform_layout)) => {
-                                    let padding = uniform_layout.field_paddings.get(index);
-                                    padding.copied().unwrap_or(0)
-                                }
-                                Ok(None) | Err(_) => 0,
-                            };
-                            ui_uniform_type_label(ui, runtime_field.data().kind(), padding);
-                        }
-                    });
 
-                    ui_uniform_field_entry(ui, &mut ctx, edits, index, field, runtime_field);
-                },
-            );
+                        ui_uniform_field_entry(ui, &mut ctx, edits, index, field, runtime_field);
+                    },
+                );
 
-            ui.add_space(6.0);
-
-            ui.menu_button("Add Uniform", |ui| {
-                for kind in UniformFieldSourceKind::iter() {
-                    if ui.button(kind.to_string()).clicked() {
-                        edits.push_add_edit(UniformField::new(DEFAULT_NAME, kind.into_source()));
-                        rename_index = Some(uniform.fields().len());
-                    }
-                }
-            });
-
-            edits.apply(&mut fields);
-
-            if &fields != uniform.fields() {
-                uniform.set_fields(fields);
-            }
-
-            if !uniform.fields().is_empty() {
                 ui.add_space(6.0);
-                ui.add(hint(|ui| {
-                    ui.label("Right-click a");
-                    ui.label(RichText::new("Label").strong());
-                    ui.label("to remove it or drag it to reorder it.");
-                }));
-            }
-        });
+
+                ui.menu_button("Add Uniform", |ui| {
+                    for kind in UniformFieldSourceKind::iter() {
+                        if ui.button(kind.to_string()).clicked() {
+                            edits
+                                .push_add_edit(UniformField::new(DEFAULT_NAME, kind.into_source()));
+                            rename_index = Some(uniform.fields().len());
+                        }
+                    }
+                });
+
+                edits.apply(&mut fields);
+
+                if &fields != uniform.fields() {
+                    uniform.set_fields(fields);
+                }
+            },
+        );
 
         if let Some(index) = rename_index {
             *self.rename_state = Some(RenameState {
@@ -240,9 +255,15 @@ fn ui_field_entry(
     edits: &mut ListEdits<UniformField>,
 ) {
     let mut source_kind = UniformFieldSourceKind::from_source(field.source());
-    let source_kind_changed = inspector::combo_row(
+    let source_kind_changed = inspector::combo_row_doc(
         ui,
         "Source",
+        field_doc!(
+            "Where this field's value comes from each frame:\n\n\
+            - **User Defined**: a constant value you set here.\n\
+            - **Camera**: pulled from a Camera (position, matrices, and so on).\n\
+            - **Time**: the elapsed time in seconds, updated every frame."
+        ),
         "source",
         UniformFieldSourceKind::iter(),
         &mut source_kind,
@@ -252,8 +273,18 @@ fn ui_field_entry(
         UniformFieldSource::UserDefined(data) => {
             let mut changed = false;
             let mut kind = data.kind();
-            let kind_changed =
-                inspector::combo_row(ui, "Type", "type", UniformFieldDataKind::iter(), &mut kind);
+            let kind_changed = inspector::combo_row_doc(
+                ui,
+                "Type",
+                field_doc!(
+                    "The data type of this field (e.g. `f32`, `vec3<f32>`, `mat4x4<f32>`), \
+                    which determines its size and alignment in the buffer.\n\n\
+                    [WGSL spec](https://www.w3.org/TR/WGSL/#alignment-and-size)"
+                ),
+                "type",
+                UniformFieldDataKind::iter(),
+                &mut kind,
+            );
 
             let mut data = data.clone();
             if kind_changed {
@@ -261,9 +292,14 @@ fn ui_field_entry(
                 changed = true;
             }
 
-            inspector::row(ui, "Data", |ui| {
-                changed |= edit_uniform_field_data(ui, &mut data);
-            });
+            inspector::row_doc(
+                ui,
+                "Data",
+                field_doc!("The constant value stored in this field. Sent to the GPU as-is."),
+                |ui| {
+                    changed |= edit_uniform_field_data(ui, &mut data);
+                },
+            );
 
             changed.then_some(UniformFieldSource::UserDefined(data))
         }
@@ -272,11 +308,26 @@ fn ui_field_entry(
         } => {
             let mut camera_id = *camera_id;
             let camera_id_before = camera_id;
-            inspector::storage_combo_row(ui, "Camera", "camera", &ctx.cameras, &mut camera_id);
+            inspector::row_doc(
+                ui,
+                "Camera",
+                field_doc!("The Camera this field reads its value from."),
+                |ui| inspector::storage_combo(ui, "camera", &ctx.cameras, &mut camera_id),
+            );
 
             let mut field = field.clone();
             let field_before = field.clone();
-            inspector::combo_row(ui, "Field", "camera_field", CameraField::iter(), &mut field);
+            inspector::combo_row_doc(
+                ui,
+                "Field",
+                field_doc!(
+                    "Which Camera property feeds this field, such as its position or one of \
+                    its matrices."
+                ),
+                "camera_field",
+                CameraField::iter(),
+                &mut field,
+            );
 
             (camera_id != camera_id_before || field != field_before)
                 .then_some(UniformFieldSource::new_camera_sourced(camera_id, field))

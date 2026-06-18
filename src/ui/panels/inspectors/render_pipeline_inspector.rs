@@ -1,7 +1,5 @@
 use std::ops::Range;
 
-use egui::RichText;
-
 use crate::{
     project::{
         RenderPipelineId,
@@ -17,7 +15,7 @@ use crate::{
         components::{
             code_editor::shader_code_section,
             draggable_list::{ListEdits, draggable_list},
-            hint::hint,
+            field_docs::field_doc,
             inspector::{self, AsWidgetText},
             resource_icons,
         },
@@ -190,19 +188,41 @@ fn shaders_ui(
 
     inspector::section(ui, "Shaders", |ui| {
         inspector::field_grid(ui, (render_pipeline_id, "shaders"), |ui| {
-            inspector::storage_combo_row(
+            inspector::row_doc(
                 ui,
                 "Vertex Shader",
-                "render_pipeline_vertex_shader",
-                shaders,
-                &mut vertex_shader,
+                field_doc!(
+                    "The shader that positions each vertex (the **vertex stage**).\n\n\
+                    WGSL marks the entry point with `@vertex`; GLSL uses `void main()` in a \
+                    `.vert` file.\n\n\
+                    [WebGPU spec](https://www.w3.org/TR/webgpu/#dictdef-gpuvertexstate)"
+                ),
+                |ui| {
+                    inspector::storage_combo(
+                        ui,
+                        "render_pipeline_vertex_shader",
+                        shaders,
+                        &mut vertex_shader,
+                    )
+                },
             );
-            inspector::storage_combo_row(
+            inspector::row_doc(
                 ui,
                 "Fragment Shader",
-                "render_pipeline_fragment_shader",
-                shaders,
-                &mut fragment_shader,
+                field_doc!(
+                    "The shader that computes each pixel's color (the **fragment stage**).\n\n\
+                    WGSL marks the entry point with `@fragment`; GLSL uses `void main()` in a \
+                    `.frag` file.\n\n\
+                    [WebGPU spec](https://www.w3.org/TR/webgpu/#dictdef-gpufragmentstate)"
+                ),
+                |ui| {
+                    inspector::storage_combo(
+                        ui,
+                        "render_pipeline_fragment_shader",
+                        shaders,
+                        &mut fragment_shader,
+                    )
+                },
             );
         });
     });
@@ -221,23 +241,38 @@ fn target_formats_ui(
 
     inspector::section(ui, "Target Formats", |ui| {
         inspector::field_grid(ui, (render_pipeline_id, "target_formats"), |ui| {
-            inspector::combo_row(
+            inspector::combo_row_doc(
                 ui,
                 "Color Format",
+                field_doc!(
+                    "Pixel format of the color attachment this pipeline writes to. Must match \
+                    the Render Pass's color target.\n\n\
+                    [WebGPU spec](https://www.w3.org/TR/webgpu/#dictdef-gpucolortargetstate)"
+                ),
                 "render_pipeline_color_format",
                 TextureFormat::COLOR,
                 &mut color_format,
             );
 
             let mut depth_enabled = depth_format.is_some();
-            if inspector::checkbox_row(ui, "Depth", &mut depth_enabled) {
+            if inspector::checkbox_row_doc(
+                ui,
+                "Depth",
+                field_doc!("Whether this pipeline performs depth testing and writes depth."),
+                &mut depth_enabled,
+            ) {
                 depth_format = depth_enabled.then_some(TextureFormat::Depth32Float);
             }
 
             if let Some(format) = &mut depth_format {
-                inspector::combo_row(
+                inspector::combo_row_doc(
                     ui,
                     "Depth Format",
+                    field_doc!(
+                        "Pixel format of the depth attachment. Must match the Render Pass's \
+                        depth target.\n\n\
+                        [WebGPU spec](https://www.w3.org/TR/webgpu/#dictdef-gpudepthstencilstate)"
+                    ),
                     "render_pipeline_depth_format",
                     TextureFormat::DEPTH,
                     format,
@@ -257,47 +292,93 @@ fn primitive_state_ui(
 ) {
     let mut primitive_state = render_pipeline.primitive_state();
 
-    inspector::section(ui, "Primitive State", |ui| {
-        inspector::field_grid(ui, (render_pipeline_id, "primitive_state"), |ui| {
-            inspector::combo_row(
-                ui,
-                "Topology",
-                "render_pipeline_topology",
-                TOPOLOGIES,
-                &mut primitive_state.topology,
-            );
-            inspector::combo_row(
-                ui,
-                "Strip Index Format",
-                "render_pipeline_strip_index_format",
-                STRIP_INDEX_FORMATS,
-                &mut primitive_state.strip_index_format,
-            );
-            inspector::combo_row(
-                ui,
-                "Front Face",
-                "render_pipeline_front_face",
-                FRONT_FACES,
-                &mut primitive_state.front_face,
-            );
-            inspector::combo_row(
-                ui,
-                "Cull Mode",
-                "render_pipeline_cull_mode",
-                CULL_MODES,
-                &mut primitive_state.cull_mode,
-            );
-            inspector::combo_row(
-                ui,
-                "Polygon Mode",
-                "render_pipeline_polygon_mode",
-                POLYGON_MODES,
-                &mut primitive_state.polygon_mode,
-            );
-            inspector::checkbox_row(ui, "Unclipped Depth", &mut primitive_state.unclipped_depth);
-            inspector::checkbox_row(ui, "Conservative", &mut primitive_state.conservative);
-        });
-    });
+    inspector::section_doc(
+        ui,
+        "Primitive State",
+        field_doc!(
+            "How vertices are assembled into primitives and rasterized.\n\n\
+            [WebGPU spec](https://www.w3.org/TR/webgpu/#dictdef-gpuprimitivestate)"
+        ),
+        |ui| {
+            inspector::field_grid(ui, (render_pipeline_id, "primitive_state"), |ui| {
+                inspector::combo_row_doc(
+                    ui,
+                    "Topology",
+                    field_doc!(
+                        "How vertices are grouped into primitives: point, line, or triangle lists \
+                        and strips.\n\n\
+                        [WebGPU spec](https://www.w3.org/TR/webgpu/#enumdef-gpuprimitivetopology)"
+                    ),
+                    "render_pipeline_topology",
+                    TOPOLOGIES,
+                    &mut primitive_state.topology,
+                );
+                inspector::combo_row_doc(
+                    ui,
+                    "Strip Index Format",
+                    field_doc!(
+                        "For **strip** topologies, the index value that restarts the strip. Leave \
+                    as **None** for list topologies.\n\n\
+                    [WebGPU spec](https://www.w3.org/TR/webgpu/#dom-gpuprimitivestate-stripindexformat)"
+                    ),
+                    "render_pipeline_strip_index_format",
+                    STRIP_INDEX_FORMATS,
+                    &mut primitive_state.strip_index_format,
+                );
+                inspector::combo_row_doc(
+                    ui,
+                    "Front Face",
+                    field_doc!(
+                        "Which winding order counts as the **front** face: counter-clockwise or \
+                    clockwise.\n\n\
+                    [WebGPU spec](https://www.w3.org/TR/webgpu/#dom-gpuprimitivestate-frontface)"
+                    ),
+                    "render_pipeline_front_face",
+                    FRONT_FACES,
+                    &mut primitive_state.front_face,
+                );
+                inspector::combo_row_doc(
+                    ui,
+                    "Cull Mode",
+                    field_doc!(
+                        "Which faces are discarded before rasterization: front, back, or none.\n\n\
+                    [WebGPU spec](https://www.w3.org/TR/webgpu/#dom-gpuprimitivestate-cullmode)"
+                    ),
+                    "render_pipeline_cull_mode",
+                    CULL_MODES,
+                    &mut primitive_state.cull_mode,
+                );
+                inspector::combo_row_doc(
+                    ui,
+                    "Polygon Mode",
+                    field_doc!(
+                        "Whether polygons are **filled** or drawn as lines/points (wireframe)."
+                    ),
+                    "render_pipeline_polygon_mode",
+                    POLYGON_MODES,
+                    &mut primitive_state.polygon_mode,
+                );
+                inspector::checkbox_row_doc(
+                    ui,
+                    "Unclipped Depth",
+                    field_doc!(
+                        "Clamp fragments beyond the near/far planes instead of clipping them. \
+                        Requires the `DEPTH_CLIP_CONTROL` feature."
+                    ),
+                    &mut primitive_state.unclipped_depth,
+                );
+                inspector::checkbox_row_doc(
+                    ui,
+                    "Conservative",
+                    field_doc!(
+                        "Enable conservative rasterization: a primitive covers a pixel if it \
+                        touches it at all. Requires the `CONSERVATIVE_RASTERIZATION` feature."
+                    ),
+                    &mut primitive_state.conservative,
+                );
+            });
+        },
+    );
 
     render_pipeline.set_primitive_state(primitive_state);
 }
@@ -311,41 +392,44 @@ fn bind_groups_ui(
     let before = render_pipeline.bind_groups().to_vec();
     let mut entries = before.clone();
 
-    inspector::section(ui, &format!("Bind Groups ({})", entries.len()), |ui| {
-        if entries.is_empty() {
-            ui.label("No bind groups.");
-        }
+    inspector::section_doc(
+        ui,
+        &format!("Bind Groups ({})", entries.len()),
+        field_doc!(
+            "The Bind Group bound at each slot (`@group(n)`) while this pipeline draws.\n\n\
+            - **Empty**: nothing bound.\n\
+            - **Static**: a fixed Bind Group resource.\n\
+            - **Model Material**: uses each mesh's own material bind group (Model draw only).\n\n\
+            Drag to reorder, right-click to remove.\n\n\
+            [WebGPU spec](https://www.w3.org/TR/webgpu/#dom-gpurenderpassencoder-setbindgroup)"
+        ),
+        |ui| {
+            if entries.is_empty() {
+                ui.label("No bind groups.");
+            }
 
-        let id_source = (render_pipeline_id, "bind_groups");
-        let mut edits = draggable_list(
-            ui,
-            id_source,
-            &entries,
-            |ui, target, index, handle, edits| {
-                bind_group_row_ui(ui, handle, index, target, bind_groups, edits);
-            },
-        );
+            let id_source = (render_pipeline_id, "bind_groups");
+            let mut edits = draggable_list(
+                ui,
+                id_source,
+                &entries,
+                |ui, target, index, handle, edits| {
+                    bind_group_row_ui(ui, handle, index, target, bind_groups, edits);
+                },
+            );
 
-        ui.add_space(3.0);
-        if ui.button("Add Bind Group").clicked() {
-            edits.push_add_edit(BindGroupTarget::default());
-        }
+            ui.add_space(3.0);
+            if ui.button("Add Bind Group").clicked() {
+                edits.push_add_edit(BindGroupTarget::default());
+            }
 
-        if !entries.is_empty() {
-            ui.add_space(6.0);
-            ui.add(hint(|ui| {
-                ui.label("Right-click a");
-                ui.label(RichText::new("Slot").strong());
-                ui.label("to remove it, or drag to reorder.");
-            }));
-        }
+            edits.apply(&mut entries);
 
-        edits.apply(&mut entries);
-
-        if entries != before {
-            render_pipeline.set_bind_groups(entries);
-        }
-    });
+            if entries != before {
+                render_pipeline.set_bind_groups(entries);
+            }
+        },
+    );
 }
 
 fn bind_group_row_ui(
@@ -425,22 +509,55 @@ fn draw_strategy_ui(
     let before = render_pipeline.draw_strategy().clone();
     let mut edited = before.clone();
 
-    inspector::section(ui, "Draw", |ui| {
-        inspector::field_grid(ui, (render_pipeline_id, "draw_strategy"), |ui| {
-            let mut draw_kind = DrawKind::from_strategy(&edited);
-            if inspector::combo_row(
-                ui,
-                "Draw Kind",
-                "render_pipeline_draw_kind",
-                DRAW_KINDS,
-                &mut draw_kind,
-            ) {
-                edited = draw_kind.default_strategy();
-            }
+    inspector::section_doc_wide(
+        ui,
+        "Draw",
+        field_doc!(
+            r"How this pipeline issues its draw call when run by a Render Pass step.
 
-            draw_strategy_fields_ui(ui, models, &mut edited);
-        });
-    });
+Roughly:
+
+```rs
+set_pipeline(pipeline)
+for slot, bind_group in bind_groups:
+  set_bind_group(slot, bind_group)
+if draw kind is Model:
+  for mesh in model.meshes:
+    set_vertex_buffer(mesh_vertex_slot, mesh.vertices)
+    set_index_buffer(mesh.indices)
+    // 'Model Material' slots use the mesh's own bind group:
+    for slot where target == Model Material:
+      set_bind_group(slot, mesh.material.bind_group)
+    draw_indexed(0..mesh.index_count, instances)
+else: // Direct draw
+  draw(vertices, instances)
+```
+
+[WebGPU spec](https://www.w3.org/TR/webgpu/#dom-gpurenderpassencoder-draw)"
+        ),
+        |ui| {
+            inspector::field_grid(ui, (render_pipeline_id, "draw_strategy"), |ui| {
+                let mut draw_kind = DrawKind::from_strategy(&edited);
+                if inspector::combo_row_doc(
+                    ui,
+                    "Draw Kind",
+                    field_doc!(
+                        "How vertices are sourced:\n\n\
+                    - **Direct**: draw a fixed range of vertices with no vertex/index buffer \
+                    (e.g. a full-screen triangle).\n\
+                    - **Model**: draw each mesh of a Model using its vertex and index buffers."
+                    ),
+                    "render_pipeline_draw_kind",
+                    DRAW_KINDS,
+                    &mut draw_kind,
+                ) {
+                    edited = draw_kind.default_strategy();
+                }
+
+                draw_strategy_fields_ui(ui, models, &mut edited);
+            });
+        },
+    );
 
     if edited != before {
         render_pipeline.set_draw_strategy(edited);
@@ -457,17 +574,49 @@ fn draw_strategy_fields_ui(
             vertices,
             instances,
         } => {
-            inspector::row(ui, "Vertices", |ui| range_u32_edit(ui, vertices));
-            inspector::row(ui, "Instances", |ui| range_u32_edit(ui, instances));
+            inspector::row_doc(
+                ui,
+                "Vertices",
+                field_doc!("Range of vertex indices to draw, e.g. `0..3` for a single triangle."),
+                |ui| range_u32_edit(ui, vertices),
+            );
+            inspector::row_doc(
+                ui,
+                "Instances",
+                field_doc!(
+                    "Range of instance indices to draw. `0..1` draws once; widen it for \
+                    instanced rendering."
+                ),
+                |ui| range_u32_edit(ui, instances),
+            );
         }
         RenderDrawStrategy::Model {
             model_id,
             instances,
             mesh_vertex_slot,
         } => {
-            inspector::storage_combo_row(ui, "Model", "render_pipeline_model", models, model_id);
-            inspector::row(ui, "Instances", |ui| range_u32_edit(ui, instances));
-            inspector::u32_drag_row(ui, "Mesh Vertex Slot", mesh_vertex_slot, 0..=u32::MAX);
+            inspector::row_doc(
+                ui,
+                "Model",
+                field_doc!("The Model whose meshes are drawn, one draw call per mesh."),
+                |ui| inspector::storage_combo(ui, "render_pipeline_model", models, model_id),
+            );
+            inspector::row_doc(
+                ui,
+                "Instances",
+                field_doc!(
+                    "Range of instance indices to draw. `0..1` draws once; widen it for \
+                    instanced rendering."
+                ),
+                |ui| range_u32_edit(ui, instances),
+            );
+            inspector::u32_drag_row_doc(
+                ui,
+                "Mesh Vertex Slot",
+                field_doc!("The vertex buffer slot the mesh's vertices are bound to."),
+                mesh_vertex_slot,
+                0..=u32::MAX,
+            );
         }
     }
 }

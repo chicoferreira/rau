@@ -55,6 +55,7 @@ serde = "1.0.228"
 ehttp = { version = "0.7.1", features = ["json", "native-async"] }
 egui-notify = "0.22.0"
 egui-phosphor = "0.12.0"
+egui_commonmark = { version = "0.23.0", features = ["macros"] }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 # Enable default features for egui-winit

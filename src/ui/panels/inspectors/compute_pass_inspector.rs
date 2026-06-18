@@ -1,5 +1,3 @@
-use egui::RichText;
-
 use crate::{
     project::{
         BindGroupId, ComputePassId,
@@ -14,7 +12,7 @@ use crate::{
         components::{
             code_editor::shader_code_section,
             draggable_list::{ListEdits, draggable_list},
-            hint::hint,
+            field_docs::field_doc,
             inspector,
         },
         pane::StateSnapshot,
@@ -48,21 +46,48 @@ fn compute_pass_fields_ui(
     inspector::section(ui, "Settings", |ui| {
         inspector::field_grid(ui, "compute_pass_inspector_grid", |ui| {
             let mut shader_id = compute_pass.shader();
-            if inspector::storage_combo_row(
+            if inspector::row_doc(
                 ui,
                 "Shader",
-                "compute_pass_shader",
-                shaders,
-                &mut shader_id,
+                field_doc!(
+                    "The compute shader run by this pass.\n\n\
+                    WGSL marks the entry point with `@compute`; GLSL uses `void main()` in a \
+                    `.comp` file.\n\n\
+                    [WebGPU spec](https://www.w3.org/TR/webgpu/#dictdef-gpuprogrammablestage)"
+                ),
+                |ui| inspector::storage_combo(ui, "compute_pass_shader", shaders, &mut shader_id),
             ) {
                 compute_pass.set_shader(shader_id);
             }
 
             let (mut x, mut y, mut z) = compute_pass.work_groups().into();
 
-            inspector::u32_drag_row(ui, "Workgroups X", &mut x, 1..=u32::MAX);
-            inspector::u32_drag_row(ui, "Workgroups Y", &mut y, 1..=u32::MAX);
-            inspector::u32_drag_row(ui, "Workgroups Z", &mut z, 1..=u32::MAX);
+            inspector::u32_drag_row_doc(
+                ui,
+                "Workgroups X",
+                field_doc!(
+                    "Number of workgroups dispatched along the **X** axis.\n\n\
+                    The shader runs once per workgroup; the total invocations are this count \
+                    multiplied by the `@workgroup_size` declared in the shader.\n\n\
+                    [WebGPU spec](https://www.w3.org/TR/webgpu/#dom-gpucomputepassencoder-dispatchworkgroups)"
+                ),
+                &mut x,
+                1..=u32::MAX,
+            );
+            inspector::u32_drag_row_doc(
+                ui,
+                "Workgroups Y",
+                field_doc!("Number of workgroups dispatched along the **Y** axis."),
+                &mut y,
+                1..=u32::MAX,
+            );
+            inspector::u32_drag_row_doc(
+                ui,
+                "Workgroups Z",
+                field_doc!("Number of workgroups dispatched along the **Z** axis."),
+                &mut z,
+                1..=u32::MAX,
+            );
 
             compute_pass.set_work_groups(WorkGroups::new(x, y, z));
         });
@@ -78,52 +103,54 @@ fn compute_pass_bind_groups_ui(
     let before = compute_pass.bind_groups().to_vec();
     let mut entries = before.clone();
 
-    inspector::section(ui, &format!("Bind Groups ({})", entries.len()), |ui| {
-        if entries.is_empty() {
-            ui.label("No bind groups in compute pass.");
-        }
+    inspector::section_doc(
+        ui,
+        &format!("Bind Groups ({})", entries.len()),
+        field_doc!(
+            "The Bind Groups bound while this pass runs, one per slot.\n\n\
+            Slot order maps to `@group(n)` in the compute shader (top to bottom: group 0, 1, \
+            and so on).\n\n\
+            Drag to reorder, right-click to remove.\n\n\
+            [WebGPU spec](https://www.w3.org/TR/webgpu/#dom-gpucomputepassencoder-setbindgroup)"
+        ),
+        |ui| {
+            if entries.is_empty() {
+                ui.label("No bind groups in compute pass.");
+            }
 
-        let mut edits = draggable_list(
-            ui,
-            (compute_pass_id, "compute_pass_bind_groups"),
-            &entries,
-            |ui, bind_group_id, index, handle, edits| {
-                compute_pass_bind_group_row_ui(
-                    ui,
-                    handle,
-                    bind_groups,
-                    index,
-                    *bind_group_id,
-                    edits,
-                );
-            },
-        );
+            let mut edits = draggable_list(
+                ui,
+                (compute_pass_id, "compute_pass_bind_groups"),
+                &entries,
+                |ui, bind_group_id, index, handle, edits| {
+                    compute_pass_bind_group_row_ui(
+                        ui,
+                        handle,
+                        bind_groups,
+                        index,
+                        *bind_group_id,
+                        edits,
+                    );
+                },
+            );
 
-        ui.add_space(6.0);
-
-        inspector::add_from_storage_menu(
-            ui,
-            "Add Bind Group",
-            bind_groups,
-            "No bind groups.",
-            |id| edits.push_add_edit(id),
-        );
-
-        if !entries.is_empty() {
             ui.add_space(6.0);
-            ui.add(hint(|ui| {
-                ui.label("Right-click a");
-                ui.label(RichText::new("Bind Group").strong());
-                ui.label("to delete it, or drag it to reorder.");
-            }));
-        }
 
-        edits.apply(&mut entries);
+            inspector::add_from_storage_menu(
+                ui,
+                "Add Bind Group",
+                bind_groups,
+                "No bind groups.",
+                |id| edits.push_add_edit(id),
+            );
 
-        if entries != before {
-            compute_pass.set_bind_groups(entries);
-        }
-    });
+            edits.apply(&mut entries);
+
+            if entries != before {
+                compute_pass.set_bind_groups(entries);
+            }
+        },
+    );
 }
 
 fn compute_pass_bind_group_row_ui(

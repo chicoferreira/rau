@@ -1,9 +1,12 @@
-use egui::{Grid, load::SizedTexture};
+use egui::load::SizedTexture;
 
 use crate::{
     project::{TextureViewId, resource::texture_view::TextureViewFormat},
     ui::{
-        components::inspector::{self, AsWidgetText},
+        components::{
+            field_docs::field_doc,
+            inspector::{self, AsWidgetText},
+        },
         pane::StateSnapshot,
     },
 };
@@ -16,68 +19,80 @@ impl StateSnapshot<'_> {
         };
 
         inspector::section(ui, "Settings", |ui| {
-            Grid::new("texture_view_inspector_grid")
-                .num_columns(2)
-                .show(ui, |ui| {
-                    ui.label("Texture");
-                    let mut texture_id = texture_view.texture_id();
-                    let texture_before = texture_id;
+            inspector::field_grid(ui, "texture_view_inspector_grid", |ui| {
+                let mut texture_id = texture_view.texture_id();
+                if inspector::row_doc(
+                    ui,
+                    "Texture",
+                    field_doc!(
+                        "The texture this view reads from. A texture view selects a format, \
+                        dimension and subresource range of an underlying texture for binding \
+                        in shaders.\n\n\
+                        [WebGPU spec](https://www.w3.org/TR/webgpu/#gputexture)"
+                    ),
+                    |ui| {
+                        inspector::storage_combo(
+                            ui,
+                            "texture",
+                            &self.project.textures,
+                            &mut texture_id,
+                        )
+                    },
+                ) {
+                    texture_view.set_texture_id(texture_id);
+                }
 
-                    inspector::storage_combo(
-                        ui,
-                        "texture",
-                        &self.project.textures,
-                        &mut texture_id,
-                    );
+                const FORMAT_LIST: [Option<TextureViewFormat>; 3] = [
+                    None,
+                    Some(TextureViewFormat::Srgb),
+                    Some(TextureViewFormat::Linear),
+                ];
 
-                    ui.end_row();
+                let mut current_format = texture_view.format();
+                if inspector::combo_row_doc(
+                    ui,
+                    "Format",
+                    field_doc!(
+                        "Overrides the **format** the texture is interpreted as when sampled.\n\n\
+                        - **From Texture**: use the texture's own format.\n\
+                        - **Force sRGB / Force Linear**: reinterpret as the sRGB or linear \
+                        variant of that format.\n\n\
+                        [WebGPU spec](https://www.w3.org/TR/webgpu/#dom-gputextureviewdescriptor-format)"
+                    ),
+                    "format",
+                    FORMAT_LIST,
+                    &mut current_format,
+                ) {
+                    texture_view.set_format(current_format);
+                }
 
-                    if texture_id != texture_before {
-                        texture_view.set_texture_id(texture_id);
-                    }
+                const DIMENSIONS: [Option<wgpu::TextureViewDimension>; 7] = [
+                    None,
+                    Some(wgpu::TextureViewDimension::D1),
+                    Some(wgpu::TextureViewDimension::D2),
+                    Some(wgpu::TextureViewDimension::D3),
+                    Some(wgpu::TextureViewDimension::D2Array),
+                    Some(wgpu::TextureViewDimension::Cube),
+                    Some(wgpu::TextureViewDimension::CubeArray),
+                ];
 
-                    ui.label("Format");
-                    let mut current_format = texture_view.format();
-                    let format_before = current_format;
-
-                    ui.horizontal(|ui| {
-                        const FORMAT_LIST: [Option<TextureViewFormat>; 3] = [
-                            None,
-                            Some(TextureViewFormat::Srgb),
-                            Some(TextureViewFormat::Linear),
-                        ];
-
-                        inspector::value_combo(ui, "format", FORMAT_LIST, &mut current_format);
-                    });
-
-                    ui.end_row();
-
-                    if current_format != format_before {
-                        texture_view.set_format(current_format);
-                    }
-
-                    ui.label("Dimension");
-                    let mut current_dimension = texture_view.dimension();
-                    let dimension_before = current_dimension;
-
-                    const DIMENSIONS: [Option<wgpu::TextureViewDimension>; 7] = [
-                        None,
-                        Some(wgpu::TextureViewDimension::D1),
-                        Some(wgpu::TextureViewDimension::D2),
-                        Some(wgpu::TextureViewDimension::D3),
-                        Some(wgpu::TextureViewDimension::D2Array),
-                        Some(wgpu::TextureViewDimension::Cube),
-                        Some(wgpu::TextureViewDimension::CubeArray),
-                    ];
-
-                    inspector::value_combo(ui, "dimension", DIMENSIONS, &mut current_dimension);
-
-                    ui.end_row();
-
-                    if current_dimension != dimension_before {
-                        texture_view.set_dimension(current_dimension);
-                    }
-                });
+                let mut current_dimension = texture_view.dimension();
+                if inspector::combo_row_doc(
+                    ui,
+                    "Dimension",
+                    field_doc!(
+                        "How the texture's data is interpreted as a **view dimension** \
+                        (1D, 2D, 2D array, 3D, cube, ...).\n\n\
+                        **From Texture** infers it from the underlying texture.\n\n\
+                        [WebGPU spec](https://www.w3.org/TR/webgpu/#enumdef-gputextureviewdimension)"
+                    ),
+                    "dimension",
+                    DIMENSIONS,
+                    &mut current_dimension,
+                ) {
+                    texture_view.set_dimension(current_dimension);
+                }
+            });
         });
 
         inspector::section(ui, "Preview", |ui| {

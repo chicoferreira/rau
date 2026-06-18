@@ -1,4 +1,3 @@
-use egui::RichText;
 use strum::IntoEnumIterator;
 
 use crate::{
@@ -16,8 +15,8 @@ use crate::{
         components::{
             code_editor::shader_code_section,
             draggable_list::{ListEdits, draggable_list},
+            field_docs::field_doc,
             flags_selector::flags_selector,
-            hint::hint,
             inspector::{self, AsWidgetText},
         },
         pane::StateSnapshot,
@@ -40,60 +39,62 @@ impl StateSnapshot<'_> {
             samplers: &self.project.samplers,
         };
 
-        inspector::section(ui, "Bindings", |ui| {
-            if entries.is_empty() {
-                ui.label("No entries in bind group");
-            }
-
-            let mut edits = draggable_list(
-                ui,
-                ("bind_group", bind_group_id),
-                &entries,
-                |ui, field, index, handle, edits| {
-                    handle.ui(ui, |ui| {
-                        ui.add(
-                            egui::Label::new(format!("Binding {index}"))
-                                .sense(egui::Sense::click()),
-                        )
-                        .context_menu(|ui| {
-                            if ui.button("Delete Entry").clicked() {
-                                edits.push_remove_edit(index);
-                                ui.close();
-                            }
-                        });
-                    });
-                    ui_entry_fields(ui, &mut ctx, edits, index, field);
-                },
-            );
-
-            ui.add_space(6.0);
-
-            ui.menu_button("Add Entry", |ui| {
-                for kind in ResourceKind::iter() {
-                    if ui.button(kind.to_string()).clicked() {
-                        ui.close();
-                        edits.push_add_edit(BindGroupEntry::new_vertex_fragment(
-                            kind.default_value(),
-                        ));
-                    }
+        inspector::section_doc(
+            ui,
+            "Bindings",
+            field_doc!(
+                "Each **binding** exposes one resource (a uniform, texture, storage texture, \
+                or sampler) to the shaders at a fixed slot.\n\n\
+                Bindings are numbered top to bottom (`@binding(0)`, `@binding(1)`, and so on) \
+                within this group. Drag to reorder, right-click to remove.\n\n\
+                [WebGPU spec](https://www.w3.org/TR/webgpu/#gpubindgroup)"
+            ),
+            |ui| {
+                if entries.is_empty() {
+                    ui.label("No entries in bind group");
                 }
-            });
 
-            if !entries.is_empty() {
+                let mut edits = draggable_list(
+                    ui,
+                    ("bind_group", bind_group_id),
+                    &entries,
+                    |ui, field, index, handle, edits| {
+                        handle.ui(ui, |ui| {
+                            ui.add(
+                                egui::Label::new(format!("Binding {index}"))
+                                    .sense(egui::Sense::click()),
+                            )
+                            .context_menu(|ui| {
+                                if ui.button("Delete Entry").clicked() {
+                                    edits.push_remove_edit(index);
+                                    ui.close();
+                                }
+                            });
+                        });
+                        ui_entry_fields(ui, &mut ctx, edits, index, field);
+                    },
+                );
+
                 ui.add_space(6.0);
-                ui.add(hint(|ui| {
-                    ui.label("Right-click a");
-                    ui.label(RichText::new("Binding").strong());
-                    ui.label("to remove it or drag it to reorder it.");
-                }));
-            }
 
-            edits.apply(&mut entries);
+                ui.menu_button("Add Entry", |ui| {
+                    for kind in ResourceKind::iter() {
+                        if ui.button(kind.to_string()).clicked() {
+                            ui.close();
+                            edits.push_add_edit(BindGroupEntry::new_vertex_fragment(
+                                kind.default_value(),
+                            ));
+                        }
+                    }
+                });
 
-            if bind_group.entries() != entries {
-                bind_group.set_entries(entries);
-            }
-        });
+                edits.apply(&mut entries);
+
+                if bind_group.entries() != entries {
+                    bind_group.set_entries(entries);
+                }
+            },
+        );
 
         let Ok(bind_group) = self.project.bind_groups.get(bind_group_id) else {
             return;
@@ -121,9 +122,14 @@ fn ui_entry_fields(
         ui.indent("entry", |ui| {
             inspector::field_grid(ui, "entry_grid", |ui| {
                 let mut current_kind: ResourceKind = entry.resource.into();
-                let kind_changed = inspector::combo_row(
+                let kind_changed = inspector::combo_row_doc(
                     ui,
                     "Resource",
+                    field_doc!(
+                        "The kind of GPU resource bound at this slot: a **Uniform** buffer, a \
+                        **Texture View**, a **Storage Texture**, or a **Sampler**.\n\n\
+                        [WebGPU spec](https://www.w3.org/TR/webgpu/#dictdef-gpubindgrouplayoutentry)"
+                    ),
                     "resource",
                     ResourceKind::iter(),
                     &mut current_kind,
@@ -135,9 +141,18 @@ fn ui_entry_fields(
                     (wgpu::ShaderStages::FRAGMENT, "Fragment"),
                     (wgpu::ShaderStages::COMPUTE, "Compute"),
                 ];
-                inspector::row(ui, "Visibility", |ui| {
-                    flags_selector(ui, "visibility", &mut visibility, SHADER_STAGE_OPTIONS);
-                });
+                inspector::row_doc(
+                    ui,
+                    "Visibility",
+                    field_doc!(
+                        "Which shader stages can access this binding. It is only visible to the \
+                        selected stages.\n\n\
+                        [WebGPU spec](https://www.w3.org/TR/webgpu/#namespacedef-gpushaderstage)"
+                    ),
+                    |ui| {
+                        flags_selector(ui, "visibility", &mut visibility, SHADER_STAGE_OPTIONS);
+                    },
+                );
 
                 let resource_from_fields = match entry.resource {
                     BindGroupResource::Uniform(id) => ui_uniform_fields(ui, ctx, id),
@@ -181,7 +196,16 @@ fn ui_uniform_fields(
     mut uniform_id: Option<UniformId>,
 ) -> Option<BindGroupResource> {
     let before = uniform_id;
-    inspector::storage_combo_row(ui, "Uniform", "uniform", ctx.uniforms, &mut uniform_id);
+    inspector::row_doc(
+        ui,
+        "Uniform",
+        field_doc!(
+            "The Uniform buffer bound here. Its fields become available to the selected \
+            shader stages.\n\n\
+            [WebGPU spec](https://www.w3.org/TR/webgpu/#dictdef-gpubufferbindinglayout)"
+        ),
+        |ui| inspector::storage_combo(ui, "uniform", ctx.uniforms, &mut uniform_id),
+    );
     (uniform_id != before).then_some(BindGroupResource::Uniform(uniform_id))
 }
 
@@ -194,23 +218,35 @@ fn ui_texture_fields(
 ) -> Option<BindGroupResource> {
     let (tvid_before, vd_before, st_before) = (texture_view_id, view_dimension, sample_type);
 
-    inspector::storage_combo_row(
+    inspector::row_doc(
         ui,
         "Texture View",
-        "texture view",
-        ctx.texture_views,
-        &mut texture_view_id,
+        field_doc!(
+            "The Texture View sampled by the shader at this binding.\n\n\
+            [WebGPU spec](https://www.w3.org/TR/webgpu/#dictdef-gputexturebindinglayout)"
+        ),
+        |ui| inspector::storage_combo(ui, "texture view", ctx.texture_views, &mut texture_view_id),
     );
-    inspector::combo_row(
+    inspector::combo_row_doc(
         ui,
         "Dimension",
+        field_doc!(
+            "How the bound texture is interpreted in the shader (1D, 2D, 2D array, cube, and so \
+            on). Must match the Texture View.\n\n\
+            [WebGPU spec](https://www.w3.org/TR/webgpu/#enumdef-gputextureviewdimension)"
+        ),
         "view_dimension",
         TEXTURE_VIEW_DIMENSIONS,
         &mut view_dimension,
     );
-    inspector::combo_row(
+    inspector::combo_row_doc(
         ui,
         "Sample Type",
+        field_doc!(
+            "The data type the shader reads texels as: filterable or non-filterable float, \
+            depth, or signed/unsigned integer. Must be compatible with the texture's format.\n\n\
+            [WebGPU spec](https://www.w3.org/TR/webgpu/#enumdef-gputexturesampletype)"
+        ),
         "sample_type",
         TEXTURE_SAMPLE_TYPES,
         &mut sample_type,
@@ -232,10 +268,26 @@ fn ui_sampler_fields(
 ) -> Option<BindGroupResource> {
     let (sid_before, sbt_before) = (sampler_id, sampler_binding_type);
 
-    inspector::storage_combo_row(ui, "Sampler", "sampler", ctx.samplers, &mut sampler_id);
-    inspector::combo_row(
+    inspector::row_doc(
+        ui,
+        "Sampler",
+        field_doc!(
+            "The Sampler bound here, used by the shader to read textures.\n\n\
+            [WebGPU spec](https://www.w3.org/TR/webgpu/#dictdef-gpusamplerbindinglayout)"
+        ),
+        |ui| inspector::storage_combo(ui, "sampler", ctx.samplers, &mut sampler_id),
+    );
+    inspector::combo_row_doc(
         ui,
         "Binding Type",
+        field_doc!(
+            "How the sampler may be used:\n\n\
+            - **Filtering**: linear filtering allowed.\n\
+            - **Non-Filtering**: nearest only.\n\
+            - **Comparison**: depth-comparison sampler (e.g. shadows).\n\n\
+            Must be compatible with the Sampler's settings.\n\n\
+            [WebGPU spec](https://www.w3.org/TR/webgpu/#enumdef-gpusamplerbindingtype)"
+        ),
         "sampler_binding_type",
         SAMPLER_BINDING_TYPES,
         &mut sampler_binding_type,
@@ -258,23 +310,43 @@ fn ui_storage_texture_fields(
 ) -> Option<BindGroupResource> {
     let before = (texture_view_id, access, view_dimension);
 
-    inspector::storage_combo_row(
+    inspector::row_doc(
         ui,
         "Texture View",
-        "storage_texture_view",
-        ctx.texture_views,
-        &mut texture_view_id,
+        field_doc!(
+            "The Texture View exposed to the shader as a storage texture, read and/or written \
+            directly without sampling.\n\n\
+            [WebGPU spec](https://www.w3.org/TR/webgpu/#dictdef-gpustoragetexturebindinglayout)"
+        ),
+        |ui| {
+            inspector::storage_combo(
+                ui,
+                "storage_texture_view",
+                ctx.texture_views,
+                &mut texture_view_id,
+            )
+        },
     );
-    inspector::combo_row(
+    inspector::combo_row_doc(
         ui,
         "Access",
+        field_doc!(
+            "How the shader may access the storage texture: **Write-Only**, **Read-Only**, \
+            **Read-Write**, or **Atomic**.\n\n\
+            [WebGPU spec](https://www.w3.org/TR/webgpu/#enumdef-gpustoragetextureaccess)"
+        ),
         "storage_texture_access",
         STORAGE_TEXTURE_ACCESS,
         &mut access,
     );
-    inspector::combo_row(
+    inspector::combo_row_doc(
         ui,
         "Dimension",
+        field_doc!(
+            "How the bound texture is interpreted in the shader (1D, 2D, 2D array, cube, and so \
+            on). Must match the Texture View.\n\n\
+            [WebGPU spec](https://www.w3.org/TR/webgpu/#enumdef-gputextureviewdimension)"
+        ),
         "storage_texture_view_dimension",
         TEXTURE_VIEW_DIMENSIONS,
         &mut view_dimension,

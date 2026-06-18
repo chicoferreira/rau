@@ -1,11 +1,9 @@
-use egui::RichText;
-
 use crate::{
     project::{RenderPassId, resource::render_pass::RenderPass, storage::Storage},
     ui::{
         components::{
             draggable_list::{ListEdits, draggable_list},
-            hint::hint,
+            field_docs::field_doc,
             inspector,
         },
         pane::StateSnapshot,
@@ -17,21 +15,38 @@ impl StateSnapshot<'_> {
         inspector::section(ui, "Main Viewport", |ui| {
             inspector::field_grid(ui, "presentation_inspector_grid", |ui| {
                 let mut id = self.project.presentation.main_viewport();
-                if inspector::storage_opt_combo_row(
+                if inspector::row_doc(
                     ui,
                     "Main Viewport",
-                    "presentation_main_viewport",
-                    &self.project.viewports,
-                    &mut id,
+                    field_doc!(
+                        "The Viewport presented when the project opens.\n\n\
+                        Optional. Leave as **None** to present nothing."
+                    ),
+                    |ui| {
+                        inspector::storage_opt_combo(
+                            ui,
+                            "presentation_main_viewport",
+                            &self.project.viewports,
+                            &mut id,
+                        )
+                    },
                 ) {
                     self.project.presentation.set_main_viewport(id);
                 }
             });
         });
 
-        inspector::section(ui, "Render Passes", |ui| {
-            presentation_render_pass_list_ui(ui, self);
-        });
+        inspector::section_doc(
+            ui,
+            "Render Passes",
+            field_doc!(
+                "The ordered list of **steps** run every frame to produce the presentation.\n\n\
+                Drag to reorder, right-click to remove."
+            ),
+            |ui| {
+                presentation_render_pass_list_ui(ui, self);
+            },
+        );
     }
 }
 
@@ -70,15 +85,6 @@ fn presentation_render_pass_list_ui(ui: &mut egui::Ui, state: &mut StateSnapshot
         "No render passes.",
         |id| edits.push_add_edit(id),
     );
-
-    if !render_passes.is_empty() {
-        ui.add_space(6.0);
-        ui.add(hint(|ui| {
-            ui.label("Right-click a");
-            ui.label(RichText::new("Render Pass").strong());
-            ui.label("to remove it, or drag to reorder.");
-        }));
-    }
 
     edits.apply(&mut render_passes);
 

@@ -10,6 +10,7 @@ use crate::{
     },
     ui::{
         components::{
+            field_docs::field_doc,
             flags_selector::flags_selector,
             hint,
             inspector::{self, AsWidgetText},
@@ -88,17 +89,42 @@ impl StateSnapshot<'_> {
 
         inspector::section(ui, "Settings", |ui| {
             inspector::field_grid(ui, "texture_inspector_grid", |ui| {
-                inspector::combo_row(
+                inspector::combo_row_doc(
                     ui,
                     "Format",
+                    field_doc!(
+                        "How each **texel** is laid out in memory.\n\n\
+                        The format fixes three things:\n\
+                        - **Channels**: which components are stored (`R`, `RG`, `RGBA`, depth, ...).\n\
+                        - **Bit depth & type** of each channel: e.g. `8` bits as `Unorm` \
+                        (0 to 1 normalized), `Uint`, or `32`-bit `Float`.\n\
+                        - **Color space**: `Srgb` formats are decoded to linear on read and \
+                        encoded back on write; non-`Srgb` formats are treated as raw linear values.\n\n\
+                        Example: `Rgba8UnormSrgb` is 4 channels at 8 bits each = **4 bytes per texel**, \
+                        sampled in sRGB.\n\n\
+                        [WebGPU spec](https://www.w3.org/TR/webgpu/#enumdef-gputextureformat)"
+                    ),
                     "texture_format",
                     TextureFormat::iter(),
                     &mut format,
                 );
 
-                inspector::row(ui, "Usage", |ui| {
-                    flags_selector(ui, "texture_usage", &mut usage, TEXTURE_USAGES);
-                });
+                inspector::row_doc(
+                    ui,
+                    "Usage",
+                    field_doc!(
+                        "Which operations this texture must support. The GPU validates every \
+                        use against these flags, so enable only what is needed.\n\n\
+                        - **Texture Binding**: sampled in a shader.\n\
+                        - **Storage Binding**: read/written as a storage texture.\n\
+                        - **Render Attachment**: drawn into by a render pass.\n\
+                        - **Copy Source / Destination**: used in copy operations.\n\n\
+                        [WebGPU spec](https://www.w3.org/TR/webgpu/#namespacedef-gputextureusage)"
+                    ),
+                    |ui| {
+                        flags_selector(ui, "texture_usage", &mut usage, TEXTURE_USAGES);
+                    },
+                );
             });
 
             ui_texture_source(
@@ -144,9 +170,21 @@ fn ui_texture_source(
     let mut selected_kind = current_kind;
 
     inspector::field_grid(ui, "texture_source_grid", |ui| {
-        if inspector::combo_row(
+        if inspector::combo_row_doc(
             ui,
             "Source",
+            field_doc!(
+                "Where this texture's **size** and initial **contents** come from.\n\n\
+                Only the **Image** source uploads pixel data; the other two just allocate an \
+                **empty** texture that a render pass, compute pass, or copy is expected to fill.\n\n\
+                - **Image**: decode an image file and upload it as the texture's contents. The \
+                size is taken from the image.\n\
+                - **Dimension**: allocate an empty texture that tracks the size of a Dimension \
+                resource, resizing automatically with it. Typically used as a \
+                render target (e.g. a viewport).\n\
+                - **Manual**: allocate an empty texture at a fixed width, height and layer count \
+                you enter below."
+            ),
             "texture_source_kind",
             SOURCE_KINDS,
             &mut selected_kind,
@@ -168,33 +206,73 @@ fn ui_texture_source(
     ui.indent("source_options", |ui| {
         inspector::field_grid(ui, "texture_source_options_grid", |ui| match source {
             TextureSource::Dimension(dimension_id) => {
-                inspector::storage_combo_row(
+                inspector::row_doc(
                     ui,
                     "Dimension",
-                    "texture_source_dimension",
-                    dimensions,
-                    dimension_id,
+                    field_doc!(
+                        "The Dimension resource whose size this texture mirrors. Resizing the \
+                        dimension (e.g. by resizing its viewport) recreates the texture to match."
+                    ),
+                    |ui| {
+                        inspector::storage_combo(
+                            ui,
+                            "texture_source_dimension",
+                            dimensions,
+                            dimension_id,
+                        );
+                    },
                 );
             }
             TextureSource::Manual { size } => {
-                inspector::u32_drag_row(ui, "Width", &mut size.width, 1_u32..=u32::MAX);
-                inspector::u32_drag_row(ui, "Height", &mut size.height, 1_u32..=u32::MAX);
-                inspector::u32_drag_row(
+                inspector::u32_drag_row_doc(
+                    ui,
+                    "Width",
+                    field_doc!(
+                        "Texture **width**, in texels.\n\n\
+                        [WebGPU spec](https://www.w3.org/TR/webgpu/#dom-gpuextent3ddict-width)"
+                    ),
+                    &mut size.width,
+                    1_u32..=u32::MAX,
+                );
+                inspector::u32_drag_row_doc(
+                    ui,
+                    "Height",
+                    field_doc!(
+                        "Texture **height**, in texels.\n\n\
+                        [WebGPU spec](https://www.w3.org/TR/webgpu/#dom-gpuextent3ddict-height)"
+                    ),
+                    &mut size.height,
+                    1_u32..=u32::MAX,
+                );
+                inspector::u32_drag_row_doc(
                     ui,
                     "Layers",
+                    field_doc!(
+                        "Number of **array layers** (or depth slices for 3D textures).\n\n\
+                        [WebGPU spec](https://www.w3.org/TR/webgpu/#dom-gpuextent3ddict-depthorarraylayers)"
+                    ),
                     &mut size.depth_or_array_layers,
                     1_u32..=u32::MAX,
                 );
             }
             TextureSource::Image(path) => {
                 if let Some(files) = files {
-                    inspector::file_combo_row(
+                    inspector::row_doc(
                         ui,
                         "Image",
-                        "texture_source_image",
-                        files,
-                        path,
-                        is_image_file,
+                        field_doc!(
+                            "The image file decoded into this texture's contents. \
+                            Supported formats include PNG, JPEG and HDR."
+                        ),
+                        |ui| {
+                            inspector::file_combo(
+                                ui,
+                                "texture_source_image",
+                                files,
+                                path,
+                                is_image_file,
+                            );
+                        },
                     );
                 } else {
                     inspector::row(ui, "Image", |ui| {

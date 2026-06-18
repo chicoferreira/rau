@@ -33,6 +33,7 @@ pub fn install(ctx: &egui::Context) {
     ctx.global_style_mut(|style| {
         style.visuals = visuals();
         style.interaction.selectable_labels = false;
+        style.url_in_tooltip = true;
         apply_spacing(style);
     });
 }

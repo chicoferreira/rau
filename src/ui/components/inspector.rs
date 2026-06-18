@@ -6,7 +6,10 @@ use egui::{
 
 use crate::{
     project::{ProjectResource, paths::FilePath, storage::Storage},
-    ui::components::resource_icons,
+    ui::components::{
+        field_docs::{self, FieldDoc},
+        resource_icons,
+    },
 };
 
 /// Trait for types that can be rendered as the label of a combo box entry.
@@ -42,6 +45,17 @@ pub fn centered_error(ui: &mut Ui, text: impl Into<RichText>) -> Response {
 }
 
 pub fn section<R>(ui: &mut Ui, title: &str, content: impl FnOnce(&mut Ui) -> R) -> R {
+    section_with(ui, title, |_| {}, content)
+}
+
+/// Like [`section`], but `header_extra` is rendered inline after the title (for
+/// example a help icon).
+pub fn section_with<R>(
+    ui: &mut Ui,
+    title: &str,
+    header_extra: impl FnOnce(&mut Ui),
+    content: impl FnOnce(&mut Ui) -> R,
+) -> R {
     egui::Frame::new()
         .inner_margin(egui::Margin {
             top: 8,
@@ -50,11 +64,16 @@ pub fn section<R>(ui: &mut Ui, title: &str, content: impl FnOnce(&mut Ui) -> R) 
             right: 0,
         })
         .show(ui, |ui| {
-            ui.add(egui::Label::new(
-                egui::RichText::new(title.to_uppercase())
-                    .size(12.0)
-                    .variation("wght", 600.0),
-            ));
+            ui.horizontal(|ui| {
+                ui.style_mut().spacing.item_spacing.x = 0.0;
+                ui.add(egui::Label::new(
+                    egui::RichText::new(title.to_uppercase())
+                        .size(12.0)
+                        .variation("wght", 600.0),
+                ));
+                ui.add_space(3.0);
+                header_extra(ui);
+            });
         });
 
     egui::Frame::new()
@@ -66,6 +85,41 @@ pub fn section<R>(ui: &mut Ui, title: &str, content: impl FnOnce(&mut Ui) -> R) 
         })
         .show(ui, |ui| ui.indent(title, content).inner)
         .inner
+}
+
+/// Like [`section`], but the heading carries a help icon with the section's
+/// documentation.
+pub fn section_doc<R>(
+    ui: &mut Ui,
+    title: &str,
+    doc: impl FieldDoc,
+    content: impl FnOnce(&mut Ui) -> R,
+) -> R {
+    section_with(
+        ui,
+        title,
+        |ui| {
+            field_docs::help_icon(ui, doc);
+        },
+        content,
+    )
+}
+
+/// Like [`section_doc`], but the tooltip is wider to fit code blocks.
+pub fn section_doc_wide<R>(
+    ui: &mut Ui,
+    title: &str,
+    doc: impl FieldDoc,
+    content: impl FnOnce(&mut Ui) -> R,
+) -> R {
+    section_with(
+        ui,
+        title,
+        |ui| {
+            field_docs::help_icon_wide(ui, doc);
+        },
+        content,
+    )
 }
 
 pub fn field_grid<R>(
@@ -88,6 +142,95 @@ pub fn row<R>(
     let result = add_control(ui);
     ui.end_row();
     result
+}
+
+/// Renders a field label followed by a help icon carrying its documentation.
+fn doc_label(ui: &mut Ui, label: impl Into<WidgetText>, doc: impl FieldDoc) {
+    ui.horizontal(|ui| {
+        ui.style_mut().spacing.item_spacing.x = 0.0;
+        ui.label(label);
+        ui.add_space(2.0);
+        field_docs::help_icon(ui, doc);
+    });
+}
+
+/// Like [`row`], but the label carries an inline documentation tooltip.
+pub fn row_doc<R>(
+    ui: &mut Ui,
+    label: impl Into<WidgetText>,
+    doc: impl FieldDoc,
+    add_control: impl FnOnce(&mut Ui) -> R,
+) -> R {
+    doc_label(ui, label, doc);
+    let result = add_control(ui);
+    ui.end_row();
+    result
+}
+
+/// A documented combo-box row: [`value_combo`] with a documented label.
+pub fn combo_row_doc<T>(
+    ui: &mut Ui,
+    label: impl Into<WidgetText>,
+    doc: impl FieldDoc,
+    id_salt: impl Hash,
+    options: impl IntoIterator<Item = T>,
+    current_value: &mut T,
+) -> bool
+where
+    T: AsWidgetText + Clone + PartialEq,
+{
+    row_doc(ui, label, doc, |ui| {
+        value_combo(ui, id_salt, options, current_value)
+    })
+}
+
+/// A documented `f32` drag row: a labelled [`egui::DragValue`] with a documented
+/// label.
+pub fn f32_drag_row_doc(
+    ui: &mut Ui,
+    label: impl Into<WidgetText>,
+    doc: impl FieldDoc,
+    value: &mut f32,
+    range: RangeInclusive<f32>,
+    speed: f64,
+    max_decimals: usize,
+) -> bool {
+    row_doc(ui, label, doc, |ui| {
+        egui::DragValue::new(value)
+            .speed(speed)
+            .max_decimals(max_decimals)
+            .range(range)
+            .ui(ui)
+            .changed()
+    })
+}
+
+/// A documented `u32` drag row: a labelled [`egui::DragValue`] with a documented
+/// label.
+pub fn u32_drag_row_doc(
+    ui: &mut Ui,
+    label: impl Into<WidgetText>,
+    doc: impl FieldDoc,
+    value: &mut u32,
+    range: RangeInclusive<u32>,
+) -> bool {
+    row_doc(ui, label, doc, |ui| {
+        egui::DragValue::new(value)
+            .speed(1)
+            .range(range)
+            .ui(ui)
+            .changed()
+    })
+}
+
+/// A documented checkbox row: a labelled checkbox with a documented label.
+pub fn checkbox_row_doc(
+    ui: &mut Ui,
+    label: impl Into<WidgetText>,
+    doc: impl FieldDoc,
+    value: &mut bool,
+) -> bool {
+    row_doc(ui, label, doc, |ui| ui.checkbox(value, ()).changed())
 }
 
 pub fn value_combo<T>(
@@ -122,21 +265,6 @@ where
             }
         });
     *current_value != before
-}
-
-pub fn combo_row<T>(
-    ui: &mut Ui,
-    label: impl Into<WidgetText>,
-    id_salt: impl Hash,
-    options: impl IntoIterator<Item = T>,
-    current_value: &mut T,
-) -> bool
-where
-    T: AsWidgetText + Clone + PartialEq,
-{
-    row(ui, label, |ui| {
-        value_combo(ui, id_salt, options, current_value)
-    })
 }
 
 const SELECT_PLACEHOLDER: &str = "Select...";
@@ -196,22 +324,6 @@ where
     *current_value != before
 }
 
-pub fn storage_opt_combo_row<R>(
-    ui: &mut Ui,
-    label: impl Into<WidgetText>,
-    id_salt: impl Hash,
-    storage: &Storage<R>,
-    current_value: &mut Option<R::Id>,
-) -> bool
-where
-    R: ProjectResource,
-    R::Id: slotmap::Key,
-{
-    row(ui, label, |ui| {
-        storage_opt_combo(ui, id_salt, storage, current_value)
-    })
-}
-
 pub fn storage_combo<R>(
     ui: &mut Ui,
     id_salt: impl Hash,
@@ -237,22 +349,6 @@ where
             }
         });
     *current_value != before
-}
-
-pub fn storage_combo_row<R>(
-    ui: &mut Ui,
-    label: impl Into<WidgetText>,
-    id_salt: impl Hash,
-    storage: &Storage<R>,
-    current_value: &mut Option<R::Id>,
-) -> bool
-where
-    R: ProjectResource,
-    R::Id: slotmap::Key,
-{
-    row(ui, label, |ui| {
-        storage_combo(ui, id_salt, storage, current_value)
-    })
 }
 
 pub fn storage_id_combo<R>(
@@ -308,9 +404,8 @@ pub fn add_from_storage_menu<R>(
     });
 }
 
-pub fn file_combo_row(
+pub fn file_combo(
     ui: &mut Ui,
-    label: impl Into<WidgetText>,
     id_salt: impl Hash,
     files: &[FilePath],
     current_value: &mut Option<FilePath>,
@@ -322,59 +417,20 @@ pub fn file_combo_row(
         resource_icons::icon_text(ui, resource_icons::file_icon(path), &path.to_string())
     };
 
-    row(ui, label, |ui| {
-        let selected_text = match current_value.as_ref() {
-            Some(path) if files.iter().any(|file| file == path) => file_text(ui, path),
-            Some(path) => resource_icons::warning_text(ui, &path.to_string()),
-            None => select_placeholder(ui),
-        };
+    let selected_text = match current_value.as_ref() {
+        Some(path) if files.iter().any(|file| file == path) => file_text(ui, path),
+        Some(path) => resource_icons::warning_text(ui, &path.to_string()),
+        None => select_placeholder(ui),
+    };
 
-        ComboBox::from_id_salt(id_salt)
-            .selected_text(selected_text)
-            .show_ui(ui, |ui| {
-                for file in files.iter().filter(|file| file_filter(file)) {
-                    let text = file_text(ui, file);
-                    ui.selectable_value(current_value, Some(file.clone()), text);
-                }
-            });
-    });
+    ComboBox::from_id_salt(id_salt)
+        .selected_text(selected_text)
+        .show_ui(ui, |ui| {
+            for file in files.iter().filter(|file| file_filter(file)) {
+                let text = file_text(ui, file);
+                ui.selectable_value(current_value, Some(file.clone()), text);
+            }
+        });
 
     *current_value != before
-}
-
-pub fn checkbox_row(ui: &mut Ui, label: impl Into<WidgetText>, value: &mut bool) -> bool {
-    row(ui, label, |ui| ui.checkbox(value, ()).changed())
-}
-
-pub fn f32_drag_row(
-    ui: &mut Ui,
-    label: impl Into<WidgetText>,
-    value: &mut f32,
-    range: RangeInclusive<f32>,
-    speed: f64,
-    max_decimals: usize,
-) -> bool {
-    row(ui, label, |ui| {
-        egui::DragValue::new(value)
-            .speed(speed)
-            .max_decimals(max_decimals)
-            .range(range)
-            .ui(ui)
-            .changed()
-    })
-}
-
-pub fn u32_drag_row(
-    ui: &mut Ui,
-    label: impl Into<WidgetText>,
-    value: &mut u32,
-    range: RangeInclusive<u32>,
-) -> bool {
-    row(ui, label, |ui| {
-        egui::DragValue::new(value)
-            .speed(1)
-            .range(range)
-            .ui(ui)
-            .changed()
-    })
 }
