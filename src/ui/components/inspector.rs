@@ -388,7 +388,7 @@ pub fn add_from_storage_menu<R>(
     R: ProjectResource,
     R::Id: slotmap::Key,
 {
-    ui.menu_button(button_label, |ui| {
+    ui.menu_button(resource_icons::add_text(ui, button_label), |ui| {
         let mut any = false;
         for (id, item) in storage.list_sorted() {
             any = true;

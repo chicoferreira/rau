@@ -19,6 +19,7 @@ use crate::{
             draggable_list::{ListEdits, draggable_list},
             field_docs::field_doc,
             inspector::{self, AsWidgetText},
+            resource_icons,
         },
         pane::StateSnapshot,
     },
@@ -133,7 +134,7 @@ fn model_vertex_buffer_spec_inspector_ui(
 
             ui.add_space(6.0);
 
-            ui.menu_button("Add attribute", |ui| {
+            ui.menu_button(resource_icons::add_text(ui, "Add attribute"), |ui| {
                 for kind in VertexBufferField::iter() {
                     if ui.button(kind.to_string()).clicked() {
                         ui.close();
@@ -398,7 +399,13 @@ fn materials_ui(
                 return;
             }
 
-            if ui.button("Derive Bind Groups from Materials…").clicked() {
+            if ui
+                .button(resource_icons::derive_text(
+                    ui,
+                    "Derive Bind Groups from Materials…",
+                ))
+                .clicked()
+            {
                 event_queue.add(StateEvent::OpenMaterialBindGroupsModal(model_id));
             }
 
@@ -483,7 +490,10 @@ fn material_textures_ui(
                                 let label =
                                     egui::Label::new(path.to_string()).sense(egui::Sense::click());
                                 ui.add(label).context_menu(|ui| {
-                                    if ui.button("Derive Texture").clicked() {
+                                    if ui
+                                        .button(resource_icons::derive_text(ui, "Derive Texture"))
+                                        .clicked()
+                                    {
                                         let event = StateEvent::DeriveTextureFromPath {
                                             path: path.clone(),
                                             texture_type,

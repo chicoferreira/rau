@@ -66,7 +66,7 @@ fn pending_resource_node(
     );
 }
 
-fn resource_icon(id: TreeNodeId) -> (&'static str, [u8; 3]) {
+fn resource_icon(id: TreeNodeId) -> resource_icons::Icon {
     use TreeNodeId as N;
     let kind = match id {
         N::ShaderFolder | N::Shader(_) => ResourceKind::Shader,
@@ -123,7 +123,7 @@ fn node_resource_id(id: TreeNodeId) -> Option<ResourceId> {
 }
 
 fn resource_folder(id: TreeNodeId, label: &str) -> TreeNode<'_, TreeNodeId> {
-    let color = resource_icon(id).1;
+    let color = resource_icon(id).color;
     TreeNode::folder(id, label).with_closer_icons(regular::FOLDER, regular::FOLDER_OPEN, color)
 }
 
@@ -132,8 +132,7 @@ fn resource_leaf<'a>(
     label: &'a str,
     error: Option<&AppError>,
 ) -> TreeNode<'a, TreeNodeId> {
-    let (icon, color) = resource_icon(id);
-    let node = TreeNode::new(id, label).with_icon(icon, color);
+    let node = TreeNode::new(id, label).with_icon(resource_icon(id));
     let node = match node_resource_id(id) {
         Some(id) => node.with_hover_text(egui::RichText::new(format!("{id:?}")).monospace()),
         None => node,

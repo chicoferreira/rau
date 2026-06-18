@@ -14,6 +14,7 @@ use crate::{
             flags_selector::flags_selector,
             hint,
             inspector::{self, AsWidgetText},
+            resource_icons,
         },
         pane::StateSnapshot,
     },
@@ -140,7 +141,10 @@ impl StateSnapshot<'_> {
                 ui.label("Create a Texture View to see the Texture contents.")
             }));
 
-            if ui.button("Derive Texture View").clicked() {
+            if ui
+                .button(resource_icons::derive_text(ui, "Derive Texture View"))
+                .clicked()
+            {
                 self.event_queue
                     .add(StateEvent::DeriveTextureView(texture_id));
             }

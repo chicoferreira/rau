@@ -189,9 +189,8 @@ fn render_dir_nodes(
             unreachable!("A file path can't be the root")
         };
 
-        let (icon, icon_color) = resource_icons::file_icon(file_path);
         let file_node = TreeNode::new(FileTreeNodeId::File(file_path.clone()), file_name)
-            .with_icon(icon, icon_color)
+            .with_icon(resource_icons::file_icon(file_path))
             .with_event("Open File", StateEvent::OpenFile(file_path.clone()));
 
         #[cfg(target_arch = "wasm32")]

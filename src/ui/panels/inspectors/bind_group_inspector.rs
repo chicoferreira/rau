@@ -18,6 +18,7 @@ use crate::{
             field_docs::field_doc,
             flags_selector::flags_selector,
             inspector::{self, AsWidgetText},
+            resource_icons,
         },
         pane::StateSnapshot,
     },
@@ -77,7 +78,7 @@ impl StateSnapshot<'_> {
 
                 ui.add_space(6.0);
 
-                ui.menu_button("Add Entry", |ui| {
+                ui.menu_button(resource_icons::add_text(ui, "Add Entry"), |ui| {
                     for kind in ResourceKind::iter() {
                         if ui.button(kind.to_string()).clicked() {
                             ui.close();

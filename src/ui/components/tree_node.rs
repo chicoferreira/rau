@@ -5,7 +5,7 @@ use egui_ltreeview::{NodeBuilder, NodeConfig, TreeViewBuilder};
 
 use crate::{
     ui::{
-        components::renameable_label::renameable_label,
+        components::{renameable_label::renameable_label, resource_icons::Icon},
         rename::{RenameState, RenameTarget},
     },
     utils::event_queue::EventQueue,
@@ -17,9 +17,7 @@ pub struct TreeNode<'a, T> {
     label: &'a str,
     /// Resolves the label color from the current theme at render time.
     label_color: Option<Box<dyn Fn(&egui::Visuals) -> egui::Color32 + 'a>>,
-    icon: Option<&'a str>,
-    icon_color: Option<egui::Color32>,
-    closer_icons: Option<(&'a str, &'a str)>,
+    glyph: Option<NodeGlyph<'a>>,
     /// Extra content rendered after the label (e.g. a child count).
     label_suffix: Option<Box<dyn FnMut(&mut egui::Ui) + 'a>>,
     /// Tooltip shown when hovering the node label.
@@ -50,6 +48,19 @@ pub fn pending_create_node<T>(
         .build_to(builder, event_queue, rename_state);
 }
 
+/// The glyph rendered before a node's label. A node has either a fixed leaf
+/// icon or an expandable folder's open/closed pair, never both.
+enum NodeGlyph<'a> {
+    /// A fixed icon shown before the label (leaf nodes).
+    Icon(Icon),
+    /// Open/closed glyphs for an expandable folder, sharing one color.
+    Closer {
+        closed: &'a str,
+        open: &'a str,
+        color: egui::Color32,
+    },
+}
+
 enum ContextMenuEntity<'a> {
     Separator,
     Action {
@@ -71,9 +82,7 @@ where
             tree_id,
             label,
             label_color: None,
-            icon: None,
-            icon_color: None,
-            closer_icons: None,
+            glyph: None,
             label_suffix: None,
             hover_text: None,
             events: Vec::new(),
@@ -87,9 +96,7 @@ where
             tree_id,
             label,
             label_color: None,
-            icon: None,
-            icon_color: None,
-            closer_icons: None,
+            glyph: None,
             label_suffix: None,
             hover_text: None,
             events: Vec::new(),
@@ -98,15 +105,13 @@ where
         }
     }
 
-    pub fn with_icon(mut self, icon: &'a str, color: [u8; 3]) -> Self {
-        self.icon = Some(icon);
-        self.icon_color = Some(egui::Color32::from_rgb(color[0], color[1], color[2]));
+    pub fn with_icon(mut self, icon: Icon) -> Self {
+        self.glyph = Some(NodeGlyph::Icon(icon));
         self
     }
 
-    pub fn with_closer_icons(mut self, closed: &'a str, open: &'a str, color: [u8; 3]) -> Self {
-        self.closer_icons = Some((closed, open));
-        self.icon_color = Some(egui::Color32::from_rgb(color[0], color[1], color[2]));
+    pub fn with_closer_icons(mut self, closed: &'a str, open: &'a str, color: egui::Color32) -> Self {
+        self.glyph = Some(NodeGlyph::Closer { closed, open, color });
         self
     }
 
@@ -182,39 +187,25 @@ where
             NodeBuilder::leaf(self.tree_id)
         };
 
-        let node = match self.icon {
-            Some(icon) => {
-                let icon_color = self.icon_color;
-                node.icon(move |ui| {
-                    let mut text = egui::RichText::new(icon);
-                    if let Some(color) = icon_color {
-                        text = text.color(color);
-                    }
-                    ui.add(Label::new(text));
-                })
-            }
-            None => node,
-        };
-
-        let node = match self.closer_icons {
-            Some((closed, open)) => {
-                let icon_color = self.icon_color;
-                node.closer(move |ui, state| {
-                    let glyph = if state.is_open { open } else { closed };
-                    let mut text = egui::RichText::new(glyph);
-                    if let Some(color) = icon_color {
-                        text = text.color(color);
-                    }
-                    ui.add(Label::new(text));
-                })
-            }
+        let has_glyph = self.glyph.is_some();
+        let node = match self.glyph {
+            Some(NodeGlyph::Icon(icon)) => node.icon(move |ui| {
+                ui.add(Label::new(egui::RichText::new(icon.glyph).color(icon.color)));
+            }),
+            Some(NodeGlyph::Closer {
+                closed,
+                open,
+                color,
+            }) => node.closer(move |ui, state| {
+                let glyph = if state.is_open { open } else { closed };
+                ui.add(Label::new(egui::RichText::new(glyph).color(color)));
+            }),
             None => node,
         };
 
         let mut label_suffix = self.label_suffix;
         let hover_text = self.hover_text;
         let mut node = node.label(self.label).label_ui(move |ui| {
-            let has_glyph = self.icon.is_some() || self.closer_icons.is_some();
             if has_glyph {
                 ui.add_space(2.0);
             }

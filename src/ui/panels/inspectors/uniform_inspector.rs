@@ -22,6 +22,7 @@ use crate::{
             field_docs::field_doc,
             inspector::{self, AsWidgetText},
             renameable_label::renameable_label,
+            resource_icons,
         },
         pane::StateSnapshot,
         rename::{RenameState, RenameTarget},
@@ -159,7 +160,7 @@ impl StateSnapshot<'_> {
 
                 ui.add_space(6.0);
 
-                ui.menu_button("Add Uniform", |ui| {
+                ui.menu_button(resource_icons::add_text(ui, "Add Uniform"), |ui| {
                     for kind in UniformFieldSourceKind::iter() {
                         if ui.button(kind.to_string()).clicked() {
                             edits

@@ -419,7 +419,7 @@ fn bind_groups_ui(
             );
 
             ui.add_space(3.0);
-            if ui.button("Add Bind Group").clicked() {
+            if ui.button(resource_icons::add_text(ui, "Add Bind Group")).clicked() {
                 edits.push_add_edit(BindGroupTarget::default());
             }
 
