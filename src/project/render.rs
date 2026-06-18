@@ -1,9 +1,11 @@
 use std::task::Poll;
 
+use slotmap::SecondaryMap;
+
 use crate::{
     error::{AppError, AppResult, RequiredFieldExt},
     project::{
-        ProjectResource, ProjectRevisionSnapshot, RuntimeProject,
+        ProjectResource, ProjectRevisionSnapshot, RenderPassId, RuntimeProject,
         resource::{
             bindgroup::BindGroup,
             model::Model,
@@ -25,6 +27,7 @@ pub struct RenderContext<'a> {
     pub runtime_bind_groups: &'a RuntimeStorage<BindGroup>,
     pub runtime_texture_views: &'a RuntimeStorage<TextureView>,
     pub runtime_render_pipelines: &'a RuntimeStorage<RenderPipeline>,
+    pub render_pass_errors: &'a mut SecondaryMap<RenderPassId, AppError>,
 }
 
 #[derive(Default)]
@@ -93,23 +96,37 @@ impl RuntimeProject {
 }
 
 impl Presentation {
-    /// Encodes every render pass into `encoder`.
+    /// Encodes every render pass into `encoder`, recording any per-pass errors in
+    /// [`RenderContext::render_pass_errors`].
     ///
-    /// Returns `Ok(false)` as soon as a pass bails out because one of its runtime
-    /// resources is still pending.
+    /// Returns `Ok(false)` as soon as a pass bails out, either because one of its runtime resources
+    /// is still pending or because encoding it failed (the error is then recorded on that pass).
+    /// `Err` is only returned for presentation-level problems, such as a render pass id that no
+    /// longer resolves to a resource.
     ///
-    /// The caller should drop the encoder without finishing it in that case,
+    /// The caller should drop the encoder without finishing it whenever this returns `Ok(false)`,
     /// so the half-encoded passes never reach the GPU and the viewport keeps the previous frame
     /// instead of flickering the clear color.
     pub fn render(
         &self,
         encoder: &mut wgpu::CommandEncoder,
-        render_ctx: &RenderContext<'_>,
+        render_ctx: &mut RenderContext<'_>,
     ) -> AppResult<bool> {
+        render_ctx.render_pass_errors.clear();
+
         for render_pass_id in self.render_passes() {
             let render_pass = render_ctx.render_passes.get(*render_pass_id)?;
-            if !render_pass.submit(encoder, &render_ctx)? {
-                return Ok(false);
+
+            match render_pass.submit(encoder, render_ctx) {
+                Ok(true) => {}                 // fully encoded
+                Ok(false) => return Ok(false), // a runtime resource is still pending
+                Err(error) => {
+                    // An encoding error (a missing target, an errored model, ...) is attributed to
+                    // the pass itself rather than bubbled up to the presentation, so it is easier to
+                    // trace. We then bail so the half-encoded frame is dropped by the caller.
+                    render_ctx.render_pass_errors.insert(*render_pass_id, error);
+                    return Ok(false);
+                }
             }
         }
 

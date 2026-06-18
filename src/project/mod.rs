@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use slotmap::new_key_type;
+use slotmap::{SecondaryMap, new_key_type};
 
 use crate::{
     error::{AppError, AppResult},
@@ -79,6 +79,9 @@ pub struct RuntimeProject {
     pub models: RuntimeStorage<Model>,
     pub render_pipelines: RuntimeStorage<RenderPipeline>,
     pub compute_passes: RuntimeStorage<ComputePass>,
+    /// Errors raised while encoding each render pass in [`Presentation::render`].
+    /// Recomputed every frame, so there is no sync/runtime storage to keep in step.
+    pub render_pass_errors: SecondaryMap<RenderPassId, AppError>,
     pub presentation_render: PresentationRender,
 }
 
@@ -190,7 +193,9 @@ impl RuntimeProject {
             ResourceId::Camera(id) => self.cameras.unregister(id),
             ResourceId::Model(id) => self.models.unregister(id),
             ResourceId::RenderPipeline(id) => self.render_pipelines.unregister(id),
-            ResourceId::RenderPass(_) => {}
+            ResourceId::RenderPass(id) => {
+                self.render_pass_errors.remove(id);
+            }
             ResourceId::Presentation(_) => {}
             ResourceId::ComputePass(id) => self.compute_passes.unregister(id),
             ResourceId::Viewport(_) => {}
@@ -222,12 +227,17 @@ impl RuntimeProject {
             .chain(self.dimensions.get_errors())
             .chain(self.cameras.get_errors())
             .chain(self.models.get_errors())
-            .chain(self.render_pipelines.get_errors())
             .chain(self.compute_passes.get_errors())
+            .chain(self.render_pipelines.get_errors())
+            .chain(
+                self.render_pass_errors
+                    .iter()
+                    .map(|(id, error)| (id.into(), error)),
+            )
             .chain(
                 self.presentation_render
                     .error()
-                    .map(|error| (ResourceId::Presentation(PresentationId), error)),
+                    .map(|error| (PresentationId.into(), error)),
             )
     }
 
@@ -243,9 +253,10 @@ impl RuntimeProject {
             ResourceId::Camera(id) => self.cameras.get_error(id),
             ResourceId::Model(id) => self.models.get_error(id),
             ResourceId::RenderPipeline(id) => self.render_pipelines.get_error(id),
+            ResourceId::RenderPass(id) => self.render_pass_errors.get(id),
             ResourceId::ComputePass(id) => self.compute_passes.get_error(id),
             ResourceId::Presentation(_) => self.presentation_render.error(),
-            ResourceId::Viewport(_) | ResourceId::RenderPass(_) => None,
+            ResourceId::Viewport(_) => None,
         }
     }
 }

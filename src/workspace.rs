@@ -219,7 +219,7 @@ impl Workspace {
             return;
         }
 
-        let render_ctx = render::RenderContext {
+        let mut render_ctx = render::RenderContext {
             models: &self.project.models,
             render_pipelines: &self.project.render_pipelines,
             render_passes: &self.project.render_passes,
@@ -227,6 +227,7 @@ impl Workspace {
             runtime_bind_groups: &self.runtime_project.bind_groups,
             runtime_texture_views: &self.runtime_project.texture_views,
             runtime_render_pipelines: &self.runtime_project.render_pipelines,
+            render_pass_errors: &mut self.runtime_project.render_pass_errors,
         };
 
         // The viewport render uses a separate, droppable encoder: if a render pass bails out
@@ -237,7 +238,7 @@ impl Workspace {
         let mut viewport_encoder = create_command_encoder(&ctx.device, "Viewport Render Encoder");
 
         let presentation = &self.project.presentation;
-        match presentation.render(&mut viewport_encoder, &render_ctx) {
+        match presentation.render(&mut viewport_encoder, &mut render_ctx) {
             Ok(true) => {
                 ctx.queue.submit([viewport_encoder.finish()]);
             }
