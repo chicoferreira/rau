@@ -1,12 +1,11 @@
 use crate::{
     file::file_system::ProjectFileSystem,
     ui::{components::inspector, pane::StateSnapshot, panels::error_panel::ErrorPanel},
+    utils::fps::FrameTimeTracker,
 };
 
 pub fn ui(state: &mut StateSnapshot, ui: &mut egui::Ui, error_panel: &mut ErrorPanel) {
     let is_rebuilding = state.runtime_project.is_rebuilding();
-    let backend = state.backend;
-    let file_system = &state.file_storage.file_system;
 
     ui.horizontal(|ui| {
         error_panel.status_indicator(ui);
@@ -16,11 +15,55 @@ pub fn ui(state: &mut StateSnapshot, ui: &mut egui::Ui, error_panel: &mut ErrorP
         }
 
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            renderer_status_ui(ui, backend);
+            renderer_status_ui(ui, state.backend);
             ui.separator();
-            storage_status_ui(ui, file_system);
+            storage_status_ui(ui, &state.file_storage.file_system);
+            ui.separator();
+            vsync_status_ui(ui, state);
+            ui.separator();
+            frame_time_ui(ui, state.frame_time);
         });
     });
+}
+
+fn frame_time_ui(ui: &mut egui::Ui, frame_time: &FrameTimeTracker) {
+    let frame_time_ms = frame_time.displayed_ms();
+    let fps = if frame_time_ms > 0.0 {
+        1000.0 / frame_time_ms
+    } else {
+        0.0
+    };
+
+    ui.colored_label(
+        ui.visuals().weak_text_color(),
+        format!("{frame_time_ms:.1}ms ({fps:.1} FPS)"),
+    );
+}
+
+fn vsync_status_ui(ui: &mut egui::Ui, state: &mut StateSnapshot) {
+    let vsync_on = matches!(state.present_mode, wgpu::PresentMode::AutoVsync);
+
+    let title = if vsync_on { "VSync" } else { "Immediate" };
+
+    let button =
+        egui::Button::new(egui::RichText::new(title).color(ui.visuals().weak_text_color()))
+            .frame(false);
+    let response = ui.add(button).on_hover_cursor(egui::CursorIcon::PointingHand).on_hover_ui(|ui| {
+        ui.strong(title);
+        ui.label(match vsync_on {
+            true => "Renders frames at the monitor's refresh rate to prevent tearing.",
+            false => "Renders frames as fast as possible for the lowest latency, but may cause screen tearing.",
+        });
+        ui.label(egui::RichText::new("Click to toggle VSync.").weak());
+    });
+
+    if response.clicked() {
+        let next = match vsync_on {
+            true => wgpu::PresentMode::AutoNoVsync,
+            false => wgpu::PresentMode::AutoVsync,
+        };
+        state.app_event_queue.set_present_mode(next);
+    }
 }
 
 fn storage_status_ui(ui: &mut egui::Ui, project_file_system: &ProjectFileSystem) {
@@ -59,7 +102,7 @@ fn renderer_status_ui(ui: &mut egui::Ui, backend: wgpu::Backend) {
         wgpu::Backend::BrowserWebGpu => "WebGPU",
     };
 
-    let text = format!("Backend: {}", backend_str);
+    let text = format!("{} Backend", backend_str);
 
     if backend == wgpu::Backend::Gl {
         ui.colored_label(ui.visuals().warn_fg_color, text)

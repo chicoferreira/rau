@@ -6,6 +6,7 @@ pub mod derive;
 pub mod derive_modal_material;
 pub mod dir_node;
 pub mod event_queue;
+pub mod fps;
 pub mod github;
 pub mod key;
 pub mod obj;

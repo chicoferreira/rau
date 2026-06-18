@@ -10,7 +10,7 @@ use crate::{
     main_menu::MainMenu,
     ui::{self},
     utils::{
-        event_queue::EventQueue, wgpu_error_scope::WgpuErrorScope,
+        event_queue::EventQueue, fps::FrameTimeTracker, wgpu_error_scope::WgpuErrorScope,
         wgpu_utils::create_command_encoder, winit_runner::WindowApp,
     },
     workspace::{AppContext, Workspace},
@@ -31,10 +31,12 @@ pub struct App {
     state: State,
     event_queue: EventQueue<AppEvent>,
     quit_requested: bool,
+    frame_time: FrameTimeTracker,
 }
 
 pub enum AppEvent {
     SetState(State),
+    SetPresentMode(wgpu::PresentMode),
     #[cfg(not(target_arch = "wasm32"))]
     Quit,
 }
@@ -130,7 +132,7 @@ impl WindowApp<StartupAction> for App {
             format: surface_format,
             width: size.width.max(1),
             height: size.height.max(1),
-            present_mode: surface_caps.present_modes[0],
+            present_mode: wgpu::PresentMode::AutoVsync,
             alpha_mode: surface_caps.alpha_modes[0],
             view_formats: surface_view_formats,
             desired_maximum_frame_latency: 2,
@@ -159,6 +161,7 @@ impl WindowApp<StartupAction> for App {
             state,
             event_queue: EventQueue::default(),
             quit_requested: false,
+            frame_time: FrameTimeTracker::new(),
         })
     }
 
@@ -199,6 +202,13 @@ impl App {
                 AppEvent::SetState(state) => {
                     self.state = state;
                 }
+                AppEvent::SetPresentMode(present_mode) => {
+                    log::info!("Switching present mode to {present_mode:?}");
+                    self.config.present_mode = present_mode;
+                    if self.is_surface_configured {
+                        self.surface.configure(&self.device, &self.config);
+                    }
+                }
                 #[cfg(not(target_arch = "wasm32"))]
                 AppEvent::Quit => {
                     self.quit_requested = true;
@@ -220,6 +230,11 @@ impl App {
     }
 
     pub fn render(&mut self, dt: instant::Duration) -> anyhow::Result<()> {
+        // Drain queued app events (e.g. present-mode changes that reconfigure the surface) before
+        // acquiring the surface texture. wgpu forbids `Surface::configure` while a `SurfaceOutput`
+        // from `get_current_texture` is still alive.
+        self.handle_events();
+
         if !self.is_surface_configured {
             return Ok(());
         }
@@ -267,14 +282,20 @@ impl App {
             pixels_per_point: self.window.scale_factor() as f32,
         };
 
-        self.handle_events();
+        self.frame_time.update(dt);
 
         let state = &mut self.state;
         let app_event_queue = &mut self.event_queue;
         let app_file_system = &self.app_file_system;
         let frame = self.egui_renderer.handle(&self.window, |ui| match state {
             State::MainMenu(main_menu) => main_menu.render_ui(ui, app_file_system),
-            State::Workspace(workspace) => workspace.render_ui(ui, self.backend, app_event_queue),
+            State::Workspace(workspace) => workspace.render_ui(
+                ui,
+                self.backend,
+                self.config.present_mode,
+                &self.frame_time,
+                app_event_queue,
+            ),
         });
 
         let submit_scope = match &mut self.state {

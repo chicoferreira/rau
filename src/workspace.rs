@@ -40,6 +40,7 @@ use crate::{
         async_job::AsyncJob,
         derive::{derive_texture_from_material_path, derive_texture_view},
         event_queue::EventQueue,
+        fps::FrameTimeTracker,
         key::KeyboardState,
         texture_capture::TextureCaptures,
         wgpu_utils::create_command_encoder,
@@ -259,6 +260,8 @@ impl Workspace {
         &mut self,
         ui: &mut egui::Ui,
         backend: wgpu::Backend,
+        present_mode: wgpu::PresentMode,
+        frame_time: &FrameTimeTracker,
         app_event_queue: &mut EventQueue<AppEvent>,
     ) {
         self.toasts.show(ui.ctx());
@@ -271,6 +274,8 @@ impl Workspace {
             rename_state: &mut self.rename_state,
             file_storage: &mut self.file_storage,
             backend,
+            present_mode,
+            frame_time,
         };
 
         snapshot.ui(

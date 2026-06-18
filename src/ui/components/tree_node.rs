@@ -110,8 +110,17 @@ where
         self
     }
 
-    pub fn with_closer_icons(mut self, closed: &'a str, open: &'a str, color: egui::Color32) -> Self {
-        self.glyph = Some(NodeGlyph::Closer { closed, open, color });
+    pub fn with_closer_icons(
+        mut self,
+        closed: &'a str,
+        open: &'a str,
+        color: egui::Color32,
+    ) -> Self {
+        self.glyph = Some(NodeGlyph::Closer {
+            closed,
+            open,
+            color,
+        });
         self
     }
 
@@ -190,7 +199,9 @@ where
         let has_glyph = self.glyph.is_some();
         let node = match self.glyph {
             Some(NodeGlyph::Icon(icon)) => node.icon(move |ui| {
-                ui.add(Label::new(egui::RichText::new(icon.glyph).color(icon.color)));
+                ui.add(Label::new(
+                    egui::RichText::new(icon.glyph).color(icon.color),
+                ));
             }),
             Some(NodeGlyph::Closer {
                 closed,

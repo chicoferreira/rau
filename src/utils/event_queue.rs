@@ -58,6 +58,10 @@ impl EventQueue<AppEvent> {
         self.add(AppEvent::SetState(State::MainMenu(MainMenu::default())));
     }
 
+    pub fn set_present_mode(&mut self, present_mode: wgpu::PresentMode) {
+        self.add(AppEvent::SetPresentMode(present_mode));
+    }
+
     #[cfg(not(target_arch = "wasm32"))]
     pub fn quit(&mut self) {
         self.add(AppEvent::Quit);

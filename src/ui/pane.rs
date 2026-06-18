@@ -10,7 +10,7 @@ use crate::{
         },
         rename::RenameState,
     },
-    utils::event_queue::EventQueue,
+    utils::{event_queue::EventQueue, fps::FrameTimeTracker},
     workspace::StateEvent,
 };
 
@@ -22,6 +22,8 @@ pub struct StateSnapshot<'a> {
     pub rename_state: &'a mut Option<RenameState>,
     pub file_storage: &'a mut FileStorage,
     pub backend: wgpu::Backend,
+    pub present_mode: wgpu::PresentMode,
+    pub frame_time: &'a FrameTimeTracker,
 }
 
 impl StateSnapshot<'_> {
