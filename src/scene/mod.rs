@@ -27,6 +27,7 @@ use crate::{
         derive::default_texture_format,
         derive_modal_material::{MaterialBindGroupsConfig, SamplerSetting},
         texture_format::TextureFormat,
+        wgpu_utils::PrimitiveState,
     },
 };
 
@@ -406,14 +407,12 @@ pub async fn create_scene(
     );
     let viewport_id = project.viewports.register(viewport);
 
-    let primitive_state = wgpu::PrimitiveState {
+    let primitive_state = PrimitiveState {
         topology: wgpu::PrimitiveTopology::TriangleList,
         strip_index_format: None,
         front_face: wgpu::FrontFace::Ccw,
         cull_mode: Some(wgpu::Face::Back),
-        unclipped_depth: false,
         polygon_mode: wgpu::PolygonMode::Fill,
-        conservative: false,
     };
 
     let mut main_render_pass = RenderPass::new(

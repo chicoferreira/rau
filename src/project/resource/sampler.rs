@@ -8,13 +8,13 @@ use crate::{
         Creatable, ProjectResource, SamplerId,
         sync::{Revision, SyncOutcome, SyncResource, SyncTracker},
     },
-    utils::{async_job::AsyncJob, wgpu_error_scope::WgpuErrorScope},
+    utils::{async_job::AsyncJob, wgpu_error_scope::WgpuErrorScope, wgpu_utils::AddressMode},
 };
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SamplerSpec {
-    pub address_mode: wgpu::AddressMode,
+    pub address_mode: AddressMode,
     pub mag_filter: wgpu::FilterMode,
     pub min_filter: wgpu::FilterMode,
     pub mipmap_filter: wgpu::MipmapFilterMode,
@@ -82,9 +82,9 @@ impl Sampler {
     fn create_sampler(device: &wgpu::Device, label: &str, spec: &SamplerSpec) -> wgpu::Sampler {
         let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
             label: Some(label),
-            address_mode_u: spec.address_mode,
-            address_mode_v: spec.address_mode,
-            address_mode_w: spec.address_mode,
+            address_mode_u: spec.address_mode.to_wgpu(),
+            address_mode_v: spec.address_mode.to_wgpu(),
+            address_mode_w: spec.address_mode.to_wgpu(),
             mag_filter: spec.mag_filter,
             min_filter: spec.min_filter,
             mipmap_filter: spec.mipmap_filter,

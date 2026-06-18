@@ -320,7 +320,7 @@
     {
       "value": {
         "label": "cube-diffuse",
-        "format": "rgba8_unorm_srgb",
+        "format": "rgba8UnormSrgb",
         "usage": "COPY_DST | TEXTURE_BINDING",
         "source": { "type": "Image", "value": "cube-diffuse.jpg" }
       },
@@ -329,7 +329,7 @@
     {
       "value": {
         "label": "cube-normal",
-        "format": "rgba8_unorm",
+        "format": "rgba8Unorm",
         "usage": "COPY_DST | TEXTURE_BINDING",
         "source": { "type": "Image", "value": "cube-normal.png" }
       },
@@ -338,7 +338,7 @@
     {
       "value": {
         "label": "Hdr Texture",
-        "format": "rgba16_float",
+        "format": "rgba16Float",
         "usage": "TEXTURE_BINDING | RENDER_ATTACHMENT",
         "source": { "type": "Dimension", "value": { "idx": 1, "version": 1 } }
       },
@@ -347,7 +347,7 @@
     {
       "value": {
         "label": "pure-sky.hdr",
-        "format": "rgba32_float",
+        "format": "rgba32Float",
         "usage": "COPY_DST | TEXTURE_BINDING",
         "source": { "type": "Image", "value": "pure-sky.hdr" }
       },
@@ -356,7 +356,7 @@
     {
       "value": {
         "label": "Sky Texture",
-        "format": "rgba32_float",
+        "format": "rgba32Float",
         "usage": "COPY_DST | TEXTURE_BINDING | STORAGE_BINDING",
         "source": {
           "type": "Manual",
@@ -370,7 +370,7 @@
     {
       "value": {
         "label": "depth texture",
-        "format": "depth32_float",
+        "format": "depth32Float",
         "usage": "TEXTURE_BINDING | RENDER_ATTACHMENT",
         "source": { "type": "Dimension", "value": { "idx": 1, "version": 1 } }
       },
@@ -379,7 +379,7 @@
     {
       "value": {
         "label": "Viewport Texture",
-        "format": "rgba8_unorm_srgb",
+        "format": "rgba8UnormSrgb",
         "usage": "TEXTURE_BINDING | RENDER_ATTACHMENT",
         "source": { "type": "Dimension", "value": { "idx": 1, "version": 1 } }
       },
@@ -476,7 +476,7 @@
       "value": {
         "label": "Image Texture Sampler",
         "spec": {
-          "addressMode": "clamp-to-edge",
+          "addressMode": "clampToEdge",
           "magFilter": "linear",
           "minFilter": "linear",
           "mipmapFilter": "linear",
@@ -491,7 +491,7 @@
       "value": {
         "label": "Sky Sampler",
         "spec": {
-          "addressMode": "clamp-to-edge",
+          "addressMode": "clampToEdge",
           "magFilter": "nearest",
           "minFilter": "nearest",
           "mipmapFilter": "nearest",
@@ -566,9 +566,7 @@
           "stripIndexFormat": null,
           "frontFace": "ccw",
           "cullMode": "back",
-          "unclippedDepth": false,
-          "polygonMode": "fill",
-          "conservative": false
+          "polygonMode": "fill"
         },
         "vertexShader": { "idx": 3, "version": 1 },
         "fragmentShader": { "idx": 3, "version": 1 },
@@ -582,8 +580,8 @@
           { "static": { "idx": 1, "version": 1 } },
           { "static": { "idx": 2, "version": 1 } }
         ],
-        "colorFormat": "rgba16_float",
-        "depthFormat": "depth32_float"
+        "colorFormat": "rgba16Float",
+        "depthFormat": "depth32Float"
       },
       "version": 1
     },
@@ -595,9 +593,7 @@
           "stripIndexFormat": null,
           "frontFace": "ccw",
           "cullMode": "back",
-          "unclippedDepth": false,
-          "polygonMode": "fill",
-          "conservative": false
+          "polygonMode": "fill"
         },
         "vertexShader": { "idx": 4, "version": 1 },
         "fragmentShader": { "idx": 4, "version": 1 },
@@ -613,8 +609,8 @@
           { "static": { "idx": 2, "version": 1 } },
           { "static": { "idx": 7, "version": 1 } }
         ],
-        "colorFormat": "rgba16_float",
-        "depthFormat": "depth32_float"
+        "colorFormat": "rgba16Float",
+        "depthFormat": "depth32Float"
       },
       "version": 1
     },
@@ -626,9 +622,7 @@
           "stripIndexFormat": null,
           "frontFace": "ccw",
           "cullMode": "back",
-          "unclippedDepth": false,
-          "polygonMode": "fill",
-          "conservative": false
+          "polygonMode": "fill"
         },
         "vertexShader": { "idx": 5, "version": 1 },
         "fragmentShader": { "idx": 5, "version": 1 },
@@ -641,8 +635,8 @@
           { "static": { "idx": 1, "version": 1 } },
           { "static": { "idx": 7, "version": 1 } }
         ],
-        "colorFormat": "rgba16_float",
-        "depthFormat": "depth32_float"
+        "colorFormat": "rgba16Float",
+        "depthFormat": "depth32Float"
       },
       "version": 1
     },
@@ -654,9 +648,7 @@
           "stripIndexFormat": null,
           "frontFace": "ccw",
           "cullMode": "back",
-          "unclippedDepth": false,
-          "polygonMode": "fill",
-          "conservative": false
+          "polygonMode": "fill"
         },
         "vertexShader": { "idx": 2, "version": 1 },
         "fragmentShader": { "idx": 2, "version": 1 },
@@ -666,7 +658,7 @@
           "instances": { "start": 0, "end": 1 }
         },
         "bindGroups": [{ "static": { "idx": 4, "version": 1 } }],
-        "colorFormat": "rgba8_unorm_srgb",
+        "colorFormat": "rgba8UnormSrgb",
         "depthFormat": null
       },
       "version": 1

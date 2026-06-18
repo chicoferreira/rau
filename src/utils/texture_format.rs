@@ -8,7 +8,7 @@ use strum::EnumIter;
 /// passing the full wgpu format list around) lets us match on it exhaustively
 /// and keeps unsupported formats out of the project.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, EnumIter)]
-#[serde(rename_all = "snake_case")]
+#[serde(rename_all = "camelCase")]
 pub enum TextureFormat {
     Rgba8UnormSrgb,
     Rgba8Unorm,

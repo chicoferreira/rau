@@ -14,6 +14,7 @@ use crate::{
     utils::{
         async_job::AsyncJob, texture_format::TextureFormat,
         validate_bind_group_layouts::validate_bind_group_layouts, wgpu_error_scope::WgpuErrorScope,
+        wgpu_utils::PrimitiveState,
     },
 };
 
@@ -21,7 +22,7 @@ use crate::{
 #[serde(rename_all = "camelCase")]
 pub struct RenderPipeline {
     label: String,
-    primitive_state: wgpu::PrimitiveState,
+    primitive_state: PrimitiveState,
     vertex_shader: Option<ShaderId>,
     fragment_shader: Option<ShaderId>,
     draw_strategy: RenderDrawStrategy,
@@ -66,7 +67,7 @@ pub enum BindGroupTarget {
 impl RenderPipeline {
     pub fn new(
         label: impl Into<String>,
-        primitive_state: wgpu::PrimitiveState,
+        primitive_state: PrimitiveState,
         vertex_shader: Option<ShaderId>,
         fragment_shader: Option<ShaderId>,
         draw_strategy: RenderDrawStrategy,
@@ -90,7 +91,7 @@ impl RenderPipeline {
 
     resource_getters! {
         pub fn bind_groups() -> &[BindGroupTarget];
-        pub fn primitive_state() -> wgpu::PrimitiveState;
+        pub fn primitive_state() -> PrimitiveState;
         pub fn vertex_shader() -> Option<ShaderId>;
         pub fn fragment_shader() -> Option<ShaderId>;
         pub fn draw_strategy() -> &RenderDrawStrategy;
@@ -101,7 +102,7 @@ impl RenderPipeline {
     resource_setters! {
         increases: [runtime_revision, project_revision];
         pub fn set_label(label: String);
-        pub fn set_primitive_state(primitive_state: wgpu::PrimitiveState);
+        pub fn set_primitive_state(primitive_state: PrimitiveState);
         pub fn set_vertex_shader(vertex_shader: Option<ShaderId>);
         pub fn set_fragment_shader(fragment_shader: Option<ShaderId>);
         pub fn set_draw_strategy(draw_strategy: RenderDrawStrategy);
@@ -329,7 +330,7 @@ impl SyncResource for RenderPipeline {
                 })],
                 compilation_options: Default::default(),
             }),
-            primitive: self.primitive_state,
+            primitive: self.primitive_state.to_wgpu(),
             depth_stencil: self.depth_format.map(|format| wgpu::DepthStencilState {
                 format: format.to_wgpu(),
                 depth_write_enabled: Some(true),

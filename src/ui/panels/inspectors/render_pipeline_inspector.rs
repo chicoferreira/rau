@@ -358,24 +358,6 @@ fn primitive_state_ui(
                     POLYGON_MODES,
                     &mut primitive_state.polygon_mode,
                 );
-                inspector::checkbox_row_doc(
-                    ui,
-                    "Unclipped Depth",
-                    field_doc!(
-                        "Clamp fragments beyond the near/far planes instead of clipping them. \
-                        Requires the `DEPTH_CLIP_CONTROL` feature."
-                    ),
-                    &mut primitive_state.unclipped_depth,
-                );
-                inspector::checkbox_row_doc(
-                    ui,
-                    "Conservative",
-                    field_doc!(
-                        "Enable conservative rasterization: a primitive covers a pixel if it \
-                        touches it at all. Requires the `CONSERVATIVE_RASTERIZATION` feature."
-                    ),
-                    &mut primitive_state.conservative,
-                );
             });
         },
     );

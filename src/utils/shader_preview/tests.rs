@@ -13,6 +13,7 @@ use crate::project::resource::uniform::{
 };
 use crate::project::storage::Storage;
 use crate::utils::texture_format::TextureFormat;
+use crate::utils::wgpu_utils::PrimitiveState;
 
 #[derive(Default)]
 struct TestStores {
@@ -189,7 +190,7 @@ fn pipeline_model_material_slot_derives_first_material_bind_group() {
 
     let pipeline = RenderPipeline::new(
         "Pipeline",
-        wgpu::PrimitiveState::default(),
+        PrimitiveState::default(),
         None,
         None,
         RenderDrawStrategy::Model {

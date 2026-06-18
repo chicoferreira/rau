@@ -1,3 +1,5 @@
+use strum::IntoEnumIterator;
+
 use crate::{
     project::SamplerId,
     ui::{
@@ -7,24 +9,12 @@ use crate::{
         },
         pane::StateSnapshot,
     },
+    utils::wgpu_utils::AddressMode,
 };
 
-const ADDRESS_MODES: [wgpu::AddressMode; 4] = [
-    wgpu::AddressMode::ClampToEdge,
-    wgpu::AddressMode::Repeat,
-    wgpu::AddressMode::MirrorRepeat,
-    wgpu::AddressMode::ClampToBorder,
-];
-
-impl AsWidgetText for wgpu::AddressMode {
+impl AsWidgetText for AddressMode {
     fn as_widget_text(&self) -> egui::WidgetText {
-        let r = match self {
-            wgpu::AddressMode::ClampToEdge => "Clamp To Edge",
-            wgpu::AddressMode::Repeat => "Repeat",
-            wgpu::AddressMode::MirrorRepeat => "Mirror Repeat",
-            wgpu::AddressMode::ClampToBorder => "Clamp To Border",
-        };
-        r.into()
+        self.label().into()
     }
 }
 
@@ -103,12 +93,11 @@ impl StateSnapshot<'_> {
                         "How texture coordinates **outside** the `[0, 1]` range are resolved.\n\n\
                         - **Clamp To Edge**: repeat the edge texel.\n\
                         - **Repeat**: tile the texture.\n\
-                        - **Mirror Repeat**: tile, flipping every other repeat.\n\
-                        - **Clamp To Border**: use the configured border color.\n\n\
+                        - **Mirror Repeat**: tile, flipping every other repeat.\n\n\
                         [WebGPU spec](https://www.w3.org/TR/webgpu/#enumdef-gpuaddressmode)"
                     ),
                     "address_mode",
-                    ADDRESS_MODES,
+                    AddressMode::iter(),
                     &mut spec.address_mode,
                 );
                 inspector::combo_row_doc(
