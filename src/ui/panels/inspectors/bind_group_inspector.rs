@@ -61,16 +61,16 @@ impl StateSnapshot<'_> {
                     &entries,
                     |ui, field, index, handle, edits| {
                         handle.ui(ui, |ui| {
-                            ui.add(
-                                egui::Label::new(format!("Binding {index}"))
-                                    .sense(egui::Sense::click()),
-                            )
-                            .context_menu(|ui| {
-                                if ui.button("Delete Entry").clicked() {
-                                    edits.push_remove_edit(index);
-                                    ui.close();
-                                }
-                            });
+                            let label =
+                                resource_icons::drag_handle_text(ui, &format!("Binding {index}"));
+
+                            ui.add(egui::Label::new(label).sense(egui::Sense::click()))
+                                .context_menu(|ui| {
+                                    if ui.button("Delete Entry").clicked() {
+                                        edits.push_remove_edit(index);
+                                        ui.close();
+                                    }
+                                });
                         });
                         ui_entry_fields(ui, &mut ctx, edits, index, field);
                     },

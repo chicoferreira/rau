@@ -207,8 +207,9 @@ fn ui_uniform_field_title(
     field: &UniformField,
 ) {
     let rename_target = RenameTarget::UniformField(uniform_id, index);
+    let label = resource_icons::drag_handle_text(ui, field.label());
     ui.add(renameable_label(
-        Label::new(field.label()).sense(Sense::click()),
+        Label::new(label).sense(Sense::click()),
         ctx.event_queue,
         ctx.rename_state,
         rename_target.clone(),

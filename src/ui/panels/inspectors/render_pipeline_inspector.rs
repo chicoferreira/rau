@@ -419,7 +419,10 @@ fn bind_groups_ui(
             );
 
             ui.add_space(3.0);
-            if ui.button(resource_icons::add_text(ui, "Add Bind Group")).clicked() {
+            if ui
+                .button(resource_icons::add_text(ui, "Add Bind Group"))
+                .clicked()
+            {
                 edits.push_add_edit(BindGroupTarget::default());
             }
 
@@ -441,7 +444,8 @@ fn bind_group_row_ui(
     edits: &mut ListEdits<BindGroupTarget>,
 ) {
     handle.ui(ui, |ui| {
-        ui.add(egui::Label::new(format!("Slot {index}")).sense(egui::Sense::click()))
+        let label = resource_icons::drag_handle_text(ui, &format!("Slot {index}"));
+        ui.add(egui::Label::new(label).sense(egui::Sense::click()))
             .context_menu(|ui| {
                 if ui.button("Remove Bind Group").clicked() {
                     edits.push_remove_edit(index);

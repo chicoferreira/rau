@@ -13,7 +13,7 @@ use crate::{
             code_editor::shader_code_section,
             draggable_list::{ListEdits, draggable_list},
             field_docs::field_doc,
-            inspector,
+            inspector, resource_icons,
         },
         pane::StateSnapshot,
     },
@@ -162,7 +162,8 @@ fn compute_pass_bind_group_row_ui(
     edits: &mut ListEdits<BindGroupId>,
 ) {
     handle.ui(ui, |ui| {
-        ui.add(egui::Label::new(format!("Slot {index}")).sense(egui::Sense::click()))
+        let label = resource_icons::drag_handle_text(ui, &format!("Slot {index}"));
+        ui.add(egui::Label::new(label).sense(egui::Sense::click()))
             .context_menu(|ui| {
                 if ui.button("Remove Bind Group").clicked() {
                     edits.push_remove_edit(index);

@@ -21,10 +21,8 @@ impl Icon {
         }
     }
 
-    /// `glyph + label`, with the glyph in the icon's accent color and the label
-    /// in `label_color`.
-    fn into_text(self, font: FontId, label: &str, label_color: Color32) -> WidgetText {
-        glyph_text(font, self.glyph, self.color, label, label_color)
+    fn into_text(self, font: FontId, label: &str, label_color: Color32, gap: f32) -> WidgetText {
+        glyph_text(font, self.glyph, self.color, label, label_color, gap)
     }
 }
 
@@ -89,14 +87,27 @@ pub fn file_icon(file_path: &FilePath) -> Icon {
     }
 }
 
+/// Default horizontal spacing between a glyph and its label.
+const DEFAULT_GLYPH_GAP: f32 = 6.0;
+
 /// `icon + label` using the button font, with the label in the default text color.
 pub fn icon_text(ui: &Ui, icon: Icon, label: &str) -> WidgetText {
-    icon.into_text(button_font(ui), label, ui.visuals().text_color())
+    icon.into_text(
+        button_font(ui),
+        label,
+        ui.visuals().text_color(),
+        DEFAULT_GLYPH_GAP,
+    )
 }
 
 /// `icon + label` sized for tab titles, with the label in the placeholder color.
 pub fn icon_tab_title(icon: Icon, label: &str) -> WidgetText {
-    icon.into_text(FontId::proportional(13.0), label, Color32::PLACEHOLDER)
+    icon.into_text(
+        FontId::proportional(13.0),
+        label,
+        Color32::PLACEHOLDER,
+        DEFAULT_GLYPH_GAP,
+    )
 }
 
 /// Button label prefixed with a "plus" glyph, for actions that add a new item
@@ -115,9 +126,20 @@ pub fn warning_text(ui: &Ui, label: &str) -> WidgetText {
     mono_text(ui, regular::WARNING, ui.visuals().warn_fg_color, label)
 }
 
+pub fn drag_handle_text(ui: &Ui, label: &str) -> WidgetText {
+    glyph_text(
+        button_font(ui),
+        regular::DOTS_SIX_VERTICAL,
+        ui.visuals().weak_text_color(),
+        label,
+        ui.visuals().text_color(),
+        2.0,
+    )
+}
+
 /// `glyph + label` in the button font, with both drawn in the same `color`.
 fn mono_text(ui: &Ui, glyph: &'static str, color: Color32, label: &str) -> WidgetText {
-    Icon { glyph, color }.into_text(button_font(ui), label, color)
+    Icon { glyph, color }.into_text(button_font(ui), label, color, DEFAULT_GLYPH_GAP)
 }
 
 fn button_font(ui: &Ui) -> FontId {
@@ -130,6 +152,7 @@ fn glyph_text(
     glyph_color: Color32,
     label: &str,
     label_color: Color32,
+    gap: f32,
 ) -> WidgetText {
     let mut job = LayoutJob::default();
     job.append(
@@ -143,7 +166,7 @@ fn glyph_text(
     );
     job.append(
         label,
-        6.0,
+        gap,
         TextFormat {
             font_id,
             color: label_color,

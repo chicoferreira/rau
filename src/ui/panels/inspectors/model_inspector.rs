@@ -168,7 +168,8 @@ fn model_vertex_buffer_field_ui(
     list_edits: &mut ListEdits<(usize, VertexBufferField)>,
 ) {
     handle.ui(ui, |ui| {
-        ui.add(egui::Label::new(format!("Location {index}")).sense(egui::Sense::click()))
+        let label = resource_icons::drag_handle_text(ui, &format!("Location {index}"));
+        ui.add(egui::Label::new(label).sense(egui::Sense::click()))
             .context_menu(|ui| {
                 if ui.button("Delete attribute").clicked() {
                     list_edits.push_remove_edit(index);

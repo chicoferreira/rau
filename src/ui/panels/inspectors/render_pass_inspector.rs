@@ -16,6 +16,7 @@ use crate::{
             draggable_list::{ListEdits, draggable_list},
             field_docs::field_doc,
             inspector::{self, AsWidgetText},
+            resource_icons,
         },
         pane::StateSnapshot,
     },
@@ -275,7 +276,8 @@ fn render_pass_pipeline_row_ui(
     edits: &mut ListEdits<RenderPipelineId>,
 ) {
     handle.ui(ui, |ui| {
-        ui.add(egui::Label::new(format!("Step {}", index + 1)).sense(egui::Sense::click()))
+        let label = resource_icons::drag_handle_text(ui, &format!("Step {}", index + 1));
+        ui.add(egui::Label::new(label).sense(egui::Sense::click()))
             .context_menu(|ui| {
                 if ui.button("Remove Pipeline").clicked() {
                     edits.push_remove_edit(index);
