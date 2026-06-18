@@ -178,6 +178,7 @@ impl WindowApp<StartupAction> for App {
         match event {
             WindowEvent::CloseRequested => event_loop.exit(),
             WindowEvent::Resized(size) => self.resize(size.width, size.height),
+            WindowEvent::Occluded(false) => self.window.request_redraw(),
             WindowEvent::RedrawRequested => {
                 let now = instant::Instant::now();
                 let dt = now - self.last_render_time;
