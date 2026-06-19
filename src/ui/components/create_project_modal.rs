@@ -508,17 +508,17 @@ fn folder_selector_controls_ui(
     form_data: &mut CreateProjectFormData,
     toasts: &mut egui_notify::Toasts,
 ) {
-    if let Some(job) = &mut form_data.folder_picker_job {
-        if let Poll::Ready(result) = job.try_resolve() {
-            match result {
-                Ok(Some(project_path)) => form_data.project_path = Some(project_path),
-                Ok(None) => {}
-                Err(error) => {
-                    toasts_log_error!(toasts, "Failed to select project folder: {error}");
-                }
+    if let Some(job) = &mut form_data.folder_picker_job
+        && let Poll::Ready(result) = job.try_resolve()
+    {
+        match result {
+            Ok(Some(project_path)) => form_data.project_path = Some(project_path),
+            Ok(None) => {}
+            Err(error) => {
+                toasts_log_error!(toasts, "Failed to select project folder: {error}");
             }
-            form_data.folder_picker_job = None;
         }
+        form_data.folder_picker_job = None;
     }
 
     ui.horizontal(|ui| {

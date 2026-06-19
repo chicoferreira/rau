@@ -146,7 +146,7 @@ fn error_card(
 
     Frame::new()
         .fill(ui.visuals().faint_bg_color)
-        .stroke(Stroke::new(1.0, error_color.gamma_multiply(0.35)))
+        .stroke(Stroke::new(1.0_f32, error_color.gamma_multiply(0.35)))
         .corner_radius(4.0)
         .inner_margin(8.0)
         .show(ui, |ui| {
@@ -166,7 +166,7 @@ fn error_card(
                     ui.painter().hline(
                         rect.x_range(),
                         rect.bottom(),
-                        Stroke::new(1.0, ui.visuals().text_color()),
+                        Stroke::new(1.0_f32, ui.visuals().text_color()),
                     );
                 }
 

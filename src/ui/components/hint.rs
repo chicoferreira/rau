@@ -4,7 +4,7 @@ pub fn hint<R>(add_contents: impl FnOnce(&mut Ui) -> R) -> impl Widget {
     |ui: &mut egui::Ui| {
         Frame::new()
             .fill(ui.visuals().panel_fill)
-            .stroke(Stroke::new(1.0, ui.visuals().text_color()))
+            .stroke(Stroke::new(1.0_f32, ui.visuals().text_color()))
             .corner_radius(4.0)
             .inner_margin(6.0)
             .show(ui, |ui| {

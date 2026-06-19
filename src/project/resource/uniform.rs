@@ -232,14 +232,14 @@ impl SyncResource for Uniform {
 
     fn sync<'a>(
         &self,
-        id: Self::Id,
+        _id: Self::Id,
         ctx: &mut Self::Context<'a>,
         previous: Option<Self::Runtime>,
         job: Self::Job,
     ) -> AppResult<SyncOutcome<Self::Runtime, Self::Job>> {
         match job {
             UniformJob::Start => {
-                self.sync(id, ctx, None, UniformJob::WaitingForResources { previous })
+                self.sync(_id, ctx, None, UniformJob::WaitingForResources { previous })
             }
             UniformJob::WaitingForResources { previous } => {
                 let Some(fields) = self.runtime_fields(ctx)? else {
@@ -270,7 +270,7 @@ impl SyncResource for Uniform {
                             ChangeResult::Uploaded => Ok(SyncOutcome::DataChanged(runtime)),
                             ChangeResult::Recreated => {
                                 let job = UniformJob::Validation(runtime, scope.pop());
-                                self.sync(id, ctx, None, job)
+                                self.sync(_id, ctx, None, job)
                             }
                         }
                     }
@@ -278,7 +278,7 @@ impl SyncResource for Uniform {
                         let scope = WgpuErrorScope::push(ctx.device);
                         let buffer = ResizableBuffer::new(ctx.device, &self.label, usage, &content);
                         let runtime = UniformRuntime { fields, buffer };
-                        self.sync(id, ctx, None, UniformJob::Validation(runtime, scope.pop()))
+                        self.sync(_id, ctx, None, UniformJob::Validation(runtime, scope.pop()))
                     }
                 }
             }

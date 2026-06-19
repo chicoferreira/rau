@@ -136,7 +136,7 @@ impl SyncResource for ComputePass {
 
     fn sync<'a>(
         &self,
-        id: Self::Id,
+        _id: Self::Id,
         ctx: &mut Self::Context<'a>,
         _previous: Option<Self::Runtime>,
         job: Self::Job,
@@ -209,7 +209,7 @@ impl SyncResource for ComputePass {
 
                 drop(pass);
 
-                self.sync(id, ctx, None, ComputePassJob::Validation(scope.pop()))
+                self.sync(_id, ctx, None, ComputePassJob::Validation(scope.pop()))
             }
             ComputePassJob::Validation(mut future) => match future.try_resolve() {
                 Poll::Ready(result) => result.map(|()| SyncOutcome::Recreated(())),

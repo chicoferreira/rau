@@ -54,7 +54,7 @@ pub async fn create_and_save_scene(
 
     let file_storage = FileStorage::new(source, file_system.clone(), file_watcher);
 
-    let project = create_scene(&device, Size2d::new(1080, 1080), &file_storage).await?;
+    let project = create_scene(device, Size2d::new(1080, 1080), &file_storage).await?;
 
     let bytes = project.serialize()?;
     file_system.write(&FilePath::project_json(), bytes);
@@ -188,7 +188,7 @@ pub async fn create_scene(
     let mut cube_model = Model::new("cube", cube_source.clone());
     let (cube_model_runtime, _) = ModelRuntime::load_from_obj_file(
         cube_source,
-        &file_storage,
+        file_storage,
         cube_model.vertex_buffer_spec().clone(),
         device.clone(),
     )
@@ -332,7 +332,7 @@ pub async fn create_scene(
     );
     let sky_color_bind_group_id = project.bind_groups.register(sky_color_bind_group);
 
-    let num_workgroups = (dst_size + 15) / 16;
+    let num_workgroups = dst_size.div_ceil(16);
     let compute_pass = ComputePass::new(
         "equirect_to_cube_map",
         vec![bind_group_id, sky_color_bind_group_id],

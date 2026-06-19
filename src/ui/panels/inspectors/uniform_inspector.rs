@@ -106,8 +106,8 @@ impl StateSnapshot<'_> {
         );
 
         let mut ctx = UniformUiContext {
-            event_queue: &mut self.event_queue,
-            rename_state: &mut self.rename_state,
+            event_queue: self.event_queue,
+            rename_state: self.rename_state,
             cameras: &self.project.cameras,
         };
 
@@ -172,7 +172,7 @@ impl StateSnapshot<'_> {
 
                 edits.apply(&mut fields);
 
-                if &fields != uniform.fields() {
+                if fields != uniform.fields() {
                     uniform.set_fields(fields);
                 }
             },
@@ -314,11 +314,11 @@ fn ui_field_entry(
                 ui,
                 "Camera",
                 field_doc!("The Camera this field reads its value from."),
-                |ui| inspector::storage_combo(ui, "camera", &ctx.cameras, &mut camera_id),
+                |ui| inspector::storage_combo(ui, "camera", ctx.cameras, &mut camera_id),
             );
 
-            let mut field = field.clone();
-            let field_before = field.clone();
+            let mut field = *field;
+            let field_before = field;
             inspector::combo_row_doc(
                 ui,
                 "Field",

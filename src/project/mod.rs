@@ -86,7 +86,7 @@ pub struct RuntimeProject {
 }
 
 impl Project {
-    pub fn label<'a>(&'a self, id: impl Into<ResourceId>) -> Option<&'a str> {
+    pub fn label(&self, id: impl Into<ResourceId>) -> Option<&str> {
         let label_err = match id.into() {
             ResourceId::Shader(id) => self.shaders.get_label(id),
             ResourceId::Viewport(id) => self.viewports.get_label(id),

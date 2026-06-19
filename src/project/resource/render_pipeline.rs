@@ -129,9 +129,7 @@ impl RenderPipeline {
                     let model = models.get(model_id)?;
 
                     // Model already checks that all material bind group ids have the same layout when syncing
-                    let first_material_bg_id = model.get_material_bind_group_ids().first().cloned();
-
-                    first_material_bg_id
+                    model.get_material_bind_group_ids().first().cloned()
                 }
                 BindGroupTarget::ModelMaterial => None,
             };

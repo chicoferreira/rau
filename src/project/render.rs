@@ -211,7 +211,7 @@ impl RenderPass {
             render_pass.set_pipeline(&pipeline_runtime.inner);
 
             let mut material_bind_group_slots = vec![];
-            for (slot, bind_group_target) in pipeline.bind_groups().into_iter().enumerate() {
+            for (slot, bind_group_target) in pipeline.bind_groups().iter().enumerate() {
                 let slot = slot as u32;
                 match bind_group_target {
                     BindGroupTarget::Empty => {

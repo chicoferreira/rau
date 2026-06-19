@@ -102,10 +102,11 @@ impl BindGroup {
         let mut group_entries = Vec::new();
 
         for (index, entry) in entries.iter().copied().enumerate() {
-            let Some(group_entry) = entry.into_bind_group_entry(index as u32, ctx)? else {
+            let Some(group_entry) = entry.create_bind_group_entry(index as u32, ctx)? else {
                 return Ok(None);
             };
-            let Some(layout_entry) = entry.into_bind_group_layout_entry(index as u32, ctx)? else {
+            let Some(layout_entry) = entry.create_bind_group_layout_entry(index as u32, ctx)?
+            else {
                 return Ok(None);
             };
             layout_entries.push(layout_entry);
@@ -185,7 +186,7 @@ impl BindGroupEntry {
         Self::new(resource, wgpu::ShaderStages::COMPUTE)
     }
 
-    fn into_bind_group_entry<'a>(
+    fn create_bind_group_entry<'a>(
         &self,
         binding: u32,
         ctx: &'a BindGroupCreationContext<'a>,
@@ -232,7 +233,7 @@ impl BindGroupEntry {
         Ok(Some(wgpu::BindGroupEntry { binding, resource }))
     }
 
-    fn into_bind_group_layout_entry(
+    fn create_bind_group_layout_entry(
         &self,
         binding: u32,
         ctx: &BindGroupCreationContext,
@@ -349,7 +350,7 @@ impl SyncResource for BindGroup {
 
     fn sync<'a>(
         &self,
-        id: Self::Id,
+        _id: Self::Id,
         ctx: &mut Self::Context<'a>,
         _previous: Option<Self::Runtime>,
         job: Self::Job,
@@ -377,7 +378,7 @@ impl SyncResource for BindGroup {
                 };
 
                 let job = BindGroupJob::Validation(runtime, scope.pop());
-                self.sync(id, ctx, None, job)
+                self.sync(_id, ctx, None, job)
             }
             BindGroupJob::Validation(runtime, mut future) => match future.try_resolve() {
                 Poll::Ready(result) => result.map(|()| SyncOutcome::Recreated(runtime)),

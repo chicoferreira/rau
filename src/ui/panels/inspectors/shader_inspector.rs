@@ -40,7 +40,7 @@ impl StateSnapshot<'_> {
                         inspector::file_combo(
                             ui,
                             "shader_source",
-                            &files,
+                            files,
                             &mut source,
                             is_shader_source,
                         )

@@ -137,10 +137,6 @@ impl FilePath {
             .map(|name| name.rsplit_once('.').map_or(name, |(stem, _)| stem))
     }
 
-    pub fn to_string(&self) -> String {
-        self.segments.join("/")
-    }
-
     pub fn is_project_json(&self) -> bool {
         self == &FilePath::project_json()
     }

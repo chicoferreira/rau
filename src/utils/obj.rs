@@ -118,7 +118,7 @@ pub fn calculate_tangents_and_bitangents(
 
     for i in 0..vertex_count {
         let n = triangles_included[i];
-        if n <= 0 {
+        if n == 0 {
             continue;
         }
         let denom = 1.0 / n as f32;

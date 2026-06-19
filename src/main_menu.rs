@@ -79,16 +79,16 @@ impl MainMenu {
             }
         }
 
-        if let Some(modal) = &mut self.create_project_modal {
-            if let Some(response) = modal.render_ui(ui, app_fs, &mut self.toasts) {
-                match response {
-                    CreateProjectModalResponse::Create { source, files } => {
-                        self.open_project(app_fs.clone(), source, files);
-                        self.create_project_modal = None;
-                    }
-                    CreateProjectModalResponse::Close => {
-                        self.create_project_modal = None;
-                    }
+        if let Some(modal) = &mut self.create_project_modal
+            && let Some(response) = modal.render_ui(ui, app_fs, &mut self.toasts)
+        {
+            match response {
+                CreateProjectModalResponse::Create { source, files } => {
+                    self.open_project(app_fs.clone(), source, files);
+                    self.create_project_modal = None;
+                }
+                CreateProjectModalResponse::Close => {
+                    self.create_project_modal = None;
                 }
             }
         }
@@ -134,19 +134,19 @@ impl MainMenu {
             }
         }
 
-        if let Some(job) = &mut self.open_workspace_job {
-            if let Poll::Ready(result) = job.try_resolve() {
-                match result {
-                    Ok(workspace) => {
-                        app_event_queue.add(AppEvent::SetState(State::Workspace(workspace)));
-                    }
-                    Err(error) => {
-                        toasts_log_error!(self.toasts, "Failed to open workspace: {error:?}");
-                        self.recent_projects_state.reload();
-                    }
+        if let Some(job) = &mut self.open_workspace_job
+            && let Poll::Ready(result) = job.try_resolve()
+        {
+            match result {
+                Ok(workspace) => {
+                    app_event_queue.add(AppEvent::SetState(State::Workspace(workspace)));
                 }
-                self.open_workspace_job = None;
+                Err(error) => {
+                    toasts_log_error!(self.toasts, "Failed to open workspace: {error:?}");
+                    self.recent_projects_state.reload();
+                }
             }
+            self.open_workspace_job = None;
         }
     }
 

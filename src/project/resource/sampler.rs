@@ -80,7 +80,7 @@ impl Sampler {
     }
 
     fn create_sampler(device: &wgpu::Device, label: &str, spec: &SamplerSpec) -> wgpu::Sampler {
-        let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
+        device.create_sampler(&wgpu::SamplerDescriptor {
             label: Some(label),
             address_mode_u: spec.address_mode.to_wgpu(),
             address_mode_v: spec.address_mode.to_wgpu(),
@@ -92,8 +92,7 @@ impl Sampler {
             lod_max_clamp: spec.lod_max_clamp,
             compare: spec.compare,
             ..Default::default()
-        });
-        sampler
+        })
     }
 }
 
@@ -139,7 +138,7 @@ impl SyncResource for Sampler {
 
     fn sync<'a>(
         &self,
-        id: Self::Id,
+        _id: Self::Id,
         ctx: &mut Self::Context<'a>,
         _previous: Option<Self::Runtime>,
         job: Self::Job,
@@ -150,7 +149,7 @@ impl SyncResource for Sampler {
                 let inner = Self::create_sampler(ctx, &self.label, &self.spec);
 
                 let runtime = SamplerRuntime { inner };
-                self.sync(id, ctx, None, SamplerJob::Validation(runtime, scope.pop()))
+                self.sync(_id, ctx, None, SamplerJob::Validation(runtime, scope.pop()))
             }
             SamplerJob::Validation(runtime, mut future) => match future.try_resolve() {
                 Poll::Ready(result) => result.map(|()| SyncOutcome::Recreated(runtime)),

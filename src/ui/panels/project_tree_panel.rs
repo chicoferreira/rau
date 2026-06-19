@@ -492,44 +492,41 @@ pub fn ui(state: &mut StateSnapshot, ui: &mut egui::Ui) -> Response {
         });
 
     for action in actions {
-        match action {
-            Action::SetSelected(selected) => {
-                for node in selected {
-                    let event = match node {
-                        TreeNodeId::Viewport(id) => StateEvent::OpenViewport(id),
-                        TreeNodeId::Uniform(id) => StateEvent::InspectResource(id.into()),
-                        TreeNodeId::BindGroup(id) => StateEvent::InspectResource(id.into()),
-                        TreeNodeId::Shader(id) => StateEvent::InspectResource(id.into()),
-                        TreeNodeId::Camera(id) => StateEvent::InspectResource(id.into()),
-                        TreeNodeId::Dimension(id) => StateEvent::InspectResource(id.into()),
-                        TreeNodeId::Sampler(id) => StateEvent::InspectResource(id.into()),
-                        TreeNodeId::Texture(id) => StateEvent::InspectResource(id.into()),
-                        TreeNodeId::TextureView(id) => StateEvent::InspectResource(id.into()),
-                        TreeNodeId::Model(id) => StateEvent::InspectResource(id.into()),
-                        TreeNodeId::RenderPipeline(id) => StateEvent::InspectResource(id.into()),
-                        TreeNodeId::RenderPass(id) => StateEvent::InspectResource(id.into()),
-                        TreeNodeId::ComputePass(id) => StateEvent::InspectResource(id.into()),
-                        TreeNodeId::Presentation(id) => StateEvent::InspectResource(id.into()),
-                        TreeNodeId::UniformFolder
-                        | TreeNodeId::BindGroupFolder
-                        | TreeNodeId::ViewportFolder
-                        | TreeNodeId::ShaderFolder
-                        | TreeNodeId::CameraFolder
-                        | TreeNodeId::DimensionFolder
-                        | TreeNodeId::SamplerFolder
-                        | TreeNodeId::TextureFolder
-                        | TreeNodeId::TextureViewFolder
-                        | TreeNodeId::ModelFolder
-                        | TreeNodeId::RenderPipelineFolder
-                        | TreeNodeId::RenderPassFolder
-                        | TreeNodeId::ComputePassFolder
-                        | TreeNodeId::PendingCreate(_) => continue,
-                    };
+        if let Action::SetSelected(selected) = action {
+            for node in selected {
+                let event = match node {
+                    TreeNodeId::Viewport(id) => StateEvent::OpenViewport(id),
+                    TreeNodeId::Uniform(id) => StateEvent::InspectResource(id.into()),
+                    TreeNodeId::BindGroup(id) => StateEvent::InspectResource(id.into()),
+                    TreeNodeId::Shader(id) => StateEvent::InspectResource(id.into()),
+                    TreeNodeId::Camera(id) => StateEvent::InspectResource(id.into()),
+                    TreeNodeId::Dimension(id) => StateEvent::InspectResource(id.into()),
+                    TreeNodeId::Sampler(id) => StateEvent::InspectResource(id.into()),
+                    TreeNodeId::Texture(id) => StateEvent::InspectResource(id.into()),
+                    TreeNodeId::TextureView(id) => StateEvent::InspectResource(id.into()),
+                    TreeNodeId::Model(id) => StateEvent::InspectResource(id.into()),
+                    TreeNodeId::RenderPipeline(id) => StateEvent::InspectResource(id.into()),
+                    TreeNodeId::RenderPass(id) => StateEvent::InspectResource(id.into()),
+                    TreeNodeId::ComputePass(id) => StateEvent::InspectResource(id.into()),
+                    TreeNodeId::Presentation(id) => StateEvent::InspectResource(id.into()),
+                    TreeNodeId::UniformFolder
+                    | TreeNodeId::BindGroupFolder
+                    | TreeNodeId::ViewportFolder
+                    | TreeNodeId::ShaderFolder
+                    | TreeNodeId::CameraFolder
+                    | TreeNodeId::DimensionFolder
+                    | TreeNodeId::SamplerFolder
+                    | TreeNodeId::TextureFolder
+                    | TreeNodeId::TextureViewFolder
+                    | TreeNodeId::ModelFolder
+                    | TreeNodeId::RenderPipelineFolder
+                    | TreeNodeId::RenderPassFolder
+                    | TreeNodeId::ComputePassFolder
+                    | TreeNodeId::PendingCreate(_) => continue,
+                };
 
-                    state.event_queue.add(event);
-                }
+                state.event_queue.add(event);
             }
-            _ => {}
         }
     }
 

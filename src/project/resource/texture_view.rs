@@ -113,14 +113,12 @@ impl TextureView {
             _ => None,
         };
 
-        let view = runtime.inner().create_view(&wgpu::TextureViewDescriptor {
-            label: Some(&label),
+        runtime.inner().create_view(&wgpu::TextureViewDescriptor {
+            label: Some(label),
             format: wgpu_format,
             dimension,
             ..Default::default()
-        });
-
-        view
+        })
     }
 }
 
@@ -166,7 +164,7 @@ impl SyncResource for TextureView {
 
     fn sync<'a>(
         &self,
-        id: Self::Id,
+        _id: Self::Id,
         ctx: &mut Self::Context<'a>,
         previous: Option<Self::Runtime>,
         job: Self::Job,
@@ -175,7 +173,7 @@ impl SyncResource for TextureView {
             TextureViewJob::Start => {
                 let previous_egui_id = previous.as_ref().and_then(|runtime| runtime.egui_id);
                 self.sync(
-                    id,
+                    _id,
                     ctx,
                     None,
                     TextureViewJob::PendingResource { previous_egui_id },
@@ -230,7 +228,7 @@ impl SyncResource for TextureView {
 
                 let runtime = TextureViewRuntime { inner, egui_id };
                 let job = TextureViewJob::Validation(runtime, scope.pop());
-                self.sync(id, ctx, None, job)
+                self.sync(_id, ctx, None, job)
             }
             TextureViewJob::Validation(runtime, mut future) => match future.try_resolve() {
                 Poll::Ready(result) => result.map(|()| SyncOutcome::Recreated(runtime)),

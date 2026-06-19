@@ -12,14 +12,17 @@ use crate::{
     workspace::StateEvent,
 };
 
+type LabelColorFn<'a> = dyn Fn(&egui::Visuals) -> egui::Color32 + 'a;
+type LabelSuffixFn<'a> = dyn FnMut(&mut egui::Ui) + 'a;
+
 pub struct TreeNode<'a, T> {
     tree_id: T,
     label: &'a str,
     /// Resolves the label color from the current theme at render time.
-    label_color: Option<Box<dyn Fn(&egui::Visuals) -> egui::Color32 + 'a>>,
+    label_color: Option<Box<LabelColorFn<'a>>>,
     glyph: Option<NodeGlyph<'a>>,
     /// Extra content rendered after the label (e.g. a child count).
-    label_suffix: Option<Box<dyn FnMut(&mut egui::Ui) + 'a>>,
+    label_suffix: Option<Box<LabelSuffixFn<'a>>>,
     /// Tooltip shown when hovering the node label.
     hover_text: Option<egui::WidgetText>,
     events: Vec<ContextMenuEntity<'a>>,
@@ -235,7 +238,7 @@ where
                         let mut event_queue = label_event_queue.borrow_mut();
                         ui.add(renameable_label(
                             default_label,
-                            &mut **event_queue,
+                            &mut event_queue,
                             rename_state,
                             rename_target,
                         ));

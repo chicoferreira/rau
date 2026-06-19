@@ -206,7 +206,7 @@ impl Workspace {
         // the GPU even on a frame where the viewport render bails out on a still-rebuilding
         // resource. Sharing it with the viewport encoder would mean a dropped viewport frame also
         // drops the compute pass dispatch, which never re-runs once the pass is built.
-        let mut compute_encoder = create_command_encoder(&ctx.device, "Compute Encoder");
+        let mut compute_encoder = create_command_encoder(ctx.device, "Compute Encoder");
 
         let resources_changed = self.tick_objects(ctx, &mut compute_encoder);
         ctx.queue.submit(std::iter::once(compute_encoder.finish()));
@@ -235,7 +235,7 @@ impl Workspace {
         //
         // This avoids the flicker that would otherwise occur because of the pass LoadOp::Clear
         // because of the `begin_render_pass` call.
-        let mut viewport_encoder = create_command_encoder(&ctx.device, "Viewport Render Encoder");
+        let mut viewport_encoder = create_command_encoder(ctx.device, "Viewport Render Encoder");
 
         let presentation = &self.project.presentation;
         match presentation.render(&mut viewport_encoder, &mut render_ctx) {
@@ -418,7 +418,7 @@ impl Workspace {
                                     let is_owner = self
                                         .dimension_owners
                                         .get(dimension_id)
-                                        .map_or(true, |&owner| owner == viewport_id);
+                                        .is_none_or(|&owner| owner == viewport_id);
 
                                     // relevant issue: https://github.com/chicoferreira/rau/issues/8
                                     //
@@ -427,12 +427,11 @@ impl Workspace {
                                     // we'll wait until it gets focused (handled in the event below). this avoids the
                                     // problem of fighting when there are two viewports with different sizes for the same dimension.
                                     // this way, only one of them (the owner) will control the dimension size.
-                                    if is_owner {
-                                        if let Ok(dimension) =
+                                    if is_owner
+                                        && let Ok(dimension) =
                                             self.project.dimensions.get_mut(dimension_id)
-                                        {
-                                            dimension.set_size(size);
-                                        }
+                                    {
+                                        dimension.set_size(size);
                                     }
                                 }
                             }
@@ -440,12 +439,11 @@ impl Workspace {
                                 // read the comment in the event above for more context
                                 if let Some(dimension_id) = viewport.dimension_id() {
                                     self.dimension_owners.insert(dimension_id, viewport_id);
-                                    if let Some(ui_size) = viewport.requested_ui_size() {
-                                        if let Ok(dimension) =
+                                    if let Some(ui_size) = viewport.requested_ui_size()
+                                        && let Ok(dimension) =
                                             self.project.dimensions.get_mut(dimension_id)
-                                        {
-                                            dimension.set_size(ui_size);
-                                        }
+                                    {
+                                        dimension.set_size(ui_size);
                                     }
                                 }
                             }
@@ -518,8 +516,8 @@ impl Workspace {
 
         let view = &mut TextureCreationContext {
             dimensions: &self.project.dimensions,
-            device: &ctx.device,
-            queue: &ctx.queue,
+            device: ctx.device,
+            queue: ctx.queue,
             file_storage: &self.file_storage,
             downlevel_flags: ctx.downlevel_flags,
         };
@@ -531,8 +529,8 @@ impl Workspace {
 
         let view = &mut TextureViewCreationContext {
             textures: &self.project.textures,
-            egui_renderer: &mut ctx.egui_renderer,
-            device: &ctx.device,
+            egui_renderer: ctx.egui_renderer,
+            device: ctx.device,
             textures_runtime: &mut self.runtime_project.textures,
             downlevel_flags: ctx.downlevel_flags,
         };
@@ -560,8 +558,8 @@ impl Workspace {
 
         let view = &mut UniformCreationContext {
             cameras: &self.project.cameras,
-            device: &ctx.device,
-            queue: &ctx.queue,
+            device: ctx.device,
+            queue: ctx.queue,
             cameras_runtime: &mut self.runtime_project.cameras,
             time: self.elapsed.as_secs_f32(),
         };
@@ -572,7 +570,7 @@ impl Workspace {
         );
 
         let view = &mut BindGroupCreationContext {
-            device: &ctx.device,
+            device: ctx.device,
             runtime_uniforms: &mut self.runtime_project.uniforms,
             runtime_texture_views: &mut self.runtime_project.texture_views,
             runtime_samplers: &mut self.runtime_project.samplers,
@@ -584,8 +582,8 @@ impl Workspace {
         );
 
         let view = &mut ModelCreationContext {
-            device: &ctx.device,
-            queue: &ctx.queue,
+            device: ctx.device,
+            queue: ctx.queue,
             file_storage: &self.file_storage,
             runtime_bind_groups: &self.runtime_project.bind_groups,
             mtl_dependencies: &mut self.mtl_dependencies,
@@ -597,7 +595,7 @@ impl Workspace {
         );
 
         let view = &mut ShaderCreationContext {
-            device: &ctx.device,
+            device: ctx.device,
             file_storage: &self.file_storage,
         };
         self.tracker.sync_storage(
@@ -607,7 +605,7 @@ impl Workspace {
         );
 
         let view = &mut render_pipeline::Context {
-            device: &ctx.device,
+            device: ctx.device,
             runtime_shaders: &mut self.runtime_project.shaders,
             runtime_bind_groups: &self.runtime_project.bind_groups,
             models: &self.project.models,
@@ -620,7 +618,7 @@ impl Workspace {
         );
 
         let view = &mut compute_pass::Context {
-            device: &ctx.device,
+            device: ctx.device,
             encoder,
             runtime_shaders: &mut self.runtime_project.shaders,
             runtime_bind_groups: &mut self.runtime_project.bind_groups,

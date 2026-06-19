@@ -54,7 +54,7 @@ fn visuals() -> egui::Visuals {
     v.hyperlink_color = Palette::ACCENT;
     v.weak_text_color = Some(Palette::TEXT_WEAK);
 
-    v.window_stroke = Stroke::new(1.0, Palette::BORDER);
+    v.window_stroke = Stroke::new(1.0_f32, Palette::BORDER);
     v.window_corner_radius = CornerRadius::same(7);
     v.menu_corner_radius = CornerRadius::same(5);
     v.window_shadow = Shadow {
@@ -71,7 +71,7 @@ fn visuals() -> egui::Visuals {
     };
 
     v.selection.bg_fill = Palette::SELECTION;
-    v.selection.stroke = Stroke::new(1.0, Palette::ACCENT);
+    v.selection.stroke = Stroke::new(1.0_f32, Palette::ACCENT);
 
     v.slider_trailing_fill = true;
 
@@ -80,32 +80,32 @@ fn visuals() -> egui::Visuals {
 
     w.noninteractive.bg_fill = Palette::BG_PANEL;
     w.noninteractive.weak_bg_fill = Palette::BG_PANEL;
-    w.noninteractive.bg_stroke = Stroke::new(1.0, Palette::BORDER);
-    w.noninteractive.fg_stroke = Stroke::new(1.0, Palette::TEXT);
+    w.noninteractive.bg_stroke = Stroke::new(1.0_f32, Palette::BORDER);
+    w.noninteractive.fg_stroke = Stroke::new(1.0_f32, Palette::TEXT);
     w.noninteractive.corner_radius = r;
 
     w.inactive.bg_fill = Palette::SURFACE;
     w.inactive.weak_bg_fill = Palette::SURFACE;
-    w.inactive.bg_stroke = Stroke::new(1.0, Palette::BORDER);
-    w.inactive.fg_stroke = Stroke::new(1.0, Palette::TEXT);
+    w.inactive.bg_stroke = Stroke::new(1.0_f32, Palette::BORDER);
+    w.inactive.fg_stroke = Stroke::new(1.0_f32, Palette::TEXT);
     w.inactive.corner_radius = r;
 
     w.hovered.bg_fill = Palette::SURFACE_HOVER;
     w.hovered.weak_bg_fill = Palette::SURFACE_HOVER;
-    w.hovered.bg_stroke = Stroke::new(1.0, Palette::BORDER_STRONG);
-    w.hovered.fg_stroke = Stroke::new(1.0, Palette::TEXT_STRONG);
+    w.hovered.bg_stroke = Stroke::new(1.0_f32, Palette::BORDER_STRONG);
+    w.hovered.fg_stroke = Stroke::new(1.0_f32, Palette::TEXT_STRONG);
     w.hovered.corner_radius = r;
 
     w.active.bg_fill = Palette::SURFACE_ACTIVE;
     w.active.weak_bg_fill = Palette::SURFACE_ACTIVE;
-    w.active.bg_stroke = Stroke::new(1.0, Palette::ACCENT);
-    w.active.fg_stroke = Stroke::new(1.0, Palette::TEXT_STRONG);
+    w.active.bg_stroke = Stroke::new(1.0_f32, Palette::ACCENT);
+    w.active.fg_stroke = Stroke::new(1.0_f32, Palette::TEXT_STRONG);
     w.active.corner_radius = r;
 
     w.open.bg_fill = Palette::SURFACE_HOVER;
     w.open.weak_bg_fill = Palette::SURFACE_HOVER;
-    w.open.bg_stroke = Stroke::new(1.0, Palette::BORDER_STRONG);
-    w.open.fg_stroke = Stroke::new(1.0, Palette::TEXT_STRONG);
+    w.open.bg_stroke = Stroke::new(1.0_f32, Palette::BORDER_STRONG);
+    w.open.fg_stroke = Stroke::new(1.0_f32, Palette::TEXT_STRONG);
     w.open.corner_radius = r;
 
     v

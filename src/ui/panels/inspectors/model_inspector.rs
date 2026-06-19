@@ -591,7 +591,7 @@ impl egui_table::TableDelegate for TriangleTableDelegate<'_> {
 
         fn format_cell<const N: usize>(content: &[[f32; N]], index: Option<usize>) -> String {
             index
-                .and_then(|i| content.get(i).map(|v| format_vec(v)))
+                .and_then(|i| content.get(i).map(format_vec))
                 .unwrap_or("N/A".to_string())
         }
 

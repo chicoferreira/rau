@@ -112,7 +112,7 @@ impl SyncResource for Shader {
 
     fn sync<'a>(
         &self,
-        id: Self::Id,
+        _id: Self::Id,
         ctx: &mut Self::Context<'a>,
         _previous: Option<Self::Runtime>,
         job: Self::Job,
@@ -124,7 +124,7 @@ impl SyncResource for Shader {
                     .as_ref()
                     .ok_or(AppError::uninit_field("Source"))?;
                 let read_job = ctx.file_storage.read_to_string(source);
-                return self.sync(id, ctx, None, ShaderJob::ReadingSource(read_job));
+                return self.sync(_id, ctx, None, ShaderJob::ReadingSource(read_job));
             }
             ShaderJob::ReadingSource(mut future) => match future.try_resolve() {
                 Poll::Ready(result) => result?,
@@ -154,7 +154,7 @@ impl SyncResource for Shader {
         let inner = utils::wgpu_utils::compile_shader(ctx.device, &self.label, &source, kind)?;
 
         let runtime = ShaderRuntime { inner };
-        self.sync(id, ctx, None, ShaderJob::Validation(runtime, scope.pop()))
+        self.sync(_id, ctx, None, ShaderJob::Validation(runtime, scope.pop()))
     }
 
     fn needs_rebuild(&self, _: Self::Id, _: &Self::Context<'_>, tracker: &SyncTracker) -> bool {

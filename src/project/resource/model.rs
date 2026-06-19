@@ -70,17 +70,12 @@ pub struct Mesh {
     index_buffer: ResizableBuffer,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type", content = "value")]
 pub enum MeshMaterialSelection {
+    #[default]
     FromSource,
     Material(Option<usize>),
-}
-
-impl Default for MeshMaterialSelection {
-    fn default() -> Self {
-        Self::FromSource
-    }
 }
 
 pub struct Material {
@@ -167,7 +162,7 @@ impl Model {
     ) -> AppResult<Option<()>> {
         let mut first = None;
 
-        for (i, id) in bind_group_ids.into_iter().copied().enumerate() {
+        for (i, id) in bind_group_ids.iter().copied().enumerate() {
             let Some(bind_group) = runtime_bind_groups.get_init(id)? else {
                 // Bind groups aren't ready yet
                 return Ok(None);

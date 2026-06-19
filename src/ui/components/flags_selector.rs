@@ -18,7 +18,7 @@ where
         "None".to_string()
     } else {
         options
-            .into_iter()
+            .iter()
             .filter(|(flag, _)| value.contains(*flag))
             .map(|(_, name)| *name)
             .collect::<Vec<_>>()

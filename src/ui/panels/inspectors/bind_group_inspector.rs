@@ -101,7 +101,7 @@ impl StateSnapshot<'_> {
             return;
         };
         let ctx = ShaderGenCtx::from_project(self.project);
-        let item = BindGroupAt::new(None, &bind_group);
+        let item = BindGroupAt::new(None, bind_group);
         shader_code_section(ui, &item, &ctx);
     }
 }
@@ -182,7 +182,6 @@ fn ui_entry_fields(
                 let updated_entry = BindGroupEntry {
                     resource: resource.unwrap_or(entry.resource),
                     visibility,
-                    ..*entry
                 };
 
                 edits.push_set_edit(index, updated_entry);

@@ -59,7 +59,7 @@ pub fn draggable_list<T: Hash>(
     let response = egui_dnd::dnd(ui, id_source)
         .with_animation_time(0.0)
         .show_custom(|ui, iter| {
-            for (i, entry) in entries.into_iter().enumerate() {
+            for (i, entry) in entries.iter().enumerate() {
                 // this item_id needs te be unique and stable for the animations
                 let item_id = egui::Id::new((id_source, entry, i));
 

@@ -42,7 +42,7 @@ pub fn ui(
     }
 
     let keyboard_state = if response.has_focus() {
-        ui.input(|input| KeyboardState::from_egui_input(input))
+        ui.input(KeyboardState::from_egui_input)
     } else {
         KeyboardState::empty()
     };

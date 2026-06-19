@@ -138,7 +138,7 @@ impl FileStorage {
     pub fn exists_file_cached(&self, path: &FilePath) -> bool {
         self.cached_files
             .as_ref()
-            .map_or(false, |files| files.iter().any(|f| f == path))
+            .is_some_and(|files| files.iter().any(|f| f == path))
     }
 
     /// Returns true only once the file listing has loaded and the path is absent

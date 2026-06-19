@@ -73,16 +73,16 @@ impl RecentProjectsState {
             });
         }
 
-        if let Some(modal) = &mut self.delete_confirmation_modal {
-            if let Some(response) = modal.render_ui(ui) {
-                match response {
-                    DeleteProjectConfirmationModalResponse::Confirm(project_id) => {
-                        self.remove_project(app_file_system, project_id);
-                        self.delete_confirmation_modal = None;
-                    }
-                    DeleteProjectConfirmationModalResponse::Cancel => {
-                        self.delete_confirmation_modal = None;
-                    }
+        if let Some(modal) = &mut self.delete_confirmation_modal
+            && let Some(response) = modal.render_ui(ui)
+        {
+            match response {
+                DeleteProjectConfirmationModalResponse::Confirm(project_id) => {
+                    self.remove_project(app_file_system, project_id);
+                    self.delete_confirmation_modal = None;
+                }
+                DeleteProjectConfirmationModalResponse::Cancel => {
+                    self.delete_confirmation_modal = None;
                 }
             }
         }
@@ -126,15 +126,15 @@ impl RecentProjectsState {
             RecentProjectLoadState::Loaded { .. } => {}
         }
 
-        if let Some(job) = &mut self.remove_job {
-            if let Poll::Ready(result) = job.try_resolve() {
-                if let Err(error) = result {
-                    toasts_log_error!(toasts, "Failed to remove recent project: {error}");
-                }
-
-                self.remove_job = None;
-                self.reload();
+        if let Some(job) = &mut self.remove_job
+            && let Poll::Ready(result) = job.try_resolve()
+        {
+            if let Err(error) = result {
+                toasts_log_error!(toasts, "Failed to remove recent project: {error}");
             }
+
+            self.remove_job = None;
+            self.reload();
         }
     }
 }
