@@ -6,6 +6,13 @@ description = "Graphics engine focused on real-time rendering and user authoring
 repository = "https://github.com/chicoferreira/rau"
 license-file = "LICENSE.md"
 
+[package.metadata.bundle.bin.rau-bin]
+name = "Rau"
+identifier = "io.github.chicoferreira.rau"
+icon = ["assets/rau-app-icon.svg"]
+category = "Developer Tool"
+short_description = "Graphics engine focused on real-time rendering and user authoring"
+
 [lib]
 crate-type = ["cdylib", "rlib"]
 
