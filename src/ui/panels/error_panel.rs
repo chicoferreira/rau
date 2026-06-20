@@ -186,6 +186,6 @@ fn error_card(
                 });
             });
 
-            inspector::error_label(ui, error);
+            inspector::error_label(ui, RichText::new(error).monospace());
         });
 }

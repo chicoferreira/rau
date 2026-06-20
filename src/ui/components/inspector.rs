@@ -1,7 +1,8 @@
 use std::{hash::Hash, ops::RangeInclusive};
 
 use egui::{
-    ComboBox, Direction, Grid, InnerResponse, Layout, Response, RichText, Ui, Widget, WidgetText,
+    Align2, ComboBox, Direction, Grid, InnerResponse, Layout, Response, RichText, Ui, Widget,
+    WidgetText,
 };
 
 use crate::{
@@ -42,6 +43,20 @@ pub fn spinner(ui: &mut Ui) -> Response {
 pub fn centered_error(ui: &mut Ui, text: impl Into<RichText>) -> Response {
     let text = text.into();
     centered(ui, |ui| error_label(ui, text)).inner
+}
+
+pub fn centered_block(ui: &mut Ui, mut add_contents: impl FnMut(&mut Ui)) {
+    let mut block = |ui: &mut Ui| {
+        ui.vertical_centered(&mut add_contents);
+    };
+    let outer = ui.available_rect_before_wrap();
+    let size = ui
+        .scope_builder(egui::UiBuilder::new().sizing_pass().invisible(), &mut block)
+        .response
+        .rect
+        .size();
+    let rect = Align2::CENTER_CENTER.align_size_within_rect(size, outer);
+    ui.scope_builder(egui::UiBuilder::new().max_rect(rect), block);
 }
 
 pub fn section<R>(ui: &mut Ui, title: &str, content: impl FnOnce(&mut Ui) -> R) -> R {

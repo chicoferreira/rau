@@ -7,11 +7,21 @@ pub struct FeaturedProject {
     pub path: &'static str,
 }
 
-pub const FEATURED_PROJECTS: &[FeaturedProject] = &[FeaturedProject {
-    id: "full-example",
-    name: "Full Example",
-    owner: "chicoferreira",
-    repo: "rau",
-    git_ref: "main",
-    path: "projects/full-example",
-}];
+pub const FEATURED_PROJECTS: &[FeaturedProject] = &[
+    FeaturedProject {
+        id: "triangle",
+        name: "Triangle",
+        owner: "chicoferreira",
+        repo: "rau",
+        git_ref: "main",
+        path: "projects/triangle",
+    },
+    FeaturedProject {
+        id: "full-example",
+        name: "Full Example",
+        owner: "chicoferreira",
+        repo: "rau",
+        git_ref: "main",
+        path: "projects/full-example",
+    },
+];

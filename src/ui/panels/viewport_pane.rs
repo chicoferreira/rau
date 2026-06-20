@@ -8,11 +8,29 @@ use crate::{
         },
         pane::StateSnapshot,
     },
+    utils::event_queue::EventQueue,
+    workspace::StateEvent,
 };
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub struct ViewportPane {
     pub viewport_id: ViewportId,
+}
+
+fn viewport_error(
+    ui: &mut egui::Ui,
+    event_queue: &mut EventQueue<StateEvent>,
+    viewport_id: ViewportId,
+    message: impl Into<egui::RichText>,
+) {
+    let message = message.into();
+    inspector::centered_block(ui, |ui| {
+        inspector::error_label(ui, message.clone());
+        ui.add_space(8.0);
+        if ui.button("Open Inspector").clicked() {
+            event_queue.inspect_resource(viewport_id);
+        }
+    });
 }
 
 impl Pane for ViewportPane {
@@ -27,8 +45,10 @@ impl Pane for ViewportPane {
         };
 
         let Some(texture_view_id) = viewport.texture_view_id() else {
-            inspector::centered_error(
+            viewport_error(
                 ui,
+                state.event_queue,
+                self.viewport_id,
                 "No texture view is assigned to this viewport.\nAssign one to display its contents here.",
             );
             return egui_tiles::UiResponse::None;
@@ -46,8 +66,10 @@ impl Pane for ViewportPane {
                 return egui_tiles::UiResponse::None;
             }
             Err(err) => {
-                inspector::centered_error(
+                viewport_error(
                     ui,
+                    state.event_queue,
+                    self.viewport_id,
                     format!("Couldn't initialize the texture view:\n{err}"),
                 );
                 return egui_tiles::UiResponse::None;
@@ -55,8 +77,10 @@ impl Pane for ViewportPane {
         };
 
         let Some(egui_id) = runtime_texture_view.egui_id() else {
-            inspector::centered_error(
+            viewport_error(
                 ui,
+                state.event_queue,
+                self.viewport_id,
                 "This texture view can't be displayed.\nOnly the Rgba8UnormSrgb format is supported in viewports.",
             );
             return egui_tiles::UiResponse::None;
