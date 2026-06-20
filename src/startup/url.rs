@@ -161,7 +161,7 @@ pub fn startup_action_from_url() -> StartupAction {
 }
 
 fn try_startup_action_from_url() -> AppResult<StartupAction> {
-    let Some(query) = crate::utils::browser::url::take_query_string()? else {
+    let Some(query) = crate::utils::browser::take_query_string()? else {
         return Ok(StartupAction::MainMenu);
     };
 

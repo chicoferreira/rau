@@ -235,7 +235,7 @@ impl FileStorage {
         let task = AsyncJob::new(async move {
             let bytes = file_system.read(&file_path).await?;
             let file_name = file_path.file_name().unwrap_or("download");
-            crate::utils::browser::file_download::download_file(file_name, bytes)
+            crate::utils::browser::download_file(file_name, bytes)
         });
 
         self.current_tasks

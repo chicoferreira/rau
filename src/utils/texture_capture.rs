@@ -240,6 +240,6 @@ async fn save_png(file_name: String, png: Vec<u8>) -> AppResult<()> {
     #[cfg(target_arch = "wasm32")]
     {
         // rfd is creating a div with an anchor link instead of downloading the file directly
-        crate::utils::browser::file_download::download_file(&file_name, png)
+        crate::utils::browser::download_file(&file_name, png)
     }
 }

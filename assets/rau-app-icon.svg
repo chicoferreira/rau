@@ -1,0 +1,20 @@
+<svg
+    xmlns="http://www.w3.org/2000/svg"
+    viewBox="0 0 160 160"
+    role="img"
+    aria-labelledby="title"
+>
+  <title>Rau app icon</title>
+  <rect width="160" height="160" rx="36" fill="#0A0A0A" />
+  <g transform="translate(28 28)">
+    <circle cx="23.833" cy="23.833" r="10.833" fill="#DA6969" />
+    <circle cx="52" cy="23.833" r="10.833" fill="#ED9E4F" />
+    <circle cx="80.167" cy="23.833" r="10.833" fill="#E2AA44" />
+    <circle cx="23.833" cy="52" r="10.833" fill="#8CB48C" />
+    <circle cx="52" cy="52" r="10.833" fill="#66D0B1" />
+    <circle cx="80.167" cy="52" r="10.833" fill="#61C0D7" />
+    <circle cx="23.833" cy="80.167" r="10.833" fill="#7575E6" />
+    <circle cx="52" cy="80.167" r="10.833" fill="#9B78DF" />
+    <circle cx="80.167" cy="80.167" r="10.833" fill="#D479AB" />
+  </g>
+</svg>

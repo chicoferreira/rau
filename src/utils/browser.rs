@@ -1,24 +1,90 @@
-//! Browser-only folder import helper.
-//!
-//! Browsers do not expose native folder paths to wasm. To import a folder we
-//! create a hidden `<input type="file" webkitdirectory multiple>`, trigger it
-//! from the user action, and then read the returned `FileList`. Each browser
-//! `File` carries a `webkitRelativePath` such as `project/assets/model.obj`;
-//! this module treats the first path segment as the project name, strips it from
-//! every returned `FilePath`, and reads the file bytes with `FileReader`.
-
-use wasm_bindgen::{JsCast, JsValue, closure::Closure};
+use wasm_bindgen::{JsCast, JsValue, prelude::Closure};
 use wasm_bindgen_futures::JsFuture;
 use web_sys::{
-    Blob, File, FileList, FileReader, HtmlInputElement,
-    js_sys::{Promise, Reflect, Uint8Array},
+    Blob, File, FileList, FileReader, HtmlElement, HtmlInputElement, Url,
+    js_sys::{Array, Promise, Reflect, Uint8Array},
 };
 
 use crate::{
-    error::AppResult,
+    error::{AppError, AppResult},
     project::paths::FilePath,
-    utils::browser::{browser_error, js_error},
 };
+
+/// Reads the current URL query string (without the leading `?`) and resets the
+/// browser URL back to the base path, dropping the query.
+///
+/// Returns `None` when there is no query to consume, in which case the URL is
+/// left untouched.
+pub fn take_query_string() -> AppResult<Option<String>> {
+    let window = web_sys::window().ok_or_else(|| browser_error("window unavailable"))?;
+    let location = window.location();
+
+    let search = location.search().map_err(js_error)?;
+    let query = search.trim_start_matches('?');
+    if query.is_empty() {
+        return Ok(None);
+    }
+    let query = query.to_string();
+
+    // Reset the browser URL back to the base path so the query parameters are not
+    // left around (e.g. on refresh or when sharing the link).
+    let history = window.history().map_err(js_error)?;
+    let path = location.pathname().map_err(js_error)?;
+    history
+        .replace_state_with_url(&JsValue::NULL, "", Some(&path))
+        .map_err(js_error)?;
+
+    Ok(Some(query))
+}
+
+pub fn set_document_title(title: &str) -> AppResult<()> {
+    let document = web_sys::window()
+        .ok_or_else(|| browser_error("window unavailable"))?
+        .document()
+        .ok_or_else(|| browser_error("document unavailable"))?;
+
+    document.set_title(title);
+
+    Ok(())
+}
+
+pub fn download_file(file_name: &str, bytes: Vec<u8>) -> AppResult<()> {
+    let window = web_sys::window().ok_or_else(|| browser_error("window unavailable"))?;
+    let document = window
+        .document()
+        .ok_or_else(|| browser_error("document unavailable"))?;
+    let body = document
+        .body()
+        .ok_or_else(|| browser_error("document body unavailable"))?;
+
+    let bytes = Uint8Array::from(bytes.as_slice());
+    let blob_parts = Array::new();
+    blob_parts.push(&bytes);
+    let blob = Blob::new_with_u8_array_sequence(&blob_parts).map_err(js_error)?;
+    let object_url = Url::create_object_url_with_blob(&blob).map_err(js_error)?;
+
+    let result = (|| {
+        let anchor = document.create_element("a").map_err(js_error)?;
+        anchor
+            .set_attribute("href", &object_url)
+            .map_err(js_error)?;
+        anchor
+            .set_attribute("download", file_name)
+            .map_err(js_error)?;
+        anchor
+            .set_attribute("style", "display: none")
+            .map_err(js_error)?;
+
+        body.append_child(&anchor).map_err(js_error)?;
+        anchor.unchecked_ref::<HtmlElement>().click();
+        anchor.remove();
+
+        Ok(())
+    })();
+
+    Url::revoke_object_url(&object_url).map_err(js_error)?;
+    result
+}
 
 pub type PickedFolderFiles = (String, Vec<(FilePath, Vec<u8>)>);
 
@@ -167,4 +233,21 @@ async fn read_web_file(file: File) -> AppResult<Vec<u8>> {
     buffer.copy_to(&mut bytes);
 
     Ok(bytes)
+}
+
+fn browser_error(message: impl Into<String>) -> AppError {
+    AppError::BrowserError(message.into())
+}
+
+fn js_error(error: JsValue) -> AppError {
+    let message = error
+        .as_string()
+        .or_else(|| {
+            Reflect::get(&error, &JsValue::from_str("message"))
+                .ok()
+                .and_then(|message| message.as_string())
+        })
+        .unwrap_or_else(|| format!("{error:?}"));
+
+    browser_error(message)
 }

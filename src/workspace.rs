@@ -251,6 +251,10 @@ impl Workspace {
         }
     }
 
+    pub fn project_name(&self) -> &str {
+        self.file_storage.project_source().project_name()
+    }
+
     pub fn on_frame_submitted(&mut self, job: AsyncJob<AppResult<()>>) {
         let current_snapshot = self.project.snapshot();
         self.runtime_project

@@ -49,16 +49,27 @@ pub enum StartupAction {
 pub fn run(startup_action: StartupAction) -> AppResult<()> {
     let event_loop = EventLoop::<App>::with_user_event().build()?;
 
+    #[allow(unused_mut)]
+    let mut attributes = winit::window::Window::default_attributes().with_title("Rau");
+
     #[cfg(not(target_arch = "wasm32"))]
     {
-        let mut app = winit_runner::WinitRunner::new(startup_action);
+        use winit::dpi::LogicalSize;
+
+        attributes = attributes.with_inner_size(LogicalSize::new(1280, 800));
+        attributes = crate::utils::icon::apply_icon(attributes);
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        let mut app = winit_runner::WinitRunner::new(startup_action, attributes);
         event_loop.run_app(&mut app)?;
     }
     #[cfg(target_arch = "wasm32")]
     {
         use winit::platform::web::EventLoopExtWebSys;
 
-        let app = winit_runner::WinitRunner::new(&event_loop, startup_action);
+        let app = winit_runner::WinitRunner::new(&event_loop, startup_action, attributes);
         event_loop.spawn_app(app)
     }
 

@@ -26,25 +26,25 @@ impl Icon {
     }
 }
 
-pub const FOLDER_COLOR: Color32 = Color32::from_rgb(198, 162, 96);
+pub const FOLDER_COLOR: Color32 = Color32::from_rgb(226, 170, 68);
 
 pub fn resource_kind_icon(kind: ResourceKind) -> Icon {
     use ResourceKind as K;
     match kind {
-        K::Shader => Icon::new(regular::CODE, [122, 158, 200]),
-        K::Viewport => Icon::new(regular::MONITOR, [120, 180, 195]),
-        K::Uniform => Icon::new(regular::SLIDERS_HORIZONTAL, [122, 190, 170]),
-        K::BindGroup => Icon::new(regular::LINK, [210, 160, 110]),
-        K::Texture => Icon::new(regular::IMAGE, [184, 132, 184]),
-        K::TextureView => Icon::new(regular::EYE, [200, 145, 175]),
-        K::Sampler => Icon::new(regular::EYEDROPPER, [175, 185, 120]),
-        K::Dimension => Icon::new(regular::RULER, [150, 175, 150]),
-        K::Camera => Icon::new(regular::VIDEO_CAMERA, [170, 150, 210]),
-        K::Model => Icon::new(regular::CUBE, [122, 176, 132]),
-        K::RenderPipeline => Icon::new(regular::GRAPH, [200, 130, 130]),
-        K::RenderPass => Icon::new(regular::PAINT_BRUSH, [210, 145, 120]),
-        K::ComputePass => Icon::new(regular::CPU, [150, 150, 215]),
-        K::Presentation => Icon::new(regular::PRESENTATION, [198, 162, 96]),
+        K::Shader => Icon::new(regular::CODE, [97, 154, 221]),
+        K::Viewport => Icon::new(regular::MONITOR, [97, 192, 215]),
+        K::Uniform => Icon::new(regular::SLIDERS_HORIZONTAL, [102, 208, 177]),
+        K::BindGroup => Icon::new(regular::LINK, [237, 158, 79]),
+        K::Texture => Icon::new(regular::IMAGE, [197, 116, 197]),
+        K::TextureView => Icon::new(regular::EYE, [212, 121, 171]),
+        K::Sampler => Icon::new(regular::EYEDROPPER, [187, 203, 102]),
+        K::Dimension => Icon::new(regular::RULER, [140, 180, 140]),
+        K::Camera => Icon::new(regular::VIDEO_CAMERA, [155, 120, 223]),
+        K::Model => Icon::new(regular::CUBE, [107, 191, 123]),
+        K::RenderPipeline => Icon::new(regular::GRAPH, [218, 105, 105]),
+        K::RenderPass => Icon::new(regular::PAINT_BRUSH, [234, 129, 89]),
+        K::ComputePass => Icon::new(regular::CPU, [117, 117, 230]),
+        K::Presentation => Icon::new(regular::PRESENTATION, [226, 170, 68]),
     }
 }
 
@@ -78,11 +78,11 @@ pub fn file_icon(file_path: &FilePath) -> Icon {
 
     match extension.as_deref() {
         Some("wgsl" | "glsl" | "vert" | "frag" | "comp") => {
-            Icon::new(regular::CODE, [122, 158, 200])
+            Icon::new(regular::CODE, [97, 154, 221])
         }
-        Some("json" | "toml") => Icon::new(regular::BRACKETS_CURLY, [198, 162, 96]),
-        Some("obj" | "gltf" | "glb") => Icon::new(regular::CUBE, [122, 176, 132]),
-        Some("png" | "jpg" | "jpeg" | "hdr") => Icon::new(regular::IMAGE, [184, 132, 184]),
+        Some("json" | "toml") => Icon::new(regular::BRACKETS_CURLY, [226, 170, 68]),
+        Some("obj" | "gltf" | "glb") => Icon::new(regular::CUBE, [107, 191, 123]),
+        Some("png" | "jpg" | "jpeg" | "hdr") => Icon::new(regular::IMAGE, [197, 116, 197]),
         _ => Icon::new(regular::FILE, [150, 150, 150]),
     }
 }

@@ -8,6 +8,8 @@ pub mod dir_node;
 pub mod event_queue;
 pub mod fps;
 pub mod github;
+#[cfg(not(target_arch = "wasm32"))]
+pub mod icon;
 pub mod key;
 pub mod obj;
 pub mod raw_scroll;

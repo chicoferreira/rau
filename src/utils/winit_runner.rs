@@ -1,6 +1,9 @@
 use std::{future::Future, sync::Arc};
 
-use winit::{application::ApplicationHandler, event::WindowEvent, event_loop::ActiveEventLoop};
+use winit::{
+    application::ApplicationHandler, event::WindowEvent, event_loop::ActiveEventLoop,
+    window::WindowAttributes,
+};
 
 use crate::error::AppResult;
 
@@ -8,6 +11,7 @@ pub struct WinitRunner<W: WindowApp<A> + 'static, A> {
     #[cfg(target_arch = "wasm32")]
     proxy: Option<winit::event_loop::EventLoopProxy<W>>,
     args: A,
+    window_attributes: WindowAttributes,
     app: Option<W>,
     pending_window_events: Vec<WindowEvent>,
 }
@@ -16,12 +20,14 @@ impl<W: WindowApp<A> + 'static, A> WinitRunner<W, A> {
     pub fn new(
         #[cfg(target_arch = "wasm32")] event_loop: &winit::event_loop::EventLoop<W>,
         args: A,
+        window_attributes: WindowAttributes,
     ) -> Self {
         #[cfg(target_arch = "wasm32")]
         let proxy = Some(event_loop.create_proxy());
         Self {
             app: None,
             args,
+            window_attributes,
             #[cfg(target_arch = "wasm32")]
             proxy,
             pending_window_events: Vec::new(),
@@ -32,7 +38,7 @@ impl<W: WindowApp<A> + 'static, A> WinitRunner<W, A> {
 impl<W: WindowApp<A> + 'static, A: Default + 'static> ApplicationHandler<W> for WinitRunner<W, A> {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         #[allow(unused_mut)]
-        let mut window_attributes = winit::window::Window::default_attributes();
+        let mut window_attributes = self.window_attributes.clone();
 
         #[cfg(target_arch = "wasm32")]
         {

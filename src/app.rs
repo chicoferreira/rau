@@ -46,6 +46,15 @@ pub enum State {
     Workspace(Workspace),
 }
 
+impl State {
+    fn window_title(&self) -> String {
+        match self {
+            State::MainMenu(_) => "Rau".to_string(),
+            State::Workspace(workspace) => format!("Rau - {}", workspace.project_name()),
+        }
+    }
+}
+
 impl WindowApp<StartupAction> for App {
     async fn new(
         window: Arc<winit::window::Window>,
@@ -201,6 +210,12 @@ impl App {
         for event in self.event_queue.drain() {
             match event {
                 AppEvent::SetState(state) => {
+                    let title = state.window_title();
+                    self.window.set_title(&title);
+                    #[cfg(target_arch = "wasm32")]
+                    if let Err(e) = crate::utils::browser::set_document_title(&title) {
+                        log::error!("Failed to set document title: {e:?}");
+                    }
                     self.state = state;
                 }
                 AppEvent::SetPresentMode(present_mode) => {
