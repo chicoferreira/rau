@@ -21,7 +21,7 @@ impl Palette {
     const TEXT_WEAK: Color32 = Color32::from_gray(100);
 
     const ACCENT: Color32 = Color32::from_rgb(218, 223, 232);
-    const SELECTION: Color32 = Color32::from_rgb(55, 86, 152);
+    const SELECTION: Color32 = Color32::from_rgb(45, 104, 211);
 
     const WARN: Color32 = Color32::from_rgb(232, 181, 94);
     const ERROR: Color32 = Color32::from_rgb(244, 113, 113);
