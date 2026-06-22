@@ -22,6 +22,12 @@ use egui_phosphor::regular;
 
 const ROW_BUTTON_SIZE: f32 = 30.0;
 
+#[derive(Clone)]
+pub struct RecentProjectEntry {
+    pub id: ProjectIdentifier,
+    pub last_opened: chrono::DateTime<chrono::Utc>,
+}
+
 #[derive(Default)]
 pub struct RecentProjectsState {
     load_state: RecentProjectLoadState,
@@ -34,10 +40,10 @@ pub enum RecentProjectLoadState {
     #[default]
     Pending,
     Loading {
-        job: AsyncJob<AppResult<Vec<ProjectIdentifier>>>,
+        job: AsyncJob<AppResult<Vec<RecentProjectEntry>>>,
     },
     Loaded {
-        projects: Vec<ProjectIdentifier>,
+        recent_projects: Vec<RecentProjectEntry>,
     },
 }
 
@@ -55,12 +61,12 @@ impl RecentProjectsState {
             "Recent Projects",
         );
 
-        let RecentProjectLoadState::Loaded { projects } = &self.load_state else {
+        let RecentProjectLoadState::Loaded { recent_projects } = &self.load_state else {
             field::spinner(ui);
             return result;
         };
 
-        if projects.is_empty() {
+        if recent_projects.is_empty() {
             ui.label(RichText::new("No recent projects yet.").weak());
             return result;
         }
@@ -69,9 +75,11 @@ impl RecentProjectsState {
 
         let remove_pending = self.remove_job.is_some();
 
-        for project in projects.clone() {
+        let recent_projects = recent_projects.clone();
+
+        for RecentProjectEntry { id, last_opened } in recent_projects {
             #[cfg(not(target_arch = "wasm32"))]
-            let subtitle = project.project_path().as_ref().display().to_string();
+            let subtitle = id.project_path().as_ref().display().to_string();
             #[cfg(target_arch = "wasm32")]
             let subtitle = "Stored in browser".to_string();
 
@@ -80,11 +88,7 @@ impl RecentProjectsState {
                 ui.horizontal(|ui| {
                     let folder = resource_icons::Icon::new(regular::FOLDER, [226, 170, 68]);
                     ui.vertical(|ui| {
-                        ui.label(resource_icons::icon_text(
-                            ui,
-                            folder,
-                            project.project_name(),
-                        ));
+                        ui.label(resource_icons::icon_text(ui, folder, id.project_name()));
                         ui.add(
                             egui::Label::new(RichText::new(&subtitle).size(12.0).weak())
                                 .selectable(true),
@@ -94,7 +98,7 @@ impl RecentProjectsState {
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         if remove_button(ui, remove_pending) {
                             self.delete_confirmation_modal =
-                                Some(DeleteProjectConfirmationModal::new(project.clone()));
+                                Some(DeleteProjectConfirmationModal::new(id.clone()));
                         }
 
                         let open_icon = resource_icons::Icon {
@@ -105,11 +109,12 @@ impl RecentProjectsState {
                         let open = egui::Button::new(open_text)
                             .min_size(egui::vec2(100.0, ROW_BUTTON_SIZE));
                         if ui.add(open).clicked() {
-                            result = Some(project.clone());
+                            result = Some(id.clone());
                         }
 
                         ui.add_space(6.0);
-                        ui.label(RichText::new("Last modified —").weak()); // TODO: add the real last modified time
+                        ui.weak(format_last_opened(last_opened))
+                            .on_hover_text(format_last_opened_full(last_opened));
                     })
                 })
             });
@@ -154,15 +159,20 @@ impl RecentProjectsState {
             }
             RecentProjectLoadState::Loading { job } => {
                 if let Poll::Ready(result) = job.try_resolve() {
-                    let projects = match result {
+                    let mut recent_projects = match result {
                         Ok(projects) => projects,
                         Err(error) => {
                             toasts_log_error!(toasts, "Failed to load recent projects: {error}");
-                            self.load_state = RecentProjectLoadState::Loaded { projects: vec![] };
+                            self.load_state = RecentProjectLoadState::Loaded {
+                                recent_projects: vec![],
+                            };
                             return;
                         }
                     };
-                    self.load_state = RecentProjectLoadState::Loaded { projects };
+
+                    recent_projects.sort_by_key(|project| std::cmp::Reverse(project.last_opened));
+
+                    self.load_state = RecentProjectLoadState::Loaded { recent_projects };
                 }
             }
             RecentProjectLoadState::Loaded { .. } => {}
@@ -179,6 +189,30 @@ impl RecentProjectsState {
             self.reload();
         }
     }
+}
+
+fn format_last_opened(last_opened: chrono::DateTime<chrono::Utc>) -> String {
+    let seconds = chrono::Utc::now()
+        .signed_duration_since(last_opened)
+        .num_seconds()
+        .max(0) as u64;
+
+    let (amount, unit) = match seconds {
+        ..60 => return "just now".to_string(),
+        60..3600 => (seconds / 60, "minute"),
+        3600..86400 => (seconds / 3600, "hour"),
+        _ => (seconds / 86400, "day"),
+    };
+
+    let plural = if amount == 1 { "" } else { "s" };
+    format!("{amount} {unit}{plural} ago")
+}
+
+fn format_last_opened_full(last_opened: chrono::DateTime<chrono::Utc>) -> String {
+    last_opened
+        .with_timezone(&chrono::Local)
+        .format("%d/%m/%Y %H:%M")
+        .to_string()
 }
 
 fn remove_button(ui: &mut egui::Ui, remove_pending: bool) -> bool {

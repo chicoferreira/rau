@@ -13,6 +13,7 @@ use crate::{
         identifier::ProjectIdentifier,
     },
     project::paths::FilePath,
+    ui::components::main_menu::recent_projects::RecentProjectEntry,
     utils::{async_job::AsyncJob, background_task},
 };
 
@@ -32,7 +33,13 @@ pub struct ProjectFileSystem {
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct AppConfig {
     #[serde(default)]
-    pub recent_projects: Vec<AbsolutePathBuf>,
+    pub recent_projects: Vec<RecentProject>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RecentProject {
+    pub path: AbsolutePathBuf,
+    pub last_opened: chrono::DateTime<chrono::Utc>,
 }
 
 fn config_path() -> AppResult<PathBuf> {
@@ -43,12 +50,23 @@ fn config_path() -> AppResult<PathBuf> {
 }
 
 impl AppConfig {
-    fn read_or_default() -> AppResult<Self> {
+    fn read_or_default_if_empty() -> AppResult<Self> {
         let path = config_path()?;
         match std::fs::read_to_string(&path) {
             Ok(contents) => Ok(toml::from_str(&contents)?),
             Err(err) if err.kind() == std::io::ErrorKind::NotFound => Ok(AppConfig::default()),
             Err(err) => Err(err.into()),
+        }
+    }
+
+    fn read_or_default_if_error() -> AppConfig {
+        match Self::read_or_default_if_empty() {
+            Ok(config) => config,
+            Err(err) => {
+                log::error!("Failed to read app config: {err}");
+                log::error!("Creating a new app config.");
+                AppConfig::default()
+            }
         }
     }
 
@@ -65,8 +83,12 @@ impl AppConfig {
     }
 
     fn remember_project_path(&mut self, project_path: AbsolutePathBuf) {
-        self.recent_projects.retain(|path| path != &project_path);
-        self.recent_projects.insert(0, project_path);
+        self.recent_projects
+            .retain(|recent| recent.path != project_path);
+        self.recent_projects.push(RecentProject {
+            path: project_path,
+            last_opened: chrono::Utc::now(),
+        });
     }
 }
 
@@ -97,18 +119,18 @@ impl AppFileSystemTrait for AppFileSystem {
         })
     }
 
-    fn recent_projects(&self) -> FutureResult<Vec<ProjectIdentifier>> {
+    fn recent_projects(&self) -> FutureResult<Vec<RecentProjectEntry>> {
         spawn_blocking(self.send_jobs.clone(), move || {
-            let config = AppConfig::read_or_default()?;
+            let config = AppConfig::read_or_default_if_empty()?;
             let mut seen = HashSet::new();
             let mut projects = Vec::new();
 
-            for path in config.recent_projects {
+            for RecentProject { path, last_opened } in config.recent_projects {
                 match ProjectIdentifier::extract_identifier(path) {
-                    Ok(project_identifier) => {
-                        let project_path = project_identifier.project_path().as_path_buf();
+                    Ok(id) => {
+                        let project_path = id.project_path().as_path_buf();
                         if seen.insert(project_path) {
-                            projects.push(project_identifier);
+                            projects.push(RecentProjectEntry { id, last_opened });
                         }
                     }
                     Err(error) => {
@@ -138,7 +160,7 @@ impl AppFileSystemTrait for AppFileSystem {
         let project_path = id.project_path().clone();
 
         spawn_blocking(self.send_jobs.clone(), move || {
-            let mut config = AppConfig::read_or_default()?;
+            let mut config = AppConfig::read_or_default_if_error();
             config.remember_project_path(project_path);
             config.save()
         })
@@ -148,8 +170,10 @@ impl AppFileSystemTrait for AppFileSystem {
         let project_path = id.project_path().clone();
 
         spawn_blocking(self.send_jobs.clone(), move || {
-            let mut config = AppConfig::read_or_default()?;
-            config.recent_projects.retain(|path| path != &project_path);
+            let mut config = AppConfig::read_or_default_if_error();
+            config
+                .recent_projects
+                .retain(|recent| recent.path != project_path);
             config.save()
         })
     }

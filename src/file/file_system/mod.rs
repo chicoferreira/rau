@@ -14,6 +14,7 @@ use crate::{
         identifier::{ProjectIdentifier, ProjectSource},
     },
     project::paths::FilePath,
+    ui::components::main_menu::recent_projects::RecentProjectEntry,
     utils::async_job::AsyncJob,
 };
 
@@ -48,7 +49,7 @@ pub trait AppFileSystemTrait: Clone + Sized {
         id: ProjectIdentifier,
     ) -> FutureResult<(ProjectFileSystem, FileWatcher)>;
 
-    fn recent_projects(&self) -> FutureResult<Vec<ProjectIdentifier>>;
+    fn recent_projects(&self) -> FutureResult<Vec<RecentProjectEntry>>;
 
     fn ensure_project_can_be_created(&self, id: ProjectIdentifier) -> FutureResult<()>;
 
@@ -133,7 +134,7 @@ impl AppFileSystem {
         }
     }
 
-    pub fn recent_projects(&self) -> FutureResult<Vec<ProjectIdentifier>> {
+    pub fn recent_projects(&self) -> FutureResult<Vec<RecentProjectEntry>> {
         self.backend.recent_projects()
     }
 

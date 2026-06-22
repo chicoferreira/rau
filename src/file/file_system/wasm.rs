@@ -1,4 +1,7 @@
-use std::{collections::BTreeSet, sync::mpsc::Sender};
+use std::{
+    collections::{BTreeSet, HashMap},
+    sync::mpsc::Sender,
+};
 
 use indexed_db_futures::{
     Build, BuildPrimitive,
@@ -22,12 +25,14 @@ use crate::{
         identifier::ProjectIdentifier,
     },
     project::paths::FilePath,
+    ui::components::main_menu::recent_projects::RecentProjectEntry,
     utils::async_job::AsyncJob,
 };
 
 const DB_NAME: &str = "rau";
 const FILES_STORE: &str = "files";
 const DIRECTORIES_STORE: &str = "directories";
+const RECENT_PROJECTS_STORE: &str = "recent_projects";
 
 #[derive(Clone)]
 pub struct AppFileSystem {
@@ -71,7 +76,7 @@ impl AppFileSystemTrait for AppFileSystem {
         })
     }
 
-    fn recent_projects(&self) -> FutureResult<Vec<ProjectIdentifier>> {
+    fn recent_projects(&self) -> FutureResult<Vec<RecentProjectEntry>> {
         let database = self.database.clone();
 
         AsyncJob::new(async move {
@@ -88,17 +93,42 @@ impl AppFileSystemTrait for AppFileSystem {
 
             let mut project_names = file_project_names;
             project_names.extend(directory_project_names);
+            drop(transaction);
 
-            Ok(project_names
+            let mut last_opened_times = ProjectFileSystem::last_opened_times(&database).await?;
+
+            let projects = project_names
                 .into_iter()
-                .map(ProjectIdentifier::new)
-                .collect())
+                .map(|name| RecentProjectEntry {
+                    last_opened: last_opened_times.remove(&name).unwrap_or_default(),
+                    id: ProjectIdentifier::new(name),
+                })
+                .collect::<Vec<_>>();
+
+            Ok(projects)
         })
     }
 
-    fn remember_project(&self, _id: ProjectIdentifier) -> FutureResult<()> {
-        // The project will be already remembered in the database by its key whenever a file is saved.
-        AsyncJob::new(async move { Ok(()) })
+    fn remember_project(&self, id: ProjectIdentifier) -> FutureResult<()> {
+        let database = self.database.clone();
+
+        AsyncJob::new(async move {
+            let transaction = ProjectFileSystem::recent_projects_transaction(
+                &database,
+                TransactionMode::Readwrite,
+            )?;
+            let store = ProjectFileSystem::recent_projects_store(&transaction)?;
+
+            let last_opened_millis = chrono::Utc::now().timestamp_millis() as f64;
+            store
+                .put(JsValue::from_f64(last_opened_millis))
+                .with_key(JsValue::from_str(id.project_name()))
+                .build()?;
+
+            transaction.commit().await?;
+
+            Ok(())
+        })
     }
 
     fn ensure_project_can_be_created(&self, id: ProjectIdentifier) -> FutureResult<()> {
@@ -157,6 +187,15 @@ impl AppFileSystemTrait for AppFileSystem {
 
             transaction.commit().await?;
 
+            // Drop the recorded last-opened time as well.
+            let transaction = ProjectFileSystem::recent_projects_transaction(
+                &database,
+                TransactionMode::Readwrite,
+            )?;
+            let store = ProjectFileSystem::recent_projects_store(&transaction)?;
+            store.delete(JsValue::from_str(id.project_name())).build()?;
+            transaction.commit().await?;
+
             Ok(())
         })
     }
@@ -170,7 +209,10 @@ impl ProjectFileSystem {
     async fn open_database() -> AppResult<Database> {
         let database = Database::open(DB_NAME).await?;
 
-        if Self::has_files_store(&database) && Self::has_directories_store(&database) {
+        if Self::has_files_store(&database)
+            && Self::has_directories_store(&database)
+            && Self::has_recent_projects_store(&database)
+        {
             return Ok(database);
         }
 
@@ -187,6 +229,11 @@ impl ProjectFileSystem {
                 if !Self::has_directories_store(&database) {
                     database.create_object_store(DIRECTORIES_STORE).build()?;
                 }
+                if !Self::has_recent_projects_store(&database) {
+                    database
+                        .create_object_store(RECENT_PROJECTS_STORE)
+                        .build()?;
+                }
 
                 Ok(())
             })
@@ -195,16 +242,22 @@ impl ProjectFileSystem {
         Ok(database)
     }
 
-    fn has_files_store(database: &Database) -> bool {
+    fn has_store(database: &Database, name: &str) -> bool {
         database
             .object_store_names()
-            .any(|store_name| store_name == FILES_STORE)
+            .any(|store_name| store_name == name)
+    }
+
+    fn has_files_store(database: &Database) -> bool {
+        Self::has_store(database, FILES_STORE)
     }
 
     fn has_directories_store(database: &Database) -> bool {
-        database
-            .object_store_names()
-            .any(|store_name| store_name == DIRECTORIES_STORE)
+        Self::has_store(database, DIRECTORIES_STORE)
+    }
+
+    fn has_recent_projects_store(database: &Database) -> bool {
+        Self::has_store(database, RECENT_PROJECTS_STORE)
     }
 
     fn key(identifier: &ProjectIdentifier, file_path: &FilePath) -> Array {
@@ -255,6 +308,50 @@ impl ProjectFileSystem {
         transaction
             .object_store(DIRECTORIES_STORE)
             .map_err(Into::into)
+    }
+
+    fn recent_projects_transaction(
+        database: &Database,
+        mode: TransactionMode,
+    ) -> AppResult<Transaction<'_>> {
+        database
+            .transaction(RECENT_PROJECTS_STORE)
+            .with_mode(mode)
+            .build()
+            .map_err(Into::into)
+    }
+
+    fn recent_projects_store<'a>(
+        transaction: &'a TransactionRef<'a>,
+    ) -> AppResult<ObjectStore<'a>> {
+        transaction
+            .object_store(RECENT_PROJECTS_STORE)
+            .map_err(Into::into)
+    }
+
+    async fn last_opened_times(
+        database: &Database,
+    ) -> AppResult<HashMap<String, chrono::DateTime<chrono::Utc>>> {
+        let transaction = Self::recent_projects_transaction(database, TransactionMode::Readonly)?;
+        let store = Self::recent_projects_store(&transaction)?;
+
+        let names_request = store.get_all_keys().primitive()?;
+        let times_request = store.get_all().primitive()?;
+
+        let (names, times) = futures_lite::future::try_zip(names_request, times_request).await?;
+
+        let names = names.collect::<indexed_db_futures::Result<Vec<JsValue>>>()?;
+        let times = times.collect::<indexed_db_futures::Result<Vec<JsValue>>>()?;
+
+        Ok(names
+            .into_iter()
+            .filter_map(|name| name.as_string())
+            .zip(times)
+            .filter_map(|(name, millis)| {
+                let datetime = chrono::DateTime::from_timestamp_millis(millis.as_f64()? as i64)?;
+                Some((name, datetime))
+            })
+            .collect())
     }
 
     async fn entry_exists(
