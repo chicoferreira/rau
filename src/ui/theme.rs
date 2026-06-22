@@ -41,6 +41,8 @@ pub fn install(ctx: &egui::Context) {
 fn visuals() -> egui::Visuals {
     let mut v = egui::Visuals::dark();
 
+    v.interact_cursor = Some(egui::CursorIcon::PointingHand);
+
     v.dark_mode = true;
 
     v.panel_fill = Palette::BG_PANEL;

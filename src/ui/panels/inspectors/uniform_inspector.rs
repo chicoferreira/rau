@@ -350,8 +350,7 @@ fn ui_field_entry(
 fn ui_uniform_type_label(ui: &mut Ui, kind: UniformFieldDataKind, padding: usize) {
     let (align, size) = kind.layout();
     egui::Popup::from_toggle_button_response(
-        &ui.label(egui::RichText::new(kind.to_string()).weak())
-            .on_hover_cursor(egui::CursorIcon::PointingHand),
+        &ui.label(egui::RichText::new(kind.to_string()).weak()),
     )
     .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside)
     .show(|ui| {

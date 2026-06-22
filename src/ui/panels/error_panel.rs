@@ -59,7 +59,6 @@ impl ErrorPanel {
                 true => "Hide error list",
                 false => "Show error list",
             })
-            .on_hover_cursor(egui::CursorIcon::PointingHand)
             .clicked();
 
         if clicked {
@@ -104,7 +103,6 @@ fn error_list_content(
             let close = ui
                 .add(egui::Button::new(regular::X).frame(false))
                 .on_hover_text("Hide error list")
-                .on_hover_cursor(egui::CursorIcon::PointingHand)
                 .clicked();
 
             if close {
@@ -157,8 +155,7 @@ fn error_card(
 
                 let response = ui
                     .add(egui::Label::new(label_text).sense(egui::Sense::click()))
-                    .on_hover_text("Click to open inspector")
-                    .on_hover_cursor(egui::CursorIcon::PointingHand);
+                    .on_hover_text("Click to open inspector");
 
                 if response.hovered() {
                     let rect = response.rect;
@@ -178,7 +175,6 @@ fn error_card(
                     if ui
                         .add(egui::Button::new(regular::COPY).frame(false))
                         .on_hover_text("Copy error message")
-                        .on_hover_cursor(egui::CursorIcon::PointingHand)
                         .clicked()
                     {
                         ui.ctx().copy_text(error.to_string());

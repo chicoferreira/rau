@@ -48,7 +48,7 @@ fn vsync_status_ui(ui: &mut egui::Ui, state: &mut StateSnapshot) {
     let button =
         egui::Button::new(egui::RichText::new(title).color(ui.visuals().weak_text_color()))
             .frame(false);
-    let response = ui.add(button).on_hover_cursor(egui::CursorIcon::PointingHand).on_hover_ui(|ui| {
+    let response = ui.add(button).on_hover_ui(|ui| {
         ui.strong(title);
         ui.label(match vsync_on {
             true => "Renders frames at the monitor's refresh rate to prevent tearing.",
