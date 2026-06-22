@@ -1,0 +1,11 @@
+newmtl MetalBarrel
+Ns 96.0
+Ka 1.0 1.0 1.0
+Kd 1.0 1.0 1.0
+Ks 1.0 1.0 1.0
+Ni 1.45
+d 1.0
+illum 2
+map_Kd diffuse.png
+map_Bump normal.png
+map_Ks specular.png

@@ -26,6 +26,7 @@ mod error;
 mod file;
 mod main_menu;
 mod project;
+#[cfg(not(target_arch = "wasm32"))]
 mod scene;
 pub mod startup;
 mod ui;

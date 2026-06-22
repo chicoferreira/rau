@@ -374,19 +374,20 @@ impl Mesh {
         let (positions, _) = model.mesh.positions.as_chunks();
         let (normals, _) = model.mesh.normals.as_chunks();
         let (texture_coords, _) = model.mesh.texcoords.as_chunks();
+        let texture_coords = flip_obj_texture_coordinates(texture_coords);
 
         let indices = model.mesh.indices;
 
         let (tangents, bitangents) = crate::utils::obj::calculate_tangents_and_bitangents(
             positions,
-            texture_coords,
+            &texture_coords,
             &indices,
         );
 
         let vertex_buffer_contents = vertex_buffer_spec.compute_vertex_contents(
             positions,
             normals,
-            texture_coords,
+            &texture_coords,
             &tangents,
             &bitangents,
         );
@@ -408,7 +409,7 @@ impl Mesh {
         Ok(Self {
             positions: positions.to_vec(),
             normals: normals.to_vec(),
-            texture_coords: texture_coords.to_vec(),
+            texture_coords,
             tangents,
             bitangents,
             indices,
@@ -429,6 +430,10 @@ impl Mesh {
         pub fn vertex_buffer() -> &ResizableBuffer;
         pub fn index_buffer() -> &ResizableBuffer;
     }
+}
+
+fn flip_obj_texture_coordinates(texture_coords: &[[f32; 2]]) -> Vec<[f32; 2]> {
+    texture_coords.iter().map(|[u, v]| [*u, 1.0 - *v]).collect()
 }
 
 impl Material {

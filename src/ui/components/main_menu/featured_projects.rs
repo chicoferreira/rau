@@ -42,6 +42,15 @@ pub const FEATURED_PROJECTS: &[FeaturedProject] = &[
         description: "A single RGB triangle drawn from the vertex shader. A minimal intro to render passes and pipelines.",
     },
     FeaturedProject {
+        id: "model",
+        name: "OBJ Model",
+        owner: "chicoferreira",
+        repo: "rau",
+        git_ref: "main",
+        path: "projects/model",
+        description: "A material-driven OBJ model with diffuse, normal, and specular maps, point lighting, and a third-person orbit camera.",
+    },
+    FeaturedProject {
         id: "full-example",
         name: "Full Example",
         owner: "chicoferreira",

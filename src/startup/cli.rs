@@ -4,6 +4,7 @@ use crate::{
     StartupAction,
     error::AppResult,
     file::identifier::{ProjectIdentifier, ProjectSource},
+    scene::{self, GenerateTemplate},
     ui::components::create_project_modal::{GithubProjectSource, ProjectCreationSource},
 };
 use clap::{Parser, Subcommand};
@@ -23,6 +24,13 @@ enum Command {
     New {
         #[command(subcommand)]
         storage: StorageCommand,
+    },
+    /// Generate a bundled example project into a target folder.
+    Generate {
+        /// Which example project to generate.
+        template: GenerateTemplate,
+        /// Folder to write the generated project into.
+        target_folder: PathBuf,
     },
 }
 
@@ -65,22 +73,6 @@ enum SourceCommand {
         #[arg(long)]
         path: Option<String>,
     },
-}
-
-impl Cli {
-    fn into_startup_action(self) -> AppResult<StartupAction> {
-        let Some(command) = self.command else {
-            return Ok(StartupAction::MainMenu);
-        };
-
-        match command {
-            Command::Open { project_folder } => {
-                let project_id = ProjectIdentifier::extract_identifier(project_folder)?;
-                Ok(StartupAction::OpenProject { project_id })
-            }
-            Command::New { storage } => storage.into_startup_action(),
-        }
-    }
 }
 
 impl StorageCommand {
@@ -136,7 +128,25 @@ pub fn main() {
         .filter_level(log::LevelFilter::Info)
         .init();
 
-    let startup_action = match Cli::parse().into_startup_action() {
+    let action = match Cli::parse().command {
+        None => Ok(StartupAction::MainMenu),
+        Some(Command::Open { project_folder }) => {
+            ProjectIdentifier::extract_identifier(project_folder)
+                .map(|project_id| StartupAction::OpenProject { project_id })
+        }
+        Some(Command::New { storage }) => storage.into_startup_action(),
+        Some(Command::Generate {
+            template,
+            target_folder,
+        }) => {
+            if let Err(e) = scene::generate_project(template, &target_folder) {
+                log::error!("Failed to generate project: {}", e);
+            }
+            return;
+        }
+    };
+
+    let startup_action = match action {
         Ok(action) => action,
         Err(e) => {
             log::error!("Failed to parse command: {}", e);
