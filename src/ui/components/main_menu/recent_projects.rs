@@ -78,17 +78,22 @@ impl RecentProjectsState {
         let recent_projects = recent_projects.clone();
 
         for RecentProjectEntry { id, last_opened } in recent_projects {
-            #[cfg(not(target_arch = "wasm32"))]
-            let subtitle = id.project_path().as_ref().display().to_string();
-            #[cfg(target_arch = "wasm32")]
-            let subtitle = "Stored in browser".to_string();
-
             menu_widgets::card(ui, |ui| {
                 ui.set_width(ui.available_width());
                 ui.horizontal(|ui| {
                     let folder = resource_icons::Icon::new(regular::FOLDER, [226, 170, 68]);
+
+                    #[cfg(target_arch = "wasm32")]
+                    {
+                        ui.set_height(ROW_BUTTON_SIZE);
+                        ui.label(resource_icons::icon_text(ui, folder, id.project_name()));
+                    }
+
+                    #[cfg(not(target_arch = "wasm32"))]
                     ui.vertical(|ui| {
                         ui.label(resource_icons::icon_text(ui, folder, id.project_name()));
+
+                        let subtitle = id.project_path().as_ref().display().to_string();
                         ui.add(
                             egui::Label::new(RichText::new(&subtitle).size(12.0).weak())
                                 .selectable(true),
