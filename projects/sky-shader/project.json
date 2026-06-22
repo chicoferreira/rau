@@ -1,0 +1,234 @@
+{
+  "presentation": {
+    "renderPasses": [{ "idx": 1, "version": 1 }],
+    "mainViewport": { "idx": 1, "version": 1 }
+  },
+  "shaders": [
+    { "value": null, "version": 0 },
+    { "value": { "label": "Sky Shader", "source": "sky.wgsl" }, "version": 1 }
+  ],
+  "viewports": [
+    { "value": null, "version": 0 },
+    {
+      "value": {
+        "label": "Viewport Texture",
+        "textureViewId": { "idx": 2, "version": 1 },
+        "dimensionId": { "idx": 1, "version": 1 },
+        "controlsCameraId": { "idx": 1, "version": 1 }
+      },
+      "version": 1
+    }
+  ],
+  "uniforms": [
+    { "value": null, "version": 0 },
+    {
+      "value": {
+        "label": "Camera Buffer",
+        "fields": [
+          {
+            "label": "view_position",
+            "source": {
+              "type": "camera",
+              "camera_id": { "idx": 1, "version": 1 },
+              "field": "position"
+            }
+          },
+          {
+            "label": "view",
+            "source": {
+              "type": "camera",
+              "camera_id": { "idx": 1, "version": 1 },
+              "field": "view"
+            }
+          },
+          {
+            "label": "proj_view",
+            "source": {
+              "type": "camera",
+              "camera_id": { "idx": 1, "version": 1 },
+              "field": "projectionView"
+            }
+          },
+          {
+            "label": "inv_proj",
+            "source": {
+              "type": "camera",
+              "camera_id": { "idx": 1, "version": 1 },
+              "field": "inverseProjection"
+            }
+          },
+          {
+            "label": "inv_view",
+            "source": {
+              "type": "camera",
+              "camera_id": { "idx": 1, "version": 1 },
+              "field": "inverseView"
+            }
+          }
+        ]
+      },
+      "version": 1
+    },
+    {
+      "value": {
+        "label": "Sky",
+        "fields": [
+          {
+            "label": "sun_position",
+            "source": {
+              "type": "userDefined",
+              "data_type": "vec3f",
+              "data": [10.0, 0.5, 0.0]
+            }
+          }
+        ]
+      },
+      "version": 1
+    }
+  ],
+  "bindGroups": [
+    { "value": null, "version": 0 },
+    {
+      "value": {
+        "label": "camera bind group",
+        "entries": [
+          {
+            "visibility": "VERTEX | FRAGMENT",
+            "resource": {
+              "type": "uniform",
+              "value": { "idx": 1, "version": 1 }
+            }
+          }
+        ]
+      },
+      "version": 1
+    },
+    {
+      "value": {
+        "label": "sky bind group",
+        "entries": [
+          {
+            "visibility": "VERTEX | FRAGMENT",
+            "resource": {
+              "type": "uniform",
+              "value": { "idx": 2, "version": 1 }
+            }
+          }
+        ]
+      },
+      "version": 1
+    }
+  ],
+  "textures": [
+    { "value": null, "version": 0 },
+    {
+      "value": {
+        "label": "Viewport Texture",
+        "format": "rgba8UnormSrgb",
+        "usage": "TEXTURE_BINDING | RENDER_ATTACHMENT",
+        "source": { "type": "Dimension", "value": { "idx": 1, "version": 1 } }
+      },
+      "version": 1
+    }
+  ],
+  "textureViews": [
+    { "value": null, "version": 0 },
+    {
+      "value": {
+        "label": "Viewport Texture View",
+        "format": { "type": "Srgb" },
+        "dimension": null,
+        "textureId": { "idx": 1, "version": 1 }
+      },
+      "version": 1
+    },
+    {
+      "value": {
+        "label": "Viewport Texture View Egui",
+        "format": { "type": "Linear" },
+        "dimension": null,
+        "textureId": { "idx": 1, "version": 1 }
+      },
+      "version": 1
+    }
+  ],
+  "samplers": [{ "value": null, "version": 0 }],
+  "dimensions": [
+    { "value": null, "version": 0 },
+    {
+      "value": { "label": "Main Dimension", "size": [1080, 1080] },
+      "version": 1
+    }
+  ],
+  "cameras": [
+    { "value": null, "version": 0 },
+    {
+      "value": {
+        "label": "Main Camera",
+        "position": [0.0, 0.0, -1.0],
+        "yaw": 0.0,
+        "pitch": 0.0,
+        "dimensionId": { "idx": 1, "version": 1 },
+        "fovy": 1.0471976,
+        "znear": 0.1,
+        "zfar": 100.0,
+        "mode": "firstPerson",
+        "lookingAt": [0.0, 0.0, 0.0],
+        "currentSpeed": [0.0, 0.0, 0.0],
+        "maxSpeed": 20.0,
+        "acceleration": 150.0,
+        "drag": 12.0,
+        "sensitivity": 0.1,
+        "scrollSensitivity": 0.6,
+        "currentScrollSpeed": 0.0
+      },
+      "version": 1
+    }
+  ],
+  "models": [{ "value": null, "version": 0 }],
+  "renderPipelines": [
+    { "value": null, "version": 0 },
+    {
+      "value": {
+        "label": "sky pipeline",
+        "primitiveState": {
+          "topology": "triangle-list",
+          "stripIndexFormat": null,
+          "frontFace": "ccw",
+          "cullMode": "back",
+          "polygonMode": "fill"
+        },
+        "vertexShader": { "idx": 1, "version": 1 },
+        "fragmentShader": { "idx": 1, "version": 1 },
+        "drawStrategy": {
+          "type": "direct",
+          "vertices": { "start": 0, "end": 3 },
+          "instances": { "start": 0, "end": 1 }
+        },
+        "bindGroups": [
+          { "static": { "idx": 1, "version": 1 } },
+          { "static": { "idx": 2, "version": 1 } }
+        ],
+        "colorFormat": "rgba8UnormSrgb",
+        "depthFormat": null
+      },
+      "version": 1
+    }
+  ],
+  "renderPasses": [
+    { "value": null, "version": 0 },
+    {
+      "value": {
+        "label": "Sky Render Pass",
+        "target": {
+          "textureViewId": { "idx": 1, "version": 1 },
+          "loadOperation": { "type": "Clear", "value": [0.0, 0.0, 0.0, 1.0] }
+        },
+        "depthTarget": null,
+        "pipelines": [{ "idx": 1, "version": 1 }]
+      },
+      "version": 1
+    }
+  ],
+  "computePasses": [{ "value": null, "version": 0 }]
+}

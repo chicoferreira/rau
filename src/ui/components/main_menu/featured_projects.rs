@@ -50,6 +50,15 @@ pub const FEATURED_PROJECTS: &[FeaturedProject] = &[
         path: "projects/full-example",
         description: "A lit OBJ cube with diffuse and normal maps, a camera, and an HDR skybox. Shows off most of what rau can do.",
     },
+    FeaturedProject {
+        id: "sky-shader",
+        name: "Sky Shader",
+        owner: "chicoferreira",
+        repo: "rau",
+        git_ref: "main",
+        path: "projects/sky-shader",
+        description: "A procedural Preetham sky on a full-screen triangle, with the view ray from the camera and the sun position from a uniform.",
+    },
 ];
 
 pub fn render_ui(ui: &mut Ui) -> Option<&'static FeaturedProject> {
