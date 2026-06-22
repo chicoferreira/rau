@@ -1,4 +1,5 @@
 use egui::RichText;
+use egui_phosphor::regular;
 use strum::IntoEnumIterator;
 
 use crate::{
@@ -12,13 +13,16 @@ use crate::{
         },
         storage::Storage,
     },
-    ui::components::{field, inspector},
+    ui::components::{field, inspector, main_menu::menu_widgets, resource_icons},
     utils::{
         derive::default_texture_format,
         derive_modal_material::{MaterialBindGroupsConfig, SamplerSetting},
         texture_format::TextureFormat,
     },
 };
+
+/// Fixed width of the modal.
+const MODAL_WIDTH: f32 = 460.0;
 
 /// Modal that creates one bind group per material of a model, along with the
 /// textures and texture views for the images the materials reference.
@@ -196,41 +200,57 @@ impl MaterialBindGroupsModal {
     ) -> Option<MaterialBindGroupsModalResponse> {
         let mut result = None;
 
-        let response = egui::Modal::new(egui::Id::new("material_bind_groups_modal")).show(
-            ui.ctx(),
-            |ui| {
-                ui.heading("Create Bind Groups from Materials");
-                ui.label(format!(
-                    "Creates a bind group for each of the {} material(s) of \"{}\", along with the textures and texture views for the images they reference.",
-                    self.material_count, self.model_label,
-                ));
+        let frame = egui::Frame::popup(ui.style()).inner_margin(20);
+        let response = egui::Modal::new(egui::Id::new("material_bind_groups_modal"))
+            .frame(frame)
+            .show(ui.ctx(), |ui| {
+                ui.set_width(MODAL_WIDTH);
 
-                ui.add_space(8.0);
+                menu_widgets::modal_title(
+                    ui,
+                    "Create Bind Groups from Materials",
+                    &format!(
+                        "Creates a bind group for each of the {} material(s) of \"{}\", along with the textures and texture views for the images they reference.",
+                        self.material_count, self.model_label,
+                    ),
+                );
+
+                ui.add_space(10.0);
                 self.texture_types_ui(ui);
 
-                ui.add_space(8.0);
+                ui.add_space(10.0);
                 self.sampler_ui(ui, samplers);
 
-                ui.add_space(8.0);
+                ui.add_space(10.0);
                 ui.weak("This will replace the bind groups currently assigned to the model materials.");
 
-                ui.add_space(4.0);
+                ui.add_space(14.0);
                 ui.horizontal(|ui| {
-                    let any_type_selected = self.texture_types.iter().any(|row| row.selected);
-
-                    let create_response = ui
-                        .add_enabled(any_type_selected, egui::Button::new("Create"))
-                        .on_disabled_hover_text("Select at least one texture type.");
-                    if create_response.clicked() {
-                        result = Some(MaterialBindGroupsModalResponse::Create);
-                    }
-
-                    if ui.button("Cancel").clicked() {
+                    let half = (ui.available_width() - ui.spacing().item_spacing.x) / 2.0;
+                    if menu_widgets::action_button_sized(ui, "Cancel", egui::vec2(half, 34.0))
+                        .clicked()
+                    {
                         result = Some(MaterialBindGroupsModalResponse::Cancel);
                     }
+
+                    let any_type_selected = self.texture_types.iter().any(|row| row.selected);
+                    let size = egui::vec2(ui.available_width(), 34.0);
+                    ui.add_enabled_ui(any_type_selected, |ui| {
+                        let label = resource_icons::monochrome_icon_text(
+                            ui,
+                            regular::MAGIC_WAND,
+                            egui::Color32::WHITE,
+                            "Create",
+                        );
+                        if menu_widgets::primary_action_button_sized(ui, label, size)
+                            .on_disabled_hover_text("Select at least one texture type.")
+                            .clicked()
+                        {
+                            result = Some(MaterialBindGroupsModalResponse::Create);
+                        }
+                    });
                 });
-            },
-        );
+            });
 
         if result.is_none() && response.should_close() {
             result = Some(MaterialBindGroupsModalResponse::Cancel);
@@ -245,7 +265,7 @@ impl MaterialBindGroupsModal {
             return;
         }
 
-        ui.strong("Texture types to include");
+        menu_widgets::modal_section_header(ui, "Texture types to include");
 
         let material_count = self.material_count;
         field::field_grid(ui, "material_bind_groups_modal_types", |ui| {
@@ -290,7 +310,7 @@ impl MaterialBindGroupsModal {
     }
 
     fn sampler_ui(&mut self, ui: &mut egui::Ui, samplers: &Storage<Sampler>) {
-        ui.strong("Sampler to include");
+        menu_widgets::modal_section_header(ui, "Sampler to include");
 
         let selected_text = match &self.sampler_setting {
             SamplerSetting::None => "None".to_string(),

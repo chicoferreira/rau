@@ -29,7 +29,7 @@ use crate::{
     },
     ui::{
         self,
-        components::{derive_modal_material_modal::MaterialBindGroupsModal, tiles::TreePane},
+        components::{derive_model_material_modal::MaterialBindGroupsModal, tiles::TreePane},
         panels::{
             error_panel::ErrorPanel, inspector_pane::InspectorPane, viewport_pane::ViewportPane,
         },
