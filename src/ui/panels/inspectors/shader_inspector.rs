@@ -1,7 +1,7 @@
 use crate::{
     project::{ShaderId, paths::FilePath},
     ui::{
-        components::{field_docs::field_doc, inspector},
+        components::{field, field_docs::field_doc, inspector},
         pane::StateSnapshot,
     },
     utils::wgpu_utils::ShaderSourceKind,
@@ -14,7 +14,7 @@ impl StateSnapshot<'_> {
         };
 
         inspector::section(ui, "Source", |ui| {
-            inspector::field_grid(ui, "shader_inspector_grid", |ui| {
+            field::field_grid(ui, "shader_inspector_grid", |ui| {
                 let mut source = shader.source().cloned();
                 let Some(files) = self.file_storage.files() else {
                     ui.spinner();
@@ -27,7 +27,7 @@ impl StateSnapshot<'_> {
                         .is_some()
                 };
 
-                if inspector::row_doc(
+                if field::row_doc(
                     ui,
                     "Source",
                     field_doc!(

@@ -2,21 +2,28 @@ use crate::{
     StartupAction,
     app::{AppEvent, State},
     error::AppResult,
-    featured_projects::FEATURED_PROJECTS,
     file::{file_system::AppFileSystem, identifier::ProjectSource},
     project::{Project, paths::FilePath},
     ui::components::{
         create_project_modal::{
             CreateProjectModal, CreateProjectModalResponse, ProjectCreationSource,
         },
-        open_or_import_project::OpenOrImportProject,
-        recent_projects::RecentProjectsState,
+        main_menu::{
+            featured_projects, menu_widgets, open_or_import_project::OpenOrImportProject,
+            recent_projects::RecentProjectsState,
+        },
+        resource_icons,
     },
-    utils::{async_job::AsyncJob, event_queue::EventQueue},
+    utils::{self, async_job::AsyncJob, event_queue::EventQueue},
     workspace::Workspace,
 };
 
+use egui::{Color32, RichText};
+use egui_phosphor::regular;
 use std::task::Poll;
+
+const CONTENT_MAX_WIDTH: f32 = 1180.0;
+const CONTENT_MARGIN: f32 = 36.0;
 
 #[derive(Default)]
 pub struct MainMenu {
@@ -25,6 +32,7 @@ pub struct MainMenu {
     open_or_import_project: OpenOrImportProject,
     recent_projects_state: RecentProjectsState,
     create_project_modal: Option<CreateProjectModal>,
+    logo_texture: Option<egui::TextureHandle>,
 }
 
 impl MainMenu {
@@ -59,25 +67,29 @@ impl MainMenu {
     pub fn render_ui(&mut self, ui: &mut egui::Ui, app_fs: &AppFileSystem) {
         self.toasts.show(ui.ctx());
 
-        if ui.button("New Project").clicked() {
-            self.create_project_modal = Some(CreateProjectModal::new(ProjectCreationSource::Empty));
-        }
+        egui::ScrollArea::vertical()
+            .auto_shrink(false)
+            .show(ui, |ui| {
+                content_container(ui, |ui| {
+                    ui.add_enabled_ui(!self.should_disable_ui(), |ui| {
+                        ui.add_space(28.0);
+                        self.header(ui);
+                        ui.add_space(28.0);
 
-        ui.add_enabled_ui(!self.should_disable_ui(), |ui| {
-            self.open_or_import_project.render_ui(ui);
-            if let Some(project_id) = self.recent_projects_state.render_ui(ui, app_fs) {
-                let source = ProjectSource::Persistent(project_id);
-                self.open_project(app_fs.clone(), source, vec![]);
-            }
-        });
+                        if let Some(project_id) = self.recent_projects_state.render_ui(ui, app_fs) {
+                            let source = ProjectSource::Persistent(project_id);
+                            self.open_project(app_fs.clone(), source, vec![]);
+                        }
 
-        ui.heading("Featured Projects");
-        for featured_project in FEATURED_PROJECTS {
-            if ui.button(featured_project.name).clicked() {
-                self.create_project_modal =
-                    Some(CreateProjectModal::from_featured_project(featured_project));
-            }
-        }
+                        ui.add_space(28.0);
+                        if let Some(project) = featured_projects::render_ui(ui) {
+                            self.create_project_modal =
+                                Some(CreateProjectModal::from_featured_project(project));
+                        }
+                        ui.add_space(40.0);
+                    });
+                });
+            });
 
         if let Some(modal) = &mut self.create_project_modal
             && let Some(response) = modal.render_ui(ui, app_fs, &mut self.toasts)
@@ -92,6 +104,53 @@ impl MainMenu {
                 }
             }
         }
+    }
+
+    fn header(&mut self, ui: &mut egui::Ui) {
+        ui.horizontal(|ui| {
+            let logo = self
+                .logo_texture
+                .get_or_insert_with(|| load_logo(ui.ctx()))
+                .clone();
+
+            ui.add(egui::Image::from_texture((logo.id(), [80.0, 80.0].into())));
+
+            ui.add_space(16.0);
+            ui.vertical(|ui| {
+                ui.spacing_mut().item_spacing.y = 0.0;
+                ui.add_space(5.0); // Add some vertical space to vertically center the text
+
+                ui.label(
+                    RichText::new("rau")
+                        .size(34.0)
+                        .variation("wght", 600.0)
+                        .strong(),
+                );
+                ui.label(RichText::new(format!("v{}", env!("CARGO_PKG_VERSION"))).weak());
+            });
+
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                ui.spacing_mut().item_spacing.x = 10.0;
+
+                ui.add_enabled_ui(!self.should_disable_ui(), |ui| {
+                    self.open_or_import_project.render_ui(ui);
+                });
+
+                let new_project = menu_widgets::primary_action_button(
+                    ui,
+                    resource_icons::monochrome_icon_text(
+                        ui,
+                        regular::PLUS,
+                        Color32::WHITE,
+                        "New Project",
+                    ),
+                );
+                if new_project.clicked() {
+                    self.create_project_modal =
+                        Some(CreateProjectModal::new(ProjectCreationSource::Empty));
+                }
+            });
+        });
     }
 
     fn open_project(
@@ -153,4 +212,34 @@ impl MainMenu {
     fn should_disable_ui(&self) -> bool {
         self.open_workspace_job.is_some() || self.open_or_import_project.is_picker_opened()
     }
+}
+
+fn content_container<R>(ui: &mut egui::Ui, content: impl FnOnce(&mut egui::Ui) -> R) -> R {
+    let outer = ui.available_rect_before_wrap();
+    let width = (outer.width() - 2.0 * CONTENT_MARGIN).clamp(0.0, CONTENT_MAX_WIDTH);
+    let left = outer.left() + ((outer.width() - width) * 0.5).max(0.0);
+    let rect = egui::Rect::from_min_max(
+        egui::pos2(left, outer.top()),
+        egui::pos2(left + width, f32::INFINITY),
+    );
+
+    ui.scope_builder(
+        egui::UiBuilder::new()
+            .max_rect(rect)
+            .layout(egui::Layout::top_down(egui::Align::Min)),
+        content,
+    )
+    .inner
+}
+
+fn load_logo(ctx: &egui::Context) -> egui::TextureHandle {
+    let image = image::load_from_memory(utils::icon::LOGO_IMAGE_BYTES)
+        .expect("Failed to decode logo")
+        .into_rgba8();
+
+    let (width, height) = image.dimensions();
+    let color_image =
+        egui::ColorImage::from_rgba_unmultiplied([width as usize, height as usize], image.as_raw());
+
+    ctx.load_texture("rau-logo", color_image, egui::TextureOptions::LINEAR)
 }

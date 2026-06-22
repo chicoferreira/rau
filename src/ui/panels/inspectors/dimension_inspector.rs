@@ -1,7 +1,7 @@
 use crate::{
     project::DimensionId,
     ui::{
-        components::{field_docs::field_doc, inspector},
+        components::{field, field_docs::field_doc, inspector},
         pane::StateSnapshot,
         size::Size2d,
     },
@@ -27,7 +27,7 @@ impl StateSnapshot<'_> {
                 bound to it."
             ),
             |ui| {
-                inspector::field_grid(ui, "dimension_inspector_grid", |ui| {
+                field::field_grid(ui, "dimension_inspector_grid", |ui| {
                     inspector::u32_drag_row_doc(
                         ui,
                         "Width",

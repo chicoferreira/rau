@@ -1,8 +1,9 @@
 use winit::window::WindowAttributes;
 
+pub const LOGO_IMAGE_BYTES: &[u8] = include_bytes!("../../assets/rau-app-icon.png");
+
 pub fn apply_icon(attributes: WindowAttributes) -> WindowAttributes {
-    let image_bytes = include_bytes!("../../assets/rau-app-icon.png");
-    let image = image::load_from_memory(image_bytes)
+    let image = image::load_from_memory(LOGO_IMAGE_BYTES)
         .expect("Failed to decode app window icon")
         .into_rgba8();
     let (width, height) = image.dimensions();

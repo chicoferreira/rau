@@ -1,13 +1,11 @@
 use std::{hash::Hash, ops::RangeInclusive};
 
-use egui::{
-    Align2, ComboBox, Direction, Grid, InnerResponse, Layout, Response, RichText, Ui, Widget,
-    WidgetText,
-};
+use egui::{Align2, ComboBox, Response, RichText, Ui, Widget, WidgetText};
 
 use crate::{
     project::{ProjectResource, paths::FilePath, storage::Storage},
     ui::components::{
+        field::{centered, error_label, row_doc},
         field_docs::{self, FieldDoc},
         resource_icons,
     },
@@ -16,28 +14,6 @@ use crate::{
 /// Trait for types that can be rendered as the label of a combo box entry.
 pub trait AsWidgetText {
     fn as_widget_text(&self) -> WidgetText;
-}
-
-pub fn centered<R>(ui: &mut Ui, add_contents: impl FnOnce(&mut Ui) -> R) -> InnerResponse<R> {
-    ui.with_layout(
-        Layout::centered_and_justified(Direction::TopDown).with_cross_justify(false),
-        add_contents,
-    )
-}
-
-pub fn error_label(ui: &mut Ui, text: impl Into<RichText>) -> Response {
-    let text = text.into().color(ui.visuals().error_fg_color);
-    ui.add(egui::Label::new(text).selectable(true))
-}
-
-/// A small, de-emphasized label for counts and other secondary annotations.
-pub fn weak_label(ui: &mut Ui, text: impl Into<RichText>) -> Response {
-    ui.label(text.into().size(11.0).color(ui.visuals().weak_text_color()))
-}
-
-/// A spinner sized to match the body text height.
-pub fn spinner(ui: &mut Ui) -> Response {
-    ui.add(egui::Spinner::new().size(ui.text_style_height(&egui::TextStyle::Body)))
 }
 
 pub fn centered_error(ui: &mut Ui, text: impl Into<RichText>) -> Response {
@@ -135,51 +111,6 @@ pub fn section_doc_wide<R>(
         },
         content,
     )
-}
-
-pub fn field_grid<R>(
-    ui: &mut Ui,
-    id_salt: impl Hash,
-    add_rows: impl FnOnce(&mut Ui) -> R,
-) -> egui::InnerResponse<R> {
-    Grid::new(id_salt)
-        .num_columns(2)
-        .spacing([8.0, 4.0])
-        .show(ui, add_rows)
-}
-
-pub fn row<R>(
-    ui: &mut Ui,
-    label: impl Into<WidgetText>,
-    add_control: impl FnOnce(&mut Ui) -> R,
-) -> R {
-    ui.label(label);
-    let result = add_control(ui);
-    ui.end_row();
-    result
-}
-
-/// Renders a field label followed by a help icon carrying its documentation.
-fn doc_label(ui: &mut Ui, label: impl Into<WidgetText>, doc: impl FieldDoc) {
-    ui.horizontal(|ui| {
-        ui.style_mut().spacing.item_spacing.x = 0.0;
-        ui.label(label);
-        ui.add_space(2.0);
-        field_docs::help_icon(ui, doc);
-    });
-}
-
-/// Like [`row`], but the label carries an inline documentation tooltip.
-pub fn row_doc<R>(
-    ui: &mut Ui,
-    label: impl Into<WidgetText>,
-    doc: impl FieldDoc,
-    add_control: impl FnOnce(&mut Ui) -> R,
-) -> R {
-    doc_label(ui, label, doc);
-    let result = add_control(ui);
-    ui.end_row();
-    result
 }
 
 /// A documented combo-box row: [`value_combo`] with a documented label.

@@ -10,6 +10,7 @@ use crate::{
     },
     ui::{
         components::{
+            field,
             field_docs::field_doc,
             flags_selector::flags_selector,
             hint,
@@ -89,7 +90,7 @@ impl StateSnapshot<'_> {
         let mut source = source_before.clone();
 
         inspector::section(ui, "Settings", |ui| {
-            inspector::field_grid(ui, "texture_inspector_grid", |ui| {
+            field::field_grid(ui, "texture_inspector_grid", |ui| {
                 inspector::combo_row_doc(
                     ui,
                     "Format",
@@ -110,7 +111,7 @@ impl StateSnapshot<'_> {
                     &mut format,
                 );
 
-                inspector::row_doc(
+                field::row_doc(
                     ui,
                     "Usage",
                     field_doc!(
@@ -173,7 +174,7 @@ fn ui_texture_source(
     let current_kind = TextureSourceKind::from_source(source);
     let mut selected_kind = current_kind;
 
-    inspector::field_grid(ui, "texture_source_grid", |ui| {
+    field::field_grid(ui, "texture_source_grid", |ui| {
         if inspector::combo_row_doc(
             ui,
             "Source",
@@ -208,9 +209,9 @@ fn ui_texture_source(
     });
 
     ui.indent("source_options", |ui| {
-        inspector::field_grid(ui, "texture_source_options_grid", |ui| match source {
+        field::field_grid(ui, "texture_source_options_grid", |ui| match source {
             TextureSource::Dimension(dimension_id) => {
-                inspector::row_doc(
+                field::row_doc(
                     ui,
                     "Dimension",
                     field_doc!(
@@ -261,7 +262,7 @@ fn ui_texture_source(
             }
             TextureSource::Image(path) => {
                 if let Some(files) = files {
-                    inspector::row_doc(
+                    field::row_doc(
                         ui,
                         "Image",
                         field_doc!(
@@ -279,7 +280,7 @@ fn ui_texture_source(
                         },
                     );
                 } else {
-                    inspector::row(ui, "Image", |ui| {
+                    field::row(ui, "Image", |ui| {
                         ui.spinner();
                     });
                 }

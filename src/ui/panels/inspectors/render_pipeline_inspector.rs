@@ -15,6 +15,7 @@ use crate::{
         components::{
             code_editor::shader_code_section,
             draggable_list::{ListEdits, draggable_list},
+            field,
             field_docs::field_doc,
             inspector::{self, AsWidgetText},
             resource_icons,
@@ -187,8 +188,8 @@ fn shaders_ui(
     let mut fragment_shader = render_pipeline.fragment_shader();
 
     inspector::section(ui, "Shaders", |ui| {
-        inspector::field_grid(ui, (render_pipeline_id, "shaders"), |ui| {
-            inspector::row_doc(
+        field::field_grid(ui, (render_pipeline_id, "shaders"), |ui| {
+            field::row_doc(
                 ui,
                 "Vertex Shader",
                 field_doc!(
@@ -206,7 +207,7 @@ fn shaders_ui(
                     )
                 },
             );
-            inspector::row_doc(
+            field::row_doc(
                 ui,
                 "Fragment Shader",
                 field_doc!(
@@ -240,7 +241,7 @@ fn target_formats_ui(
     let mut depth_format = render_pipeline.depth_format();
 
     inspector::section(ui, "Target Formats", |ui| {
-        inspector::field_grid(ui, (render_pipeline_id, "target_formats"), |ui| {
+        field::field_grid(ui, (render_pipeline_id, "target_formats"), |ui| {
             inspector::combo_row_doc(
                 ui,
                 "Color Format",
@@ -300,7 +301,7 @@ fn primitive_state_ui(
             [WebGPU spec](https://www.w3.org/TR/webgpu/#dictdef-gpuprimitivestate)"
         ),
         |ui| {
-            inspector::field_grid(ui, (render_pipeline_id, "primitive_state"), |ui| {
+            field::field_grid(ui, (render_pipeline_id, "primitive_state"), |ui| {
                 inspector::combo_row_doc(
                     ui,
                     "Topology",
@@ -522,7 +523,7 @@ else: // Direct draw
 [WebGPU spec](https://www.w3.org/TR/webgpu/#dom-gpurenderpassencoder-draw)"
         ),
         |ui| {
-            inspector::field_grid(ui, (render_pipeline_id, "draw_strategy"), |ui| {
+            field::field_grid(ui, (render_pipeline_id, "draw_strategy"), |ui| {
                 let mut draw_kind = DrawKind::from_strategy(&edited);
                 if inspector::combo_row_doc(
                     ui,
@@ -560,13 +561,13 @@ fn draw_strategy_fields_ui(
             vertices,
             instances,
         } => {
-            inspector::row_doc(
+            field::row_doc(
                 ui,
                 "Vertices",
                 field_doc!("Range of vertex indices to draw, e.g. `0..3` for a single triangle."),
                 |ui| range_u32_edit(ui, vertices),
             );
-            inspector::row_doc(
+            field::row_doc(
                 ui,
                 "Instances",
                 field_doc!(
@@ -581,13 +582,13 @@ fn draw_strategy_fields_ui(
             instances,
             mesh_vertex_slot,
         } => {
-            inspector::row_doc(
+            field::row_doc(
                 ui,
                 "Model",
                 field_doc!("The Model whose meshes are drawn, one draw call per mesh."),
                 |ui| inspector::storage_combo(ui, "render_pipeline_model", models, model_id),
             );
-            inspector::row_doc(
+            field::row_doc(
                 ui,
                 "Instances",
                 field_doc!(

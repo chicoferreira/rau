@@ -11,7 +11,7 @@ use crate::{
     },
     ui::{
         components::{
-            inspector, resource_icons,
+            field, resource_icons,
             tree_node::{TreeNode, pending_create_node},
         },
         pane::StateSnapshot,
@@ -154,7 +154,7 @@ fn resource_leaf<'a>(
 
 fn count_suffix(count: usize) -> impl FnMut(&mut egui::Ui) {
     move |ui| {
-        inspector::weak_label(ui, format!(" ({count})"));
+        field::weak_label(ui, format!(" ({count})"));
     }
 }
 

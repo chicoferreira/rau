@@ -19,6 +19,7 @@ use crate::{
             color_edit::color_edit_rgba,
             data_display::{ui_array, ui_array_mut},
             draggable_list::{ListEdits, draggable_list},
+            field,
             field_docs::field_doc,
             inspector::{self, AsWidgetText},
             renameable_label::renameable_label,
@@ -98,7 +99,7 @@ impl StateSnapshot<'_> {
                             ui.spinner();
                         }
                         Err(err) => {
-                            inspector::error_label(ui, err.to_string());
+                            field::error_label(ui, err.to_string());
                         }
                     }
                 });
@@ -235,7 +236,7 @@ fn ui_uniform_field_entry(
     runtime_field: Option<&UniformRuntimeField>,
 ) {
     ui.indent("entry", |ui| {
-        inspector::field_grid(ui, "entry_grid", |ui| {
+        field::field_grid(ui, "entry_grid", |ui| {
             ui_field_entry(ui, ctx, index, field, edits)
         });
 
@@ -294,7 +295,7 @@ fn ui_field_entry(
                 changed = true;
             }
 
-            inspector::row_doc(
+            field::row_doc(
                 ui,
                 "Data",
                 field_doc!("The constant value stored in this field. Sent to the GPU as-is."),
@@ -310,7 +311,7 @@ fn ui_field_entry(
         } => {
             let mut camera_id = *camera_id;
             let camera_id_before = camera_id;
-            inspector::row_doc(
+            field::row_doc(
                 ui,
                 "Camera",
                 field_doc!("The Camera this field reads its value from."),
@@ -354,17 +355,17 @@ fn ui_uniform_type_label(ui: &mut Ui, kind: UniformFieldDataKind, padding: usize
     )
     .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside)
     .show(|ui| {
-        inspector::field_grid(ui, "uniform_type_layout", |ui| {
-            inspector::row(ui, "Size", |ui| {
+        field::field_grid(ui, "uniform_type_layout", |ui| {
+            field::row(ui, "Size", |ui| {
                 ui.strong(format!("{size} bytes"));
             });
-            inspector::row(ui, "Alignment", |ui| {
+            field::row(ui, "Alignment", |ui| {
                 ui.strong(format!("{align} bytes"));
             });
-            inspector::row(ui, "Padding", |ui| {
+            field::row(ui, "Padding", |ui| {
                 ui.strong(format!("{padding} bytes"));
             });
-            inspector::row(ui, "WGSL type", |ui| {
+            field::row(ui, "WGSL type", |ui| {
                 highlighted_label(ui, kind.wgsl_type_label(), "wgsl");
             });
         });

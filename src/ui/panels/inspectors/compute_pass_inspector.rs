@@ -12,6 +12,7 @@ use crate::{
         components::{
             code_editor::shader_code_section,
             draggable_list::{ListEdits, draggable_list},
+            field,
             field_docs::field_doc,
             inspector, resource_icons,
         },
@@ -44,9 +45,9 @@ fn compute_pass_fields_ui(
     shaders: &Storage<Shader>,
 ) {
     inspector::section(ui, "Settings", |ui| {
-        inspector::field_grid(ui, "compute_pass_inspector_grid", |ui| {
+        field::field_grid(ui, "compute_pass_inspector_grid", |ui| {
             let mut shader_id = compute_pass.shader();
-            if inspector::row_doc(
+            if field::row_doc(
                 ui,
                 "Shader",
                 field_doc!(

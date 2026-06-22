@@ -2,7 +2,7 @@ use crate::{
     file::file_storage::OpenFileState,
     project::paths::FilePath,
     ui::{
-        components::{code_editor::code_editor, inspector},
+        components::{code_editor::code_editor, field, inspector},
         pane::StateSnapshot,
     },
 };
@@ -11,7 +11,7 @@ impl StateSnapshot<'_> {
     pub fn file_inspector_ui(&mut self, ui: &mut egui::Ui, file_path: &FilePath) {
         match self.file_storage.open_file(file_path) {
             OpenFileState::Loading { .. } => {
-                inspector::centered(ui, inspector::spinner);
+                field::centered(ui, field::spinner);
             }
             OpenFileState::Loaded { text, saved }
             | OpenFileState::Reloading { text, saved, .. } => {

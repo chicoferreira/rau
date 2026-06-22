@@ -6,7 +6,6 @@ use egui_phosphor::regular;
 
 use crate::project::{ResourceId, ResourceKind, paths::FilePath};
 
-/// A phosphor glyph paired with an accent color.
 #[derive(Clone, Copy)]
 pub struct Icon {
     pub glyph: &'static str,
@@ -48,7 +47,6 @@ pub fn resource_kind_icon(kind: ResourceKind) -> Icon {
     }
 }
 
-/// Glyph and accent color for a specific resource instance.
 pub fn resource_id_icon(id: ResourceId) -> Icon {
     resource_kind_icon(resource_id_kind(id))
 }
@@ -87,10 +85,8 @@ pub fn file_icon(file_path: &FilePath) -> Icon {
     }
 }
 
-/// Default horizontal spacing between a glyph and its label.
 const DEFAULT_GLYPH_GAP: f32 = 6.0;
 
-/// `icon + label` using the button font, with the label in the default text color.
 pub fn icon_text(ui: &Ui, icon: Icon, label: &str) -> WidgetText {
     icon.into_text(
         button_font(ui),
@@ -100,7 +96,6 @@ pub fn icon_text(ui: &Ui, icon: Icon, label: &str) -> WidgetText {
     )
 }
 
-/// `icon + label` sized for tab titles, with the label in the placeholder color.
 pub fn icon_tab_title(icon: Icon, label: &str) -> WidgetText {
     icon.into_text(
         FontId::proportional(13.0),
@@ -110,20 +105,16 @@ pub fn icon_tab_title(icon: Icon, label: &str) -> WidgetText {
     )
 }
 
-/// Button label prefixed with a "plus" glyph, for actions that add a new item
-/// (bind group entry, uniform field, attribute, …).
 pub fn add_text(ui: &Ui, label: &str) -> WidgetText {
-    mono_text(ui, regular::PLUS, ui.visuals().text_color(), label)
+    monochrome_icon_text(ui, regular::PLUS, ui.visuals().text_color(), label)
 }
 
-/// Button label prefixed with a "magic wand" glyph, for actions that derive a
-/// resource from existing data (texture view, bind groups from materials, …).
 pub fn derive_text(ui: &Ui, label: &str) -> WidgetText {
-    mono_text(ui, regular::MAGIC_WAND, ui.visuals().text_color(), label)
+    monochrome_icon_text(ui, regular::MAGIC_WAND, ui.visuals().text_color(), label)
 }
 
 pub fn warning_text(ui: &Ui, label: &str) -> WidgetText {
-    mono_text(ui, regular::WARNING, ui.visuals().warn_fg_color, label)
+    monochrome_icon_text(ui, regular::WARNING, ui.visuals().warn_fg_color, label)
 }
 
 pub fn drag_handle_text(ui: &Ui, label: &str) -> WidgetText {
@@ -137,8 +128,12 @@ pub fn drag_handle_text(ui: &Ui, label: &str) -> WidgetText {
     )
 }
 
-/// `glyph + label` in the button font, with both drawn in the same `color`.
-fn mono_text(ui: &Ui, glyph: &'static str, color: Color32, label: &str) -> WidgetText {
+pub fn monochrome_icon_text(
+    ui: &Ui,
+    glyph: &'static str,
+    color: Color32,
+    label: &str,
+) -> WidgetText {
     Icon { glyph, color }.into_text(button_font(ui), label, color, DEFAULT_GLYPH_GAP)
 }
 

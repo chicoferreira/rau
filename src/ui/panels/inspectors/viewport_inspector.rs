@@ -1,7 +1,7 @@
 use crate::{
     project::ViewportId,
     ui::{
-        components::{field_docs::field_doc, inspector},
+        components::{field, field_docs::field_doc, inspector},
         pane::StateSnapshot,
     },
 };
@@ -14,9 +14,9 @@ impl StateSnapshot<'_> {
         };
 
         inspector::section(ui, "Settings", |ui| {
-            inspector::field_grid(ui, "viewport_inspector_grid", |ui| {
+            field::field_grid(ui, "viewport_inspector_grid", |ui| {
                 let mut texture_view_id = viewport.texture_view_id();
-                if inspector::row_doc(
+                if field::row_doc(
                     ui,
                     "Texture View",
                     field_doc!("The Texture View this viewport displays."),
@@ -33,7 +33,7 @@ impl StateSnapshot<'_> {
                 }
 
                 let mut dimension_id = viewport.dimension_id();
-                if inspector::row_doc(
+                if field::row_doc(
                     ui,
                     "Dimension",
                     field_doc!(
@@ -55,7 +55,7 @@ impl StateSnapshot<'_> {
                 }
 
                 let mut camera_id = viewport.controls_camera_id();
-                if inspector::row_doc(
+                if field::row_doc(
                     ui,
                     "Controls Camera",
                     field_doc!(

@@ -4,6 +4,7 @@ use crate::{
     project::SamplerId,
     ui::{
         components::{
+            field,
             field_docs::field_doc,
             inspector::{self, AsWidgetText},
         },
@@ -85,7 +86,7 @@ impl StateSnapshot<'_> {
         let before = spec.clone();
 
         inspector::section(ui, "Settings", |ui| {
-            inspector::field_grid(ui, "sampler_inspector_grid", |ui| {
+            field::field_grid(ui, "sampler_inspector_grid", |ui| {
                 inspector::combo_row_doc(
                     ui,
                     "Address Mode",

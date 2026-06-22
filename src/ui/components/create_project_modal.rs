@@ -1,19 +1,25 @@
 use std::task::Poll;
 
 use egui::{Ui, Widget};
+use egui_phosphor::regular;
 
 use crate::error::{AppError, AppResult};
-use crate::featured_projects::FeaturedProject;
 #[cfg(not(target_arch = "wasm32"))]
 use crate::file::absolute::AbsolutePathBuf;
 use crate::file::file_system::{AppFileSystem, FutureResult};
 use crate::file::identifier::{ProjectIdentifier, ProjectSource};
 use crate::project::{Project, paths::FilePath};
-use crate::ui::components::inspector;
+use crate::ui::components::field;
+use crate::ui::components::field_docs::field_doc;
+use crate::ui::components::main_menu::featured_projects::FeaturedProject;
+use crate::ui::components::main_menu::menu_widgets;
+use crate::ui::components::resource_icons;
 #[cfg(not(target_arch = "wasm32"))]
 use crate::utils::async_job::AsyncJob;
 use crate::utils::github;
 use crate::utils::github::download::DownloadTask;
+
+const MODAL_WIDTH: f32 = 460.0;
 
 pub struct CreateProjectModal {
     form_data: CreateProjectFormData,
@@ -174,30 +180,57 @@ impl CreateProjectModal {
     ) -> Option<CreateProjectModalResponse> {
         let mut result = None;
 
-        let response =
-            egui::Modal::new(egui::Id::new("create_project_modal")).show(ui.ctx(), |ui| {
+        let frame = egui::Frame::popup(ui.style()).inner_margin(20);
+        let response = egui::Modal::new(egui::Id::new("create_project_modal"))
+            .frame(frame)
+            .show(ui.ctx(), |ui| {
+                ui.set_width(MODAL_WIDTH);
+
                 let is_busy = !matches!(self.state, CreateProjectModalState::Editing);
 
-                ui.heading("Creating new project");
+                menu_widgets::modal_title(
+                    ui,
+                    "Create New Project",
+                    "Start from a blank canvas or pull an existing project from GitHub.",
+                );
+                ui.add_space(6.0);
 
                 ui.add_enabled_ui(!is_busy, |ui| {
                     ui_form(ui, &mut self.form_data, toasts);
                 });
 
                 if let Some(error) = &self.form_data.error {
-                    inspector::error_label(ui, error.to_string());
+                    ui.add_space(6.0);
+                    field::error_label(ui, error.to_string());
                 }
 
-                result = self.tick_pending_state(ui);
-
-                if result.is_some() {
+                if let Some(pending) = self.tick_pending_state(ui) {
+                    result = Some(pending);
                     return;
                 }
 
-                ui.add_enabled_ui(self.can_create_project(), |ui| {
-                    if ui.button("Create Project").clicked() {
-                        self.start_project_creation(app_file_system);
+                ui.add_space(14.0);
+
+                ui.horizontal(|ui| {
+                    let half = (ui.available_width() - ui.spacing().item_spacing.x) / 2.0;
+                    if menu_widgets::action_button_sized(ui, "Cancel", egui::vec2(half, 34.0))
+                        .clicked()
+                    {
+                        result = Some(CreateProjectModalResponse::Close);
                     }
+
+                    let size = egui::vec2(ui.available_width(), 34.0);
+                    ui.add_enabled_ui(self.can_create_project(), |ui| {
+                        let label = resource_icons::monochrome_icon_text(
+                            ui,
+                            regular::PLUS,
+                            egui::Color32::WHITE,
+                            "Create Project",
+                        );
+                        if menu_widgets::primary_action_button_sized(ui, label, size).clicked() {
+                            self.start_project_creation(app_file_system);
+                        }
+                    });
                 });
             });
 
@@ -426,80 +459,153 @@ fn ui_form(
     form_data: &mut CreateProjectFormData,
     #[allow(unused)] toasts: &mut egui_notify::Toasts,
 ) {
-    egui::Grid::new("create_project_form")
-        .num_columns(2)
-        .show(ui, |ui| {
-            ui.label("Source:");
-            ui.horizontal(|ui| {
-                ui.selectable_value(&mut form_data.kind, ProjectCreationKind::Empty, "Empty");
-                ui.selectable_value(
-                    &mut form_data.kind,
-                    ProjectCreationKind::Github,
-                    "From GitHub",
-                );
-            });
-            ui.end_row();
+    menu_widgets::modal_section_header(ui, "Source");
 
-            if form_data.kind == ProjectCreationKind::Github {
-                text_edit_row(
-                    ui,
-                    "Owner:",
-                    &mut form_data.github_source.owner,
-                    "chicoferreira",
-                );
-                text_edit_row(ui, "Repository:", &mut form_data.github_source.repo, "rau");
-                text_edit_row(
-                    ui,
-                    "Branch/Commit SHA:",
-                    &mut form_data.github_source.git_ref,
-                    "main",
-                );
-                text_edit_row(
-                    ui,
-                    "Folder in repository:",
-                    &mut form_data.github_source.path,
-                    "optional folder path",
-                );
-            }
-        });
+    form_grid(ui, "create_project_form", |ui| {
+        // The source kind sits in the grid so it lines up with the GitHub fields
+        // below it.
+        field::row_doc(
+            ui,
+            "Source Type",
+            field_doc!(
+                "Choose **Empty** to start from a blank project, or **From GitHub** \
+                 to download an existing project from a repository."
+            ),
+            |ui| {
+                ui.horizontal(|ui| {
+                    source_selector(
+                        ui,
+                        &mut form_data.kind,
+                        ProjectCreationKind::Empty,
+                        regular::FILE_DASHED,
+                        "Empty",
+                    );
+                    source_selector(
+                        ui,
+                        &mut form_data.kind,
+                        ProjectCreationKind::Github,
+                        regular::GITHUB_LOGO,
+                        "From GitHub",
+                    );
+                });
+            },
+        );
 
-    ui.separator();
+        if form_data.kind == ProjectCreationKind::Github {
+            field::row_doc(
+                ui,
+                "Owner",
+                field_doc!("The GitHub user or organization that owns the repository."),
+                |ui| text_edit(ui, &mut form_data.github_source.owner, "chicoferreira"),
+            );
+            field::row_doc(
+                ui,
+                "Repository",
+                field_doc!("The name of the GitHub repository to download the project from."),
+                |ui| text_edit(ui, &mut form_data.github_source.repo, "rau"),
+            );
+            field::row_doc(
+                ui,
+                "Branch / Commit",
+                field_doc!("The branch name or commit SHA to download the project at."),
+                |ui| text_edit(ui, &mut form_data.github_source.git_ref, "main"),
+            );
+            field::row_doc(
+                ui,
+                "Folder in repository",
+                field_doc!(
+                    "Optional path to the project folder inside the repository. \
+                     Leave empty to use the repository root."
+                ),
+                |ui| {
+                    text_edit(
+                        ui,
+                        &mut form_data.github_source.path,
+                        "optional folder path",
+                    )
+                },
+            );
+        }
+    });
 
-    egui::Grid::new("create_project_form_name_and_folder")
-        .num_columns(2)
-        .show(ui, |ui| {
-            ui.label("Storage:");
-            ui.horizontal(|ui| {
-                ui.selectable_value(
-                    &mut form_data.storage,
-                    ProjectCreationStorage::Persistent,
-                    "Persistent",
-                );
-                ui.selectable_value(
-                    &mut form_data.storage,
-                    ProjectCreationStorage::Temporary,
-                    "Temporary",
-                );
-            });
-            ui.end_row();
+    ui.add_space(6.0);
 
-            ui.label("Project Name:");
-            ui.text_edit_singleline(&mut form_data.project_name);
-            ui.end_row();
+    menu_widgets::modal_section_header(ui, "Details");
 
-            #[cfg(not(target_arch = "wasm32"))]
-            if form_data.requires_project_path() {
-                ui.label("Project Folder:");
-                folder_selector_controls_ui(ui, form_data, toasts);
-                ui.end_row();
-            }
-        });
+    form_grid(ui, "create_project_form_name_and_folder", |ui| {
+        field::row_doc(
+            ui,
+            "Storage",
+            field_doc!(
+                "**Persistent** projects are saved to disk. **Temporary** projects \
+                 are kept only in memory and are lost when the app closes."
+            ),
+            |ui| {
+                ui.horizontal(|ui| {
+                    source_selector(
+                        ui,
+                        &mut form_data.storage,
+                        ProjectCreationStorage::Persistent,
+                        regular::FLOPPY_DISK,
+                        "Persistent",
+                    );
+                    source_selector(
+                        ui,
+                        &mut form_data.storage,
+                        ProjectCreationStorage::Temporary,
+                        regular::HOURGLASS,
+                        "Temporary",
+                    );
+                });
+            },
+        );
+
+        field::row_doc(
+            ui,
+            "Project Name",
+            field_doc!("The name of the new project."),
+            |ui| text_edit(ui, &mut form_data.project_name, ""),
+        );
+
+        #[cfg(not(target_arch = "wasm32"))]
+        if form_data.requires_project_path() {
+            field::row_doc(
+                ui,
+                "Project Folder",
+                field_doc!("The folder on disk where the project will be created."),
+                |ui| folder_selector_controls_ui(ui, form_data, toasts),
+            );
+        }
+    });
 }
 
-fn text_edit_row(ui: &mut Ui, label: &str, value: &mut String, hint: &str) {
-    ui.label(label);
-    egui::TextEdit::singleline(value).hint_text(hint).ui(ui);
-    ui.end_row();
+fn form_grid<R>(ui: &mut Ui, id_salt: &str, add_rows: impl FnOnce(&mut Ui) -> R) -> R {
+    egui::Grid::new(id_salt)
+        .num_columns(2)
+        .spacing(egui::vec2(12.0, 8.0))
+        .show(ui, add_rows)
+        .inner
+}
+
+fn text_edit(ui: &mut Ui, value: &mut String, hint: &str) {
+    egui::TextEdit::singleline(value)
+        .hint_text(hint)
+        .desired_width(f32::INFINITY)
+        .ui(ui);
+}
+
+fn source_selector<T: PartialEq>(
+    ui: &mut Ui,
+    current: &mut T,
+    value: T,
+    glyph: &'static str,
+    label: &str,
+) {
+    let selected = *current == value;
+    let text = resource_icons::monochrome_icon_text(ui, glyph, ui.visuals().text_color(), label);
+    if ui.add(egui::Button::selectable(selected, text)).clicked() {
+        *current = value;
+    }
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -521,40 +627,53 @@ fn folder_selector_controls_ui(
         form_data.folder_picker_job = None;
     }
 
+    let picker_pending = form_data.folder_picker_job.is_some();
+
+    let selected_path = form_data
+        .get_actual_project_path(&form_data.project_name)
+        .ok()
+        .map(|path| path.as_ref().display().to_string());
+
+    let (label, label_color) = match &selected_path {
+        Some(path) => (path.as_str(), ui.visuals().text_color()),
+        None => ("Choose a folder…", ui.visuals().error_fg_color),
+    };
+
     ui.horizontal(|ui| {
-        let path_str = form_data
-            .get_actual_project_path(&form_data.project_name)
-            .ok()
-            .map(|path| path.as_ref().display().to_string())
-            .unwrap_or_else(|| "No folder selected".to_string());
-
-        ui.label(path_str);
-
-        let picker_pending = form_data.folder_picker_job.is_some();
-
-        ui.add_enabled_ui(!picker_pending, |ui| {
-            if ui.button("Choose Folder").clicked() {
-                let current_path = form_data.project_path.clone();
-                form_data.folder_picker_job = Some(AsyncJob::new(async move {
-                    let dialog = rfd::AsyncFileDialog::new().set_title("Select Project Folder");
-
-                    let dialog = if let Some(current_path) = current_path {
-                        dialog.set_directory(current_path.as_ref())
-                    } else {
-                        dialog
-                    };
-
-                    let Some(folder) = dialog.pick_folder().await else {
-                        return Ok(None);
-                    };
-
-                    AbsolutePathBuf::try_from(folder.path().to_path_buf()).map(Some)
-                }));
-            }
-        });
-
         if picker_pending {
             ui.spinner();
+        }
+
+        let text = resource_icons::monochrome_icon_text(ui, regular::FOLDER, label_color, label);
+
+        let button = egui::Button::new(text)
+            .truncate()
+            .right_text(())
+            .min_size(egui::vec2(ui.available_width(), 0.0));
+
+        let response = ui.add_enabled(!picker_pending, button);
+
+        if response.clicked() {
+            let current_path = form_data.project_path.clone();
+            form_data.folder_picker_job = Some(AsyncJob::new(async move {
+                let dialog = rfd::AsyncFileDialog::new().set_title("Select Project Folder");
+
+                let dialog = if let Some(current_path) = current_path {
+                    dialog.set_directory(current_path.as_ref())
+                } else {
+                    dialog
+                };
+
+                let Some(folder) = dialog.pick_folder().await else {
+                    return Ok(None);
+                };
+
+                AbsolutePathBuf::try_from(folder.path().to_path_buf()).map(Some)
+            }));
+        }
+
+        if let Some(path) = &selected_path {
+            response.on_hover_text(path);
         }
     });
 }

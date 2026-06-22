@@ -4,7 +4,7 @@ use egui_phosphor::regular;
 use crate::{
     project::{Project, ResourceId, RuntimeProject},
     ui::{
-        components::{inspector, resource_icons},
+        components::{field, resource_icons},
         pane::StateSnapshot,
     },
     utils::event_queue::EventQueue,
@@ -97,7 +97,7 @@ fn error_list_content(
             ui.add(egui::Label::new(
                 RichText::new("ERRORS").size(11.0).variation("wght", 600.0),
             ));
-            inspector::weak_label(ui, format!(" ({})", errors.len()));
+            field::weak_label(ui, format!(" ({})", errors.len()));
         });
 
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
@@ -119,7 +119,7 @@ fn error_list_content(
         .auto_shrink(false)
         .show(ui, |ui| {
             if errors.is_empty() {
-                inspector::centered(ui, |ui| {
+                field::centered(ui, |ui| {
                     ui.label(
                         RichText::new(format!("{} No errors", regular::CHECK_CIRCLE))
                             .color(ui.visuals().weak_text_color()),
@@ -186,6 +186,6 @@ fn error_card(
                 });
             });
 
-            inspector::error_label(ui, RichText::new(error).monospace());
+            field::error_label(ui, RichText::new(error).monospace());
         });
 }

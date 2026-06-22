@@ -2,7 +2,12 @@ use std::task::Poll;
 
 #[cfg(target_arch = "wasm32")]
 use crate::error::AppError;
-use crate::{error::AppResult, file::identifier::ProjectIdentifier, utils::async_job::AsyncJob};
+use crate::{
+    error::AppResult,
+    file::identifier::ProjectIdentifier,
+    ui::components::{main_menu::menu_widgets, resource_icons},
+    utils::async_job::AsyncJob,
+};
 
 #[cfg(not(target_arch = "wasm32"))]
 use crate::file::absolute::AbsolutePathBuf;
@@ -29,22 +34,35 @@ pub struct ProjectImport {
 
 impl OpenOrImportProject {
     pub fn render_ui(&mut self, ui: &mut egui::Ui) {
-        ui.horizontal(|ui| {
-            let is_picker_opened = self.job.is_some();
-            ui.add_enabled_ui(!is_picker_opened, |ui| {
-                #[cfg(target_arch = "wasm32")]
-                if ui.button("Import Project").clicked() {
+        let is_picker_opened = self.job.is_some();
+
+        if is_picker_opened {
+            ui.spinner();
+        }
+
+        ui.add_enabled_ui(!is_picker_opened, |ui| {
+            #[cfg(target_arch = "wasm32")]
+            {
+                let icon = resource_icons::Icon {
+                    glyph: egui_phosphor::regular::DOWNLOAD_SIMPLE,
+                    color: ui.visuals().text_color(),
+                };
+                let text = resource_icons::icon_text(ui, icon, "Import Project");
+                if menu_widgets::action_button(ui, text).clicked() {
                     self.job = Some(import_project_from_folder());
                 }
+            }
 
-                #[cfg(not(target_arch = "wasm32"))]
-                if ui.button("Open Project").clicked() {
+            #[cfg(not(target_arch = "wasm32"))]
+            {
+                let icon = resource_icons::Icon {
+                    glyph: egui_phosphor::regular::FOLDER_OPEN,
+                    color: ui.visuals().text_color(),
+                };
+                let text = resource_icons::icon_text(ui, icon, "Open Project");
+                if menu_widgets::action_button(ui, text).clicked() {
                     self.job = Some(open_project_from_folder());
                 }
-            });
-
-            if is_picker_opened {
-                ui.spinner();
             }
         });
     }

@@ -24,7 +24,7 @@ impl Palette {
     const SELECTION: Color32 = Color32::from_rgb(45, 104, 211);
 
     const WARN: Color32 = Color32::from_rgb(232, 181, 94);
-    const ERROR: Color32 = Color32::from_rgb(244, 113, 113);
+    const ERROR: Color32 = Color32::from_rgb(240, 90, 90);
 }
 
 pub const CLEAR_COLOR: Color32 = Palette::BG_BASE;

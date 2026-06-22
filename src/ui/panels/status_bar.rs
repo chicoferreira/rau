@@ -1,6 +1,6 @@
 use crate::{
     file::file_system::ProjectFileSystem,
-    ui::{components::inspector, pane::StateSnapshot, panels::error_panel::ErrorPanel},
+    ui::{components::field, pane::StateSnapshot, panels::error_panel::ErrorPanel},
     utils::fps::FrameTimeTracker,
 };
 
@@ -11,7 +11,7 @@ pub fn ui(state: &mut StateSnapshot, ui: &mut egui::Ui, error_panel: &mut ErrorP
         error_panel.status_indicator(ui);
 
         if is_rebuilding {
-            inspector::spinner(ui).on_hover_text("Rebuilding resources...");
+            field::spinner(ui).on_hover_text("Rebuilding resources...");
         }
 
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {

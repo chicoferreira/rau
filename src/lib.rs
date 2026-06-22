@@ -23,7 +23,6 @@ pub mod built_info {
 
 mod app;
 mod error;
-mod featured_projects;
 mod file;
 mod main_menu;
 mod project;

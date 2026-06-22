@@ -15,6 +15,7 @@ use crate::{
         components::{
             code_editor::shader_code_section,
             draggable_list::{ListEdits, draggable_list},
+            field,
             field_docs::field_doc,
             flags_selector::flags_selector,
             inspector::{self, AsWidgetText},
@@ -121,7 +122,7 @@ fn ui_entry_fields(
 ) {
     ui.vertical(|ui| {
         ui.indent("entry", |ui| {
-            inspector::field_grid(ui, "entry_grid", |ui| {
+            field::field_grid(ui, "entry_grid", |ui| {
                 let mut current_kind: ResourceKind = entry.resource.into();
                 let kind_changed = inspector::combo_row_doc(
                     ui,
@@ -142,7 +143,7 @@ fn ui_entry_fields(
                     (wgpu::ShaderStages::FRAGMENT, "Fragment"),
                     (wgpu::ShaderStages::COMPUTE, "Compute"),
                 ];
-                inspector::row_doc(
+                field::row_doc(
                     ui,
                     "Visibility",
                     field_doc!(
@@ -196,7 +197,7 @@ fn ui_uniform_fields(
     mut uniform_id: Option<UniformId>,
 ) -> Option<BindGroupResource> {
     let before = uniform_id;
-    inspector::row_doc(
+    field::row_doc(
         ui,
         "Uniform",
         field_doc!(
@@ -218,7 +219,7 @@ fn ui_texture_fields(
 ) -> Option<BindGroupResource> {
     let (tvid_before, vd_before, st_before) = (texture_view_id, view_dimension, sample_type);
 
-    inspector::row_doc(
+    field::row_doc(
         ui,
         "Texture View",
         field_doc!(
@@ -268,7 +269,7 @@ fn ui_sampler_fields(
 ) -> Option<BindGroupResource> {
     let (sid_before, sbt_before) = (sampler_id, sampler_binding_type);
 
-    inspector::row_doc(
+    field::row_doc(
         ui,
         "Sampler",
         field_doc!(
@@ -310,7 +311,7 @@ fn ui_storage_texture_fields(
 ) -> Option<BindGroupResource> {
     let before = (texture_view_id, access, view_dimension);
 
-    inspector::row_doc(
+    field::row_doc(
         ui,
         "Texture View",
         field_doc!(

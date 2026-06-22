@@ -4,6 +4,7 @@ use crate::{
     project::{TextureViewId, resource::texture_view::TextureViewFormat},
     ui::{
         components::{
+            field,
             field_docs::field_doc,
             inspector::{self, AsWidgetText},
         },
@@ -19,9 +20,9 @@ impl StateSnapshot<'_> {
         };
 
         inspector::section(ui, "Settings", |ui| {
-            inspector::field_grid(ui, "texture_view_inspector_grid", |ui| {
+            field::field_grid(ui, "texture_view_inspector_grid", |ui| {
                 let mut texture_id = texture_view.texture_id();
-                if inspector::row_doc(
+                if field::row_doc(
                     ui,
                     "Texture",
                     field_doc!(
@@ -103,7 +104,7 @@ impl StateSnapshot<'_> {
                     return;
                 }
                 Err(err) => {
-                    inspector::error_label(ui, err.to_string());
+                    field::error_label(ui, err.to_string());
                     return;
                 }
             };

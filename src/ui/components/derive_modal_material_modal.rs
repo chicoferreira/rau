@@ -12,7 +12,7 @@ use crate::{
         },
         storage::Storage,
     },
-    ui::components::inspector,
+    ui::components::{field, inspector},
     utils::{
         derive::default_texture_format,
         derive_modal_material::{MaterialBindGroupsConfig, SamplerSetting},
@@ -248,9 +248,9 @@ impl MaterialBindGroupsModal {
         ui.strong("Texture types to include");
 
         let material_count = self.material_count;
-        inspector::field_grid(ui, "material_bind_groups_modal_types", |ui| {
+        field::field_grid(ui, "material_bind_groups_modal_types", |ui| {
             for row in &mut self.texture_types {
-                inspector::row(ui, row.texture_type.to_string(), |ui| {
+                field::row(ui, row.texture_type.to_string(), |ui| {
                     ui.horizontal(|ui| {
                         let enabled = row.present_count == material_count;
 
@@ -300,8 +300,8 @@ impl MaterialBindGroupsModal {
             }
         };
 
-        inspector::field_grid(ui, "material_bind_groups_modal_sampler", |ui| {
-            inspector::row(ui, "Sampler binding", |ui| {
+        field::field_grid(ui, "material_bind_groups_modal_sampler", |ui| {
+            field::row(ui, "Sampler binding", |ui| {
                 egui::ComboBox::from_id_salt("material_bind_groups_modal_sampler_combo")
                     .selected_text(selected_text)
                     .show_ui(ui, |ui| {

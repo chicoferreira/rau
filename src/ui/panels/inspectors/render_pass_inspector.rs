@@ -14,6 +14,7 @@ use crate::{
         components::{
             color_edit::color_edit_rgba,
             draggable_list::{ListEdits, draggable_list},
+            field,
             field_docs::field_doc,
             inspector::{self, AsWidgetText},
             resource_icons,
@@ -173,8 +174,8 @@ where
 {
     let before = (*texture_view_id, *load_op);
 
-    inspector::field_grid(ui, (id_salt, "target_grid"), |ui| {
-        inspector::row_doc(
+    field::field_grid(ui, (id_salt, "target_grid"), |ui| {
+        field::row_doc(
             ui,
             "Texture View",
             field_doc!("The Texture View this target renders into."),
@@ -188,7 +189,7 @@ where
             },
         );
 
-        inspector::row_doc(
+        field::row_doc(
             ui,
             "Load Operation",
             field_doc!(

@@ -9,6 +9,7 @@ use crate::{
     ui::{
         components::{
             data_display::ui_mat4_grid,
+            field,
             field_docs::{FieldDoc, field_doc},
             inspector,
         },
@@ -26,9 +27,9 @@ impl StateSnapshot<'_> {
         let camera_runtime = self.runtime_project.cameras.get_init(camera_id);
 
         inspector::section(ui, "Transform", |ui| {
-            inspector::field_grid(ui, "camera_transform_grid", |ui| {
+            field::field_grid(ui, "camera_transform_grid", |ui| {
                 let mut mode = camera.mode();
-                let mode_changed = inspector::row_doc(
+                let mode_changed = field::row_doc(
                     ui,
                     "Mode",
                     field_doc!(
@@ -61,7 +62,7 @@ impl StateSnapshot<'_> {
                 };
 
                 if camera.mode() == CameraMode::ThirdPerson {
-                    inspector::row_doc(
+                    field::row_doc(
                         ui,
                         "Looking At",
                         field_doc!(
@@ -86,7 +87,7 @@ impl StateSnapshot<'_> {
                     );
                 }
 
-                inspector::row_doc(
+                field::row_doc(
                     ui,
                     "Position",
                     field_doc!("World-space `(x, y, z)` location of the camera (the eye point)."),
@@ -136,7 +137,7 @@ impl StateSnapshot<'_> {
         });
 
         inspector::section(ui, "Projection", |ui| {
-            inspector::field_grid(ui, "camera_projection_grid", |ui| {
+            field::field_grid(ui, "camera_projection_grid", |ui| {
                 let Deg(mut fov) = (*camera.fovy()).into();
                 if degree_drag_row(
                     ui,
@@ -186,7 +187,7 @@ impl StateSnapshot<'_> {
                     camera.set_clip(camera.clip().with_zfar(zfar));
                 }
 
-                inspector::row_doc(
+                field::row_doc(
                     ui,
                     "Aspect",
                     field_doc!(
@@ -197,12 +198,12 @@ impl StateSnapshot<'_> {
                         Ok(Some(camera_runtime)) => ui
                             .label(RichText::new(format!("{:.4}", camera_runtime.aspect())).weak()),
                         Ok(None) => ui.spinner(),
-                        Err(err) => inspector::error_label(ui, err.to_string()),
+                        Err(err) => field::error_label(ui, err.to_string()),
                     },
                 );
 
                 let mut current_dim_id = camera.dimension_id();
-                if inspector::row_doc(
+                if field::row_doc(
                     ui,
                     "Dimension",
                     field_doc!(
@@ -226,8 +227,8 @@ impl StateSnapshot<'_> {
         });
 
         inspector::section(ui, "Movement Parameters", |ui| {
-            inspector::field_grid(ui, "camera_movement_grid", |ui| {
-                inspector::row_doc(
+            field::field_grid(ui, "camera_movement_grid", |ui| {
+                field::row_doc(
                     ui,
                     "Speed",
                     field_doc!(
@@ -242,7 +243,7 @@ impl StateSnapshot<'_> {
                     },
                 );
 
-                inspector::row_doc(
+                field::row_doc(
                     ui,
                     "Scroll Speed",
                     field_doc!(
@@ -336,7 +337,7 @@ impl StateSnapshot<'_> {
                     return;
                 }
                 Err(err) => {
-                    inspector::error_label(ui, err.to_string());
+                    field::error_label(ui, err.to_string());
                     return;
                 }
             };
@@ -386,7 +387,7 @@ fn degree_drag_row(
     value: &mut f32,
     range: std::ops::RangeInclusive<f32>,
 ) -> bool {
-    inspector::row_doc(ui, label, doc, |ui| {
+    field::row_doc(ui, label, doc, |ui| {
         ui.add(
             egui::DragValue::new(value)
                 .speed(0.5)

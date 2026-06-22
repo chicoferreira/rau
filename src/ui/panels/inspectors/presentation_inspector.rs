@@ -3,6 +3,7 @@ use crate::{
     ui::{
         components::{
             draggable_list::{ListEdits, draggable_list},
+            field,
             field_docs::field_doc,
             inspector, resource_icons,
         },
@@ -13,9 +14,9 @@ use crate::{
 impl StateSnapshot<'_> {
     pub fn presentation_inspector_ui(&mut self, ui: &mut egui::Ui) {
         inspector::section(ui, "Main Viewport", |ui| {
-            inspector::field_grid(ui, "presentation_inspector_grid", |ui| {
+            field::field_grid(ui, "presentation_inspector_grid", |ui| {
                 let mut id = self.project.presentation.main_viewport();
-                if inspector::row_doc(
+                if field::row_doc(
                     ui,
                     "Main Viewport",
                     field_doc!(

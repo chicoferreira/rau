@@ -17,6 +17,7 @@ use crate::{
         components::{
             code_editor::shader_code_section,
             draggable_list::{ListEdits, draggable_list},
+            field,
             field_docs::field_doc,
             inspector::{self, AsWidgetText},
             resource_icons,
@@ -73,7 +74,7 @@ impl StateSnapshot<'_> {
 
 fn model_source_ui(ui: &mut egui::Ui, model: &mut Model, files: Option<&[FilePath]>) {
     inspector::section(ui, "Source", |ui| {
-        inspector::field_grid(ui, "model_inspector_grid", |ui| {
+        field::field_grid(ui, "model_inspector_grid", |ui| {
             let mut source = model.source().cloned();
 
             let Some(files) = files else {
@@ -81,7 +82,7 @@ fn model_source_ui(ui: &mut egui::Ui, model: &mut Model, files: Option<&[FilePat
                 return;
             };
 
-            if inspector::row_doc(
+            if field::row_doc(
                 ui,
                 "Source",
                 field_doc!(
@@ -180,7 +181,7 @@ fn model_vertex_buffer_field_ui(
 
     ui.indent(("model_vertex_buffer_field", index), |ui| {
         let mut current = field;
-        inspector::field_grid(ui, ("model_vertex_buffer_field_grid", index), |ui| {
+        field::field_grid(ui, ("model_vertex_buffer_field_grid", index), |ui| {
             inspector::combo_row_doc(
                 ui,
                 "Attribute",
@@ -266,29 +267,29 @@ fn mesh_info_ui(
     model_runtime: &ModelRuntime,
     mesh_material_selections: &mut Vec<MeshMaterialSelection>,
 ) {
-    inspector::field_grid(ui, "mesh_grid", |ui| {
-        inspector::row(ui, "Vertices", |ui| {
+    field::field_grid(ui, "mesh_grid", |ui| {
+        field::row(ui, "Vertices", |ui| {
             ui.strong(mesh.positions().len().to_string());
         });
-        inspector::row(ui, "Normals", |ui| {
+        field::row(ui, "Normals", |ui| {
             ui.strong(mesh.normals().len().to_string());
         });
-        inspector::row(ui, "UVs", |ui| {
+        field::row(ui, "UVs", |ui| {
             ui.strong(mesh.texture_coords().len().to_string());
         });
-        inspector::row(ui, "Tangents", |ui| {
+        field::row(ui, "Tangents", |ui| {
             ui.strong(mesh.tangents().len().to_string());
         });
-        inspector::row(ui, "Bitangents", |ui| {
+        field::row(ui, "Bitangents", |ui| {
             ui.strong(mesh.bitangents().len().to_string());
         });
-        inspector::row(ui, "Indices", |ui| {
+        field::row(ui, "Indices", |ui| {
             ui.strong(mesh.indices().len().to_string());
         });
-        inspector::row(ui, "Triangles", |ui| {
+        field::row(ui, "Triangles", |ui| {
             ui.strong((mesh.indices().len() / 3).to_string());
         });
-        inspector::row_doc(
+        field::row_doc(
             ui,
             "Material",
             field_doc!(
@@ -449,11 +450,11 @@ fn material_bind_group_ui(
     bind_groups: &Storage<BindGroup>,
     material_bind_group_ids: &mut Vec<Option<BindGroupId>>,
 ) {
-    inspector::field_grid(ui, "model_material_grid", |ui| {
+    field::field_grid(ui, "model_material_grid", |ui| {
         let current_bind_group_id = material_bind_group_id(material_bind_group_ids, mat_index);
         let mut bind_group_id = current_bind_group_id;
 
-        if inspector::row_doc(
+        if field::row_doc(
             ui,
             "Bind Group",
             field_doc!(
@@ -483,9 +484,9 @@ fn material_textures_ui(
     egui::CollapsingHeader::new("Textures")
         .default_open(true)
         .show(ui, |ui| {
-            inspector::field_grid(ui, "model_material_textures_grid", |ui| {
+            field::field_grid(ui, "model_material_textures_grid", |ui| {
                 for texture_type in TextureType::iter() {
-                    inspector::row(ui, texture_type.to_string(), |ui| {
+                    field::row(ui, texture_type.to_string(), |ui| {
                         match mat.get_texture_path(texture_type) {
                             Some(path) => {
                                 let label =

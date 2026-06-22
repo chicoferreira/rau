@@ -2,7 +2,7 @@ use crate::{
     project::{ProjectResource, ResourceKind, ViewportId},
     ui::{
         components::{
-            inspector,
+            field, inspector,
             resource_icons::{icon_tab_title, resource_kind_icon},
             tiles::Pane,
         },
@@ -25,7 +25,7 @@ fn viewport_error(
 ) {
     let message = message.into();
     inspector::centered_block(ui, |ui| {
-        inspector::error_label(ui, message.clone());
+        field::error_label(ui, message.clone());
         ui.add_space(8.0);
         if ui.button("Open Inspector").clicked() {
             event_queue.inspect_resource(viewport_id);
@@ -62,7 +62,7 @@ impl Pane for ViewportPane {
         let runtime_texture_view = match runtime_texture_view {
             Ok(Some(runtime)) => runtime,
             Ok(None) => {
-                inspector::centered(ui, inspector::spinner);
+                field::centered(ui, field::spinner);
                 return egui_tiles::UiResponse::None;
             }
             Err(err) => {
