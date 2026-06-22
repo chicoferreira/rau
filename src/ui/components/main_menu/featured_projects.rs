@@ -22,6 +22,13 @@ impl FeaturedProject {
             self.owner, self.repo, self.git_ref, self.path
         )
     }
+
+    pub fn thumbnail_url(&self) -> String {
+        format!(
+            "https://raw.githubusercontent.com/{}/{}/{}/{}/thumbnail.png",
+            self.owner, self.repo, self.git_ref, self.path
+        )
+    }
 }
 
 pub const FEATURED_PROJECTS: &[FeaturedProject] = &[
@@ -59,7 +66,7 @@ pub fn render_ui(ui: &mut Ui) -> Option<&'static FeaturedProject> {
             menu_widgets::card(ui, |ui| {
                 ui.set_width(FEATURED_CARD_WIDTH);
                 ui.vertical(|ui| {
-                    image_placeholder(ui, ui.available_width());
+                    thumbnail(ui, featured_project, ui.available_width());
                     ui.add_space(5.0);
                     ui.label(
                         RichText::new(featured_project.name)
@@ -109,24 +116,25 @@ fn card_actions(ui: &mut Ui, url: &str) -> bool {
     .inner
 }
 
-/// A 16:9-ish placeholder standing in for a project thumbnail.
-fn image_placeholder(ui: &mut Ui, width: f32) {
+fn thumbnail(ui: &mut Ui, project: &FeaturedProject, width: f32) {
     let height = width * (9.0 / 16.0);
     let (rect, _) = ui.allocate_exact_size(egui::vec2(width, height), egui::Sense::hover());
-    let painter = ui.painter_at(rect);
 
-    painter.rect(
+    let corner_radius = egui::CornerRadius::same(6);
+    ui.painter_at(rect).rect(
         rect,
-        egui::CornerRadius::same(6),
+        corner_radius,
         ui.visuals().extreme_bg_color,
         ui.visuals().widgets.noninteractive.bg_stroke,
         egui::StrokeKind::Inside,
     );
-    painter.text(
-        rect.center(),
-        egui::Align2::CENTER_CENTER,
-        regular::IMAGE,
-        egui::FontId::proportional(26.0),
-        ui.visuals().weak_text_color(),
+
+    ui.put(
+        rect,
+        egui::Image::from_uri(project.thumbnail_url())
+            .fit_to_exact_size(rect.size())
+            .maintain_aspect_ratio(false)
+            .corner_radius(corner_radius)
+            .show_loading_spinner(true),
     );
 }

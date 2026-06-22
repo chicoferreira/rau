@@ -17,6 +17,7 @@ impl EguiRenderer {
         let egui_context = egui::Context::default();
         super::fonts::install(&egui_context);
         super::theme::install(&egui_context);
+        egui_extras::install_image_loaders(&egui_context);
 
         // Disable the debug-build-only "widget rect changed id between passes" warning
         #[cfg(debug_assertions)]

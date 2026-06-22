@@ -31,7 +31,7 @@ egui = "0.34.1"
 egui-wgpu = "0.34.1"
 egui-winit = { version = "0.34.1", default-features = false }
 egui_dnd = "0.15.0"
-egui_extras = { version = "0.34.1", features = ["syntect"] }
+egui_extras = { version = "0.34.1", features = ["syntect", "http", "image"] }
 egui_ltreeview = "0.7.0"
 egui_table = "0.8.0"
 egui_tiles = "0.15.0"
