@@ -39,7 +39,7 @@ pub const FEATURED_PROJECTS: &[FeaturedProject] = &[
         repo: "rau",
         git_ref: "main",
         path: "projects/triangle",
-        description: "Lorem ipsum blablabla blablabla", // TODO
+        description: "A single RGB triangle drawn from the vertex shader. A minimal intro to render passes and pipelines.",
     },
     FeaturedProject {
         id: "full-example",
@@ -48,7 +48,7 @@ pub const FEATURED_PROJECTS: &[FeaturedProject] = &[
         repo: "rau",
         git_ref: "main",
         path: "projects/full-example",
-        description: "Lorem ipsum blablabla blablabla", // TODO
+        description: "A lit OBJ cube with diffuse and normal maps, a camera, and an HDR skybox. Shows off most of what rau can do.",
     },
 ];
 
