@@ -3,7 +3,8 @@ use egui_phosphor::regular;
 
 use crate::ui::components::{main_menu::menu_widgets, resource_icons};
 
-const FEATURED_CARD_WIDTH: f32 = 280.0;
+const FEATURED_CARD_MIN_WIDTH: f32 = 280.0;
+const FEATURED_CARD_MARGIN: f32 = 24.0;
 
 pub struct FeaturedProject {
     pub id: &'static str,
@@ -42,6 +43,15 @@ pub const FEATURED_PROJECTS: &[FeaturedProject] = &[
         description: "A single RGB triangle drawn from the vertex shader. A minimal intro to render passes and pipelines.",
     },
     FeaturedProject {
+        id: "sky-shader",
+        name: "Sky Shader",
+        owner: "chicoferreira",
+        repo: "rau",
+        git_ref: "main",
+        path: "projects/sky-shader",
+        description: "A procedural Preetham sky on a full-screen triangle, with the view ray from the camera and the sun position from a uniform.",
+    },
+    FeaturedProject {
         id: "model",
         name: "OBJ Model",
         owner: "chicoferreira",
@@ -59,15 +69,6 @@ pub const FEATURED_PROJECTS: &[FeaturedProject] = &[
         path: "projects/full-example",
         description: "A lit OBJ cube with diffuse and normal maps, a camera, and an HDR skybox. Shows off most of what rau can do.",
     },
-    FeaturedProject {
-        id: "sky-shader",
-        name: "Sky Shader",
-        owner: "chicoferreira",
-        repo: "rau",
-        git_ref: "main",
-        path: "projects/sky-shader",
-        description: "A procedural Preetham sky on a full-screen triangle, with the view ray from the camera and the sun position from a uniform.",
-    },
 ];
 
 pub fn render_ui(ui: &mut Ui) -> Option<&'static FeaturedProject> {
@@ -79,30 +80,62 @@ pub fn render_ui(ui: &mut Ui) -> Option<&'static FeaturedProject> {
 
     let mut create_project = None;
 
-    ui.horizontal_wrapped(|ui| {
-        for featured_project in FEATURED_PROJECTS {
-            menu_widgets::card(ui, |ui| {
-                ui.set_width(FEATURED_CARD_WIDTH);
-                ui.vertical(|ui| {
-                    thumbnail(ui, featured_project, ui.available_width());
-                    ui.add_space(5.0);
-                    ui.label(
-                        RichText::new(featured_project.name)
-                            .size(15.0)
-                            .variation("wght", 600.0)
-                            .strong(),
-                    );
-                    ui.label(RichText::new(featured_project.description).weak());
-                    ui.add_space(10.0);
-                    if card_actions(ui, &featured_project.url()) {
-                        create_project = Some(featured_project);
-                    }
-                })
-            });
-        }
-    });
+    let total_width = ui.available_width();
+    let spacing = ui.spacing().item_spacing.x;
+    let min_card_outer = FEATURED_CARD_MIN_WIDTH + FEATURED_CARD_MARGIN;
+    let columns = (((total_width + spacing) / (min_card_outer + spacing)).floor() as usize)
+        .clamp(1, FEATURED_PROJECTS.len());
+    let card_outer = (total_width - spacing * (columns - 1) as f32) / columns as f32;
+    let card_width = card_outer - FEATURED_CARD_MARGIN - 0.5;
+
+    let description_height = max_description_height(ui, card_width);
+
+    for row in FEATURED_PROJECTS.chunks(columns) {
+        ui.horizontal_top(|ui| {
+            for featured_project in row {
+                menu_widgets::card(ui, |ui| {
+                    ui.set_width(card_width);
+                    ui.vertical(|ui| {
+                        thumbnail(ui, featured_project, ui.available_width());
+                        ui.add_space(5.0);
+                        ui.label(
+                            RichText::new(featured_project.name)
+                                .size(15.0)
+                                .variation("wght", 600.0)
+                                .strong(),
+                        );
+                        ui.scope(|ui| {
+                            ui.set_min_height(description_height);
+                            ui.label(RichText::new(featured_project.description).weak());
+                        });
+                        ui.add_space(10.0);
+                        if card_actions(ui, &featured_project.url()) {
+                            create_project = Some(featured_project);
+                        }
+                    })
+                });
+            }
+        });
+    }
 
     create_project
+}
+
+fn max_description_height(ui: &Ui, wrap_width: f32) -> f32 {
+    let font_id = egui::TextStyle::Body.resolve(ui.style());
+    let color = ui.visuals().text_color();
+    FEATURED_PROJECTS
+        .iter()
+        .map(|project| {
+            let galley = ui.painter().layout(
+                project.description.to_owned(),
+                font_id.clone(),
+                color,
+                wrap_width,
+            );
+            galley.size().y
+        })
+        .fold(0.0, f32::max)
 }
 
 fn card_actions(ui: &mut Ui, url: &str) -> bool {
