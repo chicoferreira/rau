@@ -7,7 +7,7 @@ use crate::{
         resource::{
             bindgroup::{BindGroup, BindGroupEntry, BindGroupResource},
             camera::{Camera, Deg, Pitch, Yaw},
-            compute_pass::{ComputePass, WorkGroups},
+            compute_pass::{ComputePass, DispatchPolicy, WorkGroups},
             dimension::Dimension,
             model::{Model, ModelRuntime, TextureType},
             render_pass::{LoadOperation, RenderPass, RenderPassTarget},
@@ -306,9 +306,10 @@ pub async fn create_scene(
         vec![bind_group_id, sky_color_bind_group_id],
         Some(equirectengular_shader_id),
         WorkGroups::new(num_workgroups, num_workgroups, 6),
+        DispatchPolicy::OnChange,
     );
 
-    project.compute_passes.register(compute_pass);
+    let compute_pass_id = project.compute_passes.register(compute_pass);
 
     let sky_texture_view = TextureView::new(
         "Sky Texture View",
@@ -481,6 +482,9 @@ pub async fn create_scene(
 
     let entries = vec![main_render_pass_id, hdr_render_pass_id];
     project.presentation.set_render_passes(entries);
+    project
+        .presentation
+        .set_compute_passes(vec![compute_pass_id]);
     project.presentation.set_main_viewport(Some(viewport_id));
 
     Ok(project)

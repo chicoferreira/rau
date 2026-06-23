@@ -79,6 +79,8 @@ pub struct RuntimeProject {
     pub models: RuntimeStorage<Model>,
     pub render_pipelines: RuntimeStorage<RenderPipeline>,
     pub compute_passes: RuntimeStorage<ComputePass>,
+    /// Time accumulated since each [`DispatchPolicy::Periodic`] compute pass last dispatched.
+    pub compute_accumulators: SecondaryMap<ComputePassId, instant::Duration>,
     /// Errors raised while encoding each render pass in [`Presentation::render`].
     /// Recomputed every frame, so there is no sync/runtime storage to keep in step.
     pub render_pass_errors: SecondaryMap<RenderPassId, AppError>,
@@ -197,7 +199,10 @@ impl RuntimeProject {
                 self.render_pass_errors.remove(id);
             }
             ResourceId::Presentation(_) => {}
-            ResourceId::ComputePass(id) => self.compute_passes.unregister(id),
+            ResourceId::ComputePass(id) => {
+                self.compute_passes.unregister(id);
+                self.compute_accumulators.remove(id);
+            }
             ResourceId::Viewport(_) => {}
         };
     }

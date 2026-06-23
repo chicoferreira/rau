@@ -4,6 +4,7 @@
       { "idx": 1, "version": 1 },
       { "idx": 2, "version": 1 }
     ],
+    "computePasses": [{ "idx": 1, "version": 1 }],
     "mainViewport": { "idx": 2, "version": 1 }
   },
   "shaders": [
@@ -708,7 +709,8 @@
           { "idx": 6, "version": 1 }
         ],
         "shader": { "idx": 1, "version": 1 },
-        "workGroups": [68, 68, 6]
+        "workGroups": [68, 68, 6],
+        "dispatch": { "type": "onChange" }
       },
       "version": 1
     }

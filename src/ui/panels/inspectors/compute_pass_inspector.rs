@@ -3,7 +3,7 @@ use crate::{
         BindGroupId, ComputePassId,
         resource::{
             bindgroup::BindGroup,
-            compute_pass::{ComputePass, WorkGroups},
+            compute_pass::{ComputePass, DispatchPolicy, WorkGroups},
             shader::Shader,
         },
         storage::Storage,
@@ -91,8 +91,86 @@ fn compute_pass_fields_ui(
             );
 
             compute_pass.set_work_groups(WorkGroups::new(x, y, z));
+
+            compute_pass_dispatch_ui(ui, compute_pass);
         });
     });
+}
+
+fn dispatch_label(policy: &DispatchPolicy) -> &'static str {
+    match policy {
+        DispatchPolicy::OnChange => "On Change",
+        DispatchPolicy::EveryFrame => "Every Frame",
+        DispatchPolicy::Periodic { .. } => "Periodic",
+    }
+}
+
+fn compute_pass_dispatch_ui(ui: &mut egui::Ui, compute_pass: &mut ComputePass) {
+    let mut policy = compute_pass.dispatch();
+    let mut changed = false;
+
+    changed |= field::row_doc(
+        ui,
+        "Dispatch",
+        field_doc!(
+            "When this pass re-dispatches.\n\n\
+            **On Change** runs only when an input changes (good for one-shot bakes). \
+            **Every Frame** runs once per rendered frame. \
+            **Periodic** runs at a fixed cadence independent of the framerate.\n\n\
+            Make sure to also add this pass to the presentation's compute pass list, or it won't run at all."
+        ),
+        |ui| {
+            let before = std::mem::discriminant(&policy);
+            egui::ComboBox::from_id_salt("compute_pass_dispatch")
+                .selected_text(dispatch_label(&policy))
+                .show_ui(ui, |ui| {
+                    dispatch_option(ui, &mut policy, DispatchPolicy::OnChange);
+                    dispatch_option(ui, &mut policy, DispatchPolicy::EveryFrame);
+                    // Keep the existing interval if already Periodic; otherwise
+                    // seed a sensible default when switching in.
+                    let is_periodic = matches!(policy, DispatchPolicy::Periodic { .. });
+                    if ui.selectable_label(is_periodic, "Periodic").clicked() && !is_periodic {
+                        policy = DispatchPolicy::Periodic {
+                            interval: instant::Duration::from_millis(50),
+                        };
+                    }
+                });
+            std::mem::discriminant(&policy) != before
+        },
+    );
+
+    if let DispatchPolicy::Periodic { interval } = &mut policy {
+        let mut secs = interval.as_secs_f32();
+        if inspector::f32_drag_row_doc(
+            ui,
+            "Interval (s)",
+            field_doc!(
+                "Seconds between dispatches. The pass runs once each interval of \
+                accumulated frame time, so the rate is the same on any monitor."
+            ),
+            &mut secs,
+            0.0001..=10.0,
+            0.001,
+            4,
+        ) {
+            *interval = instant::Duration::from_secs_f32(secs.max(0.0001));
+            changed = true;
+        }
+    }
+
+    if changed {
+        compute_pass.set_dispatch(policy);
+    }
+}
+
+fn dispatch_option(ui: &mut egui::Ui, policy: &mut DispatchPolicy, option: DispatchPolicy) {
+    let selected = std::mem::discriminant(policy) == std::mem::discriminant(&option);
+    if ui
+        .selectable_label(selected, dispatch_label(&option))
+        .clicked()
+    {
+        *policy = option;
+    }
 }
 
 fn compute_pass_bind_groups_ui(

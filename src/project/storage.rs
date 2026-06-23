@@ -198,6 +198,19 @@ where
             .any(|cell| matches!(cell, RuntimeCell::Pending { .. }))
     }
 
+    pub fn mark_errored(&mut self, key: R::Id, error: AppError) {
+        let Ok(cell) = self.cell_mut(key) else {
+            return;
+        };
+        let revision = match cell {
+            RuntimeCell::Created { revision, .. }
+            | RuntimeCell::Errored { revision, .. }
+            | RuntimeCell::Pending { revision, .. } => *revision,
+            RuntimeCell::Empty => Revision::default(),
+        };
+        *cell = RuntimeCell::Errored { error, revision };
+    }
+
     pub fn get_error(&self, key: R::Id) -> Option<&AppError> {
         match self.map.get(key) {
             Some(RuntimeCell::Errored { error, .. }) => Some(error),

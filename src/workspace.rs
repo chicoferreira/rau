@@ -201,15 +201,31 @@ impl Workspace {
             camera.update(ctx.dt);
         }
 
-        // Compute passes encode their dispatches into this encoder during `tick_objects`.
-        // It gets its own encoder that is *always* submitted, so the work reaches
-        // the GPU even on a frame where the viewport render bails out on a still-rebuilding
-        // resource. Sharing it with the viewport encoder would mean a dropped viewport frame also
-        // drops the compute pass dispatch, which never re-runs once the pass is built.
-        let mut compute_encoder = create_command_encoder(ctx.device, "Compute Encoder");
+        let resources_changed = self.tick_objects(ctx);
 
-        let resources_changed = self.tick_objects(ctx, &mut compute_encoder);
+        // Compute dispatches get their own encoder, which is *always* submitted. The viewport
+        // render below uses a separate, droppable encoder: when a render pass bails out on a
+        // still-rebuilding or errored resource, that whole encoder is discarded without being
+        // finished. If the compute dispatches shared it, a dropped viewport frame would silently
+        // drop them too, and an `OnChange` pass, which only dispatches on the frame its inputs
+        // change, would miss that one dispatch and never re-run, leaving its output stuck.
+        let mut compute_encoder = create_command_encoder(ctx.device, "Compute Encoder");
+        let mut compute_ctx = render::ComputeDispatchContext {
+            compute_passes: &self.project.compute_passes,
+            runtime_compute_passes: &mut self.runtime_project.compute_passes,
+            runtime_bind_groups: &self.runtime_project.bind_groups,
+            compute_accumulators: &mut self.runtime_project.compute_accumulators,
+            tracker: &self.tracker,
+            dt: ctx.dt,
+        };
+        self.project
+            .presentation
+            .dispatch_computes(&mut compute_encoder, &mut compute_ctx);
+
         ctx.queue.submit(std::iter::once(compute_encoder.finish()));
+
+        // Now that the compute dispatch has consumed this frame's change set, it can be cleared.
+        self.tracker.clear_changes();
 
         let snapshot = self.project.snapshot();
         if !self
@@ -511,7 +527,7 @@ impl Workspace {
     }
 
     /// Syncs every resource for this frame, returning whether any runtime resource changed.
-    fn tick_objects(&mut self, ctx: &mut AppContext, encoder: &mut wgpu::CommandEncoder) -> bool {
+    fn tick_objects(&mut self, ctx: &mut AppContext) -> bool {
         self.tracker.sync_storage(
             &mut self.project.dimensions,
             &mut self.runtime_project.dimensions,
@@ -623,7 +639,6 @@ impl Workspace {
 
         let view = &mut compute_pass::Context {
             device: ctx.device,
-            encoder,
             runtime_shaders: &mut self.runtime_project.shaders,
             runtime_bind_groups: &mut self.runtime_project.bind_groups,
         };
@@ -633,8 +648,9 @@ impl Workspace {
             view,
         );
 
-        let resources_changed = self.tracker.has_resource_changes();
-        self.tracker.clear_changes();
-        resources_changed
+        // Note: the tracker is *not* cleared here. `dispatch_computes` runs after
+        // `tick_objects` returns and still needs this frame's change set to decide
+        // which `OnChange` passes to dispatch; the caller clears it afterwards.
+        self.tracker.has_resource_changes()
     }
 }

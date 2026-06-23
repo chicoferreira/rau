@@ -5,9 +5,10 @@ use slotmap::SecondaryMap;
 use crate::{
     error::{AppError, AppResult, RequiredFieldExt},
     project::{
-        ProjectResource, ProjectRevisionSnapshot, RenderPassId, RuntimeProject,
+        ComputePassId, ProjectResource, ProjectRevisionSnapshot, RenderPassId, RuntimeProject,
         resource::{
             bindgroup::BindGroup,
+            compute_pass::{ComputePass, DispatchPolicy},
             model::Model,
             presentation::Presentation,
             render_pass::RenderPass,
@@ -15,6 +16,7 @@ use crate::{
             texture_view::TextureView,
         },
         storage::{RuntimeStorage, Storage},
+        sync::SyncTracker,
     },
     utils::async_job::AsyncJob,
 };
@@ -28,6 +30,15 @@ pub struct RenderContext<'a> {
     pub runtime_texture_views: &'a RuntimeStorage<TextureView>,
     pub runtime_render_pipelines: &'a RuntimeStorage<RenderPipeline>,
     pub render_pass_errors: &'a mut SecondaryMap<RenderPassId, AppError>,
+}
+
+pub struct ComputeDispatchContext<'a> {
+    pub compute_passes: &'a Storage<ComputePass>,
+    pub runtime_compute_passes: &'a mut RuntimeStorage<ComputePass>,
+    pub runtime_bind_groups: &'a RuntimeStorage<BindGroup>,
+    pub compute_accumulators: &'a mut SecondaryMap<ComputePassId, instant::Duration>,
+    pub tracker: &'a SyncTracker,
+    pub dt: instant::Duration,
 }
 
 #[derive(Default)]
@@ -96,6 +107,68 @@ impl RuntimeProject {
 }
 
 impl Presentation {
+    /// Dispatches the scheduled compute passes in order, into `encoder`, deciding
+    /// per pass whether it runs this frame from its [`DispatchPolicy`].
+    ///
+    /// The build step (pipeline creation in [`ComputePass`]'s `sync`) is separate;
+    /// this only emits the dispatches.
+    pub fn dispatch_computes(
+        &self,
+        encoder: &mut wgpu::CommandEncoder,
+        ctx: &mut ComputeDispatchContext<'_>,
+    ) {
+        for compute_pass_id in self.compute_passes() {
+            let id = *compute_pass_id;
+
+            let Ok(compute_pass) = ctx.compute_passes.get(id) else {
+                continue; // dangling id in the schedule
+            };
+
+            let runtime = match ctx.runtime_compute_passes.get_init(id) {
+                Ok(Some(runtime)) => runtime,
+                Ok(None) | Err(_) => continue,
+            };
+
+            let should_dispatch = match compute_pass.dispatch() {
+                DispatchPolicy::EveryFrame => true,
+                // `was_recreated` covers the frame the pipeline was first built or
+                // rebuilt; `inputs_changed` covers data-only changes to its inputs.
+                DispatchPolicy::OnChange => {
+                    ctx.tracker.was_recreated(id) || compute_pass.inputs_changed(ctx.tracker)
+                }
+                DispatchPolicy::Periodic { interval } => {
+                    let accumulated = ctx
+                        .compute_accumulators
+                        .entry(id)
+                        .expect("compute pass id is valid")
+                        .or_insert(instant::Duration::ZERO);
+                    *accumulated += ctx.dt;
+                    if *accumulated >= interval {
+                        // Subtract one interval (rather than reset to zero) to keep
+                        // the average cadence accurate. Clamp so a long stall can't
+                        // build up a backlog of catch-up dispatches.
+                        *accumulated = (*accumulated - interval).min(interval);
+                        true
+                    } else {
+                        false
+                    }
+                }
+            };
+
+            if should_dispatch {
+                // A wgpu validation error during encoding is caught by the frame-wide
+                // error scope in the app's render loop. An `Err` here is a Rust-side
+                // failure (e.g. a bound resource has errored); record it on the pass's
+                // own runtime cell so it surfaces like any other resource error. The
+                // error state only changes on an actual dispatch (or a rebuild), not
+                // every frame, since dispatches don't happen every frame.
+                if let Err(error) = compute_pass.encode(encoder, runtime, ctx.runtime_bind_groups) {
+                    ctx.runtime_compute_passes.mark_errored(id, error);
+                }
+            }
+        }
+    }
+
     /// Encodes every render pass into `encoder`, recording any per-pass errors in
     /// [`RenderContext::render_pass_errors`].
     ///
