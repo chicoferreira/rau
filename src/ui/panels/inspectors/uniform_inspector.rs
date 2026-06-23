@@ -372,21 +372,27 @@ fn ui_uniform_type_label(ui: &mut Ui, kind: UniformFieldDataKind, padding: usize
 }
 
 fn edit_uniform_field_data(ui: &mut egui::Ui, data: &mut uniform::UniformFieldData) -> bool {
-    let drag_value = |ui: &mut egui::Ui, value: &mut f32| {
+    let drag_float = |ui: &mut egui::Ui, value: &mut f32| {
         ui.add(egui::DragValue::new(value).speed(0.01).max_decimals(2))
             .changed()
     };
 
+    let drag_int = |ui: &mut egui::Ui, value: &mut u32| {
+        ui.add(egui::DragValue::new(value).speed(1.0).max_decimals(0))
+            .changed()
+    };
+
     ui.horizontal(|ui| match data {
-        uniform::UniformFieldData::Float(value) => drag_value(ui, value),
-        uniform::UniformFieldData::Vec4f(vec4) => ui_array_mut(ui, vec4, drag_value),
-        uniform::UniformFieldData::Vec3f(vec3) => ui_array_mut(ui, vec3, drag_value),
-        uniform::UniformFieldData::Vec2f(vec2) => ui_array_mut(ui, vec2, drag_value),
+        uniform::UniformFieldData::UInt32(value) => drag_int(ui, value),
+        uniform::UniformFieldData::Float(value) => drag_float(ui, value),
+        uniform::UniformFieldData::Vec4f(vec4) => ui_array_mut(ui, vec4, drag_float),
+        uniform::UniformFieldData::Vec3f(vec3) => ui_array_mut(ui, vec3, drag_float),
+        uniform::UniformFieldData::Vec2f(vec2) => ui_array_mut(ui, vec2, drag_float),
         uniform::UniformFieldData::Mat4x4f(mat4) => {
             let mut changed = false;
             egui::Grid::new("fieldmat4").show(ui, |ui| {
                 for row in mat4.iter_mut() {
-                    changed |= ui_array_mut(ui, row, drag_value);
+                    changed |= ui_array_mut(ui, row, drag_float);
                     ui.end_row();
                 }
             });
@@ -401,25 +407,30 @@ fn edit_uniform_field_data(ui: &mut egui::Ui, data: &mut uniform::UniformFieldDa
 }
 
 fn ui_uniform_field_data(ui: &mut egui::Ui, data: &uniform::UniformFieldData) {
-    let label = |ui: &mut egui::Ui, value: &f32| {
+    let float_label = |ui: &mut egui::Ui, value: &f32| {
         ui.label(egui::RichText::new(format!("{value:.2}")).weak());
     };
 
+    let int_label = |ui: &mut egui::Ui, value: &u32| {
+        ui.label(egui::RichText::new(format!("{value}")).weak());
+    };
+
     match data {
-        uniform::UniformFieldData::Float(value) => label(ui, value),
-        uniform::UniformFieldData::Vec4f(vec4) => ui_array(ui, vec4, label),
-        uniform::UniformFieldData::Vec3f(vec3) => ui_array(ui, vec3, label),
-        uniform::UniformFieldData::Vec2f(vec2) => ui_array(ui, vec2, label),
+        uniform::UniformFieldData::UInt32(value) => int_label(ui, value),
+        uniform::UniformFieldData::Float(value) => float_label(ui, value),
+        uniform::UniformFieldData::Vec4f(vec4) => ui_array(ui, vec4, float_label),
+        uniform::UniformFieldData::Vec3f(vec3) => ui_array(ui, vec3, float_label),
+        uniform::UniformFieldData::Vec2f(vec2) => ui_array(ui, vec2, float_label),
         uniform::UniformFieldData::Mat4x4f(mat4) => {
             egui::Grid::new("fieldmat4").show(ui, |ui| {
                 for row in mat4.iter() {
-                    ui_array(ui, row, label);
+                    ui_array(ui, row, float_label);
                     ui.end_row();
                 }
             });
         }
-        uniform::UniformFieldData::Rgba(color) => ui_array(ui, color, label),
-        uniform::UniformFieldData::Rgb(color) => ui_array(ui, color, label),
+        uniform::UniformFieldData::Rgba(color) => ui_array(ui, color, float_label),
+        uniform::UniformFieldData::Rgb(color) => ui_array(ui, color, float_label),
     }
 }
 

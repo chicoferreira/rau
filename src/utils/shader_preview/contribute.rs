@@ -247,6 +247,7 @@ fn contribute_entry(
 
 fn field_kind_type(kind: UniformFieldDataKind) -> ShaderType {
     match kind {
+        UniformFieldDataKind::UInt32 => ShaderType::Scalar(ScalarKind::U32),
         UniformFieldDataKind::Float => ShaderType::Scalar(ScalarKind::F32),
         UniformFieldDataKind::Vec2f => ShaderType::Vector {
             size: 2,

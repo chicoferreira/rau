@@ -81,6 +81,7 @@ pub enum UniformFieldSource {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", tag = "data_type", content = "data")]
 pub enum UniformFieldData {
+    UInt32(u32),
     Float(f32),
     Vec2f([f32; 2]),
     Vec3f([f32; 3]),
@@ -92,6 +93,7 @@ pub enum UniformFieldData {
 
 #[derive(Debug, Clone, Copy, PartialEq, strum::EnumIter, strum::Display)]
 pub enum UniformFieldDataKind {
+    UInt32,
     Float,
     Vec2f,
     Vec3f,
@@ -400,6 +402,7 @@ impl UniformFieldSource {
 impl UniformFieldData {
     pub fn from_kind(kind: UniformFieldDataKind) -> Self {
         match kind {
+            UniformFieldDataKind::UInt32 => UniformFieldData::UInt32(0),
             UniformFieldDataKind::Float => UniformFieldData::Float(0.0),
             UniformFieldDataKind::Vec2f => UniformFieldData::Vec2f([0.0; 2]),
             UniformFieldDataKind::Vec3f => UniformFieldData::Vec3f([0.0; 3]),
@@ -419,6 +422,7 @@ impl UniformFieldData {
             UniformFieldData::Rgb(_) => UniformFieldDataKind::Rgb,
             UniformFieldData::Rgba(_) => UniformFieldDataKind::Rgba,
             UniformFieldData::Mat4x4f(_) => UniformFieldDataKind::Mat4x4f,
+            UniformFieldData::UInt32(_) => UniformFieldDataKind::UInt32,
         }
     }
 
@@ -426,6 +430,9 @@ impl UniformFieldData {
         let start = buf.len();
 
         match self {
+            UniformFieldData::UInt32(v) => {
+                buf.extend_from_slice(bytemuck::bytes_of(v));
+            }
             UniformFieldData::Float(v) => {
                 buf.extend_from_slice(bytemuck::bytes_of(v));
             }
@@ -452,6 +459,7 @@ impl UniformFieldData {
 impl UniformFieldDataKind {
     pub fn layout(&self) -> (usize, usize) {
         match self {
+            UniformFieldDataKind::UInt32 => (4, 4),
             UniformFieldDataKind::Float => (4, 4),
             UniformFieldDataKind::Vec2f => (8, 8),
             UniformFieldDataKind::Vec3f
@@ -464,6 +472,7 @@ impl UniformFieldDataKind {
 
     pub fn wgsl_type_label(&self) -> &'static str {
         match self {
+            UniformFieldDataKind::UInt32 => "u32",
             UniformFieldDataKind::Float => "f32",
             UniformFieldDataKind::Vec2f => "vec2<f32>",
             UniformFieldDataKind::Vec3f => "vec3<f32>",
