@@ -61,6 +61,15 @@ pub const FEATURED_PROJECTS: &[FeaturedProject] = &[
         description: "A material-driven OBJ model with diffuse, normal, and specular maps, point lighting, and a third-person orbit camera.",
     },
     FeaturedProject {
+        id: "game-of-life",
+        name: "Game of Life",
+        owner: "chicoferreira",
+        repo: "rau",
+        git_ref: "main",
+        path: "projects/game-of-life",
+        description: "Conway's Game of Life on the GPU with compute shaders.",
+    },
+    FeaturedProject {
         id: "full-example",
         name: "Full Example",
         owner: "chicoferreira",

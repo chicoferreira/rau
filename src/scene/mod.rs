@@ -13,12 +13,14 @@ use crate::{
 };
 
 pub mod full_example;
+pub mod game_of_life;
 pub mod model;
 
 #[derive(Clone, Copy, clap::ValueEnum)]
 pub enum GenerateTemplate {
     FullExample,
     Model,
+    GameOfLife,
 }
 
 pub fn generate_project(template: GenerateTemplate, target_folder: &Path) -> AppResult<()> {
@@ -42,8 +44,9 @@ async fn generate_project_async(template: GenerateTemplate, target_folder: &Path
         GenerateTemplate::FullExample => {
             full_example::create_scene(&device, size, &file_storage).await?
         }
-        GenerateTemplate::Model => {
-            model::create_scene(&device, size, &file_storage).await?
+        GenerateTemplate::Model => model::create_scene(&device, size, &file_storage).await?,
+        GenerateTemplate::GameOfLife => {
+            game_of_life::create_scene(&device, size, &file_storage).await?
         }
     };
 
