@@ -61,6 +61,15 @@ pub const FEATURED_PROJECTS: &[FeaturedProject] = &[
         description: "A material-driven OBJ model with diffuse, normal, and specular maps, point lighting, and a third-person orbit camera.",
     },
     FeaturedProject {
+        id: "parallax-mapping",
+        name: "Parallax Mapping",
+        owner: "chicoferreira",
+        repo: "rau",
+        git_ref: "main",
+        path: "projects/parallax-mapping",
+        description: "A brick quad with diffuse, normal, and displacement maps. Parallax occlusion mapping marches the view ray through the depth map in tangent space to fake real surface depth. Ported from LearnOpenGL.",
+    },
+    FeaturedProject {
         id: "game-of-life",
         name: "Game of Life",
         owner: "chicoferreira",

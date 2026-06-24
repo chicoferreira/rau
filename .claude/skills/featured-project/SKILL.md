@@ -72,7 +72,7 @@ bind groups. (`thumbnail.png` is added by the user later — don't fabricate it.
 
 ### 4. The gallery card — `src/ui/components/main_menu/featured_projects.rs`
 
-Append a `FeaturedProject` to the `FEATURED_PROJECTS` array:
+Add a `FeaturedProject` to the `FEATURED_PROJECTS` array:
 
 ```rust
 FeaturedProject {
@@ -86,9 +86,24 @@ FeaturedProject {
 },
 ```
 
+The array is ordered by complexity — simplest first — and the gallery renders it
+in that order, so **insert the new card at the position that matches its
+complexity rather than appending to the end**. Gauge complexity relative to the
+existing entries (roughly: how many rau features it wires up — passes, pipelines,
+compute, models, render-to-texture stages — and how involved the technique is).
+For example, a single full-screen shader sits near the top, a lit OBJ model in
+the middle, and a multi-pass HDR/compute scene near the bottom. If two projects
+are comparable, place the new one after the existing one of similar weight.
+
 Match the tone of the existing descriptions — concrete about the technique, a bit
 inviting. The card loads its thumbnail from `projects/<name>/thumbnail.png` in
 the repo, so the user must commit that file for the image to appear.
+
+If the project is a port of an existing example, tutorial, or other source (or
+reuses its assets), credit it: say it was ported from there in the `description`,
+and add the source — name, URL, and license if known — to the scene/shader header
+comment. Note any license obligations (e.g. attribution-required assets) so the
+user knows what they're committing.
 
 ## Verify
 

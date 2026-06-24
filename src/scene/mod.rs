@@ -15,12 +15,14 @@ use crate::{
 pub mod full_example;
 pub mod game_of_life;
 pub mod model;
+pub mod parallax_mapping;
 
 #[derive(Clone, Copy, clap::ValueEnum)]
 pub enum GenerateTemplate {
     FullExample,
     Model,
     GameOfLife,
+    ParallaxMapping,
 }
 
 pub fn generate_project(template: GenerateTemplate, target_folder: &Path) -> AppResult<()> {
@@ -47,6 +49,9 @@ async fn generate_project_async(template: GenerateTemplate, target_folder: &Path
         GenerateTemplate::Model => model::create_scene(&device, size, &file_storage).await?,
         GenerateTemplate::GameOfLife => {
             game_of_life::create_scene(&device, size, &file_storage).await?
+        }
+        GenerateTemplate::ParallaxMapping => {
+            parallax_mapping::create_scene(&device, size, &file_storage).await?
         }
     };
 
