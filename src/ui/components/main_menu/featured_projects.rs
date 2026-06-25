@@ -79,6 +79,15 @@ pub const FEATURED_PROJECTS: &[FeaturedProject] = &[
         description: "A brick quad with diffuse, normal, and displacement maps. Parallax occlusion mapping marches the view ray through the depth map in tangent space to fake real surface depth. Ported from LearnOpenGL.",
     },
     FeaturedProject {
+        id: "heightmap",
+        name: "Heightmap Terrain",
+        owner: "chicoferreira",
+        repo: "rau",
+        git_ref: "main",
+        path: "projects/heightmap",
+        description: "A 3D terrain built from a heightmap image in the vertex shader. Green on flat ground, gray on steep slopes, with directional lighting and an orbit camera.",
+    },
+    FeaturedProject {
         id: "game-of-life",
         name: "Game of Life",
         owner: "chicoferreira",
