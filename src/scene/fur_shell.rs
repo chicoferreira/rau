@@ -6,7 +6,7 @@ use crate::{
         paths::FilePath,
         resource::{
             bindgroup::{BindGroup, BindGroupEntry, BindGroupResource},
-            camera::{Camera, CameraMode, Deg, LookAt, Pitch, Yaw},
+            camera::{Camera, CameraMode, LookAt},
             dimension::Dimension,
             model::{Model, ModelRuntime},
             render_pass::{Color, LoadOperation, RenderPass, RenderPassTarget},
@@ -43,16 +43,10 @@ pub async fn create_scene(
 
     let camera_position = glam::Vec3::new(2.0, 1.2, 2.0);
     let camera_target = glam::Vec3::new(0.0, 0.7, 0.0);
-    let view_dir = camera_target - camera_position;
 
     let mut camera = Camera::new("Camera".to_string());
     camera.set_dimension_id(Some(dimension_id));
-    camera.set_position(camera_position);
-    camera.set_yaw(Yaw::new(Deg(view_dir.z.atan2(view_dir.x).to_degrees())));
-    camera.set_pitch(Pitch::new(Deg(view_dir
-        .y
-        .atan2(view_dir.x.hypot(view_dir.z))
-        .to_degrees())));
+    camera.look_at(camera_position, camera_target);
     camera.set_mode(CameraMode::ThirdPerson);
     camera.set_looking_at(LookAt::new(camera_position, camera_target));
     let camera_id = project.cameras.register(camera);
