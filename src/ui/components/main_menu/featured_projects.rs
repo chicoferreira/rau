@@ -88,6 +88,15 @@ pub const FEATURED_PROJECTS: &[FeaturedProject] = &[
         description: "A simple scene with its depth buffer linearised to grayscale.",
     },
     FeaturedProject {
+        id: "shadow-mapping",
+        name: "Shadow Mapping",
+        owner: "chicoferreira",
+        repo: "rau",
+        git_ref: "main",
+        path: "projects/shadow-mapping",
+        description: "Boxes casting shadows from a spot light with classic two-pass shadow mapping.",
+    },
+    FeaturedProject {
         id: "game-of-life",
         name: "Game of Life",
         owner: "chicoferreira",

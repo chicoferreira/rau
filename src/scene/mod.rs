@@ -18,6 +18,7 @@ pub mod game_of_life;
 pub mod grass_field;
 pub mod model;
 pub mod parallax_mapping;
+pub mod shadow_mapping;
 
 #[derive(Clone, Copy, clap::ValueEnum)]
 pub enum GenerateTemplate {
@@ -27,6 +28,7 @@ pub enum GenerateTemplate {
     ParallaxMapping,
     GrassField,
     DepthTesting,
+    ShadowMapping,
 }
 
 pub fn generate_project(template: GenerateTemplate, target_folder: &Path) -> AppResult<()> {
@@ -62,6 +64,9 @@ async fn generate_project_async(template: GenerateTemplate, target_folder: &Path
         }
         GenerateTemplate::DepthTesting => {
             depth_testing::create_scene(&device, size, &file_storage).await?
+        }
+        GenerateTemplate::ShadowMapping => {
+            shadow_mapping::create_scene(&device, size, &file_storage).await?
         }
     };
 
