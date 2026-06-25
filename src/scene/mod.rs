@@ -12,6 +12,7 @@ use crate::{
     ui::size::Size2d,
 };
 
+pub mod depth_testing;
 pub mod full_example;
 pub mod game_of_life;
 pub mod grass_field;
@@ -25,6 +26,7 @@ pub enum GenerateTemplate {
     GameOfLife,
     ParallaxMapping,
     GrassField,
+    DepthTesting,
 }
 
 pub fn generate_project(template: GenerateTemplate, target_folder: &Path) -> AppResult<()> {
@@ -57,6 +59,9 @@ async fn generate_project_async(template: GenerateTemplate, target_folder: &Path
         }
         GenerateTemplate::GrassField => {
             grass_field::create_scene(&device, size, &file_storage).await?
+        }
+        GenerateTemplate::DepthTesting => {
+            depth_testing::create_scene(&device, size, &file_storage).await?
         }
     };
 

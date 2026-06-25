@@ -79,6 +79,15 @@ pub const FEATURED_PROJECTS: &[FeaturedProject] = &[
         description: "A brick quad with diffuse, normal, and displacement maps. Parallax occlusion mapping marches the view ray through the depth map in tangent space to fake real surface depth. Ported from LearnOpenGL.",
     },
     FeaturedProject {
+        id: "depth-testing",
+        name: "Depth Testing",
+        owner: "chicoferreira",
+        repo: "rau",
+        git_ref: "main",
+        path: "projects/depth-testing",
+        description: "A simple scene with its depth buffer linearised to grayscale.",
+    },
+    FeaturedProject {
         id: "game-of-life",
         name: "Game of Life",
         owner: "chicoferreira",
