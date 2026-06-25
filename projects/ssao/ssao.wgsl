@@ -78,7 +78,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     let normal = normalize(textureSample(g_normal, g_sampler, in.uv).xyz);
 
     // Background (no geometry was written here): fully unoccluded.
-    if (dot(normal, normal) < 0.5) {
+    if dot(normal, normal) < 0.5 {
         return vec4<f32>(1.0);
     }
 
@@ -103,7 +103,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
         let ndc = offset.xy / offset.w;
         let sample_uv = vec2<f32>(ndc.x * 0.5 + 0.5, 1.0 - (ndc.y * 0.5 + 0.5));
 
-        let sample_depth = textureSample(g_position, g_sampler, sample_uv).z;
+        let sample_depth = textureSampleLevel(g_position, g_sampler, sample_uv, 0.0).z;
 
         // Only count occluders within `radius`, fading out at the edge so distant
         // background geometry doesn't bleed dark halos onto foreground objects.

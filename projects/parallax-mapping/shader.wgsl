@@ -101,19 +101,19 @@ fn parallax_mapping(tex_coords: vec2<f32>, view_dir: vec3<f32>) -> vec2<f32> {
 
     var current_layer_depth = 0.0;
     var current_tex_coords = tex_coords;
-    var current_depth = textureSample(depth_texture, material_sampler, current_tex_coords).r;
+    var current_depth = textureSampleLevel(depth_texture, material_sampler, current_tex_coords, 0.0).r;
 
     // Step along the ray until the sampled surface is in front of the ray depth.
     while current_layer_depth < current_depth {
         current_tex_coords -= delta_tex_coords;
-        current_depth = textureSample(depth_texture, material_sampler, current_tex_coords).r;
+        current_depth = textureSampleLevel(depth_texture, material_sampler, current_tex_coords, 0.0).r;
         current_layer_depth += layer_depth;
     }
 
     // Interpolate between the layer before and after the intersection.
     let prev_tex_coords = current_tex_coords + delta_tex_coords;
     let after_depth = current_depth - current_layer_depth;
-    let before_depth = textureSample(depth_texture, material_sampler, prev_tex_coords).r
+    let before_depth = textureSampleLevel(depth_texture, material_sampler, prev_tex_coords, 0.0).r
         - current_layer_depth + layer_depth;
     let weight = after_depth / (after_depth - before_depth);
     return mix(current_tex_coords, prev_tex_coords, weight);
