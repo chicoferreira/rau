@@ -14,6 +14,7 @@ use crate::{
 
 pub mod depth_testing;
 pub mod full_example;
+pub mod fur_shell;
 pub mod game_of_life;
 pub mod grass_field;
 pub mod model;
@@ -23,6 +24,7 @@ pub mod shadow_mapping;
 #[derive(Clone, Copy, clap::ValueEnum)]
 pub enum GenerateTemplate {
     FullExample,
+    FurShell,
     Model,
     GameOfLife,
     ParallaxMapping,
@@ -56,6 +58,7 @@ async fn generate_project_async(template: GenerateTemplate, target_folder: &Path
         GenerateTemplate::GameOfLife => {
             game_of_life::create_scene(&device, size, &file_storage).await?
         }
+        GenerateTemplate::FurShell => fur_shell::create_scene(&device, size, &file_storage).await?,
         GenerateTemplate::ParallaxMapping => {
             parallax_mapping::create_scene(&device, size, &file_storage).await?
         }
