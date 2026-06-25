@@ -12,6 +12,7 @@ use crate::{
     ui::size::Size2d,
 };
 
+pub mod bloom;
 pub mod full_example;
 pub mod game_of_life;
 pub mod grass_field;
@@ -20,6 +21,7 @@ pub mod parallax_mapping;
 
 #[derive(Clone, Copy, clap::ValueEnum)]
 pub enum GenerateTemplate {
+    Bloom,
     FullExample,
     Model,
     GameOfLife,
@@ -45,6 +47,7 @@ async fn generate_project_async(template: GenerateTemplate, target_folder: &Path
 
     let size = Size2d::new(1080, 1080);
     let project = match template {
+        GenerateTemplate::Bloom => bloom::create_scene(&device, size, &file_storage).await?,
         GenerateTemplate::FullExample => {
             full_example::create_scene(&device, size, &file_storage).await?
         }

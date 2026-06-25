@@ -88,6 +88,15 @@ pub const FEATURED_PROJECTS: &[FeaturedProject] = &[
         description: "Conway's Game of Life on the GPU with compute shaders.",
     },
     FeaturedProject {
+        id: "bloom",
+        name: "Bloom",
+        owner: "chicoferreira",
+        repo: "rau",
+        git_ref: "main",
+        path: "projects/bloom",
+        description: "HDR bloom with gaussian blur and ACES tonemapping. Bright procedural orbs glow through a multi-pass post-processing pipeline.",
+    },
+    FeaturedProject {
         id: "full-example",
         name: "Full Example",
         owner: "chicoferreira",
