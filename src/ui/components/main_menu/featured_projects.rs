@@ -79,6 +79,15 @@ pub const FEATURED_PROJECTS: &[FeaturedProject] = &[
         description: "A brick quad with diffuse, normal, and displacement maps. Parallax occlusion mapping marches the view ray through the depth map in tangent space to fake real surface depth. Ported from LearnOpenGL.",
     },
     FeaturedProject {
+        id: "fur-shell",
+        name: "Fur Shell",
+        owner: "chicoferreira",
+        repo: "rau",
+        git_ref: "main",
+        path: "projects/fur-shell",
+        description: "Shell-based fur rendering on a rounded cube. 48 instanced layers with procedural strand discard, ambient occlusion, and point lighting.",
+    },
+    FeaturedProject {
         id: "game-of-life",
         name: "Game of Life",
         owner: "chicoferreira",
