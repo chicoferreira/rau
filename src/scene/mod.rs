@@ -14,6 +14,7 @@ use crate::{
 
 pub mod full_example;
 pub mod game_of_life;
+pub mod grass_field;
 pub mod model;
 pub mod parallax_mapping;
 
@@ -23,6 +24,7 @@ pub enum GenerateTemplate {
     Model,
     GameOfLife,
     ParallaxMapping,
+    GrassField,
 }
 
 pub fn generate_project(template: GenerateTemplate, target_folder: &Path) -> AppResult<()> {
@@ -52,6 +54,9 @@ async fn generate_project_async(template: GenerateTemplate, target_folder: &Path
         }
         GenerateTemplate::ParallaxMapping => {
             parallax_mapping::create_scene(&device, size, &file_storage).await?
+        }
+        GenerateTemplate::GrassField => {
+            grass_field::create_scene(&device, size, &file_storage).await?
         }
     };
 

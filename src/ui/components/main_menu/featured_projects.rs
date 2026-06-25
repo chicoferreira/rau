@@ -52,6 +52,15 @@ pub const FEATURED_PROJECTS: &[FeaturedProject] = &[
         description: "A procedural Preetham sky on a full-screen triangle, with the view ray from the camera and the sun position from a uniform.",
     },
     FeaturedProject {
+        id: "grass-field",
+        name: "Grass Field",
+        owner: "chicoferreira",
+        repo: "rau",
+        git_ref: "main",
+        path: "projects/grass-field",
+        description: "A GPU instancing demo with a million grass blades drawn in a single instanced draw call.",
+    },
+    FeaturedProject {
         id: "model",
         name: "OBJ Model",
         owner: "chicoferreira",
