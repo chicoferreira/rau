@@ -85,7 +85,7 @@ pub const FEATURED_PROJECTS: &[FeaturedProject] = &[
         repo: "rau",
         git_ref: "main",
         path: "projects/fur-shell",
-        description: "Shell-based fur rendering on a rounded cube. 48 instanced layers with procedural strand discard, ambient occlusion, and point lighting.",
+        description: "Shell-based fur rendering on the Stanford bunny.",
     },
     FeaturedProject {
         id: "depth-testing",
