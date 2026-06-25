@@ -41,8 +41,8 @@ pub async fn create_scene(
         .dimensions
         .register(Dimension::new("Main Dimension", size));
 
-    let camera_position = glam::Vec3::new(2.0, 1.2, 2.0);
-    let camera_target = glam::Vec3::new(0.0, 0.7, 0.0);
+    let camera_position = glam::Vec3::new(-0.2, 1.2, 2.1);
+    let camera_target = glam::Vec3::new(-0.3, 0.7, 0.2);
 
     let mut camera = Camera::new("Camera".to_string());
     camera.set_dimension_id(Some(dimension_id));
