@@ -316,6 +316,13 @@ impl Camera {
         pub fn set_looking_at(looking_at: LookAt);
     }
 
+    pub fn look_at(&mut self, position: Vec3, target: Vec3) {
+        let (yaw, pitch) = angles_from_direction(target - position);
+        self.set_position(position);
+        self.set_yaw(Yaw::new(Rad(yaw)));
+        self.set_pitch(Pitch::new(Rad(pitch)));
+    }
+
     fn calculate_aspect(&self, dimensions: &Storage<Dimension>) -> AppResult<f32> {
         let dimension_id = self
             .dimension_id
