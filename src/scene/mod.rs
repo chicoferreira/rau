@@ -20,6 +20,7 @@ pub mod grass_field;
 pub mod model;
 pub mod parallax_mapping;
 pub mod shadow_mapping;
+pub mod ssao;
 
 #[derive(Clone, Copy, clap::ValueEnum)]
 pub enum GenerateTemplate {
@@ -31,6 +32,7 @@ pub enum GenerateTemplate {
     GrassField,
     DepthTesting,
     ShadowMapping,
+    Ssao,
 }
 
 pub fn generate_project(template: GenerateTemplate, target_folder: &Path) -> AppResult<()> {
@@ -71,6 +73,7 @@ async fn generate_project_async(template: GenerateTemplate, target_folder: &Path
         GenerateTemplate::ShadowMapping => {
             shadow_mapping::create_scene(&device, size, &file_storage).await?
         }
+        GenerateTemplate::Ssao => ssao::create_scene(&device, size, &file_storage).await?,
     };
 
     file_system

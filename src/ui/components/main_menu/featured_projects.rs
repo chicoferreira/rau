@@ -123,6 +123,15 @@ pub const FEATURED_PROJECTS: &[FeaturedProject] = &[
         path: "projects/full-example",
         description: "A lit OBJ cube with diffuse and normal maps, a camera, and an HDR skybox. Shows off most of what rau can do.",
     },
+    FeaturedProject {
+        id: "ssao",
+        name: "SSAO",
+        owner: "chicoferreira",
+        repo: "rau",
+        git_ref: "main",
+        path: "projects/ssao",
+        description: "Screen-space ambient occlusion. Ported from LearnOpenGL.",
+    },
 ];
 
 pub fn render_ui(ui: &mut Ui) -> Option<&'static FeaturedProject> {
