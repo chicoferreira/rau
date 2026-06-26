@@ -17,6 +17,7 @@ pub mod full_example;
 pub mod fur_shell;
 pub mod game_of_life;
 pub mod grass_field;
+pub mod many_lights;
 pub mod model;
 pub mod parallax_mapping;
 pub mod shadow_mapping;
@@ -30,6 +31,7 @@ pub enum GenerateTemplate {
     GameOfLife,
     ParallaxMapping,
     GrassField,
+    ManyLights,
     DepthTesting,
     ShadowMapping,
     Ssao,
@@ -66,6 +68,9 @@ async fn generate_project_async(template: GenerateTemplate, target_folder: &Path
         }
         GenerateTemplate::GrassField => {
             grass_field::create_scene(&device, size, &file_storage).await?
+        }
+        GenerateTemplate::ManyLights => {
+            many_lights::create_scene(&device, size, &file_storage).await?
         }
         GenerateTemplate::DepthTesting => {
             depth_testing::create_scene(&device, size, &file_storage).await?
