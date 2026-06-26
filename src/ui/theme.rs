@@ -121,4 +121,5 @@ fn apply_spacing(style: &mut egui::Style) {
     spacing.scroll.bar_width = 9.0;
     spacing.scroll.floating = true;
     spacing.scroll.floating_allocated_width = 0.0;
+    spacing.indent = 25.0;
 }
