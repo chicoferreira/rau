@@ -39,6 +39,17 @@ impl TextureFormat {
         }
     }
 
+    pub fn from_wgpu(format: wgpu::TextureFormat) -> Option<Self> {
+        Some(match format {
+            wgpu::TextureFormat::Rgba8UnormSrgb => Self::Rgba8UnormSrgb,
+            wgpu::TextureFormat::Rgba8Unorm => Self::Rgba8Unorm,
+            wgpu::TextureFormat::Rgba16Float => Self::Rgba16Float,
+            wgpu::TextureFormat::Rgba32Float => Self::Rgba32Float,
+            wgpu::TextureFormat::Depth32Float => Self::Depth32Float,
+            _ => return None,
+        })
+    }
+
     /// Human-readable name shown in the UI.
     pub fn label(self) -> &'static str {
         match self {

@@ -39,6 +39,8 @@ pub struct TextureView {
 pub struct TextureViewRuntime {
     inner: wgpu::TextureView,
     egui_id: Option<egui::TextureId>,
+    format: Option<wgpu::TextureFormat>,
+    dimension: Option<wgpu::TextureViewDimension>,
 }
 
 #[derive(Default)]
@@ -100,7 +102,7 @@ impl TextureView {
         format: Option<TextureViewFormat>,
         dimension: Option<wgpu::TextureViewDimension>,
         downlevel_flags: wgpu::DownlevelFlags,
-    ) -> wgpu::TextureView {
+    ) -> (wgpu::TextureView, Option<wgpu::TextureFormat>) {
         let supports_view_formats = downlevel_flags.contains(wgpu::DownlevelFlags::VIEW_FORMATS);
 
         let wgpu_format = match (supports_view_formats, format) {
@@ -113,12 +115,14 @@ impl TextureView {
             _ => None,
         };
 
-        runtime.inner().create_view(&wgpu::TextureViewDescriptor {
+        let inner = runtime.inner().create_view(&wgpu::TextureViewDescriptor {
             label: Some(label),
             format: wgpu_format,
             dimension,
             ..Default::default()
-        })
+        });
+
+        (inner, wgpu_format)
     }
 }
 
@@ -132,6 +136,32 @@ impl TextureViewRuntime {
     /// [`is_filterable_rgba`]), due to egui texture requirements.
     pub fn egui_id(&self) -> Option<egui::TextureId> {
         self.egui_id
+    }
+
+    /// The actual format the view was created with, resolving `From Texture`
+    /// against the parent texture.
+    pub fn format(&self) -> wgpu::TextureFormat {
+        self.format.unwrap_or_else(|| self.inner.texture().format())
+    }
+
+    /// The actual view dimension the view was created with, resolving `From
+    /// Texture` against the parent texture.
+    pub fn dimension(&self) -> wgpu::TextureViewDimension {
+        self.dimension
+            .unwrap_or_else(|| default_view_dimension(self.inner.texture()))
+    }
+}
+
+/// The view dimension wgpu infers from a texture when the view descriptor leaves
+/// it unset, mirroring wgpu's own defaulting rules.
+fn default_view_dimension(texture: &wgpu::Texture) -> wgpu::TextureViewDimension {
+    match texture.dimension() {
+        wgpu::TextureDimension::D1 => wgpu::TextureViewDimension::D1,
+        wgpu::TextureDimension::D2 if texture.depth_or_array_layers() > 1 => {
+            wgpu::TextureViewDimension::D2Array
+        }
+        wgpu::TextureDimension::D2 => wgpu::TextureViewDimension::D2,
+        wgpu::TextureDimension::D3 => wgpu::TextureViewDimension::D3,
     }
 }
 
@@ -193,7 +223,7 @@ impl SyncResource for TextureView {
 
                 let scope = WgpuErrorScope::push(ctx.device);
 
-                let inner = Self::create_view(
+                let (inner, format) = Self::create_view(
                     &self.label,
                     texture,
                     runtime_texture,
@@ -226,7 +256,12 @@ impl SyncResource for TextureView {
                     (None, false) => None,
                 };
 
-                let runtime = TextureViewRuntime { inner, egui_id };
+                let runtime = TextureViewRuntime {
+                    inner,
+                    egui_id,
+                    format,
+                    dimension: self.dimension,
+                };
                 let job = TextureViewJob::Validation(runtime, scope.pop());
                 self.sync(_id, ctx, None, job)
             }
