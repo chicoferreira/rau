@@ -155,9 +155,19 @@ impl Workspace {
         let inspector_tree_pane = TreePane::new("inspector");
         let mut viewport_tree_pane = TreePane::new("viewport");
 
-        if let Some(viewport_id) = project.presentation.main_viewport() {
-            viewport_tree_pane.add_pane(ViewportPane { viewport_id });
-        }
+        let main_viewport = project.presentation.main_viewport();
+        let mut add_viewport =
+            |viewport_id| viewport_tree_pane.add_pane(ViewportPane { viewport_id });
+
+        // Add the main viewport first so it ends up as the first tab.
+        main_viewport.inspect(|&id| add_viewport(id));
+        // Add the remaining viewports in order.
+        project
+            .viewports
+            .list_sorted()
+            .for_each(|(id, _)| add_viewport(id));
+        // Re-add the main viewport so it ends up as the active (focused) tab.
+        main_viewport.inspect(|&id| add_viewport(id));
 
         let project_save_state = ProjectSaveState::new(&project);
 

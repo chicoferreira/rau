@@ -125,7 +125,11 @@ mod utils {
 
         match tree.tiles.get(root) {
             Some(Tile::Pane(_)) => {
-                unreachable!("all_panes_must_have_tabs must be true")
+                let new_root = tree.tiles.insert_tab_tile(vec![root, pane_tile]);
+                tree.root = Some(new_root);
+                if let Some(Tile::Container(Container::Tabs(tabs))) = tree.tiles.get_mut(new_root) {
+                    tabs.set_active(pane_tile);
+                }
             }
             Some(Tile::Container(Container::Tabs(_))) => {
                 if let Some(Tile::Container(Container::Tabs(tabs))) = tree.tiles.get_mut(root) {
