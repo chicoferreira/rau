@@ -124,6 +124,15 @@ pub const FEATURED_PROJECTS: &[FeaturedProject] = &[
         description: "A lit OBJ cube with diffuse and normal maps, a camera, and an HDR skybox. Shows off most of what rau can do.",
     },
     FeaturedProject {
+        id: "many-lights",
+        name: "Many Lights",
+        owner: "chicoferreira",
+        repo: "rau",
+        git_ref: "main",
+        path: "projects/many-lights",
+        description: "Deferred rendering with 256 animated point lights. A G-buffer stores position, normal, and albedo, then a single lighting pass loops over every light.",
+    },
+    FeaturedProject {
         id: "ssao",
         name: "SSAO",
         owner: "chicoferreira",
