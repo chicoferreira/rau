@@ -1,7 +1,6 @@
 pub mod code_editor;
 pub mod color_edit;
 pub mod create_project_modal;
-pub mod data_display;
 pub mod delete_project_confirmation_modal;
 pub mod derive_model_material_modal;
 pub mod draggable_list;

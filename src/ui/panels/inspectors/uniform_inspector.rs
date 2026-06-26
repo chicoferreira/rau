@@ -17,7 +17,6 @@ use crate::{
         components::{
             code_editor::{highlighted_label, shader_code_section},
             color_edit::color_edit_rgba,
-            data_display::{ui_array, ui_array_mut},
             draggable_list::{ListEdits, draggable_list},
             field,
             field_docs::field_doc,
@@ -242,7 +241,7 @@ fn ui_uniform_field_entry(
 
         ui.collapsing("Current Values", |ui| {
             if let Some(runtime_field) = runtime_field {
-                ui.horizontal(|ui| ui_uniform_field_data(ui, runtime_field.data()));
+                ui_uniform_field_data(ui, runtime_field.data());
             } else {
                 ui.weak("Runtime values are not available.");
             }
@@ -382,18 +381,27 @@ fn edit_uniform_field_data(ui: &mut egui::Ui, data: &mut uniform::UniformFieldDa
             .changed()
     };
 
-    ui.horizontal(|ui| match data {
+    let drag_float_array = |ui: &mut egui::Ui, array: &mut [f32]| {
+        let mut changed = false;
+        ui.horizontal(|ui| {
+            for value in array.iter_mut() {
+                changed |= drag_float(ui, value);
+            }
+        });
+        changed
+    };
+
+    match data {
         uniform::UniformFieldData::UInt32(value) => drag_int(ui, value),
         uniform::UniformFieldData::Float(value) => drag_float(ui, value),
-        uniform::UniformFieldData::Vec4f(vec4) => ui_array_mut(ui, vec4, drag_float),
-        uniform::UniformFieldData::Vec3f(vec3) => ui_array_mut(ui, vec3, drag_float),
-        uniform::UniformFieldData::Vec2f(vec2) => ui_array_mut(ui, vec2, drag_float),
+        uniform::UniformFieldData::Vec4f(vec4) => drag_float_array(ui, vec4),
+        uniform::UniformFieldData::Vec3f(vec3) => drag_float_array(ui, vec3),
+        uniform::UniformFieldData::Vec2f(vec2) => drag_float_array(ui, vec2),
         uniform::UniformFieldData::Mat4x4f(mat4) => {
             let mut changed = false;
-            egui::Grid::new("fieldmat4").show(ui, |ui| {
+            ui.vertical(|ui| {
                 for row in mat4.iter_mut() {
-                    changed |= ui_array_mut(ui, row, drag_float);
-                    ui.end_row();
+                    changed |= drag_float_array(ui, row);
                 }
             });
             changed
@@ -402,8 +410,7 @@ fn edit_uniform_field_data(ui: &mut egui::Ui, data: &mut uniform::UniformFieldDa
         uniform::UniformFieldData::Rgb(color) => {
             egui::color_picker::color_edit_button_rgb(ui, color).changed()
         }
-    })
-    .inner
+    }
 }
 
 fn ui_uniform_field_data(ui: &mut egui::Ui, data: &uniform::UniformFieldData) {
@@ -415,22 +422,28 @@ fn ui_uniform_field_data(ui: &mut egui::Ui, data: &uniform::UniformFieldData) {
         ui.label(egui::RichText::new(format!("{value}")).weak());
     };
 
+    let array_float_label = |ui: &mut egui::Ui, array: &[f32]| {
+        for value in array {
+            float_label(ui, value);
+        }
+    };
+
     match data {
         uniform::UniformFieldData::UInt32(value) => int_label(ui, value),
         uniform::UniformFieldData::Float(value) => float_label(ui, value),
-        uniform::UniformFieldData::Vec4f(vec4) => ui_array(ui, vec4, float_label),
-        uniform::UniformFieldData::Vec3f(vec3) => ui_array(ui, vec3, float_label),
-        uniform::UniformFieldData::Vec2f(vec2) => ui_array(ui, vec2, float_label),
+        uniform::UniformFieldData::Vec4f(vec4) => array_float_label(ui, vec4),
+        uniform::UniformFieldData::Vec3f(vec3) => array_float_label(ui, vec3),
+        uniform::UniformFieldData::Vec2f(vec2) => array_float_label(ui, vec2),
         uniform::UniformFieldData::Mat4x4f(mat4) => {
             egui::Grid::new("fieldmat4").show(ui, |ui| {
                 for row in mat4.iter() {
-                    ui_array(ui, row, float_label);
+                    array_float_label(ui, row);
                     ui.end_row();
                 }
             });
         }
-        uniform::UniformFieldData::Rgba(color) => ui_array(ui, color, float_label),
-        uniform::UniformFieldData::Rgb(color) => ui_array(ui, color, float_label),
+        uniform::UniformFieldData::Rgba(color) => array_float_label(ui, color),
+        uniform::UniformFieldData::Rgb(color) => array_float_label(ui, color),
     }
 }
 

@@ -8,7 +8,6 @@ use crate::{
     },
     ui::{
         components::{
-            data_display::ui_mat4_grid,
             field,
             field_docs::{FieldDoc, field_doc},
             inspector,
@@ -378,6 +377,19 @@ impl StateSnapshot<'_> {
                 });
         });
     }
+}
+
+fn ui_mat4_grid(ui: &mut egui::Ui, mat: &[[f32; 4]; 4]) {
+    egui::Grid::new(ui.id().with("mat4grid"))
+        .min_col_width(40.0)
+        .show(ui, |ui| {
+            for row in mat.iter() {
+                for value in row.iter() {
+                    ui.label(RichText::new(format!("{value:.3}")).weak().monospace());
+                }
+                ui.end_row();
+            }
+        });
 }
 
 fn degree_drag_row(
