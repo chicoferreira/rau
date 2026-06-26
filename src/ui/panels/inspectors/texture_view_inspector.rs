@@ -6,7 +6,7 @@ use crate::{
         components::{
             field,
             field_docs::field_doc,
-            inspector::{self, AsWidgetText},
+            inspector::{self, AsRichText},
         },
         pane::StateSnapshot,
     },
@@ -121,8 +121,8 @@ impl StateSnapshot<'_> {
     }
 }
 
-impl AsWidgetText for Option<TextureViewFormat> {
-    fn as_widget_text(&self) -> egui::WidgetText {
+impl AsRichText for Option<TextureViewFormat> {
+    fn as_rich_text(&self) -> egui::RichText {
         let r = match self {
             Some(TextureViewFormat::Srgb) => "From Texture (Force sRGB)",
             Some(TextureViewFormat::Linear) => "From Texture (Force Linear)",
@@ -132,17 +132,12 @@ impl AsWidgetText for Option<TextureViewFormat> {
     }
 }
 
-impl AsWidgetText for Option<wgpu::TextureViewDimension> {
-    fn as_widget_text(&self) -> egui::WidgetText {
-        let r = match self {
-            Some(wgpu::TextureViewDimension::D1) => "D1",
-            Some(wgpu::TextureViewDimension::D2) => "D2",
-            Some(wgpu::TextureViewDimension::D3) => "D3",
-            Some(wgpu::TextureViewDimension::D2Array) => "D2Array",
-            Some(wgpu::TextureViewDimension::Cube) => "Cube",
-            Some(wgpu::TextureViewDimension::CubeArray) => "CubeArray",
-            None => "From Texture",
-        };
-        r.into()
+impl AsRichText for Option<wgpu::TextureViewDimension> {
+    fn as_rich_text(&self) -> egui::RichText {
+        match self {
+            Some(dimension) => dimension.as_rich_text(),
+            None => "From Texture".into(),
+        }
+        .into()
     }
 }

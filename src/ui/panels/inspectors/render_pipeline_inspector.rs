@@ -17,7 +17,7 @@ use crate::{
             draggable_list::{ListEdits, draggable_list},
             field,
             field_docs::field_doc,
-            inspector::{self, AsWidgetText},
+            inspector::{self, AsRichText},
             resource_icons,
         },
         pane::StateSnapshot,
@@ -54,8 +54,8 @@ impl DrawKind {
     }
 }
 
-impl AsWidgetText for DrawKind {
-    fn as_widget_text(&self) -> egui::WidgetText {
+impl AsRichText for DrawKind {
+    fn as_rich_text(&self) -> egui::RichText {
         match self {
             Self::Direct => "Direct",
             Self::Model => "Model",
@@ -64,8 +64,8 @@ impl AsWidgetText for DrawKind {
     }
 }
 
-impl AsWidgetText for wgpu::PrimitiveTopology {
-    fn as_widget_text(&self) -> egui::WidgetText {
+impl AsRichText for wgpu::PrimitiveTopology {
+    fn as_rich_text(&self) -> egui::RichText {
         match self {
             wgpu::PrimitiveTopology::PointList => "Point List",
             wgpu::PrimitiveTopology::LineList => "Line List",
@@ -77,8 +77,8 @@ impl AsWidgetText for wgpu::PrimitiveTopology {
     }
 }
 
-impl AsWidgetText for Option<wgpu::IndexFormat> {
-    fn as_widget_text(&self) -> egui::WidgetText {
+impl AsRichText for Option<wgpu::IndexFormat> {
+    fn as_rich_text(&self) -> egui::RichText {
         match self {
             None => "None",
             Some(wgpu::IndexFormat::Uint16) => "Uint16",
@@ -88,8 +88,8 @@ impl AsWidgetText for Option<wgpu::IndexFormat> {
     }
 }
 
-impl AsWidgetText for wgpu::FrontFace {
-    fn as_widget_text(&self) -> egui::WidgetText {
+impl AsRichText for wgpu::FrontFace {
+    fn as_rich_text(&self) -> egui::RichText {
         match self {
             wgpu::FrontFace::Ccw => "Counter-Clockwise",
             wgpu::FrontFace::Cw => "Clockwise",
@@ -98,8 +98,8 @@ impl AsWidgetText for wgpu::FrontFace {
     }
 }
 
-impl AsWidgetText for Option<wgpu::Face> {
-    fn as_widget_text(&self) -> egui::WidgetText {
+impl AsRichText for Option<wgpu::Face> {
+    fn as_rich_text(&self) -> egui::RichText {
         match self {
             None => "None",
             Some(wgpu::Face::Front) => "Front",
@@ -109,8 +109,8 @@ impl AsWidgetText for Option<wgpu::Face> {
     }
 }
 
-impl AsWidgetText for wgpu::PolygonMode {
-    fn as_widget_text(&self) -> egui::WidgetText {
+impl AsRichText for wgpu::PolygonMode {
+    fn as_rich_text(&self) -> egui::RichText {
         match self {
             wgpu::PolygonMode::Fill => "Fill",
             wgpu::PolygonMode::Line => "Line",

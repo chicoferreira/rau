@@ -21,7 +21,7 @@ use crate::{
             draggable_list::{ListEdits, draggable_list},
             field,
             field_docs::field_doc,
-            inspector::{self, AsWidgetText},
+            inspector::{self, AsRichText},
             renameable_label::renameable_label,
             resource_icons,
         },
@@ -434,20 +434,20 @@ fn ui_uniform_field_data(ui: &mut egui::Ui, data: &uniform::UniformFieldData) {
     }
 }
 
-impl AsWidgetText for UniformFieldSourceKind {
-    fn as_widget_text(&self) -> egui::WidgetText {
+impl AsRichText for UniformFieldSourceKind {
+    fn as_rich_text(&self) -> egui::RichText {
         self.to_string().into()
     }
 }
 
-impl AsWidgetText for UniformFieldDataKind {
-    fn as_widget_text(&self) -> egui::WidgetText {
+impl AsRichText for UniformFieldDataKind {
+    fn as_rich_text(&self) -> egui::RichText {
         self.to_string().into()
     }
 }
 
-impl AsWidgetText for CameraField {
-    fn as_widget_text(&self) -> egui::WidgetText {
+impl AsRichText for CameraField {
+    fn as_rich_text(&self) -> egui::RichText {
         self.to_string().into()
     }
 }

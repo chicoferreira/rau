@@ -14,7 +14,7 @@ use crate::{
             field_docs::field_doc,
             flags_selector::flags_selector,
             hint,
-            inspector::{self, AsWidgetText},
+            inspector::{self, AsRichText},
             resource_icons,
         },
         pane::StateSnapshot,
@@ -40,8 +40,8 @@ impl TextureSourceKind {
     }
 }
 
-impl AsWidgetText for TextureSourceKind {
-    fn as_widget_text(&self) -> egui::WidgetText {
+impl AsRichText for TextureSourceKind {
+    fn as_rich_text(&self) -> egui::RichText {
         let r = match self {
             Self::Dimension => "Dimension",
             Self::Manual => "Manual",
@@ -67,8 +67,8 @@ const SOURCE_KINDS: [TextureSourceKind; 3] = [
     TextureSourceKind::Manual,
 ];
 
-impl AsWidgetText for TextureFormat {
-    fn as_widget_text(&self) -> egui::WidgetText {
+impl AsRichText for TextureFormat {
+    fn as_rich_text(&self) -> egui::RichText {
         self.label().into()
     }
 }

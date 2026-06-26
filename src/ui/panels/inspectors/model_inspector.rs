@@ -19,7 +19,7 @@ use crate::{
             draggable_list::{ListEdits, draggable_list},
             field,
             field_docs::field_doc,
-            inspector::{self, AsWidgetText},
+            inspector::{self, AsRichText},
             resource_icons,
         },
         pane::StateSnapshot,
@@ -608,8 +608,8 @@ impl egui_table::TableDelegate for TriangleTableDelegate<'_> {
     }
 }
 
-impl AsWidgetText for VertexBufferField {
-    fn as_widget_text(&self) -> egui::WidgetText {
+impl AsRichText for VertexBufferField {
+    fn as_rich_text(&self) -> egui::RichText {
         self.to_string().into()
     }
 }

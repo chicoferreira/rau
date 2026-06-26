@@ -6,23 +6,23 @@ use crate::{
         components::{
             field,
             field_docs::field_doc,
-            inspector::{self, AsWidgetText},
+            inspector::{self, AsRichText},
         },
         pane::StateSnapshot,
     },
     utils::wgpu_utils::AddressMode,
 };
 
-impl AsWidgetText for AddressMode {
-    fn as_widget_text(&self) -> egui::WidgetText {
+impl AsRichText for AddressMode {
+    fn as_rich_text(&self) -> egui::RichText {
         self.label().into()
     }
 }
 
 const FILTER_MODES: [wgpu::FilterMode; 2] = [wgpu::FilterMode::Nearest, wgpu::FilterMode::Linear];
 
-impl AsWidgetText for wgpu::FilterMode {
-    fn as_widget_text(&self) -> egui::WidgetText {
+impl AsRichText for wgpu::FilterMode {
+    fn as_rich_text(&self) -> egui::RichText {
         let r = match self {
             wgpu::FilterMode::Nearest => "Nearest",
             wgpu::FilterMode::Linear => "Linear",
@@ -36,8 +36,8 @@ const MIPMAP_FILTER_MODES: [wgpu::MipmapFilterMode; 2] = [
     wgpu::MipmapFilterMode::Linear,
 ];
 
-impl AsWidgetText for wgpu::MipmapFilterMode {
-    fn as_widget_text(&self) -> egui::WidgetText {
+impl AsRichText for wgpu::MipmapFilterMode {
+    fn as_rich_text(&self) -> egui::RichText {
         let r = match self {
             wgpu::MipmapFilterMode::Nearest => "Nearest",
             wgpu::MipmapFilterMode::Linear => "Linear",
@@ -58,8 +58,8 @@ const COMPARE_FUNCTIONS: [Option<wgpu::CompareFunction>; 9] = [
     Some(wgpu::CompareFunction::Always),
 ];
 
-impl AsWidgetText for Option<wgpu::CompareFunction> {
-    fn as_widget_text(&self) -> egui::WidgetText {
+impl AsRichText for Option<wgpu::CompareFunction> {
+    fn as_rich_text(&self) -> egui::RichText {
         let r = match self {
             None => "None",
             Some(wgpu::CompareFunction::Never) => "Never",

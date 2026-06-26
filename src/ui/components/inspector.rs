@@ -12,8 +12,8 @@ use crate::{
 };
 
 /// Trait for types that can be rendered as the label of a combo box entry.
-pub trait AsWidgetText {
-    fn as_widget_text(&self) -> WidgetText;
+pub trait AsRichText {
+    fn as_rich_text(&self) -> RichText;
 }
 
 pub fn centered_error(ui: &mut Ui, text: impl Into<RichText>) -> Response {
@@ -123,7 +123,7 @@ pub fn combo_row_doc<T>(
     current_value: &mut T,
 ) -> bool
 where
-    T: AsWidgetText + Clone + PartialEq,
+    T: AsRichText + Clone + PartialEq,
 {
     row_doc(ui, label, doc, |ui| {
         value_combo(ui, id_salt, options, current_value)
@@ -186,16 +186,16 @@ pub fn value_combo<T>(
     current_value: &mut T,
 ) -> bool
 where
-    T: AsWidgetText + Clone + PartialEq,
+    T: AsRichText + Clone + PartialEq,
 {
-    value_combo_with(ui, id_salt, options, T::as_widget_text, current_value)
+    value_combo_with(ui, id_salt, options, T::as_rich_text, current_value)
 }
 
 pub fn value_combo_with<T>(
     ui: &mut Ui,
     id_salt: impl Hash,
     options: impl IntoIterator<Item = T>,
-    label_fn: impl Fn(&T) -> WidgetText,
+    label_fn: impl Fn(&T) -> RichText,
     current_value: &mut T,
 ) -> bool
 where

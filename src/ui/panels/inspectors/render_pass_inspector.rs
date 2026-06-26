@@ -16,7 +16,7 @@ use crate::{
             draggable_list::{ListEdits, draggable_list},
             field,
             field_docs::field_doc,
-            inspector::{self, AsWidgetText},
+            inspector::{self, AsRichText},
             resource_icons,
         },
         pane::StateSnapshot,
@@ -29,8 +29,8 @@ enum LoadOpKind {
     Load,
 }
 
-impl AsWidgetText for LoadOpKind {
-    fn as_widget_text(&self) -> egui::WidgetText {
+impl AsRichText for LoadOpKind {
+    fn as_rich_text(&self) -> egui::RichText {
         match self {
             LoadOpKind::Clear => "Clear",
             LoadOpKind::Load => "Load",

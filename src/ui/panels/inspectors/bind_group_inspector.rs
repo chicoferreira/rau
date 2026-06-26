@@ -18,7 +18,7 @@ use crate::{
             field,
             field_docs::field_doc,
             flags_selector::flags_selector,
-            inspector::{self, AsWidgetText},
+            inspector::{self, AsRichText},
             resource_icons,
         },
         pane::StateSnapshot,
@@ -371,8 +371,8 @@ const TEXTURE_VIEW_DIMENSIONS: [wgpu::TextureViewDimension; 6] = [
     wgpu::TextureViewDimension::D3,
 ];
 
-impl AsWidgetText for wgpu::TextureViewDimension {
-    fn as_widget_text(&self) -> egui::WidgetText {
+impl AsRichText for wgpu::TextureViewDimension {
+    fn as_rich_text(&self) -> egui::RichText {
         let s = match self {
             wgpu::TextureViewDimension::D1 => "1D",
             wgpu::TextureViewDimension::D2 => "2D",
@@ -393,8 +393,8 @@ const TEXTURE_SAMPLE_TYPES: [wgpu::TextureSampleType; 5] = [
     wgpu::TextureSampleType::Uint,
 ];
 
-impl AsWidgetText for wgpu::TextureSampleType {
-    fn as_widget_text(&self) -> egui::WidgetText {
+impl AsRichText for wgpu::TextureSampleType {
+    fn as_rich_text(&self) -> egui::RichText {
         let r = match self {
             wgpu::TextureSampleType::Float { filterable: true } => "Float (Filterable)",
             wgpu::TextureSampleType::Float { filterable: false } => "Float (Non-Filterable)",
@@ -412,8 +412,8 @@ const SAMPLER_BINDING_TYPES: [wgpu::SamplerBindingType; 3] = [
     wgpu::SamplerBindingType::Comparison,
 ];
 
-impl AsWidgetText for wgpu::SamplerBindingType {
-    fn as_widget_text(&self) -> egui::WidgetText {
+impl AsRichText for wgpu::SamplerBindingType {
+    fn as_rich_text(&self) -> egui::RichText {
         let r = match self {
             wgpu::SamplerBindingType::Filtering => "Filtering",
             wgpu::SamplerBindingType::NonFiltering => "Non-Filtering",
@@ -430,8 +430,8 @@ const STORAGE_TEXTURE_ACCESS: [wgpu::StorageTextureAccess; 4] = [
     wgpu::StorageTextureAccess::Atomic,
 ];
 
-impl AsWidgetText for wgpu::StorageTextureAccess {
-    fn as_widget_text(&self) -> egui::WidgetText {
+impl AsRichText for wgpu::StorageTextureAccess {
+    fn as_rich_text(&self) -> egui::RichText {
         let r = match self {
             wgpu::StorageTextureAccess::WriteOnly => "Write-Only",
             wgpu::StorageTextureAccess::ReadOnly => "Read-Only",
@@ -474,8 +474,8 @@ impl ResourceKind {
     }
 }
 
-impl AsWidgetText for ResourceKind {
-    fn as_widget_text(&self) -> egui::WidgetText {
+impl AsRichText for ResourceKind {
+    fn as_rich_text(&self) -> egui::RichText {
         self.to_string().into()
     }
 }
