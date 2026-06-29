@@ -1,6 +1,7 @@
 {
   "presentation": {
     "renderPasses": [{ "idx": 1, "version": 1 }],
+    "computePasses": [],
     "mainViewport": { "idx": 1, "version": 1 }
   },
   "shaders": [
@@ -12,7 +13,7 @@
     {
       "value": {
         "label": "Viewport Texture",
-        "textureViewId": { "idx": 2, "version": 1 },
+        "textureViewId": { "idx": 1, "version": 1 },
         "dimensionId": { "idx": 1, "version": 1 },
         "controlsCameraId": { "idx": 1, "version": 1 }
       },
@@ -137,15 +138,6 @@
       "value": {
         "label": "Viewport Texture View",
         "format": { "type": "Srgb" },
-        "dimension": null,
-        "textureId": { "idx": 1, "version": 1 }
-      },
-      "version": 1
-    },
-    {
-      "value": {
-        "label": "Viewport Texture View Egui",
-        "format": { "type": "Linear" },
         "dimension": null,
         "textureId": { "idx": 1, "version": 1 }
       },

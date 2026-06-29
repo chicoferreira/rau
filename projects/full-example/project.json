@@ -41,7 +41,7 @@
     {
       "value": {
         "label": "Viewport Texture",
-        "textureViewId": { "idx": 9, "version": 1 },
+        "textureViewId": { "idx": 8, "version": 1 },
         "dimensionId": { "idx": 1, "version": 1 },
         "controlsCameraId": { "idx": 1, "version": 1 }
       },
@@ -456,15 +456,6 @@
       "value": {
         "label": "Viewport Texture View",
         "format": { "type": "Srgb" },
-        "dimension": null,
-        "textureId": { "idx": 7, "version": 1 }
-      },
-      "version": 1
-    },
-    {
-      "value": {
-        "label": "Viewport Texture View Egui",
-        "format": { "type": "Linear" },
         "dimension": null,
         "textureId": { "idx": 7, "version": 1 }
       },

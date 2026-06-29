@@ -1,5 +1,8 @@
 use crate::{
-    project::{ProjectResource, ResourceKind, ViewportId},
+    project::{
+        ProjectResource, ResourceKind, ViewportId,
+        resource::texture_view::previewable_formats_label,
+    },
     ui::{
         components::{
             field, inspector,
@@ -81,7 +84,11 @@ impl Pane for ViewportPane {
                 ui,
                 state.event_queue,
                 self.viewport_id,
-                "This texture view can't be displayed.\nOnly the Rgba8UnormSrgb format is supported in viewports.",
+                format!(
+                    "This texture view can't be displayed.\n\
+                     Only filterable RGBA formats ({}) are supported in viewports.",
+                    previewable_formats_label()
+                ),
             );
             return egui_tiles::UiResponse::None;
         };

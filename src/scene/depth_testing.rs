@@ -149,20 +149,14 @@ pub async fn create_scene(
         TextureSource::Dimension(Some(dimension_id)),
     ));
     let color_render_view_id = project.texture_views.register(TextureView::new(
-        "Scene Colour Render Target",
+        "Scene Colour",
         Some(color_texture_id),
         Some(TextureViewFormat::Srgb),
         None,
     ));
-    let color_display_view_id = project.texture_views.register(TextureView::new(
-        "Scene Colour Display View",
-        Some(color_texture_id),
-        Some(TextureViewFormat::Linear),
-        None,
-    ));
     let color_viewport_id = project.viewports.register(Viewport::new(
         "Scene Viewport",
-        Some(color_display_view_id),
+        Some(color_render_view_id),
         Some(dimension_id),
         Some(camera_id),
     ));
@@ -189,20 +183,14 @@ pub async fn create_scene(
         TextureSource::Dimension(Some(dimension_id)),
     ));
     let depth_vis_render_view_id = project.texture_views.register(TextureView::new(
-        "Depth Vis Render Target",
+        "Depth Vis",
         Some(depth_vis_texture_id),
         Some(TextureViewFormat::Srgb),
         None,
     ));
-    let depth_vis_display_view_id = project.texture_views.register(TextureView::new(
-        "Depth Vis Display View",
-        Some(depth_vis_texture_id),
-        Some(TextureViewFormat::Linear),
-        None,
-    ));
     let depth_viewport_id = project.viewports.register(Viewport::new(
         "Depth Viewport",
-        Some(depth_vis_display_view_id),
+        Some(depth_vis_render_view_id),
         Some(dimension_id),
         Some(camera_id),
     ));

@@ -331,20 +331,14 @@ pub async fn create_scene(
         TextureSource::Dimension(Some(dimension_id)),
     ));
     let color_render_view_id = project.texture_views.register(TextureView::new(
-        "Viewport Render Target",
+        "Viewport",
         Some(color_texture_id),
         Some(TextureViewFormat::Srgb),
         None,
     ));
-    let color_display_view_id = project.texture_views.register(TextureView::new(
-        "Viewport Display View",
-        Some(color_texture_id),
-        Some(TextureViewFormat::Linear),
-        None,
-    ));
     let viewport_id = project.viewports.register(Viewport::new(
         "SSAO Viewport",
-        Some(color_display_view_id),
+        Some(color_render_view_id),
         Some(dimension_id),
         Some(camera_id),
     ));

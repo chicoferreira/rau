@@ -23,7 +23,7 @@
     {
       "value": {
         "label": "Scene Viewport",
-        "textureViewId": { "idx": 2, "version": 1 },
+        "textureViewId": { "idx": 1, "version": 1 },
         "dimensionId": { "idx": 1, "version": 1 },
         "controlsCameraId": { "idx": 1, "version": 1 }
       },
@@ -32,7 +32,7 @@
     {
       "value": {
         "label": "Light Viewport",
-        "textureViewId": { "idx": 6, "version": 1 },
+        "textureViewId": { "idx": 4, "version": 1 },
         "dimensionId": null,
         "controlsCameraId": { "idx": 2, "version": 1 }
       },
@@ -139,7 +139,7 @@
             "resource": {
               "type": "texture",
               "value": {
-                "texture_view_id": { "idx": 4, "version": 1 },
+                "texture_view_id": { "idx": 3, "version": 1 },
                 "view_dimension": "2d",
                 "sample_type": "Depth"
               }
@@ -193,17 +193,8 @@
     { "value": null, "version": 0 },
     {
       "value": {
-        "label": "Scene Colour Render Target",
+        "label": "Scene Colour",
         "format": { "type": "Srgb" },
-        "dimension": null,
-        "textureId": { "idx": 1, "version": 1 }
-      },
-      "version": 1
-    },
-    {
-      "value": {
-        "label": "Scene Colour Display View",
-        "format": { "type": "Linear" },
         "dimension": null,
         "textureId": { "idx": 1, "version": 1 }
       },
@@ -229,17 +220,8 @@
     },
     {
       "value": {
-        "label": "Light View Render Target",
+        "label": "Light View",
         "format": { "type": "Srgb" },
-        "dimension": null,
-        "textureId": { "idx": 4, "version": 1 }
-      },
-      "version": 1
-    },
-    {
-      "value": {
-        "label": "Light View Display View",
-        "format": { "type": "Linear" },
         "dimension": null,
         "textureId": { "idx": 4, "version": 1 }
       },
@@ -365,11 +347,11 @@
       "value": {
         "label": "Shadow Pass",
         "target": {
-          "textureViewId": { "idx": 5, "version": 1 },
+          "textureViewId": { "idx": 4, "version": 1 },
           "loadOperation": { "type": "Clear", "value": [0.16, 0.28, 0.42, 1.0] }
         },
         "depthTarget": {
-          "textureViewId": { "idx": 4, "version": 1 },
+          "textureViewId": { "idx": 3, "version": 1 },
           "loadOperation": { "type": "Clear", "value": 1.0 }
         },
         "pipelines": [{ "idx": 1, "version": 1 }]
@@ -384,7 +366,7 @@
           "loadOperation": { "type": "Clear", "value": [0.16, 0.28, 0.42, 1.0] }
         },
         "depthTarget": {
-          "textureViewId": { "idx": 3, "version": 1 },
+          "textureViewId": { "idx": 2, "version": 1 },
           "loadOperation": { "type": "Clear", "value": 1.0 }
         },
         "pipelines": [{ "idx": 2, "version": 1 }]

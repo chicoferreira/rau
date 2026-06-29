@@ -136,20 +136,14 @@ pub async fn create_scene(
         TextureSource::Dimension(Some(dimension_id)),
     ));
     let render_texture_view_id = project.texture_views.register(TextureView::new(
-        "Viewport Render Target",
+        "Viewport",
         Some(viewport_texture_id),
         Some(TextureViewFormat::Srgb),
         None,
     ));
-    let display_texture_view_id = project.texture_views.register(TextureView::new(
-        "Viewport Display View",
-        Some(viewport_texture_id),
-        Some(TextureViewFormat::Linear),
-        None,
-    ));
     let viewport_id = project.viewports.register(Viewport::new(
         "Grass Viewport",
-        Some(display_texture_view_id),
+        Some(render_texture_view_id),
         Some(dimension_id),
         Some(camera_id),
     ));

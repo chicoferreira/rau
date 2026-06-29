@@ -27,7 +27,7 @@
     {
       "value": {
         "label": "Scene Viewport",
-        "textureViewId": { "idx": 2, "version": 1 },
+        "textureViewId": { "idx": 1, "version": 1 },
         "dimensionId": { "idx": 1, "version": 1 },
         "controlsCameraId": { "idx": 1, "version": 1 }
       },
@@ -36,7 +36,7 @@
     {
       "value": {
         "label": "Depth Viewport",
-        "textureViewId": { "idx": 5, "version": 1 },
+        "textureViewId": { "idx": 3, "version": 1 },
         "dimensionId": { "idx": 1, "version": 1 },
         "controlsCameraId": { "idx": 1, "version": 1 }
       },
@@ -120,7 +120,7 @@
             "resource": {
               "type": "texture",
               "value": {
-                "texture_view_id": { "idx": 3, "version": 1 },
+                "texture_view_id": { "idx": 2, "version": 1 },
                 "view_dimension": "2d",
                 "sample_type": "Depth"
               }
@@ -172,17 +172,8 @@
     { "value": null, "version": 0 },
     {
       "value": {
-        "label": "Scene Colour Render Target",
+        "label": "Scene Colour",
         "format": { "type": "Srgb" },
-        "dimension": null,
-        "textureId": { "idx": 1, "version": 1 }
-      },
-      "version": 1
-    },
-    {
-      "value": {
-        "label": "Scene Colour Display View",
-        "format": { "type": "Linear" },
         "dimension": null,
         "textureId": { "idx": 1, "version": 1 }
       },
@@ -199,17 +190,8 @@
     },
     {
       "value": {
-        "label": "Depth Vis Render Target",
+        "label": "Depth Vis",
         "format": { "type": "Srgb" },
-        "dimension": null,
-        "textureId": { "idx": 3, "version": 1 }
-      },
-      "version": 1
-    },
-    {
-      "value": {
-        "label": "Depth Vis Display View",
-        "format": { "type": "Linear" },
         "dimension": null,
         "textureId": { "idx": 3, "version": 1 }
       },
@@ -332,7 +314,7 @@
           "loadOperation": { "type": "Clear", "value": [0.52, 0.7, 0.86, 1.0] }
         },
         "depthTarget": {
-          "textureViewId": { "idx": 3, "version": 1 },
+          "textureViewId": { "idx": 2, "version": 1 },
           "loadOperation": { "type": "Clear", "value": 1.0 }
         },
         "pipelines": [
@@ -346,7 +328,7 @@
       "value": {
         "label": "Depth View Render Pass",
         "target": {
-          "textureViewId": { "idx": 4, "version": 1 },
+          "textureViewId": { "idx": 3, "version": 1 },
           "loadOperation": { "type": "Clear", "value": [0.0, 0.0, 0.0, 1.0] }
         },
         "depthTarget": null,

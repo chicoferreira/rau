@@ -1,7 +1,10 @@
 use egui::load::SizedTexture;
 
 use crate::{
-    project::{TextureViewId, resource::texture_view::TextureViewFormat},
+    project::{
+        TextureViewId,
+        resource::texture_view::{TextureViewFormat, previewable_formats_label},
+    },
     ui::{
         components::{
             field,
@@ -135,7 +138,10 @@ impl StateSnapshot<'_> {
             };
 
             let Some(egui_id) = texture_view.egui_id() else {
-                ui.label("Only texture views with Rgba8UnormSrgb format can be previewed.");
+                ui.label(format!(
+                    "Only texture views with a filterable RGBA format ({}) can be previewed.",
+                    previewable_formats_label()
+                ));
                 return;
             };
 

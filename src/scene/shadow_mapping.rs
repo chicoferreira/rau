@@ -169,20 +169,14 @@ pub async fn create_scene(
         TextureSource::Dimension(Some(dimension_id)),
     ));
     let color_render_view_id = project.texture_views.register(TextureView::new(
-        "Scene Colour Render Target",
+        "Scene Colour",
         Some(color_texture_id),
         Some(TextureViewFormat::Srgb),
         None,
     ));
-    let color_display_view_id = project.texture_views.register(TextureView::new(
-        "Scene Colour Display View",
-        Some(color_texture_id),
-        Some(TextureViewFormat::Linear),
-        None,
-    ));
     let viewport_id = project.viewports.register(Viewport::new(
         "Scene Viewport",
-        Some(color_display_view_id),
+        Some(color_render_view_id),
         Some(dimension_id),
         Some(camera_id),
     ));
@@ -227,15 +221,9 @@ pub async fn create_scene(
         TextureSource::Dimension(Some(shadow_dimension_id)),
     ));
     let light_view_render_view_id = project.texture_views.register(TextureView::new(
-        "Light View Render Target",
+        "Light View",
         Some(light_view_texture_id),
         Some(TextureViewFormat::Srgb),
-        None,
-    ));
-    let light_view_display_view_id = project.texture_views.register(TextureView::new(
-        "Light View Display View",
-        Some(light_view_texture_id),
-        Some(TextureViewFormat::Linear),
         None,
     ));
     // Open this pane and focus it to fly the light around; the shadows in the
@@ -245,7 +233,7 @@ pub async fn create_scene(
     // 4K render is simply scaled to fit the pane.
     let light_viewport_id = project.viewports.register(Viewport::new(
         "Light Viewport",
-        Some(light_view_display_view_id),
+        Some(light_view_render_view_id),
         None,
         Some(light_camera_id),
     ));

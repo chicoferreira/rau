@@ -55,7 +55,7 @@
     {
       "value": {
         "label": "SSAO Viewport",
-        "textureViewId": { "idx": 7, "version": 1 },
+        "textureViewId": { "idx": 6, "version": 1 },
         "dimensionId": { "idx": 1, "version": 1 },
         "controlsCameraId": { "idx": 1, "version": 1 }
       },
@@ -495,17 +495,8 @@
     },
     {
       "value": {
-        "label": "Viewport Render Target",
+        "label": "Viewport",
         "format": { "type": "Srgb" },
-        "dimension": null,
-        "textureId": { "idx": 6, "version": 1 }
-      },
-      "version": 1
-    },
-    {
-      "value": {
-        "label": "Viewport Display View",
-        "format": { "type": "Linear" },
         "dimension": null,
         "textureId": { "idx": 6, "version": 1 }
       },

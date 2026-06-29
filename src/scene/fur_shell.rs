@@ -136,15 +136,9 @@ pub async fn create_scene(
         TextureSource::Dimension(Some(dimension_id)),
     ));
     let render_view_id = project.texture_views.register(TextureView::new(
-        "Viewport Render Target",
+        "Viewport",
         Some(viewport_texture_id),
         Some(TextureViewFormat::Srgb),
-        None,
-    ));
-    let display_view_id = project.texture_views.register(TextureView::new(
-        "Viewport Display View",
-        Some(viewport_texture_id),
-        Some(TextureViewFormat::Linear),
         None,
     ));
 
@@ -203,7 +197,7 @@ pub async fn create_scene(
 
     let viewport_id = project.viewports.register(Viewport::new(
         "Viewport",
-        Some(display_view_id),
+        Some(render_view_id),
         Some(dimension_id),
         Some(camera_id),
     ));

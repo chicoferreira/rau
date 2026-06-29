@@ -124,6 +124,23 @@ impl TextureView {
 
         (inner, wgpu_format)
     }
+
+    fn create_egui_view(
+        label: &str,
+        runtime: &TextureRuntime,
+        dimension: Option<wgpu::TextureViewDimension>,
+        downlevel_flags: wgpu::DownlevelFlags,
+    ) -> wgpu::TextureView {
+        let supports_view_formats = downlevel_flags.contains(wgpu::DownlevelFlags::VIEW_FORMATS);
+        let format = supports_view_formats.then(|| runtime.inner().format().remove_srgb_suffix());
+
+        runtime.inner().create_view(&wgpu::TextureViewDescriptor {
+            label: Some(label),
+            format,
+            dimension,
+            ..Default::default()
+        })
+    }
 }
 
 impl TextureViewRuntime {
@@ -132,8 +149,8 @@ impl TextureViewRuntime {
     }
 
     /// Returns the egui texture ID.
-    /// Only returns `Some` for filterable RGBA color formats (see
-    /// [`is_filterable_rgba`]), due to egui texture requirements.
+    /// Only returns `Some` for previewable formats (see [`is_previewable`]),
+    /// due to egui texture requirements.
     pub fn egui_id(&self) -> Option<egui::TextureId> {
         self.egui_id
     }
@@ -232,28 +249,35 @@ impl SyncResource for TextureView {
                     ctx.downlevel_flags,
                 );
 
-                let has_correct_format = is_filterable_rgba(texture.format());
-
-                let egui_id = match (previous_egui_id, has_correct_format) {
-                    (Some(egui_id), true) => {
-                        ctx.egui_renderer.update_egui_texture(
+                let egui_id = if is_previewable(texture.format()) {
+                    let egui_view = Self::create_egui_view(
+                        &self.label,
+                        runtime_texture,
+                        self.dimension,
+                        ctx.downlevel_flags,
+                    );
+                    let egui_id = match previous_egui_id {
+                        Some(egui_id) => {
+                            ctx.egui_renderer.update_egui_texture(
+                                ctx.device,
+                                &egui_view,
+                                wgpu::FilterMode::Linear,
+                                egui_id,
+                            );
+                            egui_id
+                        }
+                        None => ctx.egui_renderer.register_egui_texture(
                             ctx.device,
-                            &inner,
+                            &egui_view,
                             wgpu::FilterMode::Linear,
-                            egui_id,
-                        );
-                        Some(egui_id)
-                    }
-                    (Some(egui_id), false) => {
+                        ),
+                    };
+                    Some(egui_id)
+                } else {
+                    if let Some(egui_id) = previous_egui_id {
                         ctx.egui_renderer.remove_egui_texture(egui_id);
-                        None
                     }
-                    (None, true) => Some(ctx.egui_renderer.register_egui_texture(
-                        ctx.device,
-                        &inner,
-                        wgpu::FilterMode::Linear,
-                    )),
-                    (None, false) => None,
+                    None
                 };
 
                 let runtime = TextureViewRuntime {
@@ -295,15 +319,20 @@ impl SyncResource for TextureView {
     }
 }
 
-/// Whether this format can back an egui preview texture.
-///
-/// egui samples the texture with a linear filter, so the format has to be a
-/// filterable RGBA color format. `Rgba32Float` is excluded because it is only
-/// filterable with the `FLOAT32_FILTERABLE` feature, and depth formats can't
-/// be sampled as color.
-fn is_filterable_rgba(format: TextureFormat) -> bool {
-    matches!(
-        format,
-        TextureFormat::Rgba8UnormSrgb | TextureFormat::Rgba8Unorm | TextureFormat::Rgba16Float
-    )
+pub const PREVIEWABLE_FORMATS: &[TextureFormat] = &[
+    TextureFormat::Rgba8UnormSrgb,
+    TextureFormat::Rgba8Unorm,
+    TextureFormat::Rgba16Float,
+];
+
+fn is_previewable(format: TextureFormat) -> bool {
+    PREVIEWABLE_FORMATS.contains(&format)
+}
+
+pub fn previewable_formats_label() -> String {
+    PREVIEWABLE_FORMATS
+        .iter()
+        .map(|format| format.label())
+        .collect::<Vec<_>>()
+        .join(", ")
 }

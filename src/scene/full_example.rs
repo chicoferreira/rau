@@ -361,16 +361,9 @@ pub async fn create_scene(
         Some(TextureViewFormat::Srgb),
         None,
     ));
-    let viewport_texture_view = TextureView::new(
-        "Viewport Texture View Egui".to_string(),
-        Some(viewport_texture_id),
-        Some(TextureViewFormat::Linear),
-        None,
-    );
-    let viewport_texture_view_id = project.texture_views.register(viewport_texture_view);
     let viewport = Viewport::new(
         "Viewport Texture",
-        Some(viewport_texture_view_id),
+        Some(output_viewport_view_id),
         Some(dimension_id),
         Some(camera_id),
     );
