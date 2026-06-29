@@ -57,7 +57,8 @@ use crate::{
             texture::{Texture, TextureSource},
             texture_view::{TextureView, TextureViewFormat},
             uniform::{
-                Uniform, UniformField, UniformFieldData, UniformFieldSource, camera::CameraField,
+                Transform, Uniform, UniformField, UniformFieldData, UniformFieldSource,
+                camera::CameraField,
             },
             viewport::Viewport,
         },
@@ -154,20 +155,18 @@ pub async fn create_scene(
         )],
     ));
 
-    // --- Backpack model + its world transform (translate, rotate -90° about X,
-    // matching `ssao.cpp`). Only geometry is used, so no material bind groups. ---
     let backpack_model_id = project
         .models
         .register(Model::new("Backpack", FilePath::from_str("backpack.obj")?));
-    let backpack_transform = glam::Mat4::from_translation(glam::Vec3::new(0.0, 0.5, 0.0))
-        * glam::Mat4::from_rotation_x(-std::f32::consts::FRAC_PI_2);
     let backpack_transform_uniform_id = project.uniforms.register(Uniform::new(
         "Backpack Transform",
         vec![UniformField::new(
             "model",
-            UniformFieldSource::new_user_defined(UniformFieldData::Mat4x4f(
-                backpack_transform.to_cols_array_2d(),
-            )),
+            UniformFieldSource::new_transform(Transform {
+                position: [0.0, 0.5, 0.0],
+                rotation: [-90.0, 0.0, 0.0],
+                scale: [1.0; 3],
+            }),
         )],
     ));
     let backpack_transform_bind_group_id = project.bind_groups.register(BindGroup::new(

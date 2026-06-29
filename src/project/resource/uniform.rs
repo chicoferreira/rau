@@ -75,7 +75,41 @@ pub enum UniformFieldSource {
         camera_id: Option<CameraId>,
         field: CameraField,
     },
+    Transform(Transform),
     Time,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Transform {
+    pub position: [f32; 3],
+    pub rotation: [f32; 3],
+    pub scale: [f32; 3],
+}
+
+impl Default for Transform {
+    fn default() -> Self {
+        Self {
+            position: [0.0; 3],
+            rotation: [0.0; 3],
+            scale: [1.0; 3],
+        }
+    }
+}
+
+impl Transform {
+    pub fn to_matrix(self) -> glam::Mat4 {
+        glam::Mat4::from_scale_rotation_translation(
+            glam::Vec3::from(self.scale),
+            glam::Quat::from_euler(
+                glam::EulerRot::XYZ,
+                self.rotation[0].to_radians(),
+                self.rotation[1].to_radians(),
+                self.rotation[2].to_radians(),
+            ),
+            glam::Vec3::from(self.position),
+        )
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -344,13 +378,14 @@ impl UniformField {
         match &self.source {
             UniformFieldSource::UserDefined(data) => data.kind(),
             UniformFieldSource::Camera { field, .. } => field.kind(),
+            UniformFieldSource::Transform(_) => UniformFieldDataKind::Mat4x4f,
             UniformFieldSource::Time => UniformFieldDataKind::Float,
         }
     }
 
     fn needs_rebuild_from_others(&self, tracker: &SyncTracker) -> bool {
         match &self.source {
-            UniformFieldSource::UserDefined(_) => false,
+            UniformFieldSource::UserDefined(_) | UniformFieldSource::Transform(_) => false,
             UniformFieldSource::Camera { camera_id, .. } => {
                 let Some(camera_id) = *camera_id else {
                     return false;
@@ -380,6 +415,9 @@ impl UniformField {
                 };
                 Ok(Some(field.compute(camera, camera_runtime)))
             }
+            UniformFieldSource::Transform(transform) => Ok(Some(UniformFieldData::Mat4x4f(
+                transform.to_matrix().to_cols_array_2d(),
+            ))),
             UniformFieldSource::Time => Ok(Some(UniformFieldData::Float(context.time))),
         }
     }
@@ -392,6 +430,10 @@ impl UniformFieldSource {
 
     pub fn new_camera_sourced(camera_id: Option<CameraId>, field: CameraField) -> Self {
         Self::Camera { camera_id, field }
+    }
+
+    pub fn new_transform(transform: Transform) -> Self {
+        Self::Transform(transform)
     }
 
     pub fn new_time() -> Self {

@@ -7,8 +7,8 @@ use crate::{
         resource::{
             camera::Camera,
             uniform::{
-                self, UniformField, UniformFieldData, UniformFieldDataKind, UniformFieldSource,
-                UniformRuntimeField, camera::CameraField,
+                self, Transform, UniformField, UniformFieldData, UniformFieldDataKind,
+                UniformFieldSource, UniformRuntimeField, camera::CameraField,
             },
         },
         storage::Storage,
@@ -36,6 +36,7 @@ pub enum UniformFieldSourceKind {
     #[strum(to_string = "User Defined")]
     UserDefined,
     Camera,
+    Transform,
     Time,
 }
 
@@ -44,6 +45,7 @@ impl UniformFieldSourceKind {
         match source {
             UniformFieldSource::UserDefined { .. } => Self::UserDefined,
             UniformFieldSource::Camera { .. } => Self::Camera,
+            UniformFieldSource::Transform(..) => Self::Transform,
             UniformFieldSource::Time => Self::Time,
         }
     }
@@ -54,6 +56,7 @@ impl UniformFieldSourceKind {
                 UniformFieldDataKind::Vec3f,
             )),
             Self::Camera => UniformFieldSource::new_camera_sourced(None, CameraField::Position),
+            Self::Transform => UniformFieldSource::new_transform(Transform::default()),
             Self::Time => UniformFieldSource::new_time(),
         }
     }
@@ -264,6 +267,7 @@ fn ui_field_entry(
             "Where this field's value comes from each frame:\n\n\
             - **User Defined**: a constant value you set here.\n\
             - **Camera**: pulled from a Camera (position, matrices, and so on).\n\
+            - **Transform**: a model matrix built from position, rotation, and scale.\n\
             - **Time**: the elapsed time in seconds, updated every frame."
         ),
         "source",
@@ -333,6 +337,50 @@ fn ui_field_entry(
 
             (camera_id != camera_id_before || field != field_before)
                 .then_some(UniformFieldSource::new_camera_sourced(camera_id, field))
+        }
+        UniformFieldSource::Transform(transform) => {
+            let mut transform = *transform;
+            let mut changed = false;
+
+            let drag = |ui: &mut egui::Ui, array: &mut [f32; 3], speed: f32, suffix: &str| {
+                let mut changed = false;
+                ui.horizontal(|ui| {
+                    for value in array.iter_mut() {
+                        let drag_value = egui::DragValue::new(value)
+                            .speed(speed)
+                            .max_decimals(2)
+                            .suffix(suffix);
+                        changed |= ui.add(drag_value).changed();
+                    }
+                });
+                changed
+            };
+
+            field::row_doc(
+                ui,
+                "Position",
+                field_doc!("The translation applied to the model, in world units."),
+                |ui| changed |= drag(ui, &mut transform.position, 0.01, ""),
+            );
+            field::row_doc(
+                ui,
+                "Rotation",
+                field_doc!(
+                    "Euler rotation in **degrees**, applied in XYZ order (X, then Y, then Z)."
+                ),
+                |ui| changed |= drag(ui, &mut transform.rotation, 0.1, "\u{00B0}"), // The degree symbol
+            );
+            field::row_doc(
+                ui,
+                "Scale",
+                field_doc!(
+                    "Per-axis scale factors. The composed matrix is `T * R * S` (scale first, \
+                    then rotate, then translate)."
+                ),
+                |ui| changed |= drag(ui, &mut transform.scale, 0.01, ""),
+            );
+
+            changed.then_some(UniformFieldSource::new_transform(transform))
         }
         UniformFieldSource::Time => None,
     };
