@@ -41,7 +41,6 @@
 
 use crate::{
     error::AppResult,
-    file::file_storage::FileStorage,
     project::{
         Project,
         paths::FilePath,
@@ -63,18 +62,13 @@ use crate::{
             viewport::Viewport,
         },
     },
-    ui::size::Size2d,
     utils::{texture_format::TextureFormat, wgpu_utils::PrimitiveState},
 };
 
 /// Vertices in the procedural room cube: 6 faces * 2 triangles * 3 vertices.
 const CUBE_VERTICES: u32 = 36;
 
-pub async fn create_scene(
-    _device: &wgpu::Device,
-    size: Size2d,
-    _file_storage: &FileStorage,
-) -> AppResult<Project> {
+pub async fn create_scene() -> AppResult<Project> {
     let mut project = Project::default();
 
     // --- Shaders: room + backpack G-buffer fills, then the full-screen stages. ---
@@ -107,7 +101,7 @@ pub async fn create_scene(
 
     let dimension_id = project
         .dimensions
-        .register(Dimension::new("Main Dimension", size));
+        .register(Dimension::new_runtime("Main Dimension"));
 
     // --- Camera: starts where the tutorial does, (0, 0, 5) looking down -z, but
     // lifted a touch so the floor occlusion is in frame. ---

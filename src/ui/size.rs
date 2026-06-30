@@ -6,6 +6,12 @@ pub struct Size2d {
     height: u32,
 }
 
+impl Default for Size2d {
+    fn default() -> Self {
+        Self::new(1, 1)
+    }
+}
+
 impl Size2d {
     pub fn new(width: u32, height: u32) -> Self {
         let width = width.max(1);

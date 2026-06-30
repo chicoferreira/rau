@@ -22,7 +22,6 @@ use crate::{
             viewport::Viewport,
         },
     },
-    ui::size::Size2d,
     utils::{
         derive::default_texture_format,
         derive_modal_material::{MaterialBindGroupsConfig, SamplerSetting},
@@ -31,11 +30,7 @@ use crate::{
     },
 };
 
-pub async fn create_scene(
-    device: &wgpu::Device,
-    size: Size2d,
-    file_storage: &FileStorage,
-) -> AppResult<Project> {
+pub async fn create_scene(device: &wgpu::Device, file_storage: &FileStorage) -> AppResult<Project> {
     let mut project = Project::default();
 
     let equirectangular_shader = Shader::new(
@@ -56,7 +51,7 @@ pub async fn create_scene(
     let sky_shader = Shader::new("Sky Shader", FilePath::from_str("sky.wgsl")?);
     let sky_shader_id = project.shaders.register(sky_shader);
 
-    let dimension = Dimension::new("Main Dimension", size);
+    let dimension = Dimension::new_runtime("Main Dimension");
     let dimension_id = project.dimensions.register(dimension);
 
     let mut camera = Camera::new("Main Camera".to_string());

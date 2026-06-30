@@ -21,7 +21,6 @@ use crate::{
             viewport::Viewport,
         },
     },
-    ui::size::Size2d,
     utils::{
         derive::default_texture_format,
         derive_modal_material::{MaterialBindGroupsConfig, SamplerSetting},
@@ -30,11 +29,7 @@ use crate::{
     },
 };
 
-pub async fn create_scene(
-    device: &wgpu::Device,
-    size: Size2d,
-    file_storage: &FileStorage,
-) -> AppResult<Project> {
+pub async fn create_scene(device: &wgpu::Device, file_storage: &FileStorage) -> AppResult<Project> {
     let mut project = Project::default();
 
     let shader_id = project.shaders.register(Shader::new(
@@ -44,7 +39,7 @@ pub async fn create_scene(
 
     let dimension_id = project
         .dimensions
-        .register(Dimension::new("Main Dimension", size));
+        .register(Dimension::new_runtime("Main Dimension"));
 
     let camera_position = glam::Vec3::new(2.0, 1.3, 2.5);
     let camera_target = glam::Vec3::new(0.0, 0.9, 0.0);

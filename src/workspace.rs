@@ -461,7 +461,7 @@ impl Workspace {
                                         && let Ok(dimension) =
                                             self.project.dimensions.get_mut(dimension_id)
                                     {
-                                        dimension.set_size(size);
+                                        dimension.set_actual_size(size);
                                     }
                                 }
                             }
@@ -473,7 +473,7 @@ impl Workspace {
                                         && let Ok(dimension) =
                                             self.project.dimensions.get_mut(dimension_id)
                                     {
-                                        dimension.set_size(ui_size);
+                                        dimension.set_actual_size(ui_size);
                                     }
                                 }
                             }

@@ -9,7 +9,6 @@ use crate::{
         identifier::{ProjectIdentifier, ProjectSource},
     },
     project::paths::FilePath,
-    ui::size::Size2d,
 };
 
 pub mod depth_testing;
@@ -53,32 +52,17 @@ async fn generate_project_async(template: GenerateTemplate, target_folder: &Path
     let (file_system, file_watcher) = app_file_system.mount_project(source.clone()).await?;
     let file_storage = FileStorage::new(source, file_system.clone(), file_watcher);
 
-    let size = Size2d::new(1080, 1080);
     let project = match template {
-        GenerateTemplate::FullExample => {
-            full_example::create_scene(&device, size, &file_storage).await?
-        }
-        GenerateTemplate::Model => model::create_scene(&device, size, &file_storage).await?,
-        GenerateTemplate::GameOfLife => {
-            game_of_life::create_scene(&device, size, &file_storage).await?
-        }
-        GenerateTemplate::FurShell => fur_shell::create_scene(&device, size, &file_storage).await?,
-        GenerateTemplate::ParallaxMapping => {
-            parallax_mapping::create_scene(&device, size, &file_storage).await?
-        }
-        GenerateTemplate::GrassField => {
-            grass_field::create_scene(&device, size, &file_storage).await?
-        }
-        GenerateTemplate::DepthTesting => {
-            depth_testing::create_scene(&device, size, &file_storage).await?
-        }
-        GenerateTemplate::ShadowMapping => {
-            shadow_mapping::create_scene(&device, size, &file_storage).await?
-        }
-        GenerateTemplate::SkyShader => {
-            sky_shader::create_scene(&device, size, &file_storage).await?
-        }
-        GenerateTemplate::Ssao => ssao::create_scene(&device, size, &file_storage).await?,
+        GenerateTemplate::FullExample => full_example::create_scene(&device, &file_storage).await?,
+        GenerateTemplate::Model => model::create_scene(&device, &file_storage).await?,
+        GenerateTemplate::GameOfLife => game_of_life::create_scene().await?,
+        GenerateTemplate::FurShell => fur_shell::create_scene(&device, &file_storage).await?,
+        GenerateTemplate::ParallaxMapping => parallax_mapping::create_scene().await?,
+        GenerateTemplate::GrassField => grass_field::create_scene().await?,
+        GenerateTemplate::DepthTesting => depth_testing::create_scene().await?,
+        GenerateTemplate::ShadowMapping => shadow_mapping::create_scene().await?,
+        GenerateTemplate::SkyShader => sky_shader::create_scene().await?,
+        GenerateTemplate::Ssao => ssao::create_scene().await?,
     };
 
     file_system

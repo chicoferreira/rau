@@ -161,7 +161,7 @@ impl SyncResource for Texture {
         let size = match &self.source {
             TextureSource::Dimension(dimension_id) => {
                 let dimension_id = dimension_id.ok_or(AppError::uninit_field("Dimension Id"))?;
-                let size = ctx.dimensions.get(dimension_id)?.size();
+                let size = ctx.dimensions.get(dimension_id)?.get_actual_size();
 
                 wgpu::Extent3d {
                     width: size.width(),

@@ -24,7 +24,6 @@
 
 use crate::{
     error::AppResult,
-    file::file_storage::FileStorage,
     project::{
         Project,
         paths::FilePath,
@@ -56,11 +55,7 @@ const CUBE_VERTICES: u32 = 36;
 /// the light viewport's on-screen size. Higher = crisper shadow edges.
 const SHADOW_MAP_SIZE: u32 = 4096;
 
-pub async fn create_scene(
-    _device: &wgpu::Device,
-    size: Size2d,
-    _file_storage: &FileStorage,
-) -> AppResult<Project> {
+pub async fn create_scene() -> AppResult<Project> {
     let mut project = Project::default();
 
     let scene_shader_id = project.shaders.register(Shader::new(
@@ -74,11 +69,11 @@ pub async fn create_scene(
 
     let dimension_id = project
         .dimensions
-        .register(Dimension::new("Main Dimension", size));
+        .register(Dimension::new_runtime("Main Dimension"));
     // Fixed square dimension for the shadow map and light camera: aspect stays
     // 1:1 and the resolution never follows the light viewport's pane size (the
     // viewport owns no dimension, so resizing it can't write back here).
-    let shadow_dimension_id = project.dimensions.register(Dimension::new(
+    let shadow_dimension_id = project.dimensions.register(Dimension::new_persistent(
         "Shadow Map Dimension",
         Size2d::new(SHADOW_MAP_SIZE, SHADOW_MAP_SIZE),
     ));

@@ -20,17 +20,12 @@ use crate::{
             viewport::Viewport,
         },
     },
-    ui::size::Size2d,
     utils::{texture_format::TextureFormat, wgpu_utils::PrimitiveState},
 };
 
 const SHELL_COUNT: u32 = 48;
 
-pub async fn create_scene(
-    device: &wgpu::Device,
-    size: Size2d,
-    file_storage: &FileStorage,
-) -> AppResult<Project> {
+pub async fn create_scene(device: &wgpu::Device, file_storage: &FileStorage) -> AppResult<Project> {
     let mut project = Project::default();
 
     let shader_id = project
@@ -39,7 +34,7 @@ pub async fn create_scene(
 
     let dimension_id = project
         .dimensions
-        .register(Dimension::new("Main Dimension", size));
+        .register(Dimension::new_runtime("Main Dimension"));
 
     let camera_position = glam::Vec3::new(-0.2, 1.2, 2.1);
     let camera_target = glam::Vec3::new(-0.3, 0.7, 0.2);

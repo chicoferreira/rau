@@ -20,7 +20,6 @@
 
 use crate::{
     error::AppResult,
-    file::file_storage::FileStorage,
     project::{
         Project,
         paths::FilePath,
@@ -39,7 +38,6 @@ use crate::{
             viewport::Viewport,
         },
     },
-    ui::size::Size2d,
     utils::{texture_format::TextureFormat, wgpu_utils::PrimitiveState},
 };
 
@@ -53,11 +51,7 @@ const SEGMENTS: u32 = 5;
 /// Triangle-strip vertices per blade: two per segment plus the tip.
 const VERTS_PER_BLADE: u32 = SEGMENTS * 2 + 1;
 
-pub async fn create_scene(
-    _device: &wgpu::Device,
-    size: Size2d,
-    _file_storage: &FileStorage,
-) -> AppResult<Project> {
+pub async fn create_scene() -> AppResult<Project> {
     let mut project = Project::default();
 
     let grass_shader_id = project.shaders.register(Shader::new(
@@ -71,7 +65,7 @@ pub async fn create_scene(
 
     let dimension_id = project
         .dimensions
-        .register(Dimension::new("Main Dimension", size));
+        .register(Dimension::new_runtime("Main Dimension"));
 
     let camera_position = glam::Vec3::new(0.0, 1.5, 6.5);
     let camera_target = glam::Vec3::new(0.0, 0.5, 0.0);

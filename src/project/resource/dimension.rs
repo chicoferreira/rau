@@ -14,15 +14,23 @@ use crate::{
 #[serde(rename_all = "camelCase")]
 pub struct Dimension {
     label: String,
-    size: Size2d,
+    size: DimensionSize,
     #[serde(skip)]
     runtime_revision: Revision,
     #[serde(skip)]
     project_revision: Revision,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum DimensionSize {
+    Runtime(#[serde(skip)] Size2d),
+    #[serde(untagged)]
+    Persistent(Size2d),
+}
+
 impl Dimension {
-    pub fn new(label: impl Into<String>, size: Size2d) -> Self {
+    pub fn new(label: impl Into<String>, size: DimensionSize) -> Self {
         Self {
             label: label.into(),
             size,
@@ -31,8 +39,16 @@ impl Dimension {
         }
     }
 
+    pub fn new_persistent(label: impl Into<String>, size: Size2d) -> Self {
+        Self::new(label, DimensionSize::Persistent(size))
+    }
+
+    pub fn new_runtime(label: impl Into<String>) -> Self {
+        Self::new(label, DimensionSize::Runtime(Size2d::default()))
+    }
+
     resource_getters! {
-        pub fn size() -> Size2d;
+        pub fn size() -> DimensionSize;
     }
 
     resource_setters! {
@@ -42,13 +58,43 @@ impl Dimension {
 
     resource_setters! {
         increases: [runtime_revision, project_revision];
-        pub fn set_size(size: Size2d);
+        pub fn set_size(size: DimensionSize);
+    }
+
+    pub fn get_actual_size(&self) -> Size2d {
+        match &self.size {
+            DimensionSize::Persistent(s) => *s,
+            DimensionSize::Runtime(s) => *s,
+        }
+    }
+
+    pub fn set_persistent(&mut self, persistent: bool) {
+        let size = self.get_actual_size();
+        self.set_size(match persistent {
+            true => DimensionSize::Persistent(size),
+            false => DimensionSize::Runtime(size),
+        });
+    }
+
+    pub fn set_actual_size(&mut self, size: Size2d) {
+        if self.get_actual_size() == size {
+            return;
+        }
+
+        match &mut self.size {
+            DimensionSize::Persistent(s) => {
+                *s = size;
+                self.project_revision.increase();
+            }
+            DimensionSize::Runtime(s) => *s = size,
+        }
+        self.runtime_revision.increase();
     }
 }
 
 impl Creatable for Dimension {
     fn create(label: String) -> Self {
-        Self::new(label, Size2d::new(1920, 1080))
+        Self::new_persistent(label, Size2d::new(1920, 1080))
     }
 }
 

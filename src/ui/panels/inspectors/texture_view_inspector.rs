@@ -75,7 +75,7 @@ impl StateSnapshot<'_> {
                         [WebGPU spec](https://www.w3.org/TR/webgpu/#dom-gputextureviewdescriptor-format)"
                     ),
                     |ui| {
-                        combo_with_resolved(
+                        inspector::combo_with_weak(
                             ui,
                             "format",
                             FORMAT_LIST,
@@ -109,7 +109,7 @@ impl StateSnapshot<'_> {
                         [WebGPU spec](https://www.w3.org/TR/webgpu/#enumdef-gputextureviewdimension)"
                     ),
                     |ui| {
-                        combo_with_resolved(
+                        inspector::combo_with_weak(
                             ui,
                             "dimension",
                             DIMENSIONS,
@@ -150,26 +150,6 @@ impl StateSnapshot<'_> {
             ui.add(egui::Image::new(sized_texture));
         });
     }
-}
-
-fn combo_with_resolved<T>(
-    ui: &mut egui::Ui,
-    id_salt: impl std::hash::Hash,
-    options: impl IntoIterator<Item = T>,
-    current_value: &mut T,
-    resolved: Option<impl AsRichText>,
-) -> bool
-where
-    T: AsRichText + Clone + PartialEq,
-{
-    ui.horizontal(|ui| {
-        let changed = inspector::value_combo(ui, id_salt, options, current_value);
-        if let Some(resolved) = resolved {
-            ui.weak(resolved.as_rich_text());
-        }
-        changed
-    })
-    .inner
 }
 
 impl AsRichText for Option<TextureViewFormat> {

@@ -25,7 +25,6 @@
 
 use crate::{
     error::AppResult,
-    file::file_storage::FileStorage,
     project::{
         Project,
         paths::FilePath,
@@ -44,7 +43,6 @@ use crate::{
             viewport::Viewport,
         },
     },
-    ui::size::Size2d,
     utils::{texture_format::TextureFormat, wgpu_utils::PrimitiveState},
 };
 
@@ -62,11 +60,7 @@ const CUBE_VERTICES: u32 = 36;
 const Z_NEAR: f32 = 0.1;
 const Z_FAR: f32 = 30.0;
 
-pub async fn create_scene(
-    _device: &wgpu::Device,
-    size: Size2d,
-    _file_storage: &FileStorage,
-) -> AppResult<Project> {
+pub async fn create_scene() -> AppResult<Project> {
     let mut project = Project::default();
 
     let cubes_shader_id = project.shaders.register(Shader::new(
@@ -84,7 +78,7 @@ pub async fn create_scene(
 
     let dimension_id = project
         .dimensions
-        .register(Dimension::new("Main Dimension", size));
+        .register(Dimension::new_runtime("Main Dimension"));
 
     // Low camera looking down the avenue, tilted slightly toward the floor.
     let camera_position = glam::Vec3::new(0.0, 1.6, 5.0);

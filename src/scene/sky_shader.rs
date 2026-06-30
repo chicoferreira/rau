@@ -14,7 +14,6 @@
 
 use crate::{
     error::AppResult,
-    file::file_storage::FileStorage,
     project::{
         Project,
         paths::FilePath,
@@ -33,15 +32,10 @@ use crate::{
             viewport::Viewport,
         },
     },
-    ui::size::Size2d,
     utils::{texture_format::TextureFormat, wgpu_utils::PrimitiveState},
 };
 
-pub async fn create_scene(
-    _device: &wgpu::Device,
-    size: Size2d,
-    _file_storage: &FileStorage,
-) -> AppResult<Project> {
+pub async fn create_scene() -> AppResult<Project> {
     let mut project = Project::default();
 
     let shader_id = project
@@ -50,7 +44,7 @@ pub async fn create_scene(
 
     let dimension_id = project
         .dimensions
-        .register(Dimension::new("Main Dimension", size));
+        .register(Dimension::new_runtime("Main Dimension"));
 
     // All camera fields are defaults; only the label and dimension differ.
     let mut camera = Camera::new("Main Camera".to_string());

@@ -213,6 +213,26 @@ where
     *current_value != before
 }
 
+pub fn combo_with_weak<T>(
+    ui: &mut Ui,
+    id_salt: impl Hash,
+    options: impl IntoIterator<Item = T>,
+    current_value: &mut T,
+    weak_text: Option<impl AsRichText>,
+) -> bool
+where
+    T: AsRichText + Clone + PartialEq,
+{
+    ui.horizontal(|ui| {
+        let changed = value_combo(ui, id_salt, options, current_value);
+        if let Some(text) = weak_text {
+            ui.weak(text.as_rich_text());
+        }
+        changed
+    })
+    .inner
+}
+
 const SELECT_PLACEHOLDER: &str = "Select...";
 
 fn storage_entry_text<R>(ui: &Ui, id: R::Id, label: &str) -> WidgetText

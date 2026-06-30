@@ -305,10 +305,7 @@
   ],
   "dimensions": [
     { "value": null, "version": 0 },
-    {
-      "value": { "label": "Main Dimension", "size": [1080, 1080] },
-      "version": 1
-    }
+    { "value": { "label": "Main Dimension", "size": "runtime" }, "version": 1 }
   ],
   "cameras": [
     { "value": null, "version": 0 },

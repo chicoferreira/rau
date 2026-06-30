@@ -16,7 +16,6 @@
 
 use crate::{
     error::AppResult,
-    file::file_storage::FileStorage,
     project::{
         Project,
         paths::FilePath,
@@ -45,11 +44,7 @@ const WORKGROUP_SIZE: u32 = 8;
 /// How often the simulation advances one generation: two steps per second.
 const STEP_INTERVAL: instant::Duration = instant::Duration::from_millis(200);
 
-pub async fn create_scene(
-    _device: &wgpu::Device,
-    size: Size2d,
-    _file_storage: &FileStorage,
-) -> AppResult<Project> {
+pub async fn create_scene() -> AppResult<Project> {
     let mut project = Project::default();
 
     // Shaders: one per compute stage plus the display shader.
@@ -69,13 +64,13 @@ pub async fn create_scene(
     ));
 
     // The grid runs at a fixed resolution, independent of the (resizable) viewport.
-    let grid_dimension_id = project.dimensions.register(Dimension::new(
+    let grid_dimension_id = project.dimensions.register(Dimension::new_persistent(
         "Grid Dimension",
         Size2d::new(GRID_SIZE_X, GRID_SIZE_Y),
     ));
     let display_dimension_id = project
         .dimensions
-        .register(Dimension::new("Display Dimension", size));
+        .register(Dimension::new_runtime("Display Dimension"));
 
     // Two ping-pong state textures. Each is written as a storage texture and read
     // back as a sampled texture, so both usages are required.

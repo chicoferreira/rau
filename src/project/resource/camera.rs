@@ -329,7 +329,8 @@ impl Camera {
             .ok_or(AppError::uninit_field("Dimension"))?;
 
         let dimension = dimensions.get(dimension_id)?;
-        Ok(dimension.size().width() as f32 / dimension.size().height() as f32)
+        let size = dimension.get_actual_size();
+        Ok(size.width() as f32 / size.height() as f32)
     }
 
     pub fn update(&mut self, dt: instant::Duration) {
