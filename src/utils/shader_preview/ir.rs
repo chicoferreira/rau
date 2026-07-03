@@ -1,4 +1,4 @@
-use crate::utils::texture_format::TextureFormat;
+use crate::utils::wgpu_utils::TextureFormat;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum ScalarKind {

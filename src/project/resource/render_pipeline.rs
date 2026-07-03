@@ -12,9 +12,10 @@ use crate::{
     },
     resource_getters, resource_setters,
     utils::{
-        async_job::AsyncJob, texture_format::TextureFormat,
-        validate_bind_group_layouts::validate_bind_group_layouts, wgpu_error_scope::WgpuErrorScope,
-        wgpu_utils::PrimitiveState,
+        async_job::AsyncJob,
+        validate_bind_group_layouts::validate_bind_group_layouts,
+        wgpu_error_scope::WgpuErrorScope,
+        wgpu_utils::{PrimitiveState, TextureFormat},
     },
 };
 

@@ -5,7 +5,7 @@ use super::ir::{
     Access, BindingKind, Sampled, ScalarKind, ShaderBinding, ShaderItem, ShaderModule,
     ShaderStruct, ShaderType, TexDim,
 };
-use crate::utils::texture_format::TextureFormat;
+use crate::utils::wgpu_utils::TextureFormat;
 
 /// Renders Vulkan-flavored GLSL
 pub struct GlslBackend;

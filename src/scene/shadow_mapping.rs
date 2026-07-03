@@ -43,7 +43,7 @@ use crate::{
         },
     },
     ui::size::Size2d,
-    utils::{texture_format::TextureFormat, wgpu_utils::PrimitiveState},
+    utils::wgpu_utils::{PrimitiveState, TextureFormat},
 };
 
 /// Objects drawn each frame: instance 0 is the floor, the rest are cubes. Must

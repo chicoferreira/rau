@@ -12,8 +12,7 @@ use crate::project::resource::uniform::{
     Uniform, UniformField, UniformFieldData, UniformFieldSource,
 };
 use crate::project::storage::Storage;
-use crate::utils::texture_format::TextureFormat;
-use crate::utils::wgpu_utils::PrimitiveState;
+use crate::utils::wgpu_utils::{PrimitiveState, TextureFormat};
 
 #[derive(Default)]
 struct TestStores {

@@ -19,7 +19,7 @@ use crate::{
         },
         pane::StateSnapshot,
     },
-    utils::texture_format::TextureFormat,
+    utils::wgpu_utils::TextureFormat,
     workspace::StateEvent,
 };
 

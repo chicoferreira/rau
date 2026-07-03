@@ -17,7 +17,7 @@ use crate::{
     utils::{
         derive::default_texture_format,
         derive_modal_material::{MaterialBindGroupsConfig, SamplerSetting},
-        texture_format::TextureFormat,
+        wgpu_utils::TextureFormat,
     },
 };
 

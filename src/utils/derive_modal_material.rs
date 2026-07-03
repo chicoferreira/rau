@@ -16,7 +16,7 @@ use crate::{
     },
     utils::{
         derive::{derive_texture, derive_texture_view, texture_label_from_path},
-        texture_format::TextureFormat,
+        wgpu_utils::TextureFormat,
     },
 };
 

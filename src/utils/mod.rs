@@ -15,7 +15,6 @@ pub mod raw_scroll;
 pub mod resizable_buffer;
 pub mod shader_preview;
 pub mod texture_capture;
-pub mod texture_format;
 pub mod validate_bind_group_layouts;
 pub mod wgpu_error_scope;
 pub mod wgpu_utils;

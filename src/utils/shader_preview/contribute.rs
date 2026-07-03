@@ -18,7 +18,7 @@ use crate::project::{
     },
     storage::Storage,
 };
-use crate::utils::texture_format::TextureFormat;
+use crate::utils::wgpu_utils::TextureFormat;
 
 pub struct ShaderGenCtx<'a> {
     pub bind_groups: &'a Storage<BindGroup>,

@@ -33,7 +33,7 @@ use crate::{
         },
     },
     ui::size::Size2d,
-    utils::{texture_format::TextureFormat, wgpu_utils::PrimitiveState},
+    utils::wgpu_utils::{PrimitiveState, TextureFormat},
 };
 
 /// Width and height of the simulation grid, in cells.

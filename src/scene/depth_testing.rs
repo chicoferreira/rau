@@ -43,7 +43,7 @@ use crate::{
             viewport::Viewport,
         },
     },
-    utils::{texture_format::TextureFormat, wgpu_utils::PrimitiveState},
+    utils::wgpu_utils::{PrimitiveState, TextureFormat},
 };
 
 /// Cubes per row. Must match `cubes.wgsl`.

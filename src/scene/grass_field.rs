@@ -38,7 +38,7 @@ use crate::{
             viewport::Viewport,
         },
     },
-    utils::{texture_format::TextureFormat, wgpu_utils::PrimitiveState},
+    utils::wgpu_utils::{PrimitiveState, TextureFormat},
 };
 
 /// Blades along one side of the field grid. Must match `grass.wgsl`.

@@ -13,7 +13,7 @@ use crate::{
         sync::{Revision, SyncOutcome, SyncResource, SyncTracker},
     },
     resource_getters, resource_setters,
-    utils::{async_job::AsyncJob, texture_format::TextureFormat, wgpu_error_scope::WgpuErrorScope},
+    utils::{async_job::AsyncJob, wgpu_error_scope::WgpuErrorScope, wgpu_utils::TextureFormat},
 };
 
 #[derive(Clone, Copy)]

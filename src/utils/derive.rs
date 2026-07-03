@@ -11,7 +11,7 @@ use crate::{
             texture_view::TextureView,
         },
     },
-    utils::texture_format::TextureFormat,
+    utils::wgpu_utils::TextureFormat,
 };
 
 /// Registers a new texture sourced from the image at `path`, deduplicating

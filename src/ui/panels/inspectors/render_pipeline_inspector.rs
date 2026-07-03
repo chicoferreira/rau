@@ -22,7 +22,7 @@ use crate::{
         },
         pane::StateSnapshot,
     },
-    utils::{shader_preview::ShaderGenCtx, texture_format::TextureFormat},
+    utils::{shader_preview::ShaderGenCtx, wgpu_utils::TextureFormat},
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
