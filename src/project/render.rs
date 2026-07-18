@@ -94,6 +94,12 @@ impl RuntimeProject {
         true // Should render the frame
     }
 
+    /// Records a submitted frame's error scope for [`Self::poll_presentation_errors`].
+    ///
+    /// Only one submission is tracked: submitting while still `Pending` drops the
+    /// new scope unmonitored. Scopes settle by the next frame (see
+    /// [`WgpuErrorScope`](crate::utils::wgpu_error_scope::WgpuErrorScope)), so no
+    /// queue of outstanding frames needs to be tracked.
     pub fn on_frame_submitted(
         &mut self,
         current_snapshot: ProjectRevisionSnapshot,

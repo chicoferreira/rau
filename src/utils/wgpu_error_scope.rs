@@ -1,5 +1,11 @@
 use crate::{error::AppResult, utils::async_job::AsyncJob};
 
+/// A pushed wgpu validation error scope, popped as an [`AsyncJob`] polled once
+/// per frame rather than blocked on.
+///
+/// Native resolves at the first poll. On the web the browser settles the scope,
+/// and how long it may take is unspecified; observed behaviour is that it is
+/// settled by the next frame.
 pub struct WgpuErrorScope {
     inner: wgpu::ErrorScopeGuard,
 }
