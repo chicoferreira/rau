@@ -301,15 +301,19 @@ impl App {
         let state = &mut self.state;
         let app_event_queue = &mut self.event_queue;
         let app_file_system = &self.app_file_system;
-        let frame = self.egui_renderer.handle(&self.window, |ui| match state {
-            State::MainMenu(main_menu) => main_menu.render_ui(ui, app_file_system),
-            State::Workspace(workspace) => workspace.render_ui(
-                ui,
-                self.backend,
-                self.config.present_mode,
-                &self.frame_time,
-                app_event_queue,
-            ),
+        let frame = self.egui_renderer.handle(&self.window, |ui| {
+            ui::fullscreen::handle_shortcut(ui.ctx());
+
+            match state {
+                State::MainMenu(main_menu) => main_menu.render_ui(ui, app_file_system),
+                State::Workspace(workspace) => workspace.render_ui(
+                    ui,
+                    self.backend,
+                    self.config.present_mode,
+                    &self.frame_time,
+                    app_event_queue,
+                ),
+            }
         });
 
         let submit_scope = match &mut self.state {

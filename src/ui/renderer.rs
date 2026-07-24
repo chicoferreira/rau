@@ -1,6 +1,7 @@
 pub struct EguiRenderer {
     state: egui_winit::State,
     renderer: egui_wgpu::Renderer,
+    viewport_info: egui::ViewportInfo,
 }
 
 pub struct EguiFrame {
@@ -41,6 +42,7 @@ impl EguiRenderer {
         Self {
             state: egui_state,
             renderer: egui_renderer,
+            viewport_info: egui::ViewportInfo::default(),
         }
     }
 
@@ -48,15 +50,35 @@ impl EguiRenderer {
     where
         F: FnMut(&mut egui::Ui),
     {
-        let raw_input = self.state.take_egui_input(window);
-        let full_output = self.state.egui_ctx().run_ui(raw_input, run_ui);
+        let mut raw_input = self.state.take_egui_input(window);
+
+        let egui_ctx = self.state.egui_ctx().clone();
+
+        egui_winit::update_viewport_info(&mut self.viewport_info, &egui_ctx, window, false);
+        raw_input
+            .viewports
+            .insert(egui::ViewportId::ROOT, self.viewport_info.clone());
+
+        let full_output = egui_ctx.run_ui(raw_input, run_ui);
 
         self.state
             .handle_platform_output(window, full_output.platform_output);
 
-        let egui_context = self.state.egui_ctx();
+        if let Some(viewport_output) = full_output.viewport_output.get(&egui::ViewportId::ROOT) {
+            let mut actions_requested = Vec::new();
+            egui_winit::process_viewport_commands(
+                &egui_ctx,
+                &mut self.viewport_info,
+                viewport_output.commands.iter().cloned(),
+                window,
+                &mut actions_requested,
+            );
+        }
 
-        let meshes = egui_context.tessellate(full_output.shapes, egui_context.pixels_per_point());
+        let meshes = self
+            .state
+            .egui_ctx()
+            .tessellate(full_output.shapes, egui_ctx.pixels_per_point());
 
         EguiFrame {
             meshes,

@@ -2,7 +2,7 @@ use egui_phosphor::regular;
 
 use crate::{
     project::{PresentationId, ProjectResource, ResourceKind, paths::FilePath},
-    ui::{components::resource_icons, pane::StateSnapshot},
+    ui::{components::resource_icons, fullscreen, pane::StateSnapshot},
     workspace::StateEvent,
 };
 
@@ -116,6 +116,19 @@ fn create_menu(state: &mut StateSnapshot, ui: &mut egui::Ui) {
 
 fn view_menu(state: &mut StateSnapshot, ui: &mut egui::Ui) {
     let viewport_icon = resource_icons::resource_kind_icon(ResourceKind::Viewport);
+
+    let is_fullscreen = fullscreen::is_fullscreen(ui.ctx());
+    let (icon, label) = if is_fullscreen {
+        (regular::ARROWS_IN, "Exit Fullscreen")
+    } else {
+        (regular::ARROWS_OUT, "Enter Fullscreen")
+    };
+    let button = egui::Button::new(format!("{icon} {label}")).shortcut_text("F11");
+    if ui.add(button).clicked() {
+        fullscreen::toggle(ui.ctx());
+    }
+
+    ui.separator();
 
     if ui.button("Inspect Presentation").clicked() {
         state.event_queue.inspect_resource(PresentationId);
