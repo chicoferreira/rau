@@ -1,6 +1,7 @@
 {
   "presentation": {
     "renderPasses": [{ "idx": 1, "version": 1 }],
+    "computePasses": [],
     "mainViewport": { "idx": 1, "version": 1 }
   },
   "shaders": [
@@ -16,7 +17,7 @@
       "value": {
         "label": "Main Viewport",
         "textureViewId": { "idx": 1, "version": 1 },
-        "dimensionId": null,
+        "dimensionId": { "idx": 1, "version": 1 },
         "controlsCameraId": null
       },
       "version": 1
