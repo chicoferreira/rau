@@ -42,7 +42,7 @@ fastrand = "2.3.0"
 futures-lite = "2.6.0"
 glam = { version = "0.33.0", features = ["serde"] }
 heck = "0.5.0"
-image = { version = "0.25", default-features = false, features = ["png", "jpeg", "hdr"] }
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "hdr", "exr"] }
 instant = "0.1"
 log = "0.4.29"
 naga = { version = "29.0.0", features = ["wgsl-in", "glsl-in"] }
