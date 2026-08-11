@@ -91,9 +91,9 @@ impl WindowApp<StartupAction> for App {
         let backend = adapter.get_info().backend;
         log::info!("Selected renderer backend: {backend:?}");
 
-        // Allow polygon mode changes if the adapter supports it
-        let optional_features =
-            wgpu::Features::POLYGON_MODE_LINE | wgpu::Features::POLYGON_MODE_POINT;
+        let optional_features = wgpu::Features::POLYGON_MODE_LINE
+            | wgpu::Features::POLYGON_MODE_POINT
+            | wgpu::Features::FLOAT32_FILTERABLE;
         let required_features = adapter.features() & optional_features;
 
         let (device, queue) = adapter

@@ -11,6 +11,7 @@ use crate::{
     project::paths::FilePath,
 };
 
+pub mod area_lights;
 pub mod depth_testing;
 pub mod full_example;
 pub mod fur_shell;
@@ -34,6 +35,7 @@ pub enum GenerateTemplate {
     ShadowMapping,
     SkyShader,
     Ssao,
+    AreaLights,
 }
 
 pub fn generate_project(template: GenerateTemplate, target_folder: &Path) -> AppResult<()> {
@@ -63,6 +65,7 @@ async fn generate_project_async(template: GenerateTemplate, target_folder: &Path
         GenerateTemplate::ShadowMapping => shadow_mapping::create_scene().await?,
         GenerateTemplate::SkyShader => sky_shader::create_scene().await?,
         GenerateTemplate::Ssao => ssao::create_scene().await?,
+        GenerateTemplate::AreaLights => area_lights::create_scene().await?,
     };
 
     file_system

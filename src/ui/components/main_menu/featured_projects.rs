@@ -115,6 +115,15 @@ pub const FEATURED_PROJECTS: &[FeaturedProject] = &[
         description: "Boxes casting shadows from a spot light with classic two-pass shadow mapping.",
     },
     FeaturedProject {
+        id: "area-lights",
+        name: "Area Lights",
+        owner: "chicoferreira",
+        repo: "rau",
+        git_ref: "main",
+        path: "projects/area-lights",
+        description: "Three glowing panels lighting a dark room, shaded with Linearly Transformed Cosines. Ported from LearnOpenGL.",
+    },
+    FeaturedProject {
         id: "full-example",
         name: "Full Example",
         owner: "chicoferreira",
