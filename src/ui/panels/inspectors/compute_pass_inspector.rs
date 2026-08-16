@@ -1,9 +1,12 @@
+use egui::Widget;
+
 use crate::{
     project::{
         BindGroupId, ComputePassId,
         resource::{
             bindgroup::BindGroup,
-            compute_pass::{ComputePass, DispatchPolicy, WorkGroups},
+            compute_pass::{ComputePass, DispatchPolicy, DispatchUnit, WorkSize},
+            dimension::{Dimension, DimensionRef},
             shader::Shader,
         },
         storage::Storage,
@@ -11,15 +14,71 @@ use crate::{
     ui::{
         components::{
             code_editor::shader_code_section,
+            dimension_ref::dimension_ref_edit,
             draggable_list::{ListEdits, draggable_list},
             field,
-            field_docs::field_doc,
-            inspector, resource_icons,
+            field_docs::{FieldDoc, field_doc},
+            inspector::{self, AsRichText},
+            resource_icons,
         },
         pane::StateSnapshot,
     },
     utils::shader_preview::ShaderGenCtx,
 };
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum WorkSizeKind {
+    Fixed,
+    Dimension,
+}
+
+impl WorkSizeKind {
+    fn from_work_size(work_size: &WorkSize) -> Self {
+        match work_size {
+            WorkSize::Fixed(_) => Self::Fixed,
+            WorkSize::Dimension(_) => Self::Dimension,
+        }
+    }
+}
+
+impl AsRichText for WorkSizeKind {
+    fn as_rich_text(&self) -> egui::RichText {
+        match self {
+            Self::Fixed => "Fixed",
+            Self::Dimension => "Dimension",
+        }
+        .into()
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum DispatchUnitKind {
+    Workgroup,
+    Invocation,
+}
+
+impl DispatchUnitKind {
+    fn from_unit(unit: &DispatchUnit) -> Self {
+        match unit {
+            DispatchUnit::Workgroup => Self::Workgroup,
+            DispatchUnit::Invocation { .. } => Self::Invocation,
+        }
+    }
+}
+
+impl AsRichText for DispatchUnitKind {
+    fn as_rich_text(&self) -> egui::RichText {
+        match self {
+            Self::Workgroup => "Workgroups",
+            Self::Invocation => "Invocations",
+        }
+        .into()
+    }
+}
+
+const WORK_SIZE_KINDS: [WorkSizeKind; 2] = [WorkSizeKind::Fixed, WorkSizeKind::Dimension];
+const DISPATCH_UNITS: [DispatchUnitKind; 2] =
+    [DispatchUnitKind::Workgroup, DispatchUnitKind::Invocation];
 
 impl StateSnapshot<'_> {
     pub fn compute_pass_inspector_ui(&mut self, ui: &mut egui::Ui, compute_pass_id: ComputePassId) {
@@ -28,7 +87,12 @@ impl StateSnapshot<'_> {
             return;
         };
 
-        compute_pass_fields_ui(ui, compute_pass, &self.project.shaders);
+        compute_pass_fields_ui(
+            ui,
+            compute_pass,
+            &self.project.shaders,
+            &self.project.dimensions,
+        );
 
         compute_pass_bind_groups_ui(ui, compute_pass_id, compute_pass, &self.project.bind_groups);
 
@@ -43,6 +107,7 @@ fn compute_pass_fields_ui(
     ui: &mut egui::Ui,
     compute_pass: &mut ComputePass,
     shaders: &Storage<Shader>,
+    dimensions: &Storage<Dimension>,
 ) {
     inspector::section(ui, "Settings", |ui| {
         field::field_grid(ui, "compute_pass_inspector_grid", |ui| {
@@ -61,38 +126,175 @@ fn compute_pass_fields_ui(
                 compute_pass.set_shader(shader_id);
             }
 
-            let (mut x, mut y, mut z) = compute_pass.work_groups().into();
-
-            inspector::u32_drag_row_doc(
-                ui,
-                "Workgroups X",
-                field_doc!(
-                    "Number of workgroups dispatched along the **X** axis.\n\n\
-                    The shader runs once per workgroup; the total invocations are this count \
-                    multiplied by the `@workgroup_size` declared in the shader.\n\n\
-                    [WebGPU spec](https://www.w3.org/TR/webgpu/#dom-gpucomputepassencoder-dispatchworkgroups)"
-                ),
-                &mut x,
-                1..=u32::MAX,
-            );
-            inspector::u32_drag_row_doc(
-                ui,
-                "Workgroups Y",
-                field_doc!("Number of workgroups dispatched along the **Y** axis."),
-                &mut y,
-                1..=u32::MAX,
-            );
-            inspector::u32_drag_row_doc(
-                ui,
-                "Workgroups Z",
-                field_doc!("Number of workgroups dispatched along the **Z** axis."),
-                &mut z,
-                1..=u32::MAX,
-            );
-
-            compute_pass.set_work_groups(WorkGroups::new(x, y, z));
-
             compute_pass_dispatch_ui(ui, compute_pass);
+        });
+    });
+
+    compute_pass_dispatch_size_ui(ui, compute_pass, dimensions);
+}
+
+fn compute_pass_dispatch_size_ui(
+    ui: &mut egui::Ui,
+    compute_pass: &mut ComputePass,
+    dimensions: &Storage<Dimension>,
+) {
+    inspector::section_doc(
+        ui,
+        "Dispatch Size",
+        field_doc!(
+            "How many times this pass runs the shader.\n\n\
+            A compute pass is launched by `dispatchWorkgroups(x, y, z)`, the WebGPU call that \
+            runs a **grid of workgroups** on the GPU. Every workgroup runs a fixed block of \
+            **invocations**, set by the `@workgroup_size` the shader declares. So the number of \
+            invocations along an axis is the value sent to `dispatchWorkgroups` times the \
+            workgroup size declared in the shader.\n\n\
+            With `@workgroup_size(8, 8, 1)`, a dispatch of `(16, 16, 1)` runs 16x16 workgroups \
+            of 64 (8x8x1) invocations each, for 128x128 invocations in total.\n\n\
+            **Example**: to run the shader once per pixel of a 1920x1080 Dimension, with a \
+            shader declaring `@workgroup_size(8, 8, 1)`:\n\
+            - Set **Unit** to Invocations, and **Workgroup Size** to 8, 8, 1.\n\
+            - Set **Size X** and **Size Y** to that Dimension's width and height, and \
+            **Size Z** to 1.\n\
+            - In the shader, read `@builtin(global_invocation_id)`: its `x` and `y` are the \
+            coordinates of the pixel that invocation covers.\n\n\
+            That resolves to `dispatchWorkgroups(240, 135, 1)`. Sourcing the sizes from the \
+            Dimension rather than typing 1920 and 1080 keeps it correct if the Dimension \
+            resizes.\n\n\
+            [WebGPU spec](https://www.w3.org/TR/webgpu/#dom-gpucomputepassencoder-dispatchworkgroups)"
+        ),
+        |ui| {
+            let before = compute_pass.dispatch_size();
+            let mut dispatch_size = before;
+
+            field::field_grid(ui, "compute_pass_dispatch_size_grid", |ui| {
+                let mut unit_kind = DispatchUnitKind::from_unit(&dispatch_size.unit);
+                if inspector::combo_row_doc(
+                    ui,
+                    "Unit",
+                    field_doc!(
+                        "Which of the two counts the sizes below are.\n\n\
+                         - **Workgroups**: passed to `dispatchWorkgroups` unchanged.\n\
+                         - **Invocations**: divided by the workgroup size to get the workgroup \
+                         counts. Useful when the work is one invocation per element: a pixel or \
+                         a grid cell, for instance."
+                    ),
+                    "compute_pass_dispatch_unit",
+                    DISPATCH_UNITS,
+                    &mut unit_kind,
+                ) {
+                    dispatch_size.unit = match unit_kind {
+                        DispatchUnitKind::Workgroup => DispatchUnit::Workgroup,
+                        DispatchUnitKind::Invocation => DispatchUnit::Invocation {
+                            workgroup_size: [1, 1, 1],
+                        },
+                    };
+                }
+
+                if let DispatchUnit::Invocation { workgroup_size } = &mut dispatch_size.unit {
+                    field::row_doc(
+                        ui,
+                        "Workgroup Size",
+                        field_doc!(
+                            "The workgroup size the sizes below are divided by. Set it to the \
+                             same value the shader declares in its `@workgroup_size`.\n\n\
+                             Nothing checks the two against each other.\n\n\
+                             If set **larger** than the shader declares, it dispatches too few \
+                             workgroups and leaves part of the range unprocessed.\n\n\
+                             If set **smaller**, it dispatches invocations past the range, \
+                             which matters only if the shader acts on ids beyond it.\n\n\
+                             [WGSL spec](https://www.w3.org/TR/WGSL/#compute-shader-workgroups)"
+                        ),
+                        |ui| {
+                            ui.horizontal(|ui| {
+                                for axis in workgroup_size.iter_mut() {
+                                    egui::DragValue::new(axis)
+                                        .speed(1)
+                                        .range(1..=u32::MAX)
+                                        .ui(ui);
+                                }
+                            });
+                        },
+                    );
+                }
+
+                work_size_row(
+                    ui,
+                    "Size X",
+                    field_doc!(
+                        "The extent of the dispatch along the **X** axis, in the unit selected \
+                    above.\n\n\
+                    - **Fixed**: a constant entered here.\n\
+                    - **Dimension**: read from a Dimension resource."
+                    ),
+                    "compute_pass_size_x",
+                    &mut dispatch_size.x,
+                    dimensions,
+                );
+                work_size_row(
+                    ui,
+                    "Size Y",
+                    field_doc!("The extent of the dispatch along the **Y** axis."),
+                    "compute_pass_size_y",
+                    &mut dispatch_size.y,
+                    dimensions,
+                );
+                work_size_row(
+                    ui,
+                    "Size Z",
+                    field_doc!(
+                        "The extent of the dispatch along the **Z** axis.\n\n\
+                    A Dimension carries only a width and a height, so it has no value that \
+                    corresponds to this axis, so this is typically a fixed value."
+                    ),
+                    "compute_pass_size_z",
+                    &mut dispatch_size.z,
+                    dimensions,
+                );
+            });
+
+            match dispatch_size.into_work_groups(dimensions) {
+                Ok((x, y, z)) => {
+                    field::weak_label(ui, format!("Resolves to dispatchWorkgroups({x}, {y}, {z})"))
+                }
+                Err(error) => field::error_label(ui, error.to_string()),
+            };
+
+            if dispatch_size != before {
+                compute_pass.set_dispatch_size(dispatch_size);
+            }
+        },
+    );
+}
+
+fn work_size_row(
+    ui: &mut egui::Ui,
+    label: &str,
+    doc: impl FieldDoc,
+    id_salt: &str,
+    work_size: &mut WorkSize,
+    dimensions: &Storage<Dimension>,
+) {
+    field::row_doc(ui, label, doc, |ui| {
+        ui.horizontal(|ui| {
+            let mut kind = WorkSizeKind::from_work_size(work_size);
+            if inspector::value_combo(ui, (id_salt, "kind"), WORK_SIZE_KINDS, &mut kind) {
+                *work_size = match kind {
+                    WorkSizeKind::Fixed => WorkSize::Fixed(1),
+                    WorkSizeKind::Dimension => WorkSize::Dimension(DimensionRef::default()),
+                };
+            }
+
+            match work_size {
+                WorkSize::Fixed(value) => {
+                    egui::DragValue::new(value)
+                        .speed(1)
+                        .range(1..=u32::MAX)
+                        .ui(ui);
+                }
+                WorkSize::Dimension(dimension_ref) => {
+                    dimension_ref_edit(ui, (id_salt, "ref"), dimensions, dimension_ref);
+                }
+            }
         });
     });
 }
@@ -106,7 +308,7 @@ fn dispatch_label(policy: &DispatchPolicy) -> &'static str {
 }
 
 fn compute_pass_dispatch_ui(ui: &mut egui::Ui, compute_pass: &mut ComputePass) {
-    let mut policy = compute_pass.dispatch();
+    let mut policy = compute_pass.dispatch_policy();
     let mut changed = false;
 
     changed |= field::row_doc(

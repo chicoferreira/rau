@@ -697,8 +697,13 @@
           { "idx": 6, "version": 1 }
         ],
         "shader": { "idx": 1, "version": 1 },
-        "workGroups": [68, 68, 6],
-        "dispatch": { "type": "onChange" }
+        "dispatchSize": {
+          "x": { "fixed": 68 },
+          "y": { "fixed": 68 },
+          "z": { "fixed": 6 },
+          "unit": "workgroup"
+        },
+        "dispatchPolicy": { "type": "onChange" }
       },
       "version": 1
     }

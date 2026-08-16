@@ -3,6 +3,7 @@ pub mod color_edit;
 pub mod create_project_modal;
 pub mod delete_project_confirmation_modal;
 pub mod derive_model_material_modal;
+pub mod dimension_ref;
 pub mod draggable_list;
 pub mod field;
 pub mod field_docs;

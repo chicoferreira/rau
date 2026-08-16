@@ -6,8 +6,12 @@ use crate::{
     error::{AppError, AppResult},
     project::{
         BindGroupId, ComputePassId, Creatable, ProjectResource, ShaderId,
-        resource::{bindgroup::BindGroup, shader::Shader},
-        storage::RuntimeStorage,
+        resource::{
+            bindgroup::BindGroup,
+            dimension::{Dimension, DimensionRef},
+            shader::Shader,
+        },
+        storage::{RuntimeStorage, Storage},
         sync::{Revision, SyncOutcome, SyncResource, SyncTracker},
     },
     resource_getters, resource_setters,
@@ -23,17 +27,73 @@ pub struct ComputePass {
     label: String,
     bind_groups: Vec<BindGroupId>,
     shader: Option<ShaderId>,
-    work_groups: WorkGroups,
+    #[serde(alias = "workGroups")]
+    dispatch_size: DispatchSize,
     #[serde(default)]
-    dispatch: DispatchPolicy,
+    dispatch_policy: DispatchPolicy,
     #[serde(skip)]
     runtime_revision: Revision,
     #[serde(skip)]
     project_revision: Revision,
 }
 
+/// The size of a dispatch, counted in whichever unit [`DispatchUnit`] selects.
+///
+/// Resolves to the three workgroup counts handed to
+/// [`wgpu::ComputePass::dispatch_workgroups`].
+///
+/// Each axis is either a constant or read from a [`Dimension`].
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
-pub struct WorkGroups(u32, u32, u32);
+#[serde(rename_all = "camelCase")]
+pub struct DispatchSize {
+    pub x: WorkSize,
+    pub y: WorkSize,
+    pub z: WorkSize,
+    pub unit: DispatchUnit,
+}
+
+/// What the values in a [`DispatchSize`] count.
+///
+/// Every workgroup runs `@workgroup_size` invocations, so the two units are one
+/// multiplication apart. The unit decides which of them the work sizes are.
+///
+/// Against a shader declaring `@workgroup_size(16, 16, 1)`, these dispatch the
+/// same 128x128 invocations:
+///
+/// - `new_fixed(8, 8, 1, Workgroup)`
+/// - `new_fixed(128, 128, 1, Invocation { workgroup_size: [16, 16, 1] })`
+///
+/// [`Invocation`](Self::Invocation) is the practical choice when an axis reads
+/// from a [`Dimension`] and the compute pass is expected to run for every pixel
+/// of that dimension.
+#[derive(Debug, Clone, Copy, PartialEq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum DispatchUnit {
+    /// Workgroups, passed to `dispatch_workgroups` unchanged.
+    #[default]
+    Workgroup,
+    /// Invocations, divided by `workgroup_size` to get the workgroup counts.
+    ///
+    /// The division rounds up, so the last workgroup along each axis runs past
+    /// the requested range; the shader needs its own bounds check on
+    /// `@builtin(global_invocation_id)`.
+    ///
+    /// `workgroup_size` has to be kept in step with the `@workgroup_size`
+    /// for this to make sense.
+    Invocation {
+        // TODO: grab from shader via reflection instead of having the user specify it
+        workgroup_size: [u32; 3],
+    },
+}
+
+/// One axis of a [`DispatchSize`]: a constant, or the width or height of a
+/// [`Dimension`].
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum WorkSize {
+    Fixed(u32),
+    Dimension(DimensionRef),
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Default, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "camelCase")]
@@ -95,8 +155,8 @@ impl Creatable for ComputePass {
             label,
             bind_groups: Default::default(),
             shader: Default::default(),
-            work_groups: WorkGroups::new(1, 1, 1),
-            dispatch: DispatchPolicy::default(),
+            dispatch_size: DispatchSize::new_fixed(1, 1, 1, DispatchUnit::Workgroup),
+            dispatch_policy: DispatchPolicy::default(),
             runtime_revision: Default::default(),
             project_revision: Default::default(),
         }
@@ -108,15 +168,15 @@ impl ComputePass {
         label: impl Into<String>,
         bind_groups: Vec<BindGroupId>,
         shader: Option<ShaderId>,
-        work_groups: WorkGroups,
-        dispatch: DispatchPolicy,
+        dispatch_size: DispatchSize,
+        dispatch_policy: DispatchPolicy,
     ) -> Self {
         Self {
             label: label.into(),
             bind_groups,
             shader,
-            work_groups,
-            dispatch,
+            dispatch_size,
+            dispatch_policy,
             runtime_revision: Revision::default(),
             project_revision: Revision::default(),
         }
@@ -126,8 +186,8 @@ impl ComputePass {
         pub fn label() -> &str;
         pub fn bind_groups() -> &[BindGroupId];
         pub fn shader() -> Option<ShaderId>;
-        pub fn work_groups() -> WorkGroups;
-        pub fn dispatch() -> DispatchPolicy;
+        pub fn dispatch_size() -> DispatchSize;
+        pub fn dispatch_policy() -> DispatchPolicy;
     }
 
     resource_setters! {
@@ -135,8 +195,8 @@ impl ComputePass {
         pub fn set_label(label: String);
         pub fn set_shader(shader: Option<ShaderId>);
         pub fn set_bind_groups(bind_groups: Vec<BindGroupId>);
-        pub fn set_work_groups(work_groups: WorkGroups);
-        pub fn set_dispatch(dispatch: DispatchPolicy);
+        pub fn set_dispatch_size(dispatch_size: DispatchSize);
+        pub fn set_dispatch(dispatch_policy: DispatchPolicy);
     }
 
     /// Whether any of this pass's inputs changed their data this frame. Used by
@@ -159,6 +219,7 @@ impl ComputePass {
         encoder: &mut wgpu::CommandEncoder,
         runtime: &ComputePassRuntime,
         runtime_bind_groups: &RuntimeStorage<BindGroup>,
+        dimensions: &Storage<Dimension>,
     ) -> AppResult<bool> {
         let mut bind_groups = Vec::with_capacity(self.bind_groups.len());
         for id in self.bind_groups.iter().copied() {
@@ -178,20 +239,47 @@ impl ComputePass {
             pass.set_bind_group(index as u32, bind_group.inner(), &[]);
         }
 
-        let (x, y, z) = self.work_groups().into();
+        let (x, y, z) = self.dispatch_size().into_work_groups(dimensions)?;
         pass.dispatch_workgroups(x, y, z);
 
         Ok(true)
     }
 }
 
-impl WorkGroups {
-    pub fn new(x: u32, y: u32, z: u32) -> Self {
-        Self(x.max(1), y.max(1), z.max(1))
+impl DispatchSize {
+    pub fn new_fixed(x: u32, y: u32, z: u32, unit: DispatchUnit) -> Self {
+        Self {
+            x: WorkSize::Fixed(x),
+            y: WorkSize::Fixed(y),
+            z: WorkSize::Fixed(z),
+            unit,
+        }
     }
 
-    pub fn into(self) -> (u32, u32, u32) {
-        (self.0, self.1, self.2)
+    pub fn into_work_groups(self, dimensions: &Storage<Dimension>) -> AppResult<(u32, u32, u32)> {
+        let x = self.x.resolve(dimensions)?;
+        let y = self.y.resolve(dimensions)?;
+        let z = self.z.resolve(dimensions)?;
+
+        Ok(match self.unit {
+            DispatchUnit::Workgroup => (x, y, z),
+            DispatchUnit::Invocation {
+                workgroup_size: [wx, wy, wz],
+            } => (
+                x.div_ceil(wx.max(1)), // `max(1)` avoids dividing by zero
+                y.div_ceil(wy.max(1)),
+                z.div_ceil(wz.max(1)),
+            ),
+        })
+    }
+}
+
+impl WorkSize {
+    pub fn resolve(&self, dimensions: &Storage<Dimension>) -> AppResult<u32> {
+        match self {
+            WorkSize::Fixed(value) => Ok(*value),
+            WorkSize::Dimension(dimension_ref) => dimension_ref.resolve(dimensions),
+        }
     }
 }
 

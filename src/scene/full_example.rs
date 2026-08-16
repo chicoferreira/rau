@@ -7,7 +7,7 @@ use crate::{
         resource::{
             bindgroup::{BindGroup, BindGroupEntry, BindGroupResource},
             camera::{Camera, Deg, Pitch, Yaw},
-            compute_pass::{ComputePass, DispatchPolicy, WorkGroups},
+            compute_pass::{ComputePass, DispatchPolicy, DispatchSize, DispatchUnit},
             dimension::Dimension,
             model::{Model, ModelRuntime, TextureType},
             render_pass::{LoadOperation, RenderPass, RenderPassTarget},
@@ -299,7 +299,7 @@ pub async fn create_scene(device: &wgpu::Device, file_storage: &FileStorage) -> 
         "equirect_to_cube_map",
         vec![bind_group_id, sky_color_bind_group_id],
         Some(equirectengular_shader_id),
-        WorkGroups::new(num_workgroups, num_workgroups, 6),
+        DispatchSize::new_fixed(num_workgroups, num_workgroups, 6, DispatchUnit::Workgroup),
         DispatchPolicy::OnChange,
     );
 

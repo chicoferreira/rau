@@ -285,8 +285,13 @@
         "label": "Init",
         "bindGroups": [{ "idx": 1, "version": 1 }],
         "shader": { "idx": 1, "version": 1 },
-        "workGroups": [20, 12, 1],
-        "dispatch": { "type": "onChange" }
+        "dispatchSize": {
+          "x": { "fixed": 20 },
+          "y": { "fixed": 12 },
+          "z": { "fixed": 1 },
+          "unit": "workgroup"
+        },
+        "dispatchPolicy": { "type": "onChange" }
       },
       "version": 1
     },
@@ -295,8 +300,13 @@
         "label": "Simulate",
         "bindGroups": [{ "idx": 2, "version": 1 }],
         "shader": { "idx": 2, "version": 1 },
-        "workGroups": [20, 12, 1],
-        "dispatch": { "type": "periodic", "interval": 0.2 }
+        "dispatchSize": {
+          "x": { "fixed": 20 },
+          "y": { "fixed": 12 },
+          "z": { "fixed": 1 },
+          "unit": "workgroup"
+        },
+        "dispatchPolicy": { "type": "periodic", "interval": 0.2 }
       },
       "version": 1
     },
@@ -305,8 +315,13 @@
         "label": "Copy",
         "bindGroups": [{ "idx": 3, "version": 1 }],
         "shader": { "idx": 3, "version": 1 },
-        "workGroups": [20, 12, 1],
-        "dispatch": { "type": "periodic", "interval": 0.2 }
+        "dispatchSize": {
+          "x": { "fixed": 20 },
+          "y": { "fixed": 12 },
+          "z": { "fixed": 1 },
+          "unit": "workgroup"
+        },
+        "dispatchPolicy": { "type": "periodic", "interval": 0.2 }
       },
       "version": 1
     }

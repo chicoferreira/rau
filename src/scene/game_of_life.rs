@@ -21,7 +21,7 @@ use crate::{
         paths::FilePath,
         resource::{
             bindgroup::{BindGroup, BindGroupEntry, BindGroupResource},
-            compute_pass::{ComputePass, DispatchPolicy, WorkGroups},
+            compute_pass::{ComputePass, DispatchPolicy, DispatchSize, DispatchUnit},
             dimension::Dimension,
             render_pass::{Color, LoadOperation, RenderPass, RenderPassTarget},
             render_pipeline::{BindGroupTarget, RenderDrawStrategy, RenderPipeline},
@@ -158,14 +158,14 @@ pub async fn create_scene() -> AppResult<Project> {
         "Init",
         vec![init_bind_group_id],
         Some(init_shader_id),
-        WorkGroups::new(workgroups_x, workgroups_y, 1),
+        DispatchSize::new_fixed(workgroups_x, workgroups_y, 1, DispatchUnit::Workgroup),
         DispatchPolicy::OnChange,
     ));
     let simulate_pass_id = project.compute_passes.register(ComputePass::new(
         "Simulate",
         vec![simulate_bind_group_id],
         Some(simulate_shader_id),
-        WorkGroups::new(workgroups_x, workgroups_y, 1),
+        DispatchSize::new_fixed(workgroups_x, workgroups_y, 1, DispatchUnit::Workgroup),
         DispatchPolicy::Periodic {
             interval: STEP_INTERVAL,
         },
@@ -174,7 +174,7 @@ pub async fn create_scene() -> AppResult<Project> {
         "Copy",
         vec![copy_bind_group_id],
         Some(copy_shader_id),
-        WorkGroups::new(workgroups_x, workgroups_y, 1),
+        DispatchSize::new_fixed(workgroups_x, workgroups_y, 1, DispatchUnit::Workgroup),
         DispatchPolicy::Periodic {
             interval: STEP_INTERVAL,
         },

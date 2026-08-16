@@ -1,9 +1,10 @@
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    error::AppResult,
+    error::{AppError, AppResult},
     project::{
         Creatable, DimensionId, ProjectResource,
+        storage::Storage,
         sync::{Revision, SyncOutcome, SyncResource, SyncTracker},
     },
     resource_getters, resource_setters,
@@ -27,6 +28,33 @@ pub enum DimensionSize {
     Runtime(#[serde(skip)] Size2d),
     #[serde(untagged)]
     Persistent(Size2d),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DimensionRef {
+    pub id: Option<DimensionId>,
+    pub axis: Axis,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum Axis {
+    #[default]
+    Width,
+    Height,
+}
+
+impl DimensionRef {
+    pub fn resolve(&self, dimensions: &Storage<Dimension>) -> AppResult<u32> {
+        let id = self.id.ok_or(AppError::uninit_field("Dimension"))?;
+        let size = dimensions.get(id)?.get_actual_size();
+
+        Ok(match self.axis {
+            Axis::Width => size.width(),
+            Axis::Height => size.height(),
+        })
+    }
 }
 
 impl Dimension {

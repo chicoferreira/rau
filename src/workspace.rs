@@ -224,6 +224,7 @@ impl Workspace {
             compute_passes: &self.project.compute_passes,
             runtime_compute_passes: &mut self.runtime_project.compute_passes,
             runtime_bind_groups: &self.runtime_project.bind_groups,
+            dimensions: &self.project.dimensions,
             compute_accumulators: &mut self.runtime_project.compute_accumulators,
             tracker: &self.tracker,
             dt: ctx.dt,

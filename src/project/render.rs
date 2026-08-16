@@ -9,6 +9,7 @@ use crate::{
         resource::{
             bindgroup::BindGroup,
             compute_pass::{ComputePass, DispatchPolicy},
+            dimension::Dimension,
             model::Model,
             presentation::Presentation,
             render_pass::RenderPass,
@@ -36,6 +37,7 @@ pub struct ComputeDispatchContext<'a> {
     pub compute_passes: &'a Storage<ComputePass>,
     pub runtime_compute_passes: &'a mut RuntimeStorage<ComputePass>,
     pub runtime_bind_groups: &'a RuntimeStorage<BindGroup>,
+    pub dimensions: &'a Storage<Dimension>,
     pub compute_accumulators: &'a mut SecondaryMap<ComputePassId, instant::Duration>,
     pub tracker: &'a SyncTracker,
     pub dt: instant::Duration,
@@ -135,7 +137,7 @@ impl Presentation {
                 Ok(None) | Err(_) => continue,
             };
 
-            let should_dispatch = match compute_pass.dispatch() {
+            let should_dispatch = match compute_pass.dispatch_policy() {
                 DispatchPolicy::EveryFrame => true,
                 // `was_recreated` covers the frame the pipeline was first built or
                 // rebuilt; `inputs_changed` covers data-only changes to its inputs.
@@ -168,7 +170,9 @@ impl Presentation {
                 // own runtime cell so it surfaces like any other resource error. The
                 // error state only changes on an actual dispatch (or a rebuild), not
                 // every frame, since dispatches don't happen every frame.
-                if let Err(error) = compute_pass.encode(encoder, runtime, ctx.runtime_bind_groups) {
+                let encode =
+                    compute_pass.encode(encoder, runtime, ctx.runtime_bind_groups, ctx.dimensions);
+                if let Err(error) = encode {
                     ctx.runtime_compute_passes.mark_errored(id, error);
                 }
             }
