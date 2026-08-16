@@ -5,7 +5,7 @@ use std::task::Poll;
 use crate::{
     error::{AppError, AppResult},
     project::{
-        BindGroupId, ComputePassId, Creatable, ProjectResource, ShaderId,
+        BindGroupId, ComputePassId, Creatable, DimensionId, ProjectResource, ShaderId,
         resource::{
             bindgroup::BindGroup,
             dimension::{Dimension, DimensionRef},
@@ -207,6 +207,10 @@ impl ComputePass {
                 .bind_groups
                 .iter()
                 .any(|id| tracker.was_data_changed(*id))
+            || self
+                .dispatch_size
+                .dimension_ids()
+                .any(|id| tracker.was_data_changed(id))
     }
 
     /// Encodes one dispatch of this pass into `encoder`.
@@ -254,6 +258,16 @@ impl DispatchSize {
             z: WorkSize::Fixed(z),
             unit,
         }
+    }
+
+    /// The dimensions the axes read, skipping the fixed and the unset ones.
+    pub fn dimension_ids(&self) -> impl Iterator<Item = DimensionId> {
+        [self.x, self.y, self.z]
+            .into_iter()
+            .filter_map(|work_size| match work_size {
+                WorkSize::Fixed(_) => None,
+                WorkSize::Dimension(dimension_ref) => dimension_ref.id,
+            })
     }
 
     pub fn into_work_groups(self, dimensions: &Storage<Dimension>) -> AppResult<(u32, u32, u32)> {
