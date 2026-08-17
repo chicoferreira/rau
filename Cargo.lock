@@ -3121,6 +3121,7 @@ dependencies = [
  "fastrand",
  "futures-lite",
  "glam",
+ "half",
  "heck",
  "image",
  "indexed_db_futures",

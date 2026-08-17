@@ -1,3 +1,4 @@
+use half::f16;
 use image::GenericImageView;
 use serde::{Deserialize, Serialize};
 use std::task::Poll;
@@ -243,8 +244,22 @@ impl SyncResource for Texture {
                     write_image_to_texture(ctx.queue, &texture, &rgba, size);
                 }
                 TextureFormat::Rgba16Float => {
-                    let rgba = image_to_write.to_rgba16();
-                    write_image_to_texture(ctx.queue, &texture, &rgba, size);
+                    // `to_rgba16` returns the result in `u16` format (0 black, 65535 white)
+                    // needs to be converted to the correct f16 representation
+                    let rgba = image_to_write.to_rgba32f();
+                    let halves: Vec<u16> = rgba
+                        .as_raw()
+                        .iter()
+                        .map(|&channel| f16::from_f32(channel).to_bits())
+                        .collect();
+                    let bytes_per_row = rgba.width() * 4 * size_of::<f16>() as u32;
+                    write_bytes_to_texture(
+                        ctx.queue,
+                        &texture,
+                        bytemuck::cast_slice(&halves),
+                        bytes_per_row,
+                        size,
+                    );
                 }
                 TextureFormat::R32Float => {
                     let luma = image_to_write.to_luma32f();
@@ -292,6 +307,17 @@ pub(crate) fn write_image_to_texture<P, Container>(
     let bytes_per_row =
         image.width() * P::CHANNEL_COUNT as u32 * std::mem::size_of::<P::Subpixel>() as u32;
 
+    let bytes = bytemuck::cast_slice(image.as_raw());
+    write_bytes_to_texture(queue, texture, bytes, bytes_per_row, size);
+}
+
+pub(crate) fn write_bytes_to_texture(
+    queue: &wgpu::Queue,
+    texture: &wgpu::Texture,
+    bytes: &[u8],
+    bytes_per_row: u32,
+    size: wgpu::Extent3d,
+) {
     queue.write_texture(
         wgpu::TexelCopyTextureInfo {
             aspect: wgpu::TextureAspect::All,
@@ -299,7 +325,7 @@ pub(crate) fn write_image_to_texture<P, Container>(
             mip_level: 0,
             origin: wgpu::Origin3d::ZERO,
         },
-        bytemuck::cast_slice(image.as_raw()),
+        bytes,
         wgpu::TexelCopyBufferLayout {
             offset: 0,
             bytes_per_row: Some(bytes_per_row),
