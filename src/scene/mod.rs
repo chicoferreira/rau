@@ -19,6 +19,7 @@ pub mod game_of_life;
 pub mod grass_field;
 pub mod model;
 pub mod parallax_mapping;
+pub mod ray_tracing;
 pub mod shadow_mapping;
 pub mod sky_shader;
 pub mod ssao;
@@ -36,6 +37,7 @@ pub enum GenerateTemplate {
     SkyShader,
     Ssao,
     AreaLights,
+    RayTracing,
 }
 
 pub fn generate_project(template: GenerateTemplate, target_folder: &Path) -> AppResult<()> {
@@ -66,6 +68,7 @@ async fn generate_project_async(template: GenerateTemplate, target_folder: &Path
         GenerateTemplate::SkyShader => sky_shader::create_scene().await?,
         GenerateTemplate::Ssao => ssao::create_scene().await?,
         GenerateTemplate::AreaLights => area_lights::create_scene().await?,
+        GenerateTemplate::RayTracing => ray_tracing::create_scene().await?,
     };
 
     file_system

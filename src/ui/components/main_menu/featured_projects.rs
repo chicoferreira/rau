@@ -141,6 +141,15 @@ pub const FEATURED_PROJECTS: &[FeaturedProject] = &[
         path: "projects/ssao",
         description: "Screen-space ambient occlusion. Ported from LearnOpenGL.",
     },
+    FeaturedProject {
+        id: "ray-tracing",
+        name: "Ray Tracing",
+        owner: "chicoferreira",
+        repo: "rau",
+        git_ref: "main",
+        path: "projects/ray-tracing",
+        description: "Ray Tracing in One Weekend, path traced by compute shaders with progressive rendering. Ported from raytracing.github.io.",
+    },
 ];
 
 pub fn render_ui(ui: &mut Ui) -> Option<&'static FeaturedProject> {
