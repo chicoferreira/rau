@@ -69,7 +69,7 @@ pub struct UniformField {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase", tag = "type")]
+#[serde(rename_all = "camelCase", rename_all_fields = "camelCase", tag = "type")]
 pub enum UniformFieldSource {
     UserDefined(UniformFieldData),
     Camera {
@@ -77,7 +77,9 @@ pub enum UniformFieldSource {
         field: CameraField,
     },
     Transform(Transform),
-    Dimension(Option<DimensionId>),
+    Dimension {
+        dimension_id: Option<DimensionId>,
+    },
     Time,
 }
 
@@ -115,7 +117,7 @@ impl Transform {
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase", tag = "data_type", content = "data")]
+#[serde(rename_all = "camelCase", tag = "dataType", content = "data")]
 pub enum UniformFieldData {
     UInt32(u32),
     Float(f32),
@@ -388,7 +390,7 @@ impl UniformField {
             UniformFieldSource::Camera { field, .. } => field.kind(),
             UniformFieldSource::Transform(_) => UniformFieldDataKind::Mat4x4f,
             UniformFieldSource::Time => UniformFieldDataKind::Float,
-            UniformFieldSource::Dimension(_) => UniformFieldDataKind::Vec2u,
+            UniformFieldSource::Dimension { .. } => UniformFieldDataKind::Vec2u,
         }
     }
 
@@ -402,7 +404,7 @@ impl UniformField {
 
                 tracker.was_data_changed(camera_id)
             }
-            UniformFieldSource::Dimension(dimension_id) => {
+            UniformFieldSource::Dimension { dimension_id } => {
                 let Some(dimension_id) = *dimension_id else {
                     return false;
                 };
@@ -435,7 +437,7 @@ impl UniformField {
                 transform.to_matrix().to_cols_array_2d(),
             ))),
             UniformFieldSource::Time => Ok(Some(UniformFieldData::Float(context.time))),
-            UniformFieldSource::Dimension(dimension_id) => {
+            UniformFieldSource::Dimension { dimension_id } => {
                 let dimension_id = dimension_id.ok_or(AppError::uninit_field(format!(
                     "Uniform Field {index} Dimension Id",
                 )))?;
@@ -463,7 +465,7 @@ impl UniformFieldSource {
     }
 
     pub fn new_dimension(dimension_id: Option<DimensionId>) -> Self {
-        Self::Dimension(dimension_id)
+        Self::Dimension { dimension_id }
     }
 
     pub fn new_time() -> Self {

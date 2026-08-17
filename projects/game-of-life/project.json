@@ -49,7 +49,7 @@
             "label": "seed",
             "source": {
               "type": "userDefined",
-              "data_type": "uInt32",
+              "dataType": "uInt32",
               "data": 2654435769
             }
           }
@@ -69,9 +69,9 @@
             "resource": {
               "type": "storageTexture",
               "value": {
-                "texture_view_id": { "idx": 1, "version": 1 },
+                "textureViewId": { "idx": 1, "version": 1 },
                 "access": "write-only",
-                "view_dimension": "2d"
+                "viewDimension": "2d"
               }
             }
           },
@@ -95,9 +95,9 @@
             "resource": {
               "type": "texture",
               "value": {
-                "texture_view_id": { "idx": 1, "version": 1 },
-                "view_dimension": "2d",
-                "sample_type": { "Float": { "filterable": true } }
+                "textureViewId": { "idx": 1, "version": 1 },
+                "viewDimension": "2d",
+                "sampleType": { "Float": { "filterable": true } }
               }
             }
           },
@@ -106,9 +106,9 @@
             "resource": {
               "type": "storageTexture",
               "value": {
-                "texture_view_id": { "idx": 2, "version": 1 },
+                "textureViewId": { "idx": 2, "version": 1 },
                 "access": "write-only",
-                "view_dimension": "2d"
+                "viewDimension": "2d"
               }
             }
           }
@@ -125,9 +125,9 @@
             "resource": {
               "type": "texture",
               "value": {
-                "texture_view_id": { "idx": 2, "version": 1 },
-                "view_dimension": "2d",
-                "sample_type": { "Float": { "filterable": true } }
+                "textureViewId": { "idx": 2, "version": 1 },
+                "viewDimension": "2d",
+                "sampleType": { "Float": { "filterable": true } }
               }
             }
           },
@@ -136,9 +136,9 @@
             "resource": {
               "type": "storageTexture",
               "value": {
-                "texture_view_id": { "idx": 1, "version": 1 },
+                "textureViewId": { "idx": 1, "version": 1 },
                 "access": "write-only",
-                "view_dimension": "2d"
+                "viewDimension": "2d"
               }
             }
           }
@@ -155,9 +155,9 @@
             "resource": {
               "type": "texture",
               "value": {
-                "texture_view_id": { "idx": 1, "version": 1 },
-                "view_dimension": "2d",
-                "sample_type": { "Float": { "filterable": true } }
+                "textureViewId": { "idx": 1, "version": 1 },
+                "viewDimension": "2d",
+                "sampleType": { "Float": { "filterable": true } }
               }
             }
           }
@@ -174,7 +174,7 @@
         "format": "rgba8Unorm",
         "usage": "TEXTURE_BINDING | STORAGE_BINDING",
         "source": {
-          "type": "Dimension",
+          "type": "dimension",
           "value": { "dimension": { "idx": 1, "version": 1 }, "layers": 1 }
         }
       },
@@ -186,7 +186,7 @@
         "format": "rgba8Unorm",
         "usage": "TEXTURE_BINDING | STORAGE_BINDING",
         "source": {
-          "type": "Dimension",
+          "type": "dimension",
           "value": { "dimension": { "idx": 1, "version": 1 }, "layers": 1 }
         }
       },
@@ -198,7 +198,7 @@
         "format": "rgba8Unorm",
         "usage": "TEXTURE_BINDING | RENDER_ATTACHMENT",
         "source": {
-          "type": "Dimension",
+          "type": "dimension",
           "value": { "dimension": { "idx": 2, "version": 1 }, "layers": 1 }
         }
       },
@@ -279,7 +279,7 @@
         "label": "Render Pass",
         "target": {
           "textureViewId": { "idx": 3, "version": 1 },
-          "loadOperation": { "type": "Clear", "value": [0.0, 0.0, 0.0, 1.0] }
+          "loadOperation": { "type": "clear", "value": [0.0, 0.0, 0.0, 1.0] }
         },
         "depthTarget": null,
         "pipelines": [{ "idx": 1, "version": 1 }]

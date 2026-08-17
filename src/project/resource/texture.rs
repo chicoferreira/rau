@@ -51,7 +51,7 @@ pub enum TextureJob {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(tag = "type", content = "value")]
+#[serde(tag = "type", content = "value", rename_all = "camelCase")]
 pub enum TextureSource {
     // Grab size from dimension
     Dimension {

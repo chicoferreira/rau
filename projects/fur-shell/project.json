@@ -30,7 +30,7 @@
             "label": "position",
             "source": {
               "type": "camera",
-              "camera_id": { "idx": 1, "version": 1 },
+              "cameraId": { "idx": 1, "version": 1 },
               "field": "position"
             }
           },
@@ -38,7 +38,7 @@
             "label": "projection_view",
             "source": {
               "type": "camera",
-              "camera_id": { "idx": 1, "version": 1 },
+              "cameraId": { "idx": 1, "version": 1 },
               "field": "projectionView"
             }
           }
@@ -54,7 +54,7 @@
             "label": "position",
             "source": {
               "type": "userDefined",
-              "data_type": "vec3f",
+              "dataType": "vec3f",
               "data": [3.0, 4.0, 2.0]
             }
           },
@@ -62,7 +62,7 @@
             "label": "color",
             "source": {
               "type": "userDefined",
-              "data_type": "rgb",
+              "dataType": "rgb",
               "data": [1.0, 0.95, 0.85]
             }
           }
@@ -78,7 +78,7 @@
             "label": "fur_length",
             "source": {
               "type": "userDefined",
-              "data_type": "float",
+              "dataType": "float",
               "data": 0.06
             }
           },
@@ -86,7 +86,7 @@
             "label": "density",
             "source": {
               "type": "userDefined",
-              "data_type": "float",
+              "dataType": "float",
               "data": 1000.0
             }
           },
@@ -152,7 +152,7 @@
         "format": "rgba8UnormSrgb",
         "usage": "COPY_SRC | TEXTURE_BINDING | RENDER_ATTACHMENT",
         "source": {
-          "type": "Dimension",
+          "type": "dimension",
           "value": { "dimension": { "idx": 1, "version": 1 }, "layers": 1 }
         }
       },
@@ -164,7 +164,7 @@
         "format": "depth32Float",
         "usage": "TEXTURE_BINDING | RENDER_ATTACHMENT",
         "source": {
-          "type": "Dimension",
+          "type": "dimension",
           "value": { "dimension": { "idx": 1, "version": 1 }, "layers": 1 }
         }
       },
@@ -176,7 +176,7 @@
     {
       "value": {
         "label": "Viewport",
-        "format": { "type": "Srgb" },
+        "format": { "type": "srgb" },
         "dimension": null,
         "textureId": { "idx": 1, "version": 1 }
       },
@@ -259,9 +259,9 @@
         "fragmentShader": { "idx": 1, "version": 1 },
         "drawStrategy": {
           "type": "model",
-          "model_id": { "idx": 1, "version": 1 },
+          "modelId": { "idx": 1, "version": 1 },
           "instances": { "start": 0, "end": 48 },
-          "mesh_vertex_slot": 0
+          "meshVertexSlot": 0
         },
         "bindGroups": [
           { "static": { "idx": 1, "version": 1 } },
@@ -281,11 +281,11 @@
         "label": "Fur Render Pass",
         "target": {
           "textureViewId": { "idx": 1, "version": 1 },
-          "loadOperation": { "type": "Clear", "value": [0.53, 0.72, 0.9, 1.0] }
+          "loadOperation": { "type": "clear", "value": [0.53, 0.72, 0.9, 1.0] }
         },
         "depthTarget": {
           "textureViewId": { "idx": 2, "version": 1 },
-          "loadOperation": { "type": "Clear", "value": 1.0 }
+          "loadOperation": { "type": "clear", "value": 1.0 }
         },
         "pipelines": [{ "idx": 1, "version": 1 }]
       },

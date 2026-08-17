@@ -39,7 +39,7 @@ pub struct RenderPipeline {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(tag = "type", rename_all = "camelCase")]
+#[serde(tag = "type", rename_all = "camelCase", rename_all_fields = "camelCase")]
 pub enum RenderDrawStrategy {
     /// Loop through all the model's meshes, setting the mesh
     /// material bind group at every [`BindGroupTarget::ModelMaterial`] slot

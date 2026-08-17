@@ -45,7 +45,12 @@ pub struct BindGroupEntry {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(tag = "type", content = "value", rename_all = "camelCase")]
+#[serde(
+    tag = "type",
+    content = "value",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
 pub enum BindGroupResource {
     Texture {
         texture_view_id: Option<TextureViewId>,

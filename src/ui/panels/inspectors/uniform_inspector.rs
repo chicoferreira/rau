@@ -48,7 +48,7 @@ impl UniformFieldSourceKind {
             UniformFieldSource::UserDefined { .. } => Self::UserDefined,
             UniformFieldSource::Camera { .. } => Self::Camera,
             UniformFieldSource::Transform(..) => Self::Transform,
-            UniformFieldSource::Dimension(..) => Self::Dimension,
+            UniformFieldSource::Dimension { .. } => Self::Dimension,
             UniformFieldSource::Time => Self::Time,
         }
     }
@@ -389,7 +389,7 @@ fn ui_field_entry(
 
             changed.then_some(UniformFieldSource::new_transform(transform))
         }
-        UniformFieldSource::Dimension(dimension_id) => {
+        UniformFieldSource::Dimension { dimension_id } => {
             let mut dimension_id = *dimension_id;
             let dimension_id_before = dimension_id;
 

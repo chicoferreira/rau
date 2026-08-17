@@ -30,7 +30,7 @@
             "label": "view_position",
             "source": {
               "type": "camera",
-              "camera_id": { "idx": 1, "version": 1 },
+              "cameraId": { "idx": 1, "version": 1 },
               "field": "position"
             }
           },
@@ -38,7 +38,7 @@
             "label": "view",
             "source": {
               "type": "camera",
-              "camera_id": { "idx": 1, "version": 1 },
+              "cameraId": { "idx": 1, "version": 1 },
               "field": "view"
             }
           },
@@ -46,7 +46,7 @@
             "label": "proj_view",
             "source": {
               "type": "camera",
-              "camera_id": { "idx": 1, "version": 1 },
+              "cameraId": { "idx": 1, "version": 1 },
               "field": "projectionView"
             }
           },
@@ -54,7 +54,7 @@
             "label": "inv_proj",
             "source": {
               "type": "camera",
-              "camera_id": { "idx": 1, "version": 1 },
+              "cameraId": { "idx": 1, "version": 1 },
               "field": "inverseProjection"
             }
           },
@@ -62,7 +62,7 @@
             "label": "inv_view",
             "source": {
               "type": "camera",
-              "camera_id": { "idx": 1, "version": 1 },
+              "cameraId": { "idx": 1, "version": 1 },
               "field": "inverseView"
             }
           }
@@ -78,7 +78,7 @@
             "label": "sun_position",
             "source": {
               "type": "userDefined",
-              "data_type": "vec3f",
+              "dataType": "vec3f",
               "data": [10.0, 0.5, 0.0]
             }
           }
@@ -128,7 +128,7 @@
         "format": "rgba8UnormSrgb",
         "usage": "TEXTURE_BINDING | RENDER_ATTACHMENT",
         "source": {
-          "type": "Dimension",
+          "type": "dimension",
           "value": { "dimension": { "idx": 1, "version": 1 }, "layers": 1 }
         }
       },
@@ -140,7 +140,7 @@
     {
       "value": {
         "label": "Viewport Texture View",
-        "format": { "type": "Srgb" },
+        "format": { "type": "srgb" },
         "dimension": null,
         "textureId": { "idx": 1, "version": 1 }
       },
@@ -214,7 +214,7 @@
         "label": "Sky Render Pass",
         "target": {
           "textureViewId": { "idx": 1, "version": 1 },
-          "loadOperation": { "type": "Clear", "value": [0.0, 0.0, 0.0, 1.0] }
+          "loadOperation": { "type": "clear", "value": [0.0, 0.0, 0.0, 1.0] }
         },
         "depthTarget": null,
         "pipelines": [{ "idx": 1, "version": 1 }]

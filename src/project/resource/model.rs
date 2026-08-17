@@ -71,7 +71,7 @@ pub struct Mesh {
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
-#[serde(tag = "type", content = "value")]
+#[serde(tag = "type", content = "value", rename_all = "camelCase")]
 pub enum MeshMaterialSelection {
     #[default]
     FromSource,

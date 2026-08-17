@@ -26,7 +26,7 @@ pub struct RenderPassTarget<T> {
 }
 
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq, Serialize, Deserialize)]
-#[serde(tag = "type", content = "value")]
+#[serde(tag = "type", content = "value", rename_all = "camelCase")]
 pub enum LoadOperation<T> {
     Clear(T),
     Load,

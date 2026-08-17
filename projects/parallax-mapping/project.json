@@ -33,7 +33,7 @@
             "label": "position",
             "source": {
               "type": "camera",
-              "camera_id": { "idx": 1, "version": 1 },
+              "cameraId": { "idx": 1, "version": 1 },
               "field": "position"
             }
           },
@@ -41,7 +41,7 @@
             "label": "projection_view",
             "source": {
               "type": "camera",
-              "camera_id": { "idx": 1, "version": 1 },
+              "cameraId": { "idx": 1, "version": 1 },
               "field": "projectionView"
             }
           }
@@ -57,7 +57,7 @@
             "label": "position",
             "source": {
               "type": "userDefined",
-              "data_type": "vec3f",
+              "dataType": "vec3f",
               "data": [0.5, 0.6, 1.2]
             }
           },
@@ -65,7 +65,7 @@
             "label": "color",
             "source": {
               "type": "userDefined",
-              "data_type": "rgb",
+              "dataType": "rgb",
               "data": [1.0, 0.95, 0.85]
             }
           }
@@ -81,7 +81,7 @@
             "label": "height_scale",
             "source": {
               "type": "userDefined",
-              "data_type": "float",
+              "dataType": "float",
               "data": 0.1
             }
           }
@@ -146,9 +146,9 @@
             "resource": {
               "type": "texture",
               "value": {
-                "texture_view_id": { "idx": 1, "version": 1 },
-                "view_dimension": "2d",
-                "sample_type": { "Float": { "filterable": true } }
+                "textureViewId": { "idx": 1, "version": 1 },
+                "viewDimension": "2d",
+                "sampleType": { "Float": { "filterable": true } }
               }
             }
           },
@@ -157,9 +157,9 @@
             "resource": {
               "type": "texture",
               "value": {
-                "texture_view_id": { "idx": 2, "version": 1 },
-                "view_dimension": "2d",
-                "sample_type": { "Float": { "filterable": true } }
+                "textureViewId": { "idx": 2, "version": 1 },
+                "viewDimension": "2d",
+                "sampleType": { "Float": { "filterable": true } }
               }
             }
           },
@@ -168,9 +168,9 @@
             "resource": {
               "type": "texture",
               "value": {
-                "texture_view_id": { "idx": 3, "version": 1 },
-                "view_dimension": "2d",
-                "sample_type": { "Float": { "filterable": true } }
+                "textureViewId": { "idx": 3, "version": 1 },
+                "viewDimension": "2d",
+                "sampleType": { "Float": { "filterable": true } }
               }
             }
           },
@@ -179,8 +179,8 @@
             "resource": {
               "type": "sampler",
               "value": {
-                "sampler_id": { "idx": 1, "version": 1 },
-                "sampler_binding_type": "filtering"
+                "samplerId": { "idx": 1, "version": 1 },
+                "samplerBindingType": "filtering"
               }
             }
           }
@@ -196,7 +196,7 @@
         "label": "Brick Diffuse",
         "format": "rgba8UnormSrgb",
         "usage": "COPY_DST | TEXTURE_BINDING",
-        "source": { "type": "Image", "value": "bricks/bricks2.jpg" }
+        "source": { "type": "image", "value": "bricks/bricks2.jpg" }
       },
       "version": 1
     },
@@ -205,7 +205,7 @@
         "label": "Brick Normal",
         "format": "rgba8Unorm",
         "usage": "COPY_DST | TEXTURE_BINDING",
-        "source": { "type": "Image", "value": "bricks/bricks2_normal.jpg" }
+        "source": { "type": "image", "value": "bricks/bricks2_normal.jpg" }
       },
       "version": 1
     },
@@ -214,7 +214,7 @@
         "label": "Brick Displacement",
         "format": "rgba8Unorm",
         "usage": "COPY_DST | TEXTURE_BINDING",
-        "source": { "type": "Image", "value": "bricks/bricks2_disp.jpg" }
+        "source": { "type": "image", "value": "bricks/bricks2_disp.jpg" }
       },
       "version": 1
     },
@@ -224,7 +224,7 @@
         "format": "rgba8UnormSrgb",
         "usage": "TEXTURE_BINDING | RENDER_ATTACHMENT",
         "source": {
-          "type": "Dimension",
+          "type": "dimension",
           "value": { "dimension": { "idx": 1, "version": 1 }, "layers": 1 }
         }
       },
@@ -236,7 +236,7 @@
         "format": "depth32Float",
         "usage": "TEXTURE_BINDING | RENDER_ATTACHMENT",
         "source": {
-          "type": "Dimension",
+          "type": "dimension",
           "value": { "dimension": { "idx": 1, "version": 1 }, "layers": 1 }
         }
       },
@@ -275,7 +275,7 @@
     {
       "value": {
         "label": "Viewport",
-        "format": { "type": "Srgb" },
+        "format": { "type": "srgb" },
         "dimension": null,
         "textureId": { "idx": 4, "version": 1 }
       },
@@ -377,11 +377,11 @@
         "label": "Parallax Render Pass",
         "target": {
           "textureViewId": { "idx": 4, "version": 1 },
-          "loadOperation": { "type": "Clear", "value": [0.0, 0.0, 0.0, 0.0] }
+          "loadOperation": { "type": "clear", "value": [0.0, 0.0, 0.0, 0.0] }
         },
         "depthTarget": {
           "textureViewId": { "idx": 5, "version": 1 },
-          "loadOperation": { "type": "Clear", "value": 1.0 }
+          "loadOperation": { "type": "clear", "value": 1.0 }
         },
         "pipelines": [{ "idx": 1, "version": 1 }]
       },

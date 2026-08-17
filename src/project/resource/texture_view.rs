@@ -58,7 +58,7 @@ pub enum TextureViewJob {
 ///
 /// Check [`wgpu::wgt::TextureDescriptor::view_formats`]
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
-#[serde(tag = "type")]
+#[serde(tag = "type", rename_all = "camelCase")]
 pub enum TextureViewFormat {
     Srgb,
     Linear,

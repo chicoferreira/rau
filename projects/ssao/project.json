@@ -72,7 +72,7 @@
             "label": "position",
             "source": {
               "type": "camera",
-              "camera_id": { "idx": 1, "version": 1 },
+              "cameraId": { "idx": 1, "version": 1 },
               "field": "position"
             }
           },
@@ -80,7 +80,7 @@
             "label": "view",
             "source": {
               "type": "camera",
-              "camera_id": { "idx": 1, "version": 1 },
+              "cameraId": { "idx": 1, "version": 1 },
               "field": "view"
             }
           },
@@ -88,7 +88,7 @@
             "label": "projection",
             "source": {
               "type": "camera",
-              "camera_id": { "idx": 1, "version": 1 },
+              "cameraId": { "idx": 1, "version": 1 },
               "field": "projection"
             }
           },
@@ -96,7 +96,7 @@
             "label": "projection_view",
             "source": {
               "type": "camera",
-              "camera_id": { "idx": 1, "version": 1 },
+              "cameraId": { "idx": 1, "version": 1 },
               "field": "projectionView"
             }
           }
@@ -129,7 +129,7 @@
             "label": "radius",
             "source": {
               "type": "userDefined",
-              "data_type": "float",
+              "dataType": "float",
               "data": 0.5
             }
           },
@@ -137,7 +137,7 @@
             "label": "bias",
             "source": {
               "type": "userDefined",
-              "data_type": "float",
+              "dataType": "float",
               "data": 0.025
             }
           },
@@ -145,7 +145,7 @@
             "label": "power",
             "source": {
               "type": "userDefined",
-              "data_type": "float",
+              "dataType": "float",
               "data": 1.5
             }
           },
@@ -153,7 +153,7 @@
             "label": "kernel_size",
             "source": {
               "type": "userDefined",
-              "data_type": "uInt32",
+              "dataType": "uInt32",
               "data": 64
             }
           }
@@ -169,7 +169,7 @@
             "label": "position",
             "source": {
               "type": "userDefined",
-              "data_type": "vec3f",
+              "dataType": "vec3f",
               "data": [2.0, 4.0, -2.0]
             }
           },
@@ -177,7 +177,7 @@
             "label": "color",
             "source": {
               "type": "userDefined",
-              "data_type": "rgb",
+              "dataType": "rgb",
               "data": [0.9, 0.2, 0.2]
             }
           },
@@ -185,7 +185,7 @@
             "label": "linear",
             "source": {
               "type": "userDefined",
-              "data_type": "float",
+              "dataType": "float",
               "data": 0.09
             }
           },
@@ -193,7 +193,7 @@
             "label": "quadratic",
             "source": {
               "type": "userDefined",
-              "data_type": "float",
+              "dataType": "float",
               "data": 0.032
             }
           }
@@ -273,9 +273,9 @@
             "resource": {
               "type": "texture",
               "value": {
-                "texture_view_id": { "idx": 1, "version": 1 },
-                "view_dimension": "2d",
-                "sample_type": { "Float": { "filterable": false } }
+                "textureViewId": { "idx": 1, "version": 1 },
+                "viewDimension": "2d",
+                "sampleType": { "Float": { "filterable": false } }
               }
             }
           },
@@ -284,9 +284,9 @@
             "resource": {
               "type": "texture",
               "value": {
-                "texture_view_id": { "idx": 2, "version": 1 },
-                "view_dimension": "2d",
-                "sample_type": { "Float": { "filterable": false } }
+                "textureViewId": { "idx": 2, "version": 1 },
+                "viewDimension": "2d",
+                "sampleType": { "Float": { "filterable": false } }
               }
             }
           },
@@ -295,8 +295,8 @@
             "resource": {
               "type": "sampler",
               "value": {
-                "sampler_id": { "idx": 1, "version": 1 },
-                "sampler_binding_type": "non-filtering"
+                "samplerId": { "idx": 1, "version": 1 },
+                "samplerBindingType": "non-filtering"
               }
             }
           }
@@ -313,9 +313,9 @@
             "resource": {
               "type": "texture",
               "value": {
-                "texture_view_id": { "idx": 4, "version": 1 },
-                "view_dimension": "2d",
-                "sample_type": { "Float": { "filterable": false } }
+                "textureViewId": { "idx": 4, "version": 1 },
+                "viewDimension": "2d",
+                "sampleType": { "Float": { "filterable": false } }
               }
             }
           },
@@ -324,8 +324,8 @@
             "resource": {
               "type": "sampler",
               "value": {
-                "sampler_id": { "idx": 1, "version": 1 },
-                "sampler_binding_type": "non-filtering"
+                "samplerId": { "idx": 1, "version": 1 },
+                "samplerBindingType": "non-filtering"
               }
             }
           }
@@ -342,9 +342,9 @@
             "resource": {
               "type": "texture",
               "value": {
-                "texture_view_id": { "idx": 1, "version": 1 },
-                "view_dimension": "2d",
-                "sample_type": { "Float": { "filterable": false } }
+                "textureViewId": { "idx": 1, "version": 1 },
+                "viewDimension": "2d",
+                "sampleType": { "Float": { "filterable": false } }
               }
             }
           },
@@ -353,9 +353,9 @@
             "resource": {
               "type": "texture",
               "value": {
-                "texture_view_id": { "idx": 2, "version": 1 },
-                "view_dimension": "2d",
-                "sample_type": { "Float": { "filterable": false } }
+                "textureViewId": { "idx": 2, "version": 1 },
+                "viewDimension": "2d",
+                "sampleType": { "Float": { "filterable": false } }
               }
             }
           },
@@ -364,9 +364,9 @@
             "resource": {
               "type": "texture",
               "value": {
-                "texture_view_id": { "idx": 5, "version": 1 },
-                "view_dimension": "2d",
-                "sample_type": { "Float": { "filterable": false } }
+                "textureViewId": { "idx": 5, "version": 1 },
+                "viewDimension": "2d",
+                "sampleType": { "Float": { "filterable": false } }
               }
             }
           },
@@ -375,8 +375,8 @@
             "resource": {
               "type": "sampler",
               "value": {
-                "sampler_id": { "idx": 1, "version": 1 },
-                "sampler_binding_type": "non-filtering"
+                "samplerId": { "idx": 1, "version": 1 },
+                "samplerBindingType": "non-filtering"
               }
             }
           }
@@ -393,7 +393,7 @@
         "format": "rgba16Float",
         "usage": "TEXTURE_BINDING | RENDER_ATTACHMENT",
         "source": {
-          "type": "Dimension",
+          "type": "dimension",
           "value": { "dimension": { "idx": 1, "version": 1 }, "layers": 1 }
         }
       },
@@ -405,7 +405,7 @@
         "format": "rgba16Float",
         "usage": "TEXTURE_BINDING | RENDER_ATTACHMENT",
         "source": {
-          "type": "Dimension",
+          "type": "dimension",
           "value": { "dimension": { "idx": 1, "version": 1 }, "layers": 1 }
         }
       },
@@ -417,7 +417,7 @@
         "format": "depth32Float",
         "usage": "RENDER_ATTACHMENT",
         "source": {
-          "type": "Dimension",
+          "type": "dimension",
           "value": { "dimension": { "idx": 1, "version": 1 }, "layers": 1 }
         }
       },
@@ -429,7 +429,7 @@
         "format": "rgba16Float",
         "usage": "TEXTURE_BINDING | RENDER_ATTACHMENT",
         "source": {
-          "type": "Dimension",
+          "type": "dimension",
           "value": { "dimension": { "idx": 1, "version": 1 }, "layers": 1 }
         }
       },
@@ -441,7 +441,7 @@
         "format": "rgba16Float",
         "usage": "TEXTURE_BINDING | RENDER_ATTACHMENT",
         "source": {
-          "type": "Dimension",
+          "type": "dimension",
           "value": { "dimension": { "idx": 1, "version": 1 }, "layers": 1 }
         }
       },
@@ -453,7 +453,7 @@
         "format": "rgba8UnormSrgb",
         "usage": "TEXTURE_BINDING | RENDER_ATTACHMENT",
         "source": {
-          "type": "Dimension",
+          "type": "dimension",
           "value": { "dimension": { "idx": 1, "version": 1 }, "layers": 1 }
         }
       },
@@ -510,7 +510,7 @@
     {
       "value": {
         "label": "Viewport",
-        "format": { "type": "Srgb" },
+        "format": { "type": "srgb" },
         "dimension": null,
         "textureId": { "idx": 6, "version": 1 }
       },
@@ -624,9 +624,9 @@
         "fragmentShader": { "idx": 3, "version": 1 },
         "drawStrategy": {
           "type": "model",
-          "model_id": { "idx": 1, "version": 1 },
+          "modelId": { "idx": 1, "version": 1 },
           "instances": { "start": 0, "end": 1 },
-          "mesh_vertex_slot": 0
+          "meshVertexSlot": 0
         },
         "bindGroups": [
           { "static": { "idx": 1, "version": 1 } },
@@ -674,9 +674,9 @@
         "fragmentShader": { "idx": 4, "version": 1 },
         "drawStrategy": {
           "type": "model",
-          "model_id": { "idx": 1, "version": 1 },
+          "modelId": { "idx": 1, "version": 1 },
           "instances": { "start": 0, "end": 1 },
-          "mesh_vertex_slot": 0
+          "meshVertexSlot": 0
         },
         "bindGroups": [
           { "static": { "idx": 1, "version": 1 } },
@@ -772,11 +772,11 @@
         "label": "G-Buffer Position Pass",
         "target": {
           "textureViewId": { "idx": 1, "version": 1 },
-          "loadOperation": { "type": "Clear", "value": [0.0, 0.0, 0.0, 0.0] }
+          "loadOperation": { "type": "clear", "value": [0.0, 0.0, 0.0, 0.0] }
         },
         "depthTarget": {
           "textureViewId": { "idx": 3, "version": 1 },
-          "loadOperation": { "type": "Clear", "value": 1.0 }
+          "loadOperation": { "type": "clear", "value": 1.0 }
         },
         "pipelines": [
           { "idx": 1, "version": 1 },
@@ -790,11 +790,11 @@
         "label": "G-Buffer Normal Pass",
         "target": {
           "textureViewId": { "idx": 2, "version": 1 },
-          "loadOperation": { "type": "Clear", "value": [0.0, 0.0, 0.0, 0.0] }
+          "loadOperation": { "type": "clear", "value": [0.0, 0.0, 0.0, 0.0] }
         },
         "depthTarget": {
           "textureViewId": { "idx": 3, "version": 1 },
-          "loadOperation": { "type": "Clear", "value": 1.0 }
+          "loadOperation": { "type": "clear", "value": 1.0 }
         },
         "pipelines": [
           { "idx": 3, "version": 1 },
@@ -808,7 +808,7 @@
         "label": "SSAO Pass",
         "target": {
           "textureViewId": { "idx": 4, "version": 1 },
-          "loadOperation": { "type": "Clear", "value": [1.0, 1.0, 1.0, 1.0] }
+          "loadOperation": { "type": "clear", "value": [1.0, 1.0, 1.0, 1.0] }
         },
         "depthTarget": null,
         "pipelines": [{ "idx": 5, "version": 1 }]
@@ -820,7 +820,7 @@
         "label": "SSAO Blur Pass",
         "target": {
           "textureViewId": { "idx": 5, "version": 1 },
-          "loadOperation": { "type": "Clear", "value": [1.0, 1.0, 1.0, 1.0] }
+          "loadOperation": { "type": "clear", "value": [1.0, 1.0, 1.0, 1.0] }
         },
         "depthTarget": null,
         "pipelines": [{ "idx": 6, "version": 1 }]
@@ -832,7 +832,7 @@
         "label": "Lighting Pass",
         "target": {
           "textureViewId": { "idx": 6, "version": 1 },
-          "loadOperation": { "type": "Clear", "value": [0.05, 0.05, 0.05, 1.0] }
+          "loadOperation": { "type": "clear", "value": [0.05, 0.05, 0.05, 1.0] }
         },
         "depthTarget": null,
         "pipelines": [{ "idx": 7, "version": 1 }]

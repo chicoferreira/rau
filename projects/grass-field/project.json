@@ -37,7 +37,7 @@
             "label": "position",
             "source": {
               "type": "camera",
-              "camera_id": { "idx": 1, "version": 1 },
+              "cameraId": { "idx": 1, "version": 1 },
               "field": "position"
             }
           },
@@ -45,7 +45,7 @@
             "label": "projection_view",
             "source": {
               "type": "camera",
-              "camera_id": { "idx": 1, "version": 1 },
+              "cameraId": { "idx": 1, "version": 1 },
               "field": "projectionView"
             }
           }
@@ -62,7 +62,7 @@
             "label": "wind_strength",
             "source": {
               "type": "userDefined",
-              "data_type": "float",
+              "dataType": "float",
               "data": 0.35
             }
           },
@@ -70,7 +70,7 @@
             "label": "wind_speed",
             "source": {
               "type": "userDefined",
-              "data_type": "float",
+              "dataType": "float",
               "data": 1.2
             }
           }
@@ -120,7 +120,7 @@
         "format": "rgba8UnormSrgb",
         "usage": "TEXTURE_BINDING | RENDER_ATTACHMENT",
         "source": {
-          "type": "Dimension",
+          "type": "dimension",
           "value": { "dimension": { "idx": 1, "version": 1 }, "layers": 1 }
         }
       },
@@ -132,7 +132,7 @@
         "format": "depth32Float",
         "usage": "TEXTURE_BINDING | RENDER_ATTACHMENT",
         "source": {
-          "type": "Dimension",
+          "type": "dimension",
           "value": { "dimension": { "idx": 1, "version": 1 }, "layers": 1 }
         }
       },
@@ -144,7 +144,7 @@
     {
       "value": {
         "label": "Viewport",
-        "format": { "type": "Srgb" },
+        "format": { "type": "srgb" },
         "dimension": null,
         "textureId": { "idx": 1, "version": 1 }
       },
@@ -250,11 +250,11 @@
         "label": "Grass Render Pass",
         "target": {
           "textureViewId": { "idx": 1, "version": 1 },
-          "loadOperation": { "type": "Clear", "value": [0.52, 0.7, 0.86, 1.0] }
+          "loadOperation": { "type": "clear", "value": [0.52, 0.7, 0.86, 1.0] }
         },
         "depthTarget": {
           "textureViewId": { "idx": 2, "version": 1 },
-          "loadOperation": { "type": "Clear", "value": 1.0 }
+          "loadOperation": { "type": "clear", "value": 1.0 }
         },
         "pipelines": [
           { "idx": 1, "version": 1 },
