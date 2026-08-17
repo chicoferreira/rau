@@ -13,7 +13,7 @@ struct Camera {
 
 struct AreaLight {
     transform: mat4x4<f32>,
-    color: vec4<f32>,
+    color: vec3<f32>,
     intensity: f32,
 }
 
@@ -22,8 +22,8 @@ struct Lights {
 }
 
 struct Material {
-    floor_albedo: vec4<f32>,
-    wall_albedo: vec4<f32>,
+    floor_albedo: vec3<f32>,
+    wall_albedo: vec3<f32>,
     floor_roughness: f32,
     wall_roughness: f32,
     specular: f32,
@@ -69,7 +69,7 @@ fn vs_main(@builtin(vertex_index) index: u32) -> VertexOutput {
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     let light = lights.lights[in.light_index];
-    let emission = light.color.rgb * light.intensity;
+    let emission = light.color * light.intensity;
 
     // Same tone map as the room, so the panels sit on the curve with the light
     // they cast instead of clipping to flat white.

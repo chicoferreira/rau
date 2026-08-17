@@ -27,7 +27,7 @@ struct Camera {
 // width and height, translation its centre.
 struct AreaLight {
     transform: mat4x4<f32>,
-    color: vec4<f32>,
+    color: vec3<f32>,
     intensity: f32,
 }
 
@@ -36,8 +36,8 @@ struct Lights {
 }
 
 struct Material {
-    floor_albedo: vec4<f32>,
-    wall_albedo: vec4<f32>,
+    floor_albedo: vec3<f32>,
+    wall_albedo: vec3<f32>,
     floor_roughness: f32,
     wall_roughness: f32,
     specular: f32,
@@ -219,7 +219,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     let edge = min(min(tile.x / width.x, tile.y / width.y), 1.0);
     let grout = (1.0 - edge) * f32(in.is_floor);
 
-    let albedo = select(material.wall_albedo.rgb, material.floor_albedo.rgb, is_floor)
+    let albedo = select(material.wall_albedo, material.floor_albedo, is_floor)
         * mix(1.0, 0.35, grout);
     let roughness = select(material.wall_roughness, material.floor_roughness, is_floor)
         + grout * 0.25;
@@ -260,7 +260,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
         let diffuse = ltc_evaluate(n, v, p, identity, quad);
         let specular = ltc_evaluate(n, v, p, minv, quad);
 
-        result += light.color.rgb * light.intensity * (specular * fresnel + albedo * diffuse);
+        result += light.color * light.intensity * (specular * fresnel + albedo * diffuse);
     }
 
     // The render target is sRGB, so the hardware does the encode and this stays

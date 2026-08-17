@@ -524,8 +524,7 @@ impl UniformFieldData {
                 buf.extend_from_slice(bytemuck::bytes_of(v));
             }
             UniformFieldData::Vec3f(v) | UniformFieldData::Rgb(v) => {
-                let padded: [f32; 4] = [v[0], v[1], v[2], 0.0];
-                buf.extend_from_slice(bytemuck::bytes_of(&padded));
+                buf.extend_from_slice(bytemuck::bytes_of(v));
             }
             UniformFieldData::Vec4u(v) => {
                 buf.extend_from_slice(bytemuck::bytes_of(v));
@@ -549,8 +548,9 @@ impl UniformFieldDataKind {
             UniformFieldDataKind::UInt32 => (4, 4),
             UniformFieldDataKind::Float => (4, 4),
             UniformFieldDataKind::Vec2f | UniformFieldDataKind::Vec2u => (8, 8),
-            UniformFieldDataKind::Vec3u => (16, 12),
-            UniformFieldDataKind::Vec3f | UniformFieldDataKind::Rgb => (16, 16),
+            UniformFieldDataKind::Vec3f
+            | UniformFieldDataKind::Vec3u
+            | UniformFieldDataKind::Rgb => (16, 12),
             UniformFieldDataKind::Vec4f
             | UniformFieldDataKind::Vec4u
             | UniformFieldDataKind::Rgba => (16, 16),
