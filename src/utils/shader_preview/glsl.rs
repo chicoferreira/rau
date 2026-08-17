@@ -56,7 +56,7 @@ impl GlslBackend {
         match format {
             Some(TextureFormat::Rgba16Float) => "rgba16f",
             Some(TextureFormat::Rgba32Float) => "rgba32f",
-            Some(TextureFormat::Depth32Float) => "r32f",
+            Some(TextureFormat::R32Float | TextureFormat::Depth32Float) => "r32f",
             Some(TextureFormat::Rgba8UnormSrgb | TextureFormat::Rgba8Unorm) | None => "rgba8",
         }
     }

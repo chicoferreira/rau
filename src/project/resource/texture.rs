@@ -246,6 +246,10 @@ impl SyncResource for Texture {
                     let rgba = image_to_write.to_rgba16();
                     write_image_to_texture(ctx.queue, &texture, &rgba, size);
                 }
+                TextureFormat::R32Float => {
+                    let luma = image_to_write.to_luma32f();
+                    write_image_to_texture(ctx.queue, &texture, &luma, size);
+                }
                 TextureFormat::Rgba8UnormSrgb
                 | TextureFormat::Rgba8Unorm
                 | TextureFormat::Depth32Float => {

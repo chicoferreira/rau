@@ -103,16 +103,18 @@ pub enum TextureFormat {
     Rgba8Unorm,
     Rgba16Float,
     Rgba32Float,
+    R32Float,
     Depth32Float,
 }
 
 impl TextureFormat {
     /// Color formats, usable as render targets and sampled textures.
-    pub const COLOR: [TextureFormat; 4] = [
+    pub const COLOR: [TextureFormat; 5] = [
         Self::Rgba8UnormSrgb,
         Self::Rgba8Unorm,
         Self::Rgba16Float,
         Self::Rgba32Float,
+        Self::R32Float,
     ];
 
     /// Depth/stencil formats.
@@ -124,6 +126,7 @@ impl TextureFormat {
             Self::Rgba8Unorm => wgpu::TextureFormat::Rgba8Unorm,
             Self::Rgba16Float => wgpu::TextureFormat::Rgba16Float,
             Self::Rgba32Float => wgpu::TextureFormat::Rgba32Float,
+            Self::R32Float => wgpu::TextureFormat::R32Float,
             Self::Depth32Float => wgpu::TextureFormat::Depth32Float,
         }
     }
@@ -134,6 +137,7 @@ impl TextureFormat {
             wgpu::TextureFormat::Rgba8Unorm => Self::Rgba8Unorm,
             wgpu::TextureFormat::Rgba16Float => Self::Rgba16Float,
             wgpu::TextureFormat::Rgba32Float => Self::Rgba32Float,
+            wgpu::TextureFormat::R32Float => Self::R32Float,
             wgpu::TextureFormat::Depth32Float => Self::Depth32Float,
             _ => return None,
         })
@@ -146,6 +150,7 @@ impl TextureFormat {
             Self::Rgba8Unorm => "RGBA8 Unorm Linear",
             Self::Rgba16Float => "RGBA16 Float",
             Self::Rgba32Float => "RGBA32 Float",
+            Self::R32Float => "R32 Float",
             Self::Depth32Float => "Depth32 Float",
         }
     }

@@ -52,7 +52,7 @@ struct TextureTypeRow {
 
 /// Formats offered for material textures. Depth formats are intentionally left
 /// out since they don't make sense for sampled color/data textures.
-const MATERIAL_TEXTURE_FORMATS: [TextureFormat; 4] = TextureFormat::COLOR;
+const MATERIAL_TEXTURE_FORMATS: [TextureFormat; 5] = TextureFormat::COLOR;
 
 enum MaterialBindGroupsModalResponse {
     Create,
