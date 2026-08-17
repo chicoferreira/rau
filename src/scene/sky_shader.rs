@@ -110,7 +110,7 @@ pub async fn create_scene() -> AppResult<Project> {
         "Viewport Texture",
         color_format,
         wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::RENDER_ATTACHMENT,
-        TextureSource::Dimension(Some(dimension_id)),
+        TextureSource::dimension(dimension_id),
     ));
     let viewport_texture_view_id = project.texture_views.register(TextureView::new(
         "Viewport Texture View",

@@ -33,7 +33,7 @@ enum TextureSourceKind {
 impl TextureSourceKind {
     fn from_source(source: &TextureSource) -> Self {
         match source {
-            TextureSource::Dimension(_) => Self::Dimension,
+            TextureSource::Dimension { .. } => Self::Dimension,
             TextureSource::Manual { .. } => Self::Manual,
             TextureSource::Image(_) => Self::Image,
         }
@@ -184,9 +184,9 @@ fn ui_texture_source(
                 **empty** texture that a render pass, compute pass, or copy is expected to fill.\n\n\
                 - **Image**: decode an image file and upload it as the texture's contents. The \
                 size is taken from the image.\n\
-                - **Dimension**: allocate an empty texture that tracks the size of a Dimension \
-                resource, resizing automatically with it. Typically used as a \
-                render target (e.g. a viewport).\n\
+                - **Dimension**: allocate an empty texture whose width and height track a \
+                Dimension resource, resizing automatically with it, at a fixed layer count. \
+                Typically used as a render target (e.g. a viewport).\n\
                 - **Manual**: allocate an empty texture at a fixed width, height and layer count \
                 you enter below."
             ),
@@ -195,7 +195,7 @@ fn ui_texture_source(
             &mut selected_kind,
         ) {
             *source = match selected_kind {
-                TextureSourceKind::Dimension => TextureSource::Dimension(None),
+                TextureSourceKind::Dimension => TextureSource::dimension(None),
                 TextureSourceKind::Manual => TextureSource::Manual {
                     size: wgpu::Extent3d {
                         width: 800,
@@ -210,7 +210,7 @@ fn ui_texture_source(
 
     ui.indent("source_options", |ui| {
         field::field_grid(ui, "texture_source_options_grid", |ui| match source {
-            TextureSource::Dimension(dimension_id) => {
+            TextureSource::Dimension { dimension, layers } => {
                 field::row_doc(
                     ui,
                     "Dimension",
@@ -223,9 +223,19 @@ fn ui_texture_source(
                             ui,
                             "texture_source_dimension",
                             dimensions,
-                            dimension_id,
+                            dimension,
                         );
                     },
+                );
+                inspector::u32_drag_row_doc(
+                    ui,
+                    "Layers",
+                    field_doc!(
+                        "Number of **array layers** (or depth slices for 3D textures).\n\n\
+                        [WebGPU spec](https://www.w3.org/TR/webgpu/#dom-gpuextent3ddict-depthorarraylayers)"
+                    ),
+                    layers,
+                    1_u32..=u32::MAX,
                 );
             }
             TextureSource::Manual { size } => {

@@ -223,7 +223,10 @@
         "label": "Viewport Texture",
         "format": "rgba8UnormSrgb",
         "usage": "TEXTURE_BINDING | RENDER_ATTACHMENT",
-        "source": { "type": "Dimension", "value": { "idx": 1, "version": 1 } }
+        "source": {
+          "type": "Dimension",
+          "value": { "dimension": { "idx": 1, "version": 1 }, "layers": 1 }
+        }
       },
       "version": 1
     },
@@ -232,7 +235,10 @@
         "label": "Depth Texture",
         "format": "depth32Float",
         "usage": "TEXTURE_BINDING | RENDER_ATTACHMENT",
-        "source": { "type": "Dimension", "value": { "idx": 1, "version": 1 } }
+        "source": {
+          "type": "Dimension",
+          "value": { "dimension": { "idx": 1, "version": 1 }, "layers": 1 }
+        }
       },
       "version": 1
     }

@@ -253,7 +253,7 @@ pub async fn create_scene() -> AppResult<Project> {
         "G-Buffer Position",
         gbuffer_format,
         wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::RENDER_ATTACHMENT,
-        TextureSource::Dimension(Some(dimension_id)),
+        TextureSource::dimension(dimension_id),
     ));
     let g_position_view_id = project.texture_views.register(TextureView::new(
         "G-Buffer Position View",
@@ -266,7 +266,7 @@ pub async fn create_scene() -> AppResult<Project> {
         "G-Buffer Normal",
         gbuffer_format,
         wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::RENDER_ATTACHMENT,
-        TextureSource::Dimension(Some(dimension_id)),
+        TextureSource::dimension(dimension_id),
     ));
     let g_normal_view_id = project.texture_views.register(TextureView::new(
         "G-Buffer Normal View",
@@ -281,7 +281,7 @@ pub async fn create_scene() -> AppResult<Project> {
         "G-Buffer Depth",
         depth_format,
         wgpu::TextureUsages::RENDER_ATTACHMENT,
-        TextureSource::Dimension(Some(dimension_id)),
+        TextureSource::dimension(dimension_id),
     ));
     let depth_view_id = project.texture_views.register(TextureView::new(
         "G-Buffer Depth View",
@@ -294,7 +294,7 @@ pub async fn create_scene() -> AppResult<Project> {
         "SSAO Raw",
         gbuffer_format,
         wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::RENDER_ATTACHMENT,
-        TextureSource::Dimension(Some(dimension_id)),
+        TextureSource::dimension(dimension_id),
     ));
     let ssao_raw_view_id = project.texture_views.register(TextureView::new(
         "SSAO Raw View",
@@ -307,7 +307,7 @@ pub async fn create_scene() -> AppResult<Project> {
         "SSAO Blurred",
         gbuffer_format,
         wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::RENDER_ATTACHMENT,
-        TextureSource::Dimension(Some(dimension_id)),
+        TextureSource::dimension(dimension_id),
     ));
     let ssao_blurred_view_id = project.texture_views.register(TextureView::new(
         "SSAO Blurred View",
@@ -321,7 +321,7 @@ pub async fn create_scene() -> AppResult<Project> {
         "Viewport Texture",
         color_format,
         wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::RENDER_ATTACHMENT,
-        TextureSource::Dimension(Some(dimension_id)),
+        TextureSource::dimension(dimension_id),
     ));
     let color_render_view_id = project.texture_views.register(TextureView::new(
         "Viewport",

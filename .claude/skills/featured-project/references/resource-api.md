@@ -97,7 +97,7 @@ let tex_id = project.textures.register(Texture::new(
     "Viewport Texture",
     TextureFormat::Rgba8UnormSrgb,                 // see utils::texture_format::TextureFormat
     wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::RENDER_ATTACHMENT,
-    TextureSource::Dimension(Some(dim_id)),        // sized from a Dimension
+    TextureSource::dimension(dim_id),              // sized from a Dimension
 ));
 let view_id = project.texture_views.register(TextureView::new(
     "Viewport View",
@@ -108,7 +108,9 @@ let view_id = project.texture_views.register(TextureView::new(
 ```
 
 `TextureSource` variants seen in the codebase:
-- `TextureSource::Dimension(Some(dim_id))` — sized from a dimension (most common).
+- `TextureSource::dimension(dim_id)` — sized from a dimension with 1 array layer
+  (most common). For more layers (e.g. a cubemap that resizes with a dimension)
+  spell out `TextureSource::Dimension { dimension: Some(dim_id), layers: 6 }`.
 - `TextureSource::Image(Some(path))` — loaded from an image file (e.g. an HDR).
   See `full_example::create_texture`.
 - `TextureSource::Manual { size: wgpu::Extent3d { .. } }` — explicit size, e.g.

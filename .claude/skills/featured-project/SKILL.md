@@ -122,14 +122,17 @@ generate + run steps the user does).
 These two steps are intentionally manual — tell the user exactly how, but do not
 do them yourself:
 
-1. **Generate `project.json`:**
+1. **Generate `project.json`, then format it:**
 
    ```bash
-   cargo run -- generate <name> projects/<name>
+   cargo run -- generate <name> projects/<name> && npx prettier --write projects/<name>/project.json
    ```
 
    (`<name>` here is the kebab-case template name, e.g. `game-of-life`.) This
-   writes `projects/<name>/project.json` from the scene builder.
+   writes `projects/<name>/project.json` from the scene builder. The generator
+   serializes minified JSON onto a single line, so the prettier pass is not
+   optional — every committed `project.json` is prettier formatted, and skipping
+   it makes the file unreadable and its diffs useless.
 
 2. **Capture the thumbnail:** open the project, then use the Texture's **"Save as
    Image"** feature to export the viewport at **1920x1080**, and save it as

@@ -79,13 +79,13 @@ pub async fn create_scene() -> AppResult<Project> {
         "Grid A",
         TextureFormat::Rgba8Unorm,
         grid_usage,
-        TextureSource::Dimension(Some(grid_dimension_id)),
+        TextureSource::dimension(grid_dimension_id),
     ));
     let grid_b_texture_id = project.textures.register(Texture::new(
         "Grid B",
         TextureFormat::Rgba8Unorm,
         grid_usage,
-        TextureSource::Dimension(Some(grid_dimension_id)),
+        TextureSource::dimension(grid_dimension_id),
     ));
     let grid_a_view_id = project.texture_views.register(TextureView::new(
         "Grid A View",
@@ -186,7 +186,7 @@ pub async fn create_scene() -> AppResult<Project> {
         "Viewport Texture",
         color_format,
         wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::RENDER_ATTACHMENT,
-        TextureSource::Dimension(Some(display_dimension_id)),
+        TextureSource::dimension(display_dimension_id),
     ));
     let viewport_texture_view_id = project.texture_views.register(TextureView::new(
         "Viewport",

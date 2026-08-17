@@ -128,7 +128,7 @@ pub async fn create_scene(device: &wgpu::Device, file_storage: &FileStorage) -> 
         wgpu::TextureUsages::TEXTURE_BINDING
             | wgpu::TextureUsages::RENDER_ATTACHMENT
             | wgpu::TextureUsages::COPY_SRC,
-        TextureSource::Dimension(Some(dimension_id)),
+        TextureSource::dimension(dimension_id),
     ));
     let render_view_id = project.texture_views.register(TextureView::new(
         "Viewport",
@@ -142,7 +142,7 @@ pub async fn create_scene(device: &wgpu::Device, file_storage: &FileStorage) -> 
         "Depth Texture",
         depth_format,
         wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::RENDER_ATTACHMENT,
-        TextureSource::Dimension(Some(dimension_id)),
+        TextureSource::dimension(dimension_id),
     ));
     let depth_view_id = project.texture_views.register(TextureView::new(
         "Depth Texture View",

@@ -140,7 +140,7 @@ pub async fn create_scene() -> AppResult<Project> {
         "Scene Colour Texture",
         color_format,
         wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::RENDER_ATTACHMENT,
-        TextureSource::Dimension(Some(dimension_id)),
+        TextureSource::dimension(dimension_id),
     ));
     let color_render_view_id = project.texture_views.register(TextureView::new(
         "Scene Colour",
@@ -160,7 +160,7 @@ pub async fn create_scene() -> AppResult<Project> {
         "Depth Texture",
         depth_format,
         wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::RENDER_ATTACHMENT,
-        TextureSource::Dimension(Some(dimension_id)),
+        TextureSource::dimension(dimension_id),
     ));
     let depth_buffer_view_id = project.texture_views.register(TextureView::new(
         "Depth Buffer View",
@@ -174,7 +174,7 @@ pub async fn create_scene() -> AppResult<Project> {
         "Depth Vis Texture",
         color_format,
         wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::RENDER_ATTACHMENT,
-        TextureSource::Dimension(Some(dimension_id)),
+        TextureSource::dimension(dimension_id),
     ));
     let depth_vis_render_view_id = project.texture_views.register(TextureView::new(
         "Depth Vis",

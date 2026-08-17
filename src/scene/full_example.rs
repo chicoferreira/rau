@@ -183,7 +183,7 @@ pub async fn create_scene(device: &wgpu::Device, file_storage: &FileStorage) -> 
         "Hdr Texture".to_string(),
         hdr_texture_format,
         wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::RENDER_ATTACHMENT,
-        TextureSource::Dimension(Some(dimension_id)),
+        TextureSource::dimension(dimension_id),
     );
     let hdr_texture_id = project.textures.register(hdr_texture);
     let hdr_texture_view = TextureView::new(
@@ -335,7 +335,7 @@ pub async fn create_scene(device: &wgpu::Device, file_storage: &FileStorage) -> 
         "depth texture",
         depth_texture_format,
         wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::RENDER_ATTACHMENT,
-        TextureSource::Dimension(Some(dimension_id)),
+        TextureSource::dimension(dimension_id),
     );
     let depth_texture_id = project.textures.register(depth_texture);
     let depth_texture_view =
@@ -346,7 +346,7 @@ pub async fn create_scene(device: &wgpu::Device, file_storage: &FileStorage) -> 
         "Viewport Texture",
         viewport_texture_format,
         wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::RENDER_ATTACHMENT,
-        TextureSource::Dimension(Some(dimension_id)),
+        TextureSource::dimension(dimension_id),
     );
     let viewport_texture_id = project.textures.register(viewport_texture);
     let output_viewport_view_id = project.texture_views.register(TextureView::new(

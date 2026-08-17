@@ -54,9 +54,23 @@ pub enum TextureJob {
 #[serde(tag = "type", content = "value")]
 pub enum TextureSource {
     // Grab size from dimension
-    Dimension(Option<DimensionId>),
+    Dimension {
+        dimension: Option<DimensionId>,
+        layers: u32,
+    },
     Image(Option<FilePath>),
-    Manual { size: wgpu::Extent3d },
+    Manual {
+        size: wgpu::Extent3d,
+    },
+}
+
+impl TextureSource {
+    pub fn dimension(dimension: impl Into<Option<DimensionId>>) -> Self {
+        Self::Dimension {
+            dimension: dimension.into(),
+            layers: 1,
+        }
+    }
 }
 
 impl Texture {
@@ -159,14 +173,14 @@ impl SyncResource for Texture {
         let mut image_to_write = None;
 
         let size = match &self.source {
-            TextureSource::Dimension(dimension_id) => {
-                let dimension_id = dimension_id.ok_or(AppError::uninit_field("Dimension Id"))?;
+            TextureSource::Dimension { dimension, layers } => {
+                let dimension_id = dimension.ok_or(AppError::uninit_field("Dimension Id"))?;
                 let size = ctx.dimensions.get(dimension_id)?.get_actual_size();
 
                 wgpu::Extent3d {
                     width: size.width(),
                     height: size.height(),
-                    depth_or_array_layers: 1,
+                    depth_or_array_layers: *layers,
                 }
             }
             TextureSource::Image(path) => {
@@ -243,8 +257,13 @@ impl SyncResource for Texture {
 
     fn needs_rebuild(&self, _: Self::Id, _: &Self::Context<'_>, tracker: &SyncTracker) -> bool {
         match &self.source {
-            TextureSource::Dimension(Some(dimension_id)) => tracker.was_data_changed(*dimension_id),
-            TextureSource::Dimension(None) => false,
+            TextureSource::Dimension {
+                dimension: Some(dimension_id),
+                ..
+            } => tracker.was_data_changed(*dimension_id),
+            TextureSource::Dimension {
+                dimension: None, ..
+            } => false,
             TextureSource::Image(Some(path)) => tracker.file_changed(path),
             TextureSource::Image(None) => false,
             TextureSource::Manual { .. } => false,
