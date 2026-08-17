@@ -261,6 +261,18 @@ fn field_kind_type(kind: UniformFieldDataKind) -> ShaderType {
             size: 4,
             scalar: ScalarKind::F32,
         },
+        UniformFieldDataKind::Vec2u => ShaderType::Vector {
+            size: 2,
+            scalar: ScalarKind::U32,
+        },
+        UniformFieldDataKind::Vec3u => ShaderType::Vector {
+            size: 3,
+            scalar: ScalarKind::U32,
+        },
+        UniformFieldDataKind::Vec4u => ShaderType::Vector {
+            size: 4,
+            scalar: ScalarKind::U32,
+        },
         UniformFieldDataKind::Mat4x4f => ShaderType::Matrix {
             cols: 4,
             rows: 4,

@@ -8,8 +8,8 @@ mod tests;
 use crate::{
     error::{AppError, AppResult},
     project::{
-        CameraId, Creatable, ProjectResource, UniformId,
-        resource::{camera::Camera, uniform::camera::CameraField},
+        CameraId, Creatable, DimensionId, ProjectResource, UniformId,
+        resource::{camera::Camera, dimension::Dimension, uniform::camera::CameraField},
         storage::{RuntimeStorage, Storage},
         sync::{Revision, SyncOutcome, SyncResource, SyncTracker},
     },
@@ -24,6 +24,7 @@ use crate::{
 pub struct UniformCreationContext<'a> {
     pub cameras: &'a Storage<Camera>,
     pub cameras_runtime: &'a RuntimeStorage<Camera>,
+    pub dimensions: &'a Storage<Dimension>,
     pub device: &'a wgpu::Device,
     pub queue: &'a wgpu::Queue,
     pub time: f32,
@@ -76,6 +77,7 @@ pub enum UniformFieldSource {
         field: CameraField,
     },
     Transform(Transform),
+    Dimension(Option<DimensionId>),
     Time,
 }
 
@@ -117,8 +119,11 @@ impl Transform {
 pub enum UniformFieldData {
     UInt32(u32),
     Float(f32),
+    Vec2u([u32; 2]),
     Vec2f([f32; 2]),
+    Vec3u([u32; 3]),
     Vec3f([f32; 3]),
+    Vec4u([u32; 4]),
     Vec4f([f32; 4]),
     Rgb([f32; 3]),
     Rgba([f32; 4]),
@@ -129,8 +134,11 @@ pub enum UniformFieldData {
 pub enum UniformFieldDataKind {
     UInt32,
     Float,
+    Vec2u,
     Vec2f,
+    Vec3u,
     Vec3f,
+    Vec4u,
     Vec4f,
     Rgb,
     Rgba,
@@ -380,6 +388,7 @@ impl UniformField {
             UniformFieldSource::Camera { field, .. } => field.kind(),
             UniformFieldSource::Transform(_) => UniformFieldDataKind::Mat4x4f,
             UniformFieldSource::Time => UniformFieldDataKind::Float,
+            UniformFieldSource::Dimension(_) => UniformFieldDataKind::Vec2u,
         }
     }
 
@@ -392,6 +401,13 @@ impl UniformField {
                 };
 
                 tracker.was_data_changed(camera_id)
+            }
+            UniformFieldSource::Dimension(dimension_id) => {
+                let Some(dimension_id) = *dimension_id else {
+                    return false;
+                };
+
+                tracker.was_data_changed(dimension_id)
             }
             // Time advances every frame, so the uniform must always be re-evaluated.
             UniformFieldSource::Time => true,
@@ -419,6 +435,16 @@ impl UniformField {
                 transform.to_matrix().to_cols_array_2d(),
             ))),
             UniformFieldSource::Time => Ok(Some(UniformFieldData::Float(context.time))),
+            UniformFieldSource::Dimension(dimension_id) => {
+                let dimension_id = dimension_id.ok_or(AppError::uninit_field(format!(
+                    "Uniform Field {index} Dimension Id",
+                )))?;
+
+                let dimension = context.dimensions.get(dimension_id)?;
+                let size = dimension.get_actual_size();
+
+                Ok(Some(UniformFieldData::Vec2u([size.width(), size.height()])))
+            }
         }
     }
 }
@@ -436,6 +462,10 @@ impl UniformFieldSource {
         Self::Transform(transform)
     }
 
+    pub fn new_dimension(dimension_id: Option<DimensionId>) -> Self {
+        Self::Dimension(dimension_id)
+    }
+
     pub fn new_time() -> Self {
         Self::Time
     }
@@ -446,8 +476,11 @@ impl UniformFieldData {
         match kind {
             UniformFieldDataKind::UInt32 => UniformFieldData::UInt32(0),
             UniformFieldDataKind::Float => UniformFieldData::Float(0.0),
+            UniformFieldDataKind::Vec2u => UniformFieldData::Vec2u([0; 2]),
             UniformFieldDataKind::Vec2f => UniformFieldData::Vec2f([0.0; 2]),
+            UniformFieldDataKind::Vec3u => UniformFieldData::Vec3u([0; 3]),
             UniformFieldDataKind::Vec3f => UniformFieldData::Vec3f([0.0; 3]),
+            UniformFieldDataKind::Vec4u => UniformFieldData::Vec4u([0; 4]),
             UniformFieldDataKind::Vec4f => UniformFieldData::Vec4f([0.0; 4]),
             UniformFieldDataKind::Rgb => UniformFieldData::Rgb([1.0; 3]),
             UniformFieldDataKind::Rgba => UniformFieldData::Rgba([1.0; 4]),
@@ -458,8 +491,11 @@ impl UniformFieldData {
     pub fn kind(&self) -> UniformFieldDataKind {
         match self {
             UniformFieldData::Float(_) => UniformFieldDataKind::Float,
+            UniformFieldData::Vec2u(_) => UniformFieldDataKind::Vec2u,
             UniformFieldData::Vec2f(_) => UniformFieldDataKind::Vec2f,
+            UniformFieldData::Vec3u(_) => UniformFieldDataKind::Vec3u,
             UniformFieldData::Vec3f(_) => UniformFieldDataKind::Vec3f,
+            UniformFieldData::Vec4u(_) => UniformFieldDataKind::Vec4u,
             UniformFieldData::Vec4f(_) => UniformFieldDataKind::Vec4f,
             UniformFieldData::Rgb(_) => UniformFieldDataKind::Rgb,
             UniformFieldData::Rgba(_) => UniformFieldDataKind::Rgba,
@@ -478,12 +514,21 @@ impl UniformFieldData {
             UniformFieldData::Float(v) => {
                 buf.extend_from_slice(bytemuck::bytes_of(v));
             }
+            UniformFieldData::Vec2u(v) => {
+                buf.extend_from_slice(bytemuck::bytes_of(v));
+            }
             UniformFieldData::Vec2f(v) => {
+                buf.extend_from_slice(bytemuck::bytes_of(v));
+            }
+            UniformFieldData::Vec3u(v) => {
                 buf.extend_from_slice(bytemuck::bytes_of(v));
             }
             UniformFieldData::Vec3f(v) | UniformFieldData::Rgb(v) => {
                 let padded: [f32; 4] = [v[0], v[1], v[2], 0.0];
                 buf.extend_from_slice(bytemuck::bytes_of(&padded));
+            }
+            UniformFieldData::Vec4u(v) => {
+                buf.extend_from_slice(bytemuck::bytes_of(v));
             }
             UniformFieldData::Vec4f(v) | UniformFieldData::Rgba(v) => {
                 buf.extend_from_slice(bytemuck::bytes_of(v));
@@ -503,10 +548,11 @@ impl UniformFieldDataKind {
         match self {
             UniformFieldDataKind::UInt32 => (4, 4),
             UniformFieldDataKind::Float => (4, 4),
-            UniformFieldDataKind::Vec2f => (8, 8),
-            UniformFieldDataKind::Vec3f
-            | UniformFieldDataKind::Rgb
-            | UniformFieldDataKind::Vec4f
+            UniformFieldDataKind::Vec2f | UniformFieldDataKind::Vec2u => (8, 8),
+            UniformFieldDataKind::Vec3u => (16, 12),
+            UniformFieldDataKind::Vec3f | UniformFieldDataKind::Rgb => (16, 16),
+            UniformFieldDataKind::Vec4f
+            | UniformFieldDataKind::Vec4u
             | UniformFieldDataKind::Rgba => (16, 16),
             UniformFieldDataKind::Mat4x4f => (16, 64),
         }
@@ -516,8 +562,11 @@ impl UniformFieldDataKind {
         match self {
             UniformFieldDataKind::UInt32 => "u32",
             UniformFieldDataKind::Float => "f32",
+            UniformFieldDataKind::Vec2u => "vec2<u32>",
             UniformFieldDataKind::Vec2f => "vec2<f32>",
+            UniformFieldDataKind::Vec3u => "vec3<u32>",
             UniformFieldDataKind::Vec3f => "vec3<f32>",
+            UniformFieldDataKind::Vec4u => "vec4<u32>",
             UniformFieldDataKind::Vec4f => "vec4<f32>",
             UniformFieldDataKind::Rgb => "vec3<f32>",
             UniformFieldDataKind::Rgba => "vec4<f32>",

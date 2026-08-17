@@ -589,6 +589,7 @@ impl Workspace {
 
         let view = &mut UniformCreationContext {
             cameras: &self.project.cameras,
+            dimensions: &self.project.dimensions,
             device: ctx.device,
             queue: ctx.queue,
             cameras_runtime: &mut self.runtime_project.cameras,

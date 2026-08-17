@@ -6,6 +6,7 @@ use crate::{
         UniformId,
         resource::{
             camera::Camera,
+            dimension::Dimension,
             uniform::{
                 self, Transform, UniformField, UniformFieldData, UniformFieldDataKind,
                 UniformFieldSource, UniformRuntimeField, camera::CameraField,
@@ -37,6 +38,7 @@ pub enum UniformFieldSourceKind {
     UserDefined,
     Camera,
     Transform,
+    Dimension,
     Time,
 }
 
@@ -46,6 +48,7 @@ impl UniformFieldSourceKind {
             UniformFieldSource::UserDefined { .. } => Self::UserDefined,
             UniformFieldSource::Camera { .. } => Self::Camera,
             UniformFieldSource::Transform(..) => Self::Transform,
+            UniformFieldSource::Dimension(..) => Self::Dimension,
             UniformFieldSource::Time => Self::Time,
         }
     }
@@ -57,6 +60,7 @@ impl UniformFieldSourceKind {
             )),
             Self::Camera => UniformFieldSource::new_camera_sourced(None, CameraField::Position),
             Self::Transform => UniformFieldSource::new_transform(Transform::default()),
+            Self::Dimension => UniformFieldSource::new_dimension(None),
             Self::Time => UniformFieldSource::new_time(),
         }
     }
@@ -112,6 +116,7 @@ impl StateSnapshot<'_> {
             event_queue: self.event_queue,
             rename_state: self.rename_state,
             cameras: &self.project.cameras,
+            dimensions: &self.project.dimensions,
         };
 
         let mut fields = uniform.fields().to_vec();
@@ -199,6 +204,7 @@ struct UniformUiContext<'a> {
     event_queue: &'a mut EventQueue<StateEvent>,
     rename_state: &'a mut Option<RenameState>,
     cameras: &'a Storage<Camera>,
+    dimensions: &'a Storage<Dimension>,
 }
 
 fn ui_uniform_field_title(
@@ -268,6 +274,7 @@ fn ui_field_entry(
             - **User Defined**: a constant value you set here.\n\
             - **Camera**: pulled from a Camera (position, matrices, and so on).\n\
             - **Transform**: a model matrix built from position, rotation, and scale.\n\
+            - **Dimension**: the width and height of a Dimension.\n\
             - **Time**: the elapsed time in seconds, updated every frame."
         ),
         "source",
@@ -382,6 +389,22 @@ fn ui_field_entry(
 
             changed.then_some(UniformFieldSource::new_transform(transform))
         }
+        UniformFieldSource::Dimension(dimension_id) => {
+            let mut dimension_id = *dimension_id;
+            let dimension_id_before = dimension_id;
+
+            field::row_doc(
+                ui,
+                "Dimension",
+                field_doc!(
+                    "The Dimension whose size fills this field, as `vec2<u32>(width, height)`"
+                ),
+                |ui| inspector::storage_combo(ui, "dimension", ctx.dimensions, &mut dimension_id),
+            );
+
+            (dimension_id != dimension_id_before)
+                .then_some(UniformFieldSource::new_dimension(dimension_id))
+        }
         UniformFieldSource::Time => None,
     };
 
@@ -439,12 +462,25 @@ fn edit_uniform_field_data(ui: &mut egui::Ui, data: &mut uniform::UniformFieldDa
         changed
     };
 
+    let drag_int_array = |ui: &mut egui::Ui, array: &mut [u32]| {
+        let mut changed = false;
+        ui.horizontal(|ui| {
+            for value in array.iter_mut() {
+                changed |= drag_int(ui, value);
+            }
+        });
+        changed
+    };
+
     match data {
         uniform::UniformFieldData::UInt32(value) => drag_int(ui, value),
         uniform::UniformFieldData::Float(value) => drag_float(ui, value),
         uniform::UniformFieldData::Vec4f(vec4) => drag_float_array(ui, vec4),
         uniform::UniformFieldData::Vec3f(vec3) => drag_float_array(ui, vec3),
         uniform::UniformFieldData::Vec2f(vec2) => drag_float_array(ui, vec2),
+        uniform::UniformFieldData::Vec4u(vec4) => drag_int_array(ui, vec4),
+        uniform::UniformFieldData::Vec3u(vec3) => drag_int_array(ui, vec3),
+        uniform::UniformFieldData::Vec2u(vec2) => drag_int_array(ui, vec2),
         uniform::UniformFieldData::Mat4x4f(mat4) => {
             let mut changed = false;
             ui.vertical(|ui| {
@@ -476,12 +512,21 @@ fn ui_uniform_field_data(ui: &mut egui::Ui, data: &uniform::UniformFieldData) {
         }
     };
 
+    let array_int_label = |ui: &mut egui::Ui, array: &[u32]| {
+        for value in array {
+            int_label(ui, value);
+        }
+    };
+
     match data {
         uniform::UniformFieldData::UInt32(value) => int_label(ui, value),
         uniform::UniformFieldData::Float(value) => float_label(ui, value),
         uniform::UniformFieldData::Vec4f(vec4) => array_float_label(ui, vec4),
         uniform::UniformFieldData::Vec3f(vec3) => array_float_label(ui, vec3),
         uniform::UniformFieldData::Vec2f(vec2) => array_float_label(ui, vec2),
+        uniform::UniformFieldData::Vec4u(vec4) => array_int_label(ui, vec4),
+        uniform::UniformFieldData::Vec3u(vec3) => array_int_label(ui, vec3),
+        uniform::UniformFieldData::Vec2u(vec2) => array_int_label(ui, vec2),
         uniform::UniformFieldData::Mat4x4f(mat4) => {
             egui::Grid::new("fieldmat4").show(ui, |ui| {
                 for row in mat4.iter() {
