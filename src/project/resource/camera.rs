@@ -359,7 +359,7 @@ impl Camera {
         self.current_scroll_speed += self.input.scroll * *self.scroll_sensitivity;
         self.current_scroll_speed -= self.current_scroll_speed * *self.drag * dt;
 
-        const SPEED_EPSILON: f32 = 0.0005;
+        const SPEED_EPSILON: f32 = 0.1;
         if self.current_speed.x.abs() < SPEED_EPSILON {
             self.current_speed.x = 0.0;
         }
