@@ -319,6 +319,18 @@ impl SyncResource for TextureView {
     }
 }
 
+/// The formats a texture view can be previewed in.
+///
+/// egui-wgpu binds every user texture through one layout, a filterable float
+/// `texture_2d<f32>`, so unfilterable float and depth formats can't be handed
+/// to it.
+///
+/// The list stops there on purpose. Supporting more would mean guessing the
+/// mapping: a depth buffer's near and far, whether an `R32Float` channel is a
+/// mask or a distance.
+///
+/// Users who want one can render the texture into an RGBA target with the
+/// conversion they want via an authored shader.
 pub const PREVIEWABLE_FORMATS: &[TextureFormat] = &[
     TextureFormat::Rgba8UnormSrgb,
     TextureFormat::Rgba8Unorm,
