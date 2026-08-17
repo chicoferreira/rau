@@ -363,10 +363,8 @@
         "format": "rgba32Float",
         "usage": "COPY_DST | TEXTURE_BINDING | STORAGE_BINDING",
         "source": {
-          "type": "Manual",
-          "value": {
-            "size": { "width": 1080, "height": 1080, "depthOrArrayLayers": 6 }
-          }
+          "type": "Dimension",
+          "value": { "dimension": { "idx": 2, "version": 1 }, "layers": 6 }
         }
       },
       "version": 1
@@ -506,7 +504,11 @@
   ],
   "dimensions": [
     { "value": null, "version": 0 },
-    { "value": { "label": "Main Dimension", "size": "runtime" }, "version": 1 }
+    { "value": { "label": "Main Dimension", "size": "runtime" }, "version": 1 },
+    {
+      "value": { "label": "Cube Face Dimension", "size": [1080, 1080] },
+      "version": 1
+    }
   ],
   "cameras": [
     { "value": null, "version": 0 },
@@ -707,10 +709,14 @@
         ],
         "shader": { "idx": 1, "version": 1 },
         "dispatchSize": {
-          "x": { "fixed": 68 },
-          "y": { "fixed": 68 },
+          "x": {
+            "dimension": { "id": { "idx": 2, "version": 1 }, "axis": "width" }
+          },
+          "y": {
+            "dimension": { "id": { "idx": 2, "version": 1 }, "axis": "height" }
+          },
           "z": { "fixed": 6 },
-          "unit": "workgroup"
+          "unit": { "invocation": { "workgroupSize": [16, 16, 1] } }
         },
         "dispatchPolicy": { "type": "onChange" }
       },

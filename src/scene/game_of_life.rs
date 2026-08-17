@@ -36,14 +36,6 @@ use crate::{
     utils::wgpu_utils::{PrimitiveState, TextureFormat},
 };
 
-/// Width and height of the simulation grid, in cells.
-const GRID_SIZE_X: u32 = 160;
-const GRID_SIZE_Y: u32 = 90;
-/// Compute workgroup size along X and Y (matches `@workgroup_size(8, 8, 1)`).
-const WORKGROUP_SIZE: u32 = 8;
-/// How often the simulation advances one generation: two steps per second.
-const STEP_INTERVAL: instant::Duration = instant::Duration::from_millis(200);
-
 pub async fn create_scene() -> AppResult<Project> {
     let mut project = Project::default();
 
@@ -66,7 +58,7 @@ pub async fn create_scene() -> AppResult<Project> {
     // The grid runs at a fixed resolution, independent of the (resizable) viewport.
     let grid_dimension_id = project.dimensions.register(Dimension::new_persistent(
         "Grid Dimension",
-        Size2d::new(GRID_SIZE_X, GRID_SIZE_Y),
+        Size2d::new(160, 90),
     ));
     let display_dimension_id = project
         .dimensions
@@ -149,8 +141,13 @@ pub async fn create_scene() -> AppResult<Project> {
         ],
     ));
 
-    let workgroups_x = GRID_SIZE_X.div_ceil(WORKGROUP_SIZE);
-    let workgroups_y = GRID_SIZE_Y.div_ceil(WORKGROUP_SIZE);
+    let grid_dispatch = DispatchSize::new_dimension(
+        grid_dimension_id,
+        1,
+        DispatchUnit::Invocation {
+            workgroup_size: [8, 8, 1],
+        },
+    );
     // Init seeds the grid once; Simulate and Copy advance one generation per
     // `STEP_INTERVAL`. Giving both the same interval keeps them in lockstep, so a
     // step is always a Simulate (A -> B) immediately followed by a Copy (B -> A).
@@ -158,14 +155,18 @@ pub async fn create_scene() -> AppResult<Project> {
         "Init",
         vec![init_bind_group_id],
         Some(init_shader_id),
-        DispatchSize::new_fixed(workgroups_x, workgroups_y, 1, DispatchUnit::Workgroup),
+        grid_dispatch,
         DispatchPolicy::OnChange,
     ));
+
+    /// How often the simulation advances one generation: two steps per second.
+    const STEP_INTERVAL: instant::Duration = instant::Duration::from_millis(200);
+
     let simulate_pass_id = project.compute_passes.register(ComputePass::new(
         "Simulate",
         vec![simulate_bind_group_id],
         Some(simulate_shader_id),
-        DispatchSize::new_fixed(workgroups_x, workgroups_y, 1, DispatchUnit::Workgroup),
+        grid_dispatch,
         DispatchPolicy::Periodic {
             interval: STEP_INTERVAL,
         },
@@ -174,7 +175,7 @@ pub async fn create_scene() -> AppResult<Project> {
         "Copy",
         vec![copy_bind_group_id],
         Some(copy_shader_id),
-        DispatchSize::new_fixed(workgroups_x, workgroups_y, 1, DispatchUnit::Workgroup),
+        grid_dispatch,
         DispatchPolicy::Periodic {
             interval: STEP_INTERVAL,
         },

@@ -22,6 +22,7 @@ use crate::{
             viewport::Viewport,
         },
     },
+    ui::size::Size2d,
     utils::{
         derive::default_texture_format,
         derive_modal_material::{MaterialBindGroupsConfig, SamplerSetting},
@@ -230,7 +231,10 @@ pub async fn create_scene(device: &wgpu::Device, file_storage: &FileStorage) -> 
     let sky_texture_view = TextureView::new("label", Some(sky_texture_id), None, None);
     let sky_texture_view_id = project.texture_views.register(sky_texture_view);
 
-    let dst_size = 1080;
+    let cube_face_dimension_id = project.dimensions.register(Dimension::new_persistent(
+        "Cube Face Dimension",
+        Size2d::new(1080, 1080),
+    ));
 
     let texture_format = TextureFormat::Rgba32Float;
 
@@ -240,13 +244,8 @@ pub async fn create_scene(device: &wgpu::Device, file_storage: &FileStorage) -> 
         wgpu::TextureUsages::STORAGE_BINDING
             | wgpu::TextureUsages::TEXTURE_BINDING
             | wgpu::TextureUsages::COPY_DST,
-        TextureSource::Manual {
-            size: wgpu::Extent3d {
-                width: dst_size,
-                height: dst_size,
-                depth_or_array_layers: 6,
-            },
-        },
+        // A cube map is a six-layer array, one layer per face.
+        TextureSource::dimension_layered(cube_face_dimension_id, 6),
     );
 
     let dst_texture_id = project.textures.register(dst_texture);
@@ -294,12 +293,19 @@ pub async fn create_scene(device: &wgpu::Device, file_storage: &FileStorage) -> 
     );
     let sky_color_bind_group_id = project.bind_groups.register(sky_color_bind_group);
 
-    let num_workgroups = dst_size.div_ceil(16);
+    // One invocation per texel of a face, six faces deep. Reading the face size
+    // from the dimension reprojects the sky whenever the resolution changes.
     let compute_pass = ComputePass::new(
         "equirect_to_cube_map",
         vec![bind_group_id, sky_color_bind_group_id],
         Some(equirectengular_shader_id),
-        DispatchSize::new_fixed(num_workgroups, num_workgroups, 6, DispatchUnit::Workgroup),
+        DispatchSize::new_dimension(
+            cube_face_dimension_id,
+            6,
+            DispatchUnit::Invocation {
+                workgroup_size: [16, 16, 1],
+            },
+        ),
         DispatchPolicy::OnChange,
     );
 

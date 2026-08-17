@@ -8,7 +8,7 @@ use crate::{
         BindGroupId, ComputePassId, Creatable, DimensionId, ProjectResource, ShaderId,
         resource::{
             bindgroup::BindGroup,
-            dimension::{Dimension, DimensionRef},
+            dimension::{Axis, Dimension, DimensionRef},
             shader::Shader,
         },
         storage::{RuntimeStorage, Storage},
@@ -67,7 +67,7 @@ pub struct DispatchSize {
 /// from a [`Dimension`] and the compute pass is expected to run for every pixel
 /// of that dimension.
 #[derive(Debug, Clone, Copy, PartialEq, Default, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", rename_all_fields = "camelCase")]
 pub enum DispatchUnit {
     /// Workgroups, passed to `dispatch_workgroups` unchanged.
     #[default]
@@ -82,6 +82,7 @@ pub enum DispatchUnit {
     /// for this to make sense.
     Invocation {
         // TODO: grab from shader via reflection instead of having the user specify it
+        #[serde(alias = "workgroup_size")]
         workgroup_size: [u32; 3],
     },
 }
@@ -255,6 +256,22 @@ impl DispatchSize {
         Self {
             x: WorkSize::Fixed(x),
             y: WorkSize::Fixed(y),
+            z: WorkSize::Fixed(z),
+            unit,
+        }
+    }
+
+    pub fn new_dimension(dimension: DimensionId, z: u32, unit: DispatchUnit) -> Self {
+        let axis = |axis| {
+            WorkSize::Dimension(DimensionRef {
+                id: Some(dimension),
+                axis,
+            })
+        };
+
+        Self {
+            x: axis(Axis::Width),
+            y: axis(Axis::Height),
             z: WorkSize::Fixed(z),
             unit,
         }

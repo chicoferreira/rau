@@ -295,10 +295,14 @@
         "bindGroups": [{ "idx": 1, "version": 1 }],
         "shader": { "idx": 1, "version": 1 },
         "dispatchSize": {
-          "x": { "fixed": 20 },
-          "y": { "fixed": 12 },
+          "x": {
+            "dimension": { "id": { "idx": 1, "version": 1 }, "axis": "width" }
+          },
+          "y": {
+            "dimension": { "id": { "idx": 1, "version": 1 }, "axis": "height" }
+          },
           "z": { "fixed": 1 },
-          "unit": "workgroup"
+          "unit": { "invocation": { "workgroupSize": [8, 8, 1] } }
         },
         "dispatchPolicy": { "type": "onChange" }
       },
@@ -310,10 +314,14 @@
         "bindGroups": [{ "idx": 2, "version": 1 }],
         "shader": { "idx": 2, "version": 1 },
         "dispatchSize": {
-          "x": { "fixed": 20 },
-          "y": { "fixed": 12 },
+          "x": {
+            "dimension": { "id": { "idx": 1, "version": 1 }, "axis": "width" }
+          },
+          "y": {
+            "dimension": { "id": { "idx": 1, "version": 1 }, "axis": "height" }
+          },
           "z": { "fixed": 1 },
-          "unit": "workgroup"
+          "unit": { "invocation": { "workgroupSize": [8, 8, 1] } }
         },
         "dispatchPolicy": { "type": "periodic", "interval": 0.2 }
       },
@@ -325,10 +333,14 @@
         "bindGroups": [{ "idx": 3, "version": 1 }],
         "shader": { "idx": 3, "version": 1 },
         "dispatchSize": {
-          "x": { "fixed": 20 },
-          "y": { "fixed": 12 },
+          "x": {
+            "dimension": { "id": { "idx": 1, "version": 1 }, "axis": "width" }
+          },
+          "y": {
+            "dimension": { "id": { "idx": 1, "version": 1 }, "axis": "height" }
+          },
           "z": { "fixed": 1 },
-          "unit": "workgroup"
+          "unit": { "invocation": { "workgroupSize": [8, 8, 1] } }
         },
         "dispatchPolicy": { "type": "periodic", "interval": 0.2 }
       },

@@ -66,9 +66,13 @@ pub enum TextureSource {
 
 impl TextureSource {
     pub fn dimension(dimension: impl Into<Option<DimensionId>>) -> Self {
+        Self::dimension_layered(dimension, 1)
+    }
+
+    pub fn dimension_layered(dimension: impl Into<Option<DimensionId>>, layers: u32) -> Self {
         Self::Dimension {
             dimension: dimension.into(),
-            layers: 1,
+            layers,
         }
     }
 }

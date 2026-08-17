@@ -28,10 +28,11 @@ fn compute_equirect_to_cubemap(
     @builtin(global_invocation_id)
     gid: vec3<u32>,
 ) {
-    // If texture size is not divisible by 32, we
-    // need to make sure we don't try to write to
-    // pixels that don't exist.
-    if gid.x >= u32(textureDimensions(dst).x) {
+    // The dispatch rounds the face size up to whole workgroups, so the last
+    // workgroup on each axis runs past the texture. Drop those invocations
+    // instead of writing to pixels that don't exist.
+    let dst_size = textureDimensions(dst);
+    if gid.x >= dst_size.x || gid.y >= dst_size.y {
         return;
     }
 
@@ -75,8 +76,7 @@ fn compute_equirect_to_cubemap(
     );
 
     // Get texture coords relative to cubemap face
-    let dst_dimensions = vec2<f32>(textureDimensions(dst));
-    let cube_uv = vec2<f32>(gid.xy) / dst_dimensions * 2.0 - 1.0;
+    let cube_uv = vec2<f32>(gid.xy) / vec2<f32>(dst_size) * 2.0 - 1.0;
 
     // Get spherical coordinate from cube_uv
     let face = FACES[gid.z];
