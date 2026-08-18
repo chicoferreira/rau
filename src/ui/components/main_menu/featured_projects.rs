@@ -124,13 +124,13 @@ pub const FEATURED_PROJECTS: &[FeaturedProject] = &[
         description: "Three glowing panels lighting a dark room, shaded with Linearly Transformed Cosines. Ported from LearnOpenGL.",
     },
     FeaturedProject {
-        id: "full-example",
-        name: "Full Example",
+        id: "hdr-skybox",
+        name: "HDR Skybox",
         owner: "chicoferreira",
         repo: "rau",
         git_ref: "main",
-        path: "projects/full-example",
-        description: "A lit OBJ cube with diffuse and normal maps, a camera, and an HDR skybox. Shows off most of what rau can do.",
+        path: "projects/hdr-skybox",
+        description: "A lit OBJ cube with diffuse and normal maps, a camera, and an HDR skybox. Based on the Learn WGPU tutorial by sotrh.",
     },
     FeaturedProject {
         id: "ssao",

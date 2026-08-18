@@ -8,7 +8,7 @@ description: Scaffold a new built-in example / featured project for the rau rend
 A featured project in rau is a bundled example that (1) builds its `project.json`
 programmatically from Rust code in `src/scene/`, (2) ships its shaders/assets in
 `projects/<name>/`, and (3) shows up as a card in the main-menu gallery. The
-recent ones — `model`, `game-of-life`, `full-example` — all follow this pattern.
+recent ones — `model`, `game-of-life`, `hdr-skybox` — all follow this pattern.
 
 This skill scaffolds the **project resources**: the scene builder code, the
 generator registration, the shaders/assets, and the gallery card. Two steps are
@@ -31,7 +31,7 @@ pipelines, passes, a viewport, etc. onto a `Project` and returns it.
 the resource API (constructors, the `register` pattern, the WGSL binding
 convention, model loading, compute ping-pong, cameras, uniforms). Then open the
 closest existing scene in `src/scene/` (`game_of_life.rs` for compute/2D,
-`model.rs` for a single 3D model, `full_example.rs` for the works) and adapt it
+`model.rs` for a single 3D model, `hdr_skybox.rs` for the works) and adapt it
 rather than writing from a blank file — matching the surrounding style and the
 exact API shapes matters more than inventing your own.
 

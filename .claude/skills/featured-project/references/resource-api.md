@@ -11,7 +11,7 @@ The canonical examples to copy from live in `src/scene/`:
   triangle display. No external assets, shaders only.
 - `model.rs` — single OBJ model with diffuse/normal/specular maps, a camera, a
   point light, and a depth buffer. The smallest "real 3D" scene.
-- `full_example.rs` — everything: HDR pipeline, equirect→cubemap compute,
+- `hdr_skybox.rs` — everything: HDR pipeline, equirect→cubemap compute,
   skybox, instanced models, multiple render passes.
 
 When in doubt, read the closest example end-to-end and adapt it. The notes below
@@ -112,7 +112,7 @@ let view_id = project.texture_views.register(TextureView::new(
   (most common). For more layers (e.g. a cubemap that resizes with a dimension)
   spell out `TextureSource::Dimension { dimension: Some(dim_id), layers: 6 }`.
 - `TextureSource::Image(Some(path))` — loaded from an image file (e.g. an HDR).
-  See `full_example::create_texture`.
+  See `hdr_skybox::create_texture`.
 - `TextureSource::Manual { size: wgpu::Extent3d { .. } }` — explicit size, e.g.
   a cubemap with `depth_or_array_layers: 6`.
 

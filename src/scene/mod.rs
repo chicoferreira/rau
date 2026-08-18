@@ -13,10 +13,10 @@ use crate::{
 
 pub mod area_lights;
 pub mod depth_testing;
-pub mod full_example;
 pub mod fur_shell;
 pub mod game_of_life;
 pub mod grass_field;
+pub mod hdr_skybox;
 pub mod model;
 pub mod parallax_mapping;
 pub mod ray_tracing;
@@ -26,7 +26,7 @@ pub mod ssao;
 
 #[derive(Clone, Copy, clap::ValueEnum)]
 pub enum GenerateTemplate {
-    FullExample,
+    HdrSkybox,
     FurShell,
     Model,
     GameOfLife,
@@ -57,7 +57,7 @@ async fn generate_project_async(template: GenerateTemplate, target_folder: &Path
     let file_storage = FileStorage::new(source, file_system.clone(), file_watcher);
 
     let project = match template {
-        GenerateTemplate::FullExample => full_example::create_scene(&device, &file_storage).await?,
+        GenerateTemplate::HdrSkybox => hdr_skybox::create_scene(&device, &file_storage).await?,
         GenerateTemplate::Model => model::create_scene(&device, &file_storage).await?,
         GenerateTemplate::GameOfLife => game_of_life::create_scene().await?,
         GenerateTemplate::FurShell => fur_shell::create_scene(&device, &file_storage).await?,
