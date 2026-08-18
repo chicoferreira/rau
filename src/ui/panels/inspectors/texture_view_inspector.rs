@@ -169,6 +169,5 @@ impl AsRichText for Option<wgpu::TextureViewDimension> {
             Some(dimension) => dimension.as_rich_text(),
             None => "From Texture".into(),
         }
-        .into()
     }
 }
