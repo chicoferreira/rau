@@ -174,7 +174,13 @@ impl Project {
     }
 
     pub fn serialize(&self) -> AppResult<Vec<u8>> {
-        serde_json::to_vec(&self).map_err(Into::into)
+        let formatter = json_pretty_compact::PrettyCompactFormatter::new().with_max_line_length(80);
+        let mut bytes = Vec::new();
+        let mut serializer = serde_json::Serializer::with_formatter(&mut bytes, formatter);
+
+        Serialize::serialize(self, &mut serializer)?;
+        bytes.push(b'\n');
+        Ok(bytes)
     }
 
     pub fn deserialize(data: &[u8]) -> AppResult<Self> {

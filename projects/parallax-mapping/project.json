@@ -1,7 +1,7 @@
 {
   "presentation": {
-    "renderPasses": [{ "idx": 1, "version": 1 }],
-    "computePasses": [],
+    "renderPasses": [ { "idx": 1, "version": 1 } ],
+    "computePasses": [ ],
     "mainViewport": { "idx": 1, "version": 1 }
   },
   "shaders": [
@@ -58,7 +58,7 @@
             "source": {
               "type": "userDefined",
               "dataType": "vec3f",
-              "data": [0.5, 0.6, 1.2]
+              "data": [ 0.5, 0.6, 1.2 ]
             }
           },
           {
@@ -66,7 +66,7 @@
             "source": {
               "type": "userDefined",
               "dataType": "rgb",
-              "data": [1.0, 0.95, 0.85]
+              "data": [ 1.0, 0.95, 0.85 ]
             }
           }
         ]
@@ -318,7 +318,7 @@
     {
       "value": {
         "label": "Camera",
-        "position": [-1.7, 0.0, 3.0],
+        "position": [ -1.7, 0.0, 3.0 ],
         "yaw": -1.0552473,
         "pitch": 0.0,
         "dimensionId": { "idx": 1, "version": 1 },
@@ -326,8 +326,8 @@
         "znear": 0.1,
         "zfar": 100.0,
         "mode": "thirdPerson",
-        "lookingAt": [0.0, 0.0, 0.0],
-        "currentSpeed": [0.0, 0.0, 0.0],
+        "lookingAt": [ 0.0, 0.0, 0.0 ],
+        "currentSpeed": [ 0.0, 0.0, 0.0 ],
         "maxSpeed": 20.0,
         "acceleration": 150.0,
         "drag": 12.0,
@@ -338,7 +338,7 @@
       "version": 1
     }
   ],
-  "models": [{ "value": null, "version": 0 }],
+  "models": [ { "value": null, "version": 0 } ],
   "renderPipelines": [
     { "value": null, "version": 0 },
     {
@@ -377,16 +377,16 @@
         "label": "Parallax Render Pass",
         "target": {
           "textureViewId": { "idx": 4, "version": 1 },
-          "loadOperation": { "type": "clear", "value": [0.0, 0.0, 0.0, 0.0] }
+          "loadOperation": { "type": "clear", "value": [ 0.0, 0.0, 0.0, 0.0 ] }
         },
         "depthTarget": {
           "textureViewId": { "idx": 5, "version": 1 },
           "loadOperation": { "type": "clear", "value": 1.0 }
         },
-        "pipelines": [{ "idx": 1, "version": 1 }]
+        "pipelines": [ { "idx": 1, "version": 1 } ]
       },
       "version": 1
     }
   ],
-  "computePasses": [{ "value": null, "version": 0 }]
+  "computePasses": [ { "value": null, "version": 0 } ]
 }

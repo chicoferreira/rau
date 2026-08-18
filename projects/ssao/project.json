@@ -7,7 +7,7 @@
       { "idx": 4, "version": 1 },
       { "idx": 5, "version": 1 }
     ],
-    "computePasses": [],
+    "computePasses": [ ],
     "mainViewport": { "idx": 1, "version": 1 }
   },
   "shaders": [
@@ -20,7 +20,10 @@
       "version": 1
     },
     {
-      "value": { "label": "Room Normal Shader", "source": "room_normal.wgsl" },
+      "value": {
+        "label": "Room Normal Shader",
+        "source": "room_normal.wgsl"
+      },
       "version": 1
     },
     {
@@ -112,9 +115,9 @@
             "label": "model",
             "source": {
               "type": "transform",
-              "position": [0.0, 0.5, 0.0],
-              "rotation": [-90.0, 0.0, 0.0],
-              "scale": [1.0, 1.0, 1.0]
+              "position": [ 0.0, 0.5, 0.0 ],
+              "rotation": [ -90.0, 0.0, 0.0 ],
+              "scale": [ 1.0, 1.0, 1.0 ]
             }
           }
         ]
@@ -170,7 +173,7 @@
             "source": {
               "type": "userDefined",
               "dataType": "vec3f",
-              "data": [2.0, 4.0, -2.0]
+              "data": [ 2.0, 4.0, -2.0 ]
             }
           },
           {
@@ -178,7 +181,7 @@
             "source": {
               "type": "userDefined",
               "dataType": "rgb",
-              "data": [0.9, 0.2, 0.2]
+              "data": [ 0.9, 0.2, 0.2 ]
             }
           },
           {
@@ -544,7 +547,7 @@
     {
       "value": {
         "label": "Camera",
-        "position": [3.5, 2.0, -3.0],
+        "position": [ 3.5, 2.0, -3.0 ],
         "yaw": 2.5213435,
         "pitch": -0.33555448,
         "dimensionId": { "idx": 1, "version": 1 },
@@ -552,8 +555,8 @@
         "znear": 0.1,
         "zfar": 100.0,
         "mode": "thirdPerson",
-        "lookingAt": [0.0, 0.5, -0.5],
-        "currentSpeed": [0.0, 0.0, 0.0],
+        "lookingAt": [ 0.0, 0.5, -0.5 ],
+        "currentSpeed": [ 0.0, 0.0, 0.0 ],
         "maxSpeed": 20.0,
         "acceleration": 150.0,
         "drag": 12.0,
@@ -570,8 +573,8 @@
       "value": {
         "label": "Backpack",
         "source": "backpack.obj",
-        "materialBindGroupIds": [],
-        "meshMaterialSelections": [],
+        "materialBindGroupIds": [ ],
+        "meshMaterialSelections": [ ],
         "vertexBufferSpec": {
           "fields": [
             "position",
@@ -604,7 +607,7 @@
           "vertices": { "start": 0, "end": 36 },
           "instances": { "start": 0, "end": 1 }
         },
-        "bindGroups": [{ "static": { "idx": 1, "version": 1 } }],
+        "bindGroups": [ { "static": { "idx": 1, "version": 1 } } ],
         "colorFormat": "rgba16Float",
         "depthFormat": "depth32Float"
       },
@@ -654,7 +657,7 @@
           "vertices": { "start": 0, "end": 36 },
           "instances": { "start": 0, "end": 1 }
         },
-        "bindGroups": [{ "static": { "idx": 1, "version": 1 } }],
+        "bindGroups": [ { "static": { "idx": 1, "version": 1 } } ],
         "colorFormat": "rgba16Float",
         "depthFormat": "depth32Float"
       },
@@ -731,7 +734,7 @@
           "vertices": { "start": 0, "end": 3 },
           "instances": { "start": 0, "end": 1 }
         },
-        "bindGroups": [{ "static": { "idx": 6, "version": 1 } }],
+        "bindGroups": [ { "static": { "idx": 6, "version": 1 } } ],
         "colorFormat": "rgba16Float",
         "depthFormat": null
       },
@@ -772,16 +775,13 @@
         "label": "G-Buffer Position Pass",
         "target": {
           "textureViewId": { "idx": 1, "version": 1 },
-          "loadOperation": { "type": "clear", "value": [0.0, 0.0, 0.0, 0.0] }
+          "loadOperation": { "type": "clear", "value": [ 0.0, 0.0, 0.0, 0.0 ] }
         },
         "depthTarget": {
           "textureViewId": { "idx": 3, "version": 1 },
           "loadOperation": { "type": "clear", "value": 1.0 }
         },
-        "pipelines": [
-          { "idx": 1, "version": 1 },
-          { "idx": 2, "version": 1 }
-        ]
+        "pipelines": [ { "idx": 1, "version": 1 }, { "idx": 2, "version": 1 } ]
       },
       "version": 1
     },
@@ -790,16 +790,13 @@
         "label": "G-Buffer Normal Pass",
         "target": {
           "textureViewId": { "idx": 2, "version": 1 },
-          "loadOperation": { "type": "clear", "value": [0.0, 0.0, 0.0, 0.0] }
+          "loadOperation": { "type": "clear", "value": [ 0.0, 0.0, 0.0, 0.0 ] }
         },
         "depthTarget": {
           "textureViewId": { "idx": 3, "version": 1 },
           "loadOperation": { "type": "clear", "value": 1.0 }
         },
-        "pipelines": [
-          { "idx": 3, "version": 1 },
-          { "idx": 4, "version": 1 }
-        ]
+        "pipelines": [ { "idx": 3, "version": 1 }, { "idx": 4, "version": 1 } ]
       },
       "version": 1
     },
@@ -808,10 +805,10 @@
         "label": "SSAO Pass",
         "target": {
           "textureViewId": { "idx": 4, "version": 1 },
-          "loadOperation": { "type": "clear", "value": [1.0, 1.0, 1.0, 1.0] }
+          "loadOperation": { "type": "clear", "value": [ 1.0, 1.0, 1.0, 1.0 ] }
         },
         "depthTarget": null,
-        "pipelines": [{ "idx": 5, "version": 1 }]
+        "pipelines": [ { "idx": 5, "version": 1 } ]
       },
       "version": 1
     },
@@ -820,10 +817,10 @@
         "label": "SSAO Blur Pass",
         "target": {
           "textureViewId": { "idx": 5, "version": 1 },
-          "loadOperation": { "type": "clear", "value": [1.0, 1.0, 1.0, 1.0] }
+          "loadOperation": { "type": "clear", "value": [ 1.0, 1.0, 1.0, 1.0 ] }
         },
         "depthTarget": null,
-        "pipelines": [{ "idx": 6, "version": 1 }]
+        "pipelines": [ { "idx": 6, "version": 1 } ]
       },
       "version": 1
     },
@@ -832,13 +829,16 @@
         "label": "Lighting Pass",
         "target": {
           "textureViewId": { "idx": 6, "version": 1 },
-          "loadOperation": { "type": "clear", "value": [0.05, 0.05, 0.05, 1.0] }
+          "loadOperation": {
+            "type": "clear",
+            "value": [ 0.05, 0.05, 0.05, 1.0 ]
+          }
         },
         "depthTarget": null,
-        "pipelines": [{ "idx": 7, "version": 1 }]
+        "pipelines": [ { "idx": 7, "version": 1 } ]
       },
       "version": 1
     }
   ],
-  "computePasses": [{ "value": null, "version": 0 }]
+  "computePasses": [ { "value": null, "version": 0 } ]
 }

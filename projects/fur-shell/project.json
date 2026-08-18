@@ -1,7 +1,7 @@
 {
   "presentation": {
-    "renderPasses": [{ "idx": 1, "version": 1 }],
-    "computePasses": [],
+    "renderPasses": [ { "idx": 1, "version": 1 } ],
+    "computePasses": [ ],
     "mainViewport": { "idx": 1, "version": 1 }
   },
   "shaders": [
@@ -55,7 +55,7 @@
             "source": {
               "type": "userDefined",
               "dataType": "vec3f",
-              "data": [3.0, 4.0, 2.0]
+              "data": [ 3.0, 4.0, 2.0 ]
             }
           },
           {
@@ -63,7 +63,7 @@
             "source": {
               "type": "userDefined",
               "dataType": "rgb",
-              "data": [1.0, 0.95, 0.85]
+              "data": [ 1.0, 0.95, 0.85 ]
             }
           }
         ]
@@ -192,7 +192,7 @@
       "version": 1
     }
   ],
-  "samplers": [{ "value": null, "version": 0 }],
+  "samplers": [ { "value": null, "version": 0 } ],
   "dimensions": [
     { "value": null, "version": 0 },
     { "value": { "label": "Main Dimension", "size": "runtime" }, "version": 1 }
@@ -202,7 +202,7 @@
     {
       "value": {
         "label": "Camera",
-        "position": [-0.2, 1.2, 2.1],
+        "position": [ -0.2, 1.2, 2.1 ],
         "yaw": -1.6233793,
         "pitch": -0.25698355,
         "dimensionId": { "idx": 1, "version": 1 },
@@ -210,8 +210,8 @@
         "znear": 0.1,
         "zfar": 100.0,
         "mode": "thirdPerson",
-        "lookingAt": [-0.3, 0.7, 0.2],
-        "currentSpeed": [0.0, 0.0, 0.0],
+        "lookingAt": [ -0.3, 0.7, 0.2 ],
+        "currentSpeed": [ 0.0, 0.0, 0.0 ],
         "maxSpeed": 20.0,
         "acceleration": 150.0,
         "drag": 12.0,
@@ -228,8 +228,8 @@
       "value": {
         "label": "Bunny",
         "source": "bunny.obj",
-        "materialBindGroupIds": [],
-        "meshMaterialSelections": [],
+        "materialBindGroupIds": [ ],
+        "meshMaterialSelections": [ ],
         "vertexBufferSpec": {
           "fields": [
             "position",
@@ -281,16 +281,19 @@
         "label": "Fur Render Pass",
         "target": {
           "textureViewId": { "idx": 1, "version": 1 },
-          "loadOperation": { "type": "clear", "value": [0.53, 0.72, 0.9, 1.0] }
+          "loadOperation": {
+            "type": "clear",
+            "value": [ 0.53, 0.72, 0.9, 1.0 ]
+          }
         },
         "depthTarget": {
           "textureViewId": { "idx": 2, "version": 1 },
           "loadOperation": { "type": "clear", "value": 1.0 }
         },
-        "pipelines": [{ "idx": 1, "version": 1 }]
+        "pipelines": [ { "idx": 1, "version": 1 } ]
       },
       "version": 1
     }
   ],
-  "computePasses": [{ "value": null, "version": 0 }]
+  "computePasses": [ { "value": null, "version": 0 } ]
 }

@@ -1987,6 +1987,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "json-pretty-compact"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "62a9c1f06b173b0da0ccc8cae00599d7b3ceda6e76d68be9b6bc2c941adafe0e"
+dependencies = [
+ "serde_json",
+ "thiserror 1.0.69",
+]
+
+[[package]]
 name = "khronos-egl"
 version = "6.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3127,6 +3137,7 @@ dependencies = [
  "indexed_db_futures",
  "instant",
  "itertools",
+ "json-pretty-compact",
  "log",
  "naga",
  "notify",

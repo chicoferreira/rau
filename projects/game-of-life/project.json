@@ -1,6 +1,6 @@
 {
   "presentation": {
-    "renderPasses": [{ "idx": 1, "version": 1 }],
+    "renderPasses": [ { "idx": 1, "version": 1 } ],
     "computePasses": [
       { "idx": 1, "version": 1 },
       { "idx": 2, "version": 1 },
@@ -235,17 +235,20 @@
       "version": 1
     }
   ],
-  "samplers": [{ "value": null, "version": 0 }],
+  "samplers": [ { "value": null, "version": 0 } ],
   "dimensions": [
     { "value": null, "version": 0 },
-    { "value": { "label": "Grid Dimension", "size": [160, 90] }, "version": 1 },
+    {
+      "value": { "label": "Grid Dimension", "size": [ 160, 90 ] },
+      "version": 1
+    },
     {
       "value": { "label": "Display Dimension", "size": "runtime" },
       "version": 1
     }
   ],
-  "cameras": [{ "value": null, "version": 0 }],
-  "models": [{ "value": null, "version": 0 }],
+  "cameras": [ { "value": null, "version": 0 } ],
+  "models": [ { "value": null, "version": 0 } ],
   "renderPipelines": [
     { "value": null, "version": 0 },
     {
@@ -265,7 +268,7 @@
           "vertices": { "start": 0, "end": 3 },
           "instances": { "start": 0, "end": 1 }
         },
-        "bindGroups": [{ "static": { "idx": 4, "version": 1 } }],
+        "bindGroups": [ { "static": { "idx": 4, "version": 1 } } ],
         "colorFormat": "rgba8Unorm",
         "depthFormat": null
       },
@@ -279,10 +282,10 @@
         "label": "Render Pass",
         "target": {
           "textureViewId": { "idx": 3, "version": 1 },
-          "loadOperation": { "type": "clear", "value": [0.0, 0.0, 0.0, 1.0] }
+          "loadOperation": { "type": "clear", "value": [ 0.0, 0.0, 0.0, 1.0 ] }
         },
         "depthTarget": null,
-        "pipelines": [{ "idx": 1, "version": 1 }]
+        "pipelines": [ { "idx": 1, "version": 1 } ]
       },
       "version": 1
     }
@@ -292,17 +295,23 @@
     {
       "value": {
         "label": "Init",
-        "bindGroups": [{ "idx": 1, "version": 1 }],
+        "bindGroups": [ { "idx": 1, "version": 1 } ],
         "shader": { "idx": 1, "version": 1 },
         "dispatchSize": {
           "x": {
-            "dimension": { "id": { "idx": 1, "version": 1 }, "axis": "width" }
+            "dimension": {
+              "id": { "idx": 1, "version": 1 },
+              "axis": "width"
+            }
           },
           "y": {
-            "dimension": { "id": { "idx": 1, "version": 1 }, "axis": "height" }
+            "dimension": {
+              "id": { "idx": 1, "version": 1 },
+              "axis": "height"
+            }
           },
           "z": { "fixed": 1 },
-          "unit": { "invocation": { "workgroupSize": [8, 8, 1] } }
+          "unit": { "invocation": { "workgroupSize": [ 8, 8, 1 ] } }
         },
         "dispatchPolicy": { "type": "onChange" }
       },
@@ -311,17 +320,23 @@
     {
       "value": {
         "label": "Simulate",
-        "bindGroups": [{ "idx": 2, "version": 1 }],
+        "bindGroups": [ { "idx": 2, "version": 1 } ],
         "shader": { "idx": 2, "version": 1 },
         "dispatchSize": {
           "x": {
-            "dimension": { "id": { "idx": 1, "version": 1 }, "axis": "width" }
+            "dimension": {
+              "id": { "idx": 1, "version": 1 },
+              "axis": "width"
+            }
           },
           "y": {
-            "dimension": { "id": { "idx": 1, "version": 1 }, "axis": "height" }
+            "dimension": {
+              "id": { "idx": 1, "version": 1 },
+              "axis": "height"
+            }
           },
           "z": { "fixed": 1 },
-          "unit": { "invocation": { "workgroupSize": [8, 8, 1] } }
+          "unit": { "invocation": { "workgroupSize": [ 8, 8, 1 ] } }
         },
         "dispatchPolicy": { "type": "periodic", "interval": 0.2 }
       },
@@ -330,17 +345,23 @@
     {
       "value": {
         "label": "Copy",
-        "bindGroups": [{ "idx": 3, "version": 1 }],
+        "bindGroups": [ { "idx": 3, "version": 1 } ],
         "shader": { "idx": 3, "version": 1 },
         "dispatchSize": {
           "x": {
-            "dimension": { "id": { "idx": 1, "version": 1 }, "axis": "width" }
+            "dimension": {
+              "id": { "idx": 1, "version": 1 },
+              "axis": "width"
+            }
           },
           "y": {
-            "dimension": { "id": { "idx": 1, "version": 1 }, "axis": "height" }
+            "dimension": {
+              "id": { "idx": 1, "version": 1 },
+              "axis": "height"
+            }
           },
           "z": { "fixed": 1 },
-          "unit": { "invocation": { "workgroupSize": [8, 8, 1] } }
+          "unit": { "invocation": { "workgroupSize": [ 8, 8, 1 ] } }
         },
         "dispatchPolicy": { "type": "periodic", "interval": 0.2 }
       },

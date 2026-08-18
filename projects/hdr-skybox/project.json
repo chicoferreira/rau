@@ -4,7 +4,7 @@
       { "idx": 1, "version": 1 },
       { "idx": 2, "version": 1 }
     ],
-    "computePasses": [{ "idx": 1, "version": 1 }],
+    "computePasses": [ { "idx": 1, "version": 1 } ],
     "mainViewport": { "idx": 2, "version": 1 }
   },
   "shaders": [
@@ -108,7 +108,7 @@
             "source": {
               "type": "userDefined",
               "dataType": "vec3f",
-              "data": [2.0, 2.0, 2.0]
+              "data": [ 2.0, 2.0, 2.0 ]
             }
           },
           {
@@ -116,7 +116,7 @@
             "source": {
               "type": "userDefined",
               "dataType": "rgb",
-              "data": [1.0, 1.0, 1.0]
+              "data": [ 1.0, 1.0, 1.0 ]
             }
           }
         ]
@@ -132,7 +132,7 @@
             "source": {
               "type": "userDefined",
               "dataType": "rgb",
-              "data": [1.0, 1.0, 1.0]
+              "data": [ 1.0, 1.0, 1.0 ]
             }
           }
         ]
@@ -506,7 +506,7 @@
     { "value": null, "version": 0 },
     { "value": { "label": "Main Dimension", "size": "runtime" }, "version": 1 },
     {
-      "value": { "label": "Cube Face Dimension", "size": [1080, 1080] },
+      "value": { "label": "Cube Face Dimension", "size": [ 1080, 1080 ] },
       "version": 1
     }
   ],
@@ -515,7 +515,7 @@
     {
       "value": {
         "label": "Main Camera",
-        "position": [0.0, 5.0, 10.0],
+        "position": [ 0.0, 5.0, 10.0 ],
         "yaw": -1.5707964,
         "pitch": -0.34906584,
         "dimensionId": { "idx": 1, "version": 1 },
@@ -523,8 +523,8 @@
         "znear": 0.1,
         "zfar": 100.0,
         "mode": "firstPerson",
-        "lookingAt": [0.0, 0.0, 0.0],
-        "currentSpeed": [0.0, 0.0, 0.0],
+        "lookingAt": [ 0.0, 0.0, 0.0 ],
+        "currentSpeed": [ 0.0, 0.0, 0.0 ],
         "maxSpeed": 20.0,
         "acceleration": 150.0,
         "drag": 12.0,
@@ -541,8 +541,8 @@
       "value": {
         "label": "cube",
         "source": "cube.obj",
-        "materialBindGroupIds": [{ "idx": 3, "version": 1 }],
-        "meshMaterialSelections": [],
+        "materialBindGroupIds": [ { "idx": 3, "version": 1 } ],
+        "meshMaterialSelections": [ ],
         "vertexBufferSpec": {
           "fields": [
             "position",
@@ -657,7 +657,7 @@
           "vertices": { "start": 0, "end": 3 },
           "instances": { "start": 0, "end": 1 }
         },
-        "bindGroups": [{ "static": { "idx": 4, "version": 1 } }],
+        "bindGroups": [ { "static": { "idx": 4, "version": 1 } } ],
         "colorFormat": "rgba8UnormSrgb",
         "depthFormat": null
       },
@@ -671,7 +671,7 @@
         "label": "Main Render Pass",
         "target": {
           "textureViewId": { "idx": 3, "version": 1 },
-          "loadOperation": { "type": "clear", "value": [0.0, 0.0, 0.0, 1.0] }
+          "loadOperation": { "type": "clear", "value": [ 0.0, 0.0, 0.0, 1.0 ] }
         },
         "depthTarget": {
           "textureViewId": { "idx": 7, "version": 1 },
@@ -690,10 +690,10 @@
         "label": "HDR render pass",
         "target": {
           "textureViewId": { "idx": 8, "version": 1 },
-          "loadOperation": { "type": "clear", "value": [0.0, 0.0, 0.0, 1.0] }
+          "loadOperation": { "type": "clear", "value": [ 0.0, 0.0, 0.0, 1.0 ] }
         },
         "depthTarget": null,
-        "pipelines": [{ "idx": 4, "version": 1 }]
+        "pipelines": [ { "idx": 4, "version": 1 } ]
       },
       "version": 1
     }
@@ -710,13 +710,19 @@
         "shader": { "idx": 1, "version": 1 },
         "dispatchSize": {
           "x": {
-            "dimension": { "id": { "idx": 2, "version": 1 }, "axis": "width" }
+            "dimension": {
+              "id": { "idx": 2, "version": 1 },
+              "axis": "width"
+            }
           },
           "y": {
-            "dimension": { "id": { "idx": 2, "version": 1 }, "axis": "height" }
+            "dimension": {
+              "id": { "idx": 2, "version": 1 },
+              "axis": "height"
+            }
           },
           "z": { "fixed": 6 },
-          "unit": { "invocation": { "workgroupSize": [16, 16, 1] } }
+          "unit": { "invocation": { "workgroupSize": [ 16, 16, 1 ] } }
         },
         "dispatchPolicy": { "type": "onChange" }
       },

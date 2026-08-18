@@ -1,7 +1,7 @@
 {
   "presentation": {
-    "renderPasses": [{ "idx": 1, "version": 1 }],
-    "computePasses": [],
+    "renderPasses": [ { "idx": 1, "version": 1 } ],
+    "computePasses": [ ],
     "mainViewport": { "idx": 1, "version": 1 }
   },
   "shaders": [
@@ -79,7 +79,7 @@
             "source": {
               "type": "userDefined",
               "dataType": "vec3f",
-              "data": [10.0, 0.5, 0.0]
+              "data": [ 10.0, 0.5, 0.0 ]
             }
           }
         ]
@@ -147,7 +147,7 @@
       "version": 1
     }
   ],
-  "samplers": [{ "value": null, "version": 0 }],
+  "samplers": [ { "value": null, "version": 0 } ],
   "dimensions": [
     { "value": null, "version": 0 },
     { "value": { "label": "Main Dimension", "size": "runtime" }, "version": 1 }
@@ -157,7 +157,7 @@
     {
       "value": {
         "label": "Main Camera",
-        "position": [0.0, 0.0, -1.0],
+        "position": [ 0.0, 0.0, -1.0 ],
         "yaw": 0.0,
         "pitch": 0.0,
         "dimensionId": { "idx": 1, "version": 1 },
@@ -165,8 +165,8 @@
         "znear": 0.1,
         "zfar": 100.0,
         "mode": "firstPerson",
-        "lookingAt": [0.0, 0.0, 0.0],
-        "currentSpeed": [0.0, 0.0, 0.0],
+        "lookingAt": [ 0.0, 0.0, 0.0 ],
+        "currentSpeed": [ 0.0, 0.0, 0.0 ],
         "maxSpeed": 20.0,
         "acceleration": 150.0,
         "drag": 12.0,
@@ -177,7 +177,7 @@
       "version": 1
     }
   ],
-  "models": [{ "value": null, "version": 0 }],
+  "models": [ { "value": null, "version": 0 } ],
   "renderPipelines": [
     { "value": null, "version": 0 },
     {
@@ -214,13 +214,13 @@
         "label": "Sky Render Pass",
         "target": {
           "textureViewId": { "idx": 1, "version": 1 },
-          "loadOperation": { "type": "clear", "value": [0.0, 0.0, 0.0, 1.0] }
+          "loadOperation": { "type": "clear", "value": [ 0.0, 0.0, 0.0, 1.0 ] }
         },
         "depthTarget": null,
-        "pipelines": [{ "idx": 1, "version": 1 }]
+        "pipelines": [ { "idx": 1, "version": 1 } ]
       },
       "version": 1
     }
   ],
-  "computePasses": [{ "value": null, "version": 0 }]
+  "computePasses": [ { "value": null, "version": 0 } ]
 }

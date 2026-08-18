@@ -4,7 +4,7 @@
       { "idx": 1, "version": 1 },
       { "idx": 2, "version": 1 }
     ],
-    "computePasses": [],
+    "computePasses": [ ],
     "mainViewport": { "idx": 1, "version": 1 }
   },
   "shaders": [
@@ -90,7 +90,7 @@
             "source": {
               "type": "userDefined",
               "dataType": "rgb",
-              "data": [1.0, 0.95, 0.85]
+              "data": [ 1.0, 0.95, 0.85 ]
             }
           }
         ]
@@ -240,12 +240,12 @@
       "version": 1
     }
   ],
-  "samplers": [{ "value": null, "version": 0 }],
+  "samplers": [ { "value": null, "version": 0 } ],
   "dimensions": [
     { "value": null, "version": 0 },
     { "value": { "label": "Main Dimension", "size": "runtime" }, "version": 1 },
     {
-      "value": { "label": "Shadow Map Dimension", "size": [4096, 4096] },
+      "value": { "label": "Shadow Map Dimension", "size": [ 4096, 4096 ] },
       "version": 1
     }
   ],
@@ -254,7 +254,7 @@
     {
       "value": {
         "label": "Camera",
-        "position": [2.0, 2.5, 5.0],
+        "position": [ 2.0, 2.5, 5.0 ],
         "yaw": -1.9513026,
         "pitch": -0.33918586,
         "dimensionId": { "idx": 1, "version": 1 },
@@ -262,8 +262,8 @@
         "znear": 0.1,
         "zfar": 100.0,
         "mode": "firstPerson",
-        "lookingAt": [0.0, 0.6, 0.0],
-        "currentSpeed": [0.0, 0.0, 0.0],
+        "lookingAt": [ 0.0, 0.6, 0.0 ],
+        "currentSpeed": [ 0.0, 0.0, 0.0 ],
         "maxSpeed": 20.0,
         "acceleration": 150.0,
         "drag": 12.0,
@@ -276,7 +276,7 @@
     {
       "value": {
         "label": "Light",
-        "position": [7.0, 5.5, 2.0],
+        "position": [ 7.0, 5.5, 2.0 ],
         "yaw": -2.863293,
         "pitch": -0.6470011,
         "dimensionId": { "idx": 2, "version": 1 },
@@ -284,8 +284,8 @@
         "znear": 1.0,
         "zfar": 40.0,
         "mode": "firstPerson",
-        "lookingAt": [0.0, 0.0, 0.0],
-        "currentSpeed": [0.0, 0.0, 0.0],
+        "lookingAt": [ 0.0, 0.0, 0.0 ],
+        "currentSpeed": [ 0.0, 0.0, 0.0 ],
         "maxSpeed": 20.0,
         "acceleration": 150.0,
         "drag": 12.0,
@@ -296,7 +296,7 @@
       "version": 1
     }
   ],
-  "models": [{ "value": null, "version": 0 }],
+  "models": [ { "value": null, "version": 0 } ],
   "renderPipelines": [
     { "value": null, "version": 0 },
     {
@@ -316,7 +316,7 @@
           "vertices": { "start": 0, "end": 36 },
           "instances": { "start": 0, "end": 5 }
         },
-        "bindGroups": [{ "static": { "idx": 2, "version": 1 } }],
+        "bindGroups": [ { "static": { "idx": 2, "version": 1 } } ],
         "colorFormat": "rgba8UnormSrgb",
         "depthFormat": "depth32Float"
       },
@@ -357,13 +357,16 @@
         "label": "Shadow Pass",
         "target": {
           "textureViewId": { "idx": 4, "version": 1 },
-          "loadOperation": { "type": "clear", "value": [0.16, 0.28, 0.42, 1.0] }
+          "loadOperation": {
+            "type": "clear",
+            "value": [ 0.16, 0.28, 0.42, 1.0 ]
+          }
         },
         "depthTarget": {
           "textureViewId": { "idx": 3, "version": 1 },
           "loadOperation": { "type": "clear", "value": 1.0 }
         },
-        "pipelines": [{ "idx": 1, "version": 1 }]
+        "pipelines": [ { "idx": 1, "version": 1 } ]
       },
       "version": 1
     },
@@ -372,16 +375,19 @@
         "label": "Scene Pass",
         "target": {
           "textureViewId": { "idx": 1, "version": 1 },
-          "loadOperation": { "type": "clear", "value": [0.16, 0.28, 0.42, 1.0] }
+          "loadOperation": {
+            "type": "clear",
+            "value": [ 0.16, 0.28, 0.42, 1.0 ]
+          }
         },
         "depthTarget": {
           "textureViewId": { "idx": 2, "version": 1 },
           "loadOperation": { "type": "clear", "value": 1.0 }
         },
-        "pipelines": [{ "idx": 2, "version": 1 }]
+        "pipelines": [ { "idx": 2, "version": 1 } ]
       },
       "version": 1
     }
   ],
-  "computePasses": [{ "value": null, "version": 0 }]
+  "computePasses": [ { "value": null, "version": 0 } ]
 }
