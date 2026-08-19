@@ -77,7 +77,7 @@ impl ErrorPanel {
             .resizable(true)
             .default_size(200.0)
             .min_size(80.0)
-            .show_inside(ui, |ui| {
+            .show(ui, |ui| {
                 error_list_content(open, ui, state.project, state.event_queue, &self.errors);
             });
     }

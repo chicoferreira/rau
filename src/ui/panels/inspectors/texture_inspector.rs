@@ -58,7 +58,7 @@ const TEXTURE_USAGES: &[(TextureUsages, &str)] = &[
     (TextureUsages::STORAGE_BINDING, "Storage Binding"),
     (TextureUsages::RENDER_ATTACHMENT, "Render Attachment"),
     (TextureUsages::STORAGE_ATOMIC, "Storage Atomic"),
-    (TextureUsages::TRANSIENT, "Transient"),
+    (TextureUsages::TRANSIENT_ATTACHMENT, "Transient Attachment"),
 ];
 
 const SOURCE_KINDS: [TextureSourceKind; 3] = [

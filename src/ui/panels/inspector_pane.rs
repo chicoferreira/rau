@@ -107,7 +107,7 @@ impl Pane for InspectorPane {
         ui: &mut egui::Ui,
     ) -> egui_tiles::UiResponse {
         let panel = egui::CentralPanel::default().frame(egui::Frame::new().inner_margin(0));
-        panel.show_inside(ui, |ui| {
+        panel.show(ui, |ui| {
             egui::ScrollArea::both().auto_shrink(false).show(ui, |ui| {
                 ui.push_id(self.clone(), |ui| {
                     match self {

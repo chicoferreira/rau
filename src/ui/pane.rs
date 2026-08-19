@@ -36,33 +36,33 @@ impl StateSnapshot<'_> {
     ) {
         error_panel.tick(self.runtime_project);
 
-        egui::Panel::top("top_panel").show_inside(ui, |ui| {
+        egui::Panel::top("top_panel").show(ui, |ui| {
             menu_bar::ui(self, ui);
         });
 
         egui::Panel::bottom("status_panel")
             .resizable(false)
-            .show_inside(ui, |ui| {
+            .show(ui, |ui| {
                 status_bar::ui(self, ui, error_panel);
             });
 
         egui::Panel::left("left_panel")
             .frame(egui::Frame::new().inner_margin(0))
             .resizable(true)
-            .show_inside(ui, |ui| {
+            .show(ui, |ui| {
                 let half_height = ui.available_height() * 0.5;
 
                 egui::Panel::top("files_panel")
                     .frame(egui::Frame::new().inner_margin(egui::Margin::symmetric(4, 0)))
                     .resizable(true)
                     .default_size(half_height)
-                    .show_inside(ui, |ui| {
+                    .show(ui, |ui| {
                         section_panel(ui, "File Explorer", |ui| files_panel::ui(self, ui));
                     });
 
                 egui::CentralPanel::default()
                     .frame(egui::Frame::new().inner_margin(egui::Margin::symmetric(4, 0)))
-                    .show_inside(ui, |ui| {
+                    .show(ui, |ui| {
                         section_panel(ui, "Project Resources", |ui| {
                             project_tree_panel::ui(self, ui)
                         });
@@ -72,7 +72,7 @@ impl StateSnapshot<'_> {
         egui::Panel::right("inspector_tree_panel")
             .frame(egui::Frame::new().inner_margin(0))
             .resizable(true)
-            .show_inside(ui, |ui| {
+            .show(ui, |ui| {
                 inspector_tree_pane.ui(self, ui);
             });
 

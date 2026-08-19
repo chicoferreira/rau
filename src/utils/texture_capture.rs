@@ -185,7 +185,10 @@ async fn read_buffer(
         .map_err(|_| AppError::CaptureError("buffer map callback was dropped".into()))?
         .map_err(|err| AppError::CaptureError(format!("buffer map failed: {err}")))?;
 
-    let mapped = buffer.slice(..).get_mapped_range();
+    let mapped = buffer
+        .slice(..)
+        .get_mapped_range()
+        .map_err(|err| AppError::CaptureError(format!("mapping the buffer range failed: {err}")))?;
     let mut pixels = Vec::with_capacity((unpadded_bytes_per_row as usize) * (height as usize));
     for row in 0..height {
         let start = (row * padded_bytes_per_row) as usize;

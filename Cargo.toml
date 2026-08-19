@@ -27,14 +27,15 @@ anyhow = "1.0.100"
 bitflags = "2.11.0"
 bytemuck = { version = "1.24.0", features = ["derive"] }
 derive_more = { version = "2.1.1", features = ["add", "add_assign", "deref", "from"] }
-egui = "0.34.1"
-egui-wgpu = "0.34.1"
-egui-winit = { version = "0.34.1", default-features = false }
-egui_dnd = "0.15.0"
-egui_extras = { version = "0.34.1", features = ["syntect", "http", "image"] }
-egui_ltreeview = "0.7.0"
-egui_table = "0.8.0"
-egui_tiles = "0.15.0"
+egui = "0.36.1"
+egui-wgpu = "0.36.1"
+egui-winit = { version = "0.36.1", default-features = false }
+egui_dnd = "0.17.0"
+egui_extras = { version = "0.36.1", features = ["syntect", "http", "image"] }
+# TODO: go back to a crates.io version once this releases for egui 0.36
+egui_ltreeview = { git = "https://github.com/LennysLounge/egui_ltreeview", rev = "59b32c9645" }
+egui_table = "0.10.0"
+egui_tiles = "0.17.1"
 enumset = "1.1.10"
 enum_dispatch = "0.3.13"
 env_logger = "0.11.8"
@@ -46,30 +47,32 @@ heck = "0.5.0"
 image = { version = "0.25", default-features = false, features = ["png", "jpeg", "hdr", "exr"] }
 instant = "0.1"
 log = "0.4.29"
-naga = { version = "29.0.0", features = ["wgsl-in", "glsl-in"] }
+naga = { version = "30.0.0", features = ["wgsl-in", "glsl-in"] }
 serde_json = "1.0.149"
 slotmap = { version = "1.0", features = ["serde"] }
 strum = { version = "0.28.0", features = ["derive"] }
 thiserror = "2.0.18"
 tobj = { version = "4.0.3", default-features = false, features = ["futures"] }
 tokio = { version = "1.52.3", features = ["sync"] }
-wgpu = { version = "29.0", features = ["naga-ir", "serde"] }
-winit = { version = "0.30.12", features = ["android-native-activity"] }
+wgpu = { version = "30.0", features = ["naga-ir", "serde"] }
+winit = { version = "0.30.13", features = ["android-native-activity"] }
 syntect = { version = "5.3.0", default-features = false, features = ["default-fancy"] }
 itertools = "0.14.0"
 url = "2.5.8"
 rfd = "0.17.2"
 serde = "1.0.228"
 ehttp = { version = "0.7.1", features = ["json", "native-async"] }
-egui-notify = "0.22.0"
-egui-phosphor = "0.12.0"
-egui_commonmark = { version = "0.23.0", features = ["macros"] }
+# TODO: go back to a crates.io version once this releases for egui 0.36
+egui-notify = { git = "https://github.com/UnknownSuperficialNight/egui-notify.git", rev = "ae98ed7cb5" }
+# TODO: go back to a crates.io version once this releases for egui 0.36
+egui-phosphor = { git = "https://github.com/UnknownSuperficialNight/egui-phosphor.git", rev = "d392183fe3" }
+egui_commonmark = { version = "0.25.0", features = ["macros"] }
 chrono = { version = "0.4", features = ["serde"] }
 json-pretty-compact = "0.1.2"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 # Enable default features for egui-winit
-egui-winit = { version = "0.34.1", default-features = true }
+egui-winit = { version = "0.36.1", default-features = true }
 clap = { version = "4.5", features = ["derive"] }
 pollster = "0.4.0"
 notify = "8.2.0"

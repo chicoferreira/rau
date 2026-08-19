@@ -1,6 +1,4 @@
-use std::hash::Hash;
-
-use egui::{RichText, Ui};
+use egui::{AsIdSalt, RichText, Ui};
 
 use crate::{
     project::{
@@ -27,7 +25,7 @@ impl AsRichText for Axis {
 
 pub fn dimension_ref_edit(
     ui: &mut Ui,
-    id_salt: impl Hash,
+    id_salt: impl AsIdSalt,
     dimensions: &Storage<Dimension>,
     value: &mut DimensionRef,
 ) -> bool {

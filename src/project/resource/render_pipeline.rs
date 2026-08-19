@@ -271,14 +271,15 @@ impl SyncResource for RenderPipeline {
             RenderDrawStrategy::Direct { .. } => None,
         };
 
-        let vertex_buffers: &[wgpu::VertexBufferLayout] = match &vertex_attributes_and_stride {
-            Some((attributes, array_stride)) => &[wgpu::VertexBufferLayout {
-                array_stride: *array_stride,
-                step_mode: wgpu::VertexStepMode::Vertex,
-                attributes,
-            }],
-            None => &[],
-        };
+        let vertex_buffers: &[Option<wgpu::VertexBufferLayout>] =
+            match &vertex_attributes_and_stride {
+                Some((attributes, array_stride)) => &[Some(wgpu::VertexBufferLayout {
+                    array_stride: *array_stride,
+                    step_mode: wgpu::VertexStepMode::Vertex,
+                    attributes,
+                })],
+                None => &[],
+            };
 
         let bind_group_ids = self.collect_bind_group_ids(ctx.models)?;
 

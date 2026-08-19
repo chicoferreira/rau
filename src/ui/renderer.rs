@@ -88,16 +88,18 @@ impl EguiRenderer {
 
     pub fn render_egui_frame(
         &mut self,
-        frame: &EguiFrame,
+        frame: &mut EguiFrame,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
         encoder: &mut wgpu::CommandEncoder,
         view: &wgpu::TextureView,
         screen_descriptor: &egui_wgpu::ScreenDescriptor,
     ) {
-        for (id, image_delta) in &frame.textures_delta.set {
-            self.renderer
-                .update_texture(device, queue, *id, image_delta);
+        for (id, image_deltas) in &frame.textures_delta.set {
+            for image_delta in image_deltas {
+                self.renderer
+                    .update_texture(device, queue, *id, image_delta);
+            }
         }
 
         self.renderer
@@ -137,6 +139,8 @@ impl EguiRenderer {
         for ele in &frame.textures_delta.free {
             self.renderer.free_texture(ele);
         }
+
+        frame.textures_delta.clear();
     }
 
     pub fn register_egui_texture(

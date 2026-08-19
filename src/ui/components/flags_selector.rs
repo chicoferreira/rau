@@ -1,11 +1,9 @@
-use std::hash::Hash;
-
 use bitflags::Flags;
-use egui::{ComboBox, PopupCloseBehavior, Ui};
+use egui::{AsIdSalt, ComboBox, PopupCloseBehavior, Ui};
 
 pub fn flags_selector<F>(
     ui: &mut Ui,
-    id_salt: impl Hash,
+    id_salt: impl AsIdSalt,
     value: &mut F,
     options: &[(F, &str)],
 ) -> bool

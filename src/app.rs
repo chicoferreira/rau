@@ -85,6 +85,7 @@ impl WindowApp<StartupAction> for App {
                 power_preference: wgpu::PowerPreference::default(),
                 compatible_surface: Some(&surface),
                 force_fallback_adapter: false,
+                apply_limit_buckets: false,
             })
             .await?;
 
@@ -139,6 +140,7 @@ impl WindowApp<StartupAction> for App {
         let config = wgpu::SurfaceConfiguration {
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
             format: surface_format,
+            color_space: wgpu::SurfaceColorSpace::Auto,
             width: size.width.max(1),
             height: size.height.max(1),
             present_mode: wgpu::PresentMode::AutoVsync,
@@ -301,7 +303,7 @@ impl App {
         let state = &mut self.state;
         let app_event_queue = &mut self.event_queue;
         let app_file_system = &self.app_file_system;
-        let frame = self.egui_renderer.handle(&self.window, |ui| {
+        let mut frame = self.egui_renderer.handle(&self.window, |ui| {
             ui::fullscreen::handle_shortcut(ui.ctx());
 
             match state {
@@ -336,7 +338,7 @@ impl App {
         };
 
         self.egui_renderer.render_egui_frame(
-            &frame,
+            &mut frame,
             &self.device,
             &self.queue,
             &mut egui_encoder,
@@ -350,7 +352,7 @@ impl App {
             workspace.on_frame_submitted(scope.pop());
         }
 
-        output.present();
+        self.queue.present(output);
         self.window.request_redraw();
 
         Ok(())

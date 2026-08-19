@@ -1,6 +1,4 @@
-use std::hash::Hash;
-
-use egui::{Direction, Grid, InnerResponse, Layout, Response, RichText, Ui, WidgetText};
+use egui::{AsIdSalt, Direction, Grid, InnerResponse, Layout, Response, RichText, Ui, WidgetText};
 
 use crate::ui::components::field_docs::{self, FieldDoc};
 
@@ -26,7 +24,7 @@ pub fn spinner(ui: &mut Ui) -> Response {
 
 pub fn field_grid<R>(
     ui: &mut Ui,
-    id_salt: impl Hash,
+    id_salt: impl AsIdSalt,
     add_rows: impl FnOnce(&mut Ui) -> R,
 ) -> InnerResponse<R> {
     Grid::new(id_salt)

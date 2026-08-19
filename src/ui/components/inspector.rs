@@ -1,6 +1,6 @@
-use std::{hash::Hash, ops::RangeInclusive};
+use std::ops::RangeInclusive;
 
-use egui::{Align2, ComboBox, Response, RichText, Ui, Widget, WidgetText};
+use egui::{Align2, AsIdSalt, ComboBox, Response, RichText, Ui, Widget, WidgetText};
 
 use crate::{
     project::{ProjectResource, paths::FilePath, storage::Storage},
@@ -118,7 +118,7 @@ pub fn combo_row_doc<T>(
     ui: &mut Ui,
     label: impl Into<WidgetText>,
     doc: impl FieldDoc,
-    id_salt: impl Hash,
+    id_salt: impl AsIdSalt,
     options: impl IntoIterator<Item = T>,
     current_value: &mut T,
 ) -> bool
@@ -181,7 +181,7 @@ pub fn checkbox_row_doc(
 
 pub fn value_combo<T>(
     ui: &mut Ui,
-    id_salt: impl Hash,
+    id_salt: impl AsIdSalt,
     options: impl IntoIterator<Item = T>,
     current_value: &mut T,
 ) -> bool
@@ -193,7 +193,7 @@ where
 
 pub fn value_combo_with<T>(
     ui: &mut Ui,
-    id_salt: impl Hash,
+    id_salt: impl AsIdSalt,
     options: impl IntoIterator<Item = T>,
     label_fn: impl Fn(&T) -> RichText,
     current_value: &mut T,
@@ -215,7 +215,7 @@ where
 
 pub fn combo_with_weak<T>(
     ui: &mut Ui,
-    id_salt: impl Hash,
+    id_salt: impl AsIdSalt,
     options: impl IntoIterator<Item = T>,
     current_value: &mut T,
     weak_text: Option<impl AsRichText>,
@@ -269,7 +269,7 @@ fn select_placeholder(ui: &Ui) -> WidgetText {
 
 pub fn storage_opt_combo<R>(
     ui: &mut Ui,
-    id_salt: impl Hash,
+    id_salt: impl AsIdSalt,
     storage: &Storage<R>,
     current_value: &mut Option<R::Id>,
 ) -> bool
@@ -292,7 +292,7 @@ where
 
 pub fn storage_combo<R>(
     ui: &mut Ui,
-    id_salt: impl Hash,
+    id_salt: impl AsIdSalt,
     storage: &Storage<R>,
     current_value: &mut Option<R::Id>,
 ) -> bool
@@ -319,7 +319,7 @@ where
 
 pub fn storage_id_combo<R>(
     ui: &mut Ui,
-    id_salt: impl Hash,
+    id_salt: impl AsIdSalt,
     storage: &Storage<R>,
     current_value: &mut R::Id,
 ) -> bool
@@ -372,7 +372,7 @@ pub fn add_from_storage_menu<R>(
 
 pub fn file_combo(
     ui: &mut Ui,
-    id_salt: impl Hash,
+    id_salt: impl AsIdSalt,
     files: &[FilePath],
     current_value: &mut Option<FilePath>,
     file_filter: impl Fn(&FilePath) -> bool,

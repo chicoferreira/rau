@@ -1,5 +1,3 @@
-use std::hash::Hash;
-
 pub struct ListEdits<T> {
     changes: Vec<ListEdit<T>>,
 }
@@ -46,9 +44,9 @@ pub enum ListEdit<T> {
     Reorder(egui_dnd::DragUpdate),
 }
 
-pub fn draggable_list<T: Hash>(
+pub fn draggable_list<T: egui::AsId>(
     ui: &mut egui::Ui,
-    id_source: impl Hash + Copy,
+    id_source: impl egui::AsId + Copy,
     entries: &[T],
     mut render_item: impl FnMut(&mut egui::Ui, &T, usize, egui_dnd::Handle, &mut ListEdits<T>),
 ) -> ListEdits<T> {

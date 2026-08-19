@@ -1,7 +1,7 @@
-use std::{cell::RefCell, hash::Hash, rc::Rc};
+use std::{cell::RefCell, rc::Rc};
 
 use egui::Label;
-use egui_ltreeview::{NodeBuilder, NodeConfig, TreeViewBuilder};
+use egui_ltreeview::{NodeBuilder, NodeConfig, NodeId, TreeViewBuilder};
 
 use crate::{
     ui::{
@@ -37,7 +37,7 @@ pub fn pending_create_node<T>(
     tree_id: T,
     rename_target: RenameTarget,
 ) where
-    T: Clone + Eq + Hash,
+    T: NodeId,
 {
     let current_label = match rename_state.as_ref() {
         Some(rename_state) if rename_state.target == rename_target => {
@@ -78,7 +78,7 @@ enum ContextMenuEntity<'a> {
 
 impl<'a, T> TreeNode<'a, T>
 where
-    T: Clone + Eq + Hash + 'a,
+    T: NodeId + 'a,
 {
     pub fn new(tree_id: T, label: &'a str) -> Self {
         Self {
