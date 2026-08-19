@@ -78,12 +78,10 @@ pub struct RuntimeProject {
     pub cameras: RuntimeStorage<Camera>,
     pub models: RuntimeStorage<Model>,
     pub render_pipelines: RuntimeStorage<RenderPipeline>,
+    pub render_passes: RuntimeStorage<RenderPass>,
     pub compute_passes: RuntimeStorage<ComputePass>,
     /// Time accumulated since each [`DispatchPolicy::Periodic`] compute pass last dispatched.
     pub compute_accumulators: SecondaryMap<ComputePassId, instant::Duration>,
-    /// Errors raised while encoding each render pass in [`Presentation::render`].
-    /// Recomputed every frame, so there is no sync/runtime storage to keep in step.
-    pub render_pass_errors: SecondaryMap<RenderPassId, AppError>,
     pub presentation_render: PresentationRender,
 }
 
@@ -201,9 +199,7 @@ impl RuntimeProject {
             ResourceId::Camera(id) => self.cameras.unregister(id),
             ResourceId::Model(id) => self.models.unregister(id),
             ResourceId::RenderPipeline(id) => self.render_pipelines.unregister(id),
-            ResourceId::RenderPass(id) => {
-                self.render_pass_errors.remove(id);
-            }
+            ResourceId::RenderPass(id) => self.render_passes.unregister(id),
             ResourceId::Presentation(_) => {}
             ResourceId::ComputePass(id) => {
                 self.compute_passes.unregister(id);
@@ -224,6 +220,7 @@ impl RuntimeProject {
             || self.cameras.has_pending()
             || self.models.has_pending()
             || self.render_pipelines.has_pending()
+            || self.render_passes.has_pending()
             || self.compute_passes.has_pending()
     }
 
@@ -240,11 +237,7 @@ impl RuntimeProject {
             .chain(self.models.get_errors())
             .chain(self.compute_passes.get_errors())
             .chain(self.render_pipelines.get_errors())
-            .chain(
-                self.render_pass_errors
-                    .iter()
-                    .map(|(id, error)| (id.into(), error)),
-            )
+            .chain(self.render_passes.get_errors())
             .chain(
                 self.presentation_render
                     .error()
@@ -264,7 +257,7 @@ impl RuntimeProject {
             ResourceId::Camera(id) => self.cameras.get_error(id),
             ResourceId::Model(id) => self.models.get_error(id),
             ResourceId::RenderPipeline(id) => self.render_pipelines.get_error(id),
-            ResourceId::RenderPass(id) => self.render_pass_errors.get(id),
+            ResourceId::RenderPass(id) => self.render_passes.get_error(id),
             ResourceId::ComputePass(id) => self.compute_passes.get_error(id),
             ResourceId::Presentation(_) => self.presentation_render.error(),
             ResourceId::Viewport(_) => None,

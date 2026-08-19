@@ -18,7 +18,7 @@ use crate::{
             camera::CameraCreationContext,
             compute_pass,
             model::{ModelCreationContext, TextureType},
-            render_pipeline,
+            render_pass, render_pipeline,
             shader::ShaderCreationContext,
             texture::TextureCreationContext,
             texture_view::TextureViewCreationContext,
@@ -246,15 +246,10 @@ impl Workspace {
             return;
         }
 
-        let mut render_ctx = render::RenderContext {
-            models: &self.project.models,
-            render_pipelines: &self.project.render_pipelines,
+        let render_ctx = render::RenderContext {
             render_passes: &self.project.render_passes,
-            runtime_models: &self.runtime_project.models,
-            runtime_bind_groups: &self.runtime_project.bind_groups,
+            runtime_render_passes: &self.runtime_project.render_passes,
             runtime_texture_views: &self.runtime_project.texture_views,
-            runtime_render_pipelines: &self.runtime_project.render_pipelines,
-            render_pass_errors: &mut self.runtime_project.render_pass_errors,
         };
 
         // The viewport render uses a separate, droppable encoder: if a render pass bails out
@@ -265,7 +260,7 @@ impl Workspace {
         let mut viewport_encoder = create_command_encoder(ctx.device, "Viewport Render Encoder");
 
         let presentation = &self.project.presentation;
-        match presentation.render(&mut viewport_encoder, &mut render_ctx) {
+        match presentation.render(&mut viewport_encoder, &render_ctx) {
             Ok(true) => {
                 ctx.queue.submit([viewport_encoder.finish()]);
             }
@@ -646,6 +641,21 @@ impl Workspace {
         self.tracker.sync_storage(
             &mut self.project.render_pipelines,
             &mut self.runtime_project.render_pipelines,
+            view,
+        );
+
+        let view = &mut render_pass::Context {
+            device: ctx.device,
+            models: &self.project.models,
+            render_pipelines: &self.project.render_pipelines,
+            runtime_models: &self.runtime_project.models,
+            runtime_bind_groups: &self.runtime_project.bind_groups,
+            runtime_texture_views: &self.runtime_project.texture_views,
+            runtime_render_pipelines: &self.runtime_project.render_pipelines,
+        };
+        self.tracker.sync_storage(
+            &mut self.project.render_passes,
+            &mut self.runtime_project.render_passes,
             view,
         );
 
