@@ -11,14 +11,13 @@ use crate::{
         sync::{Revision, SyncOutcome, SyncResource, SyncTracker},
     },
     resource_getters, resource_setters,
-    ui::renderer::EguiRenderer,
     utils::{async_job::AsyncJob, wgpu_error_scope::WgpuErrorScope, wgpu_utils::TextureFormat},
 };
 
 pub struct TextureViewCreationContext<'a> {
     pub textures: &'a Storage<Texture>,
     pub textures_runtime: &'a RuntimeStorage<Texture>,
-    pub egui_renderer: &'a mut EguiRenderer,
+    pub egui_renderer: &'a egui::mutex::RwLock<egui_wgpu::Renderer>,
     pub device: &'a wgpu::Device,
     pub downlevel_flags: wgpu::DownlevelFlags,
 }
@@ -256,9 +255,10 @@ impl SyncResource for TextureView {
                         self.dimension,
                         ctx.downlevel_flags,
                     );
+                    let mut renderer = ctx.egui_renderer.write();
                     let egui_id = match previous_egui_id {
                         Some(egui_id) => {
-                            ctx.egui_renderer.update_egui_texture(
+                            renderer.update_egui_texture_from_wgpu_texture(
                                 ctx.device,
                                 &egui_view,
                                 wgpu::FilterMode::Linear,
@@ -266,7 +266,7 @@ impl SyncResource for TextureView {
                             );
                             egui_id
                         }
-                        None => ctx.egui_renderer.register_egui_texture(
+                        None => renderer.register_native_texture(
                             ctx.device,
                             &egui_view,
                             wgpu::FilterMode::Linear,
@@ -275,7 +275,7 @@ impl SyncResource for TextureView {
                     Some(egui_id)
                 } else {
                     if let Some(egui_id) = previous_egui_id {
-                        ctx.egui_renderer.remove_egui_texture(egui_id);
+                        ctx.egui_renderer.write().free_texture(&egui_id);
                     }
                     None
                 };

@@ -72,7 +72,7 @@ pub enum AppError {
     #[error(transparent)]
     NotifyError(#[from] notify::Error),
     #[error(transparent)]
-    WinitEventLoopError(#[from] winit::error::EventLoopError),
+    EframeError(#[from] eframe::Error),
     #[cfg(target_arch = "wasm32")]
     #[error(transparent)]
     IndexedDbOpenDbError(#[from] indexed_db_futures::error::OpenDbError),

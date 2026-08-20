@@ -73,7 +73,7 @@ pub struct Workspace {
 pub struct AppContext<'a> {
     pub device: &'a wgpu::Device,
     pub queue: &'a wgpu::Queue,
-    pub egui_renderer: &'a mut ui::renderer::EguiRenderer,
+    pub egui_renderer: &'a egui::mutex::RwLock<egui_wgpu::Renderer>,
     pub downlevel_flags: wgpu::DownlevelFlags,
     pub dt: instant::Duration,
 }

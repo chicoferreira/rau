@@ -1,11 +1,10 @@
-use winit::event_loop::EventLoop;
-
 use crate::{
     app::App,
-    error::AppResult,
-    file::identifier::{ProjectIdentifier, ProjectSource},
+    file::{
+        file_system::AppFileSystem,
+        identifier::{ProjectIdentifier, ProjectSource},
+    },
     ui::components::create_project_modal::ProjectCreationSource,
-    utils::winit_runner,
 };
 
 macro_rules! toasts_log_error {
@@ -46,32 +45,27 @@ pub enum StartupAction {
     },
 }
 
-pub fn run(startup_action: StartupAction) -> AppResult<()> {
-    let event_loop = EventLoop::<App>::with_user_event().build()?;
+#[cfg(not(target_arch = "wasm32"))]
+pub fn run(startup_action: StartupAction) -> error::AppResult<()> {
+    use pollster::FutureExt as _;
 
-    #[allow(unused_mut)]
-    let mut attributes = winit::window::Window::default_attributes().with_title("Rau");
+    let app_file_system = AppFileSystem::open().block_on()?;
 
-    #[cfg(not(target_arch = "wasm32"))]
-    {
-        use winit::dpi::LogicalSize;
-
-        attributes = attributes.with_inner_size(LogicalSize::new(1280, 800));
-        attributes = crate::utils::icon::apply_icon(attributes);
-    }
-
-    #[cfg(not(target_arch = "wasm32"))]
-    {
-        let mut app = winit_runner::WinitRunner::new(startup_action, attributes);
-        event_loop.run_app(&mut app)?;
-    }
-    #[cfg(target_arch = "wasm32")]
-    {
-        use winit::platform::web::EventLoopExtWebSys;
-
-        let app = winit_runner::WinitRunner::new(&event_loop, startup_action, attributes);
-        event_loop.spawn_app(app)
-    }
+    eframe::run_native(
+        "Rau",
+        eframe::NativeOptions {
+            viewport: egui::ViewportBuilder::default()
+                .with_title("Rau")
+                .with_inner_size([1280.0, 800.0])
+                .with_icon(crate::utils::icon::load_icon()),
+            wgpu_options: app::wgpu_options(),
+            ..Default::default()
+        },
+        Box::new(move |cc| {
+            let app = App::new(cc, startup_action, app_file_system);
+            Ok(Box::new(app.map_err(|error| error.to_string())?))
+        }),
+    )?;
 
     Ok(())
 }
@@ -79,12 +73,42 @@ pub fn run(startup_action: StartupAction) -> AppResult<()> {
 #[cfg(target_arch = "wasm32")]
 #[wasm_bindgen::prelude::wasm_bindgen(start)]
 pub fn run_web() -> Result<(), wasm_bindgen::JsValue> {
-    use wasm_bindgen::UnwrapThrowExt;
+    use wasm_bindgen::{JsCast, UnwrapThrowExt};
 
     console_error_panic_hook::set_once();
     console_log::init_with_level(log::Level::Info).unwrap_throw();
 
-    run(startup::url::startup_action_from_url()).unwrap_throw();
+    let canvas: web_sys::HtmlCanvasElement = web_sys::window()
+        .unwrap_throw()
+        .document()
+        .unwrap_throw()
+        .get_element_by_id("canvas")
+        .expect_throw("canvas element not found")
+        .dyn_into()
+        .expect_throw("element is not a canvas");
+
+    let startup_action = startup::url::startup_action_from_url();
+
+    wasm_bindgen_futures::spawn_local(async move {
+        let app_file_system = AppFileSystem::open()
+            .await
+            .expect_throw("Failed to open the file system");
+
+        eframe::WebRunner::new()
+            .start(
+                canvas,
+                eframe::WebOptions {
+                    wgpu_options: app::wgpu_options(),
+                    ..Default::default()
+                },
+                Box::new(move |cc| {
+                    let app = App::new(cc, startup_action, app_file_system);
+                    Ok(Box::new(app.map_err(|error| error.to_string())?))
+                }),
+            )
+            .await
+            .expect_throw("Failed to start eframe");
+    });
 
     Ok(())
 }

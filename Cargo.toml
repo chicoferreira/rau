@@ -27,9 +27,9 @@ anyhow = "1.0.100"
 bitflags = "2.11.0"
 bytemuck = { version = "1.24.0", features = ["derive"] }
 derive_more = { version = "2.1.1", features = ["add", "add_assign", "deref", "from"] }
+eframe = "0.36.1"
 egui = "0.36.1"
 egui-wgpu = "0.36.1"
-egui-winit = { version = "0.36.1", default-features = false }
 egui_dnd = "0.17.0"
 egui_extras = { version = "0.36.1", features = ["syntect", "http", "image"] }
 # TODO: go back to a crates.io version once this releases for egui 0.36
@@ -55,7 +55,6 @@ thiserror = "2.0.18"
 tobj = { version = "4.0.3", default-features = false, features = ["futures"] }
 tokio = { version = "1.52.3", features = ["sync"] }
 wgpu = { version = "30.0", features = ["naga-ir", "serde"] }
-winit = { version = "0.30.13", features = ["android-native-activity"] }
 syntect = { version = "5.3.0", default-features = false, features = ["default-fancy"] }
 itertools = "0.14.0"
 url = "2.5.8"
@@ -71,8 +70,6 @@ chrono = { version = "0.4", features = ["serde"] }
 json-pretty-compact = "0.1.2"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-# Enable default features for egui-winit
-egui-winit = { version = "0.36.1", default-features = true }
 clap = { version = "4.5", features = ["derive"] }
 pollster = "0.4.0"
 notify = "8.2.0"
@@ -94,6 +91,7 @@ web-sys = { version = "0.3", features = [
     "FileList",
     "FileReader",
     "History",
+    "HtmlCanvasElement",
     "HtmlElement",
     "HtmlInputElement",
     "Location",
@@ -109,3 +107,16 @@ built = { version = "0.7", features = ["chrono", "git2"] }
 
 [target.'cfg(windows)'.build-dependencies]
 winresource = "0.1"
+
+[patch.crates-io]
+# TODO: go back to a crates.io version once the fix is released upstream
+eframe = { git = "https://github.com/chicoferreira/egui", rev = "eadb02bead" }
+egui = { git = "https://github.com/chicoferreira/egui", rev = "eadb02bead" }
+egui-wgpu = { git = "https://github.com/chicoferreira/egui", rev = "eadb02bead" }
+egui_extras = { git = "https://github.com/chicoferreira/egui", rev = "eadb02bead" }
+
+# The vendored WebGPU bindings in 30.0.0 treat a `null` promise result as a
+# value, so a clean `popErrorScope()` panics. Fixed on the v30 branch.
+# TODO: go back to a crates.io version once 30.0.1 is released
+naga = { git = "https://github.com/gfx-rs/wgpu", rev = "55b3988ae1" }
+wgpu = { git = "https://github.com/gfx-rs/wgpu", rev = "55b3988ae1" }
