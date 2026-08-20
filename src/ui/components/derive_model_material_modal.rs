@@ -300,8 +300,10 @@ impl MaterialBindGroupsModal {
                                 .map(FilePath::to_string)
                                 .collect::<Vec<_>>()
                                 .join("\n");
-                            ui.label(RichText::new("⚠").color(ui.visuals().warn_fg_color))
-                                .on_hover_text(format!("Missing files:\n{missing}"));
+                            ui.label(
+                                RichText::new(regular::WARNING).color(ui.visuals().warn_fg_color),
+                            )
+                            .on_hover_text(format!("Missing files:\n{missing}"));
                         }
                     });
                 });

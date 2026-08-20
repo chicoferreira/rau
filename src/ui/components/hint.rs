@@ -14,7 +14,10 @@ pub fn hint<R>(add_contents: impl FnOnce(&mut Ui) -> R) -> impl Widget {
                         ui.fonts_mut(|f| f.glyph_width(&TextStyle::Body.resolve(ui.style()), ' '));
                     ui.spacing_mut().item_spacing.x = width;
 
-                    ui.label(RichText::new("💡 Hint:").strong());
+                    ui.label(
+                        RichText::new(format!("{} Hint:", egui_phosphor::regular::LIGHTBULB))
+                            .strong(),
+                    );
                     add_contents(ui);
                 })
             })
