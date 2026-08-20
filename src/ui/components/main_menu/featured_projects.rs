@@ -231,7 +231,7 @@ fn card_actions(ui: &mut Ui, url: &str) -> bool {
                         RichText::new(regular::GITHUB_LOGO).color(ui.visuals().text_color()),
                     ),
                 )
-                .on_hover_text("View on GitHub");
+                .on_hover_text(url);
             if github.clicked() {
                 ui.ctx().open_url(egui::OpenUrl::new_tab(url));
             }

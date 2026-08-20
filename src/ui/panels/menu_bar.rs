@@ -39,10 +39,14 @@ fn rau_menu(_state: &mut StateSnapshot, ui: &mut egui::Ui) {
             .strong()
             .size(14.0),
     );
-    ui.hyperlink_to(
-        format!("{} Open source code", regular::GITHUB_LOGO),
-        env!("CARGO_PKG_REPOSITORY"),
-    );
+    let repository = env!("CARGO_PKG_REPOSITORY");
+    if ui
+        .link(format!("{} Open source code", regular::GITHUB_LOGO))
+        .on_hover_text(repository)
+        .clicked()
+    {
+        ui.ctx().open_url(egui::OpenUrl::new_tab(repository));
+    }
 
     ui.separator();
 
