@@ -208,7 +208,7 @@ impl SyncResource for RenderPipeline {
         self.runtime_revision
     }
 
-    fn needs_rebuild(&self, _: Self::Id, _: &Self::Context<'_>, tracker: &SyncTracker) -> bool {
+    fn needs_rebuild(&self, _: Self::Id, ctx: &Self::Context<'_>, tracker: &SyncTracker) -> bool {
         let draw_strategy_needs_rebuild = match self.draw_strategy {
             RenderDrawStrategy::Model { model_id, .. } => {
                 model_id.is_some_and(|id| tracker.was_recreated(id))
@@ -224,7 +224,23 @@ impl SyncResource for RenderPipeline {
             match target {
                 BindGroupTarget::Empty => false,
                 BindGroupTarget::Static(id) => tracker.was_recreated(*id),
-                BindGroupTarget::ModelMaterial => false, // already handled by `draw_strategy_needs_rebuild`
+                // Recreating a material bind group can change its layout, so the pipeline
+                // layout has to be rebuilt from it.
+                BindGroupTarget::ModelMaterial => {
+                    let RenderDrawStrategy::Model { model_id, .. } = &self.draw_strategy else {
+                        return false;
+                    };
+
+                    model_id.is_some_and(|model_id| {
+                        ctx.models.get(model_id).is_ok_and(|model| {
+                            model
+                                .material_bind_group_ids()
+                                .iter()
+                                .flatten()
+                                .any(|id| tracker.was_recreated(*id))
+                        })
+                    })
+                }
             }
         });
 

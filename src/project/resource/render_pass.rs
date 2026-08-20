@@ -301,44 +301,15 @@ impl SyncResource for RenderPass {
         self.runtime_revision
     }
 
-    fn needs_rebuild(&self, _: Self::Id, ctx: &Self::Context<'_>, tracker: &SyncTracker) -> bool {
+    fn needs_rebuild(&self, _: Self::Id, _: &Self::Context<'_>, tracker: &SyncTracker) -> bool {
         let targets_recreated = self
             .target_texture_view_ids()
             .any(|id| tracker.was_recreated(id));
 
-        let pipelines_recreated = self.pipelines.iter().any(|pipeline_id| {
-            if tracker.was_recreated(*pipeline_id) {
-                return true;
-            }
-
-            let Ok(pipeline) = ctx.render_pipelines.get(*pipeline_id) else {
-                return false; // dangling id, reported when recording
-            };
-
-            let binds_materials = pipeline
-                .bind_groups()
-                .iter()
-                .any(|target| matches!(target, BindGroupTarget::ModelMaterial));
-
-            let RenderDrawStrategy::Model { model_id, .. } = pipeline.draw_strategy() else {
-                return false;
-            };
-
-            // whenever a pipeline binds materials, the pipeline doesn't get rebuilt when the bind groups
-            // of the materials are recreated, because the individual bind groups are not stored in the
-            // pipeline itself (just [`BindGroupTarget::ModelMaterial`]) and they only get determined
-            // when doing the render operations.
-            binds_materials
-                && model_id.is_some_and(|model_id| {
-                    ctx.models.get(model_id).is_ok_and(|model| {
-                        model
-                            .material_bind_group_ids()
-                            .iter()
-                            .flatten()
-                            .any(|id| tracker.was_recreated(*id))
-                    })
-                })
-        });
+        let pipelines_recreated = self
+            .pipelines
+            .iter()
+            .any(|pipeline_id| tracker.was_recreated(*pipeline_id));
 
         targets_recreated || pipelines_recreated
     }
