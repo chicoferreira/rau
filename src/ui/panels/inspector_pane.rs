@@ -106,6 +106,8 @@ impl Pane for InspectorPane {
         state: &mut StateSnapshot<'_>,
         ui: &mut egui::Ui,
     ) -> egui_tiles::UiResponse {
+        puffin::profile_function!();
+
         let panel = egui::CentralPanel::default().frame(egui::Frame::new().inner_margin(0));
         panel.show(ui, |ui| {
             egui::ScrollArea::both().auto_shrink(false).show(ui, |ui| {

@@ -23,6 +23,8 @@ impl ProjectSaveState {
     }
 
     pub fn tick(&mut self, project: &Project, file_storage: &mut FileStorage) {
+        puffin::profile_function!();
+
         let now = instant::Instant::now();
         let revisions = project.project_revisions().collect();
 

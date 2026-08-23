@@ -23,6 +23,8 @@ const CREATABLE_RESOURCES: &[(ResourceKind, &str)] = &[
 ];
 
 pub fn ui(state: &mut StateSnapshot, ui: &mut egui::Ui) {
+    puffin::profile_function!();
+
     egui::MenuBar::new().ui(ui, |ui| {
         ui.menu_button("Rau", |ui| rau_menu(state, ui));
         ui.menu_button("Project", |ui| project_menu(state, ui));

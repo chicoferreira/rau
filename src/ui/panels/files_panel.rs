@@ -54,6 +54,8 @@ fn pending_folder_node(
 }
 
 pub fn ui(state: &mut StateSnapshot, ui: &mut egui::Ui) -> Response {
+    puffin::profile_function!();
+
     let project_name = state
         .file_storage
         .project_source()

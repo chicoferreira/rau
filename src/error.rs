@@ -37,6 +37,8 @@ pub enum AppError {
     WgpuRequestAdapterError(#[from] wgpu::RequestAdapterError),
     #[error(transparent)]
     WgpuRequestDeviceError(#[from] wgpu::RequestDeviceError),
+    #[error(transparent)]
+    GpuProfilerCreationError(#[from] wgpu_profiler::CreationError),
     #[error("Unsupported shader extension {0:?}. Expected .wgsl, .vert, .frag or .comp.")]
     UnsupportedShaderExtension(String),
     /// A shader parse error occurred. Holds a message formatted with source

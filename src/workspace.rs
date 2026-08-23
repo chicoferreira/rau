@@ -75,6 +75,7 @@ pub struct AppContext<'a> {
     pub queue: &'a wgpu::Queue,
     pub egui_renderer: &'a egui::mutex::RwLock<egui_wgpu::Renderer>,
     pub downlevel_flags: wgpu::DownlevelFlags,
+    pub gpu_profiler: &'a wgpu_profiler::GpuProfiler,
     pub dt: instant::Duration,
 }
 
@@ -192,6 +193,8 @@ impl Workspace {
     }
 
     pub fn render(&mut self, ctx: &mut AppContext) {
+        puffin::profile_function!();
+
         self.elapsed += ctx.dt;
         self.handle_events();
         self.project_save_state
@@ -207,8 +210,12 @@ impl Workspace {
             &mut self.toasts,
         );
 
-        for (_, camera) in self.project.cameras.list_mut() {
-            camera.update(ctx.dt);
+        {
+            puffin::profile_scope!("update cameras");
+
+            for (_, camera) in self.project.cameras.list_mut() {
+                camera.update(ctx.dt);
+            }
         }
 
         let resources_changed = self.tick_objects(ctx);
@@ -219,37 +226,49 @@ impl Workspace {
         // finished. If the compute dispatches shared it, a dropped viewport frame would silently
         // drop them too, and an `OnChange` pass, which only dispatches on the frame its inputs
         // change, would miss that one dispatch and never re-run, leaving its output stuck.
-        let mut compute_encoder = create_command_encoder(ctx.device, "Compute Encoder");
-        let mut compute_ctx = render::ComputeDispatchContext {
-            compute_passes: &self.project.compute_passes,
-            runtime_compute_passes: &mut self.runtime_project.compute_passes,
-            runtime_bind_groups: &self.runtime_project.bind_groups,
-            dimensions: &self.project.dimensions,
-            compute_accumulators: &mut self.runtime_project.compute_accumulators,
-            tracker: &self.tracker,
-            dt: ctx.dt,
-        };
-        self.project
-            .presentation
-            .dispatch_computes(&mut compute_encoder, &mut compute_ctx);
+        {
+            puffin::profile_scope!("compute dispatch");
 
-        ctx.queue.submit(std::iter::once(compute_encoder.finish()));
+            let mut compute_encoder = create_command_encoder(ctx.device, "Compute Encoder");
+            let mut compute_ctx = render::ComputeDispatchContext {
+                compute_passes: &self.project.compute_passes,
+                runtime_compute_passes: &mut self.runtime_project.compute_passes,
+                runtime_bind_groups: &self.runtime_project.bind_groups,
+                dimensions: &self.project.dimensions,
+                compute_accumulators: &mut self.runtime_project.compute_accumulators,
+                tracker: &self.tracker,
+                gpu_profiler: ctx.gpu_profiler,
+                dt: ctx.dt,
+            };
+            self.project
+                .presentation
+                .dispatch_computes(&mut compute_encoder, &mut compute_ctx);
+
+            ctx.queue.submit(std::iter::once(compute_encoder.finish()));
+        }
 
         // Now that the compute dispatch has consumed this frame's change set, it can be cleared.
         self.tracker.clear_changes();
 
-        let snapshot = self.project.snapshot();
-        if !self
-            .runtime_project
-            .poll_presentation_errors(snapshot, resources_changed)
         {
-            return;
+            puffin::profile_scope!("poll presentation errors");
+
+            let snapshot = self.project.snapshot();
+            if !self
+                .runtime_project
+                .poll_presentation_errors(snapshot, resources_changed)
+            {
+                return;
+            }
         }
+
+        puffin::profile_scope!("viewport render");
 
         let render_ctx = render::RenderContext {
             render_passes: &self.project.render_passes,
             runtime_render_passes: &self.runtime_project.render_passes,
             runtime_texture_views: &self.runtime_project.texture_views,
+            gpu_profiler: ctx.gpu_profiler,
         };
 
         // The viewport render uses a separate, droppable encoder: if a render pass bails out
@@ -291,6 +310,8 @@ impl Workspace {
         frame_time: &FrameTimeTracker,
         app_event_queue: &mut EventQueue<AppEvent>,
     ) {
+        puffin::profile_function!();
+
         self.toasts.show(ui.ctx());
 
         let mut snapshot = ui::pane::StateSnapshot {
@@ -329,6 +350,8 @@ impl Workspace {
     }
 
     fn handle_events(&mut self) {
+        puffin::profile_function!();
+
         for event in self.event_queue.drain() {
             log::debug!("Handling event {event:?}");
             match event {
@@ -534,6 +557,8 @@ impl Workspace {
 
     /// Syncs every resource for this frame, returning whether any runtime resource changed.
     fn tick_objects(&mut self, ctx: &mut AppContext) -> bool {
+        puffin::profile_function!();
+
         self.tracker.sync_storage(
             &mut self.project.dimensions,
             &mut self.runtime_project.dimensions,

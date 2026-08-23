@@ -10,6 +10,26 @@ use crate::{
     project::paths::FilePath,
 };
 
+/// Whether the document is cross-origin isolated.
+///
+/// Browsers clamp `performance.now()` (the clock puffin uses to measure time) to a
+/// very slow tick (100µs in Chrome, 1ms in Firefox) unless the document is isolated.
+///
+/// Serving with these headers fixes the problem:
+/// ```
+/// Cross-Origin-Opener-Policy: same-origin
+/// Cross-Origin-Embedder-Policy: require-corp
+/// ```
+pub fn is_cross_origin_isolated() -> bool {
+    // `web-sys` has no binding for `Window::crossOriginIsolated`, so read the property directly.
+    web_sys::window().is_some_and(|window| {
+        Reflect::get(&window, &JsValue::from_str("crossOriginIsolated"))
+            .ok()
+            .and_then(|value| value.as_bool())
+            .unwrap_or(false)
+    })
+}
+
 /// Reads the current URL query string (without the leading `?`) and resets the
 /// browser URL back to the base path, dropping the query.
 ///

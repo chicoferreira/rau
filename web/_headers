@@ -1,0 +1,7 @@
+# Browsers clamp `performance.now()` (the clock puffin uses to measure time) to a
+# very slow tick (100µs in Chrome, 1ms in Firefox) unless the document is isolated.
+# 
+# Serving with these headers fixes the problem:
+/*
+  Cross-Origin-Opener-Policy: same-origin
+  Cross-Origin-Embedder-Policy: require-corp

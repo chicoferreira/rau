@@ -40,6 +40,8 @@ impl TextureCaptures {
         queue: &wgpu::Queue,
         toasts: &mut egui_notify::Toasts,
     ) {
+        puffin::profile_function!();
+
         for texture_id in std::mem::take(&mut self.pending) {
             match start_capture(project, runtime_project, device, queue, texture_id) {
                 Ok(task) => self.tasks.push(task),

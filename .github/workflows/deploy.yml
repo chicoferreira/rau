@@ -33,14 +33,12 @@ jobs:
         uses: Swatinem/rust-cache@v2
 
       - name: Build web target
-        run: wasm-pack build --release --target web
+        run: wasm-pack build --release --target web --out-dir web/pkg
 
       - name: Assemble site
         run: |
-          mkdir -p dist
-          cp index.html dist/index.html
+          cp -R web dist
           cp -R assets dist/assets
-          cp -R pkg dist/pkg
 
       - name: Deploy
         uses: cloudflare/wrangler-action@v3

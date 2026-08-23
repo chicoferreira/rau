@@ -34,6 +34,8 @@ impl StateSnapshot<'_> {
         viewport_tree_pane: &mut TreePane<ViewportPane>,
         error_panel: &mut ErrorPanel,
     ) {
+        puffin::profile_function!();
+
         error_panel.tick(self.runtime_project);
 
         egui::Panel::top("top_panel").show(ui, |ui| {
@@ -73,11 +75,13 @@ impl StateSnapshot<'_> {
             .frame(egui::Frame::new().inner_margin(0))
             .resizable(true)
             .show(ui, |ui| {
+                puffin::profile_scope!("inspector panes");
                 inspector_tree_pane.ui(self, ui);
             });
 
         error_panel.ui(self, ui);
 
+        puffin::profile_scope!("viewport panes");
         viewport_tree_pane.ui(self, ui);
     }
 }

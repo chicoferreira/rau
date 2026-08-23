@@ -215,6 +215,7 @@ impl ComputePass {
     }
 
     /// Encodes one dispatch of this pass into `encoder`.
+    /// The pass is measured with a GPU timer query, so it appears on the frame profiler.
     ///
     /// Returns `Ok(true)` once fully encoded, or `Ok(false)` if a bind group is
     /// still rebuilding (the caller should try again next frame). Mirrors
@@ -222,6 +223,7 @@ impl ComputePass {
     pub fn encode(
         &self,
         encoder: &mut wgpu::CommandEncoder,
+        gpu_profiler: &wgpu_profiler::GpuProfiler,
         runtime: &ComputePassRuntime,
         runtime_bind_groups: &RuntimeStorage<BindGroup>,
         dimensions: &Storage<Dimension>,
@@ -234,9 +236,12 @@ impl ComputePass {
             bind_groups.push(bind_group);
         }
 
+        let label = format!("{} (Compute Pass)", self.label);
+        let query = gpu_profiler.begin_pass_query(label.clone(), encoder);
+
         let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
-            label: Some(&format!("{} (Compute Pass)", self.label)),
-            timestamp_writes: None,
+            label: Some(&label),
+            timestamp_writes: query.compute_pass_timestamp_writes(),
         });
 
         pass.set_pipeline(runtime.pipeline());
@@ -246,6 +251,9 @@ impl ComputePass {
 
         let (x, y, z) = self.dispatch_size().into_work_groups(dimensions)?;
         pass.dispatch_workgroups(x, y, z);
+        drop(pass);
+
+        gpu_profiler.end_query(encoder, query);
 
         Ok(true)
     }

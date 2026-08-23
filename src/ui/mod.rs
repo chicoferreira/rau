@@ -3,6 +3,7 @@ pub mod fonts;
 pub mod fullscreen;
 pub mod pane;
 pub mod panels;
+pub mod profiler;
 pub mod rename;
 pub mod size;
 pub mod theme;

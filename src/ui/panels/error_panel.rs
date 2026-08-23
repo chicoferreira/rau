@@ -19,6 +19,8 @@ pub struct ErrorPanel {
 
 impl ErrorPanel {
     pub fn tick(&mut self, runtime_project: &RuntimeProject) {
+        puffin::profile_function!();
+
         let current: Vec<_> = runtime_project
             .iter_errors()
             .map(|(id, error)| (id, error.to_string()))
@@ -67,6 +69,8 @@ impl ErrorPanel {
     }
 
     pub fn ui(&mut self, state: &mut StateSnapshot, ui: &mut egui::Ui) {
+        puffin::profile_function!();
+
         if !self.open {
             return;
         }

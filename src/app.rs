@@ -21,6 +21,7 @@ pub struct App {
     state: State,
     event_queue: EventQueue<AppEvent>,
     frame_time: FrameTimeTracker,
+    profiler: ui::profiler::Profiler,
 }
 
 pub enum AppEvent {
@@ -78,6 +79,7 @@ impl App {
             state,
             event_queue: EventQueue::default(),
             frame_time: FrameTimeTracker::new(),
+            profiler: ui::profiler::Profiler::new(&render_state.device)?,
         })
     }
 
@@ -86,6 +88,8 @@ impl App {
         #[cfg_attr(target_arch = "wasm32", allow(unused))] ctx: &egui::Context,
         frame: &mut eframe::Frame,
     ) {
+        puffin::profile_function!();
+
         for event in self.event_queue.drain() {
             match event {
                 AppEvent::SetState(state) => {
@@ -116,6 +120,10 @@ impl App {
     }
 
     fn render(&mut self, dt: instant::Duration) {
+        puffin::profile_function!();
+
+        self.profiler.begin_frame();
+
         let submit_scope = match &mut self.state {
             State::MainMenu(main_menu) => {
                 main_menu.render(&mut self.event_queue, &self.app_file_system);
@@ -128,6 +136,7 @@ impl App {
                     queue: &self.queue,
                     egui_renderer: &self.egui_renderer,
                     downlevel_flags: self.downlevel_flags,
+                    gpu_profiler: self.profiler.gpu_profiler(),
                     dt,
                 };
                 workspace.render(&mut ctx);
@@ -138,6 +147,8 @@ impl App {
         if let (Some(scope), State::Workspace(workspace)) = (submit_scope, &mut self.state) {
             workspace.on_frame_submitted(scope.pop());
         }
+
+        self.profiler.end_frame(&self.device, &self.queue);
     }
 }
 
@@ -147,6 +158,9 @@ impl eframe::App for App {
     }
 
     fn ui(&mut self, ui: &mut egui::Ui, frame: &mut eframe::Frame) {
+        puffin::GlobalProfiler::lock().new_frame();
+        puffin::profile_scope!("frame");
+
         let now = instant::Instant::now();
         let dt = now - self.last_render_time;
         self.last_render_time = now;
@@ -170,6 +184,8 @@ impl eframe::App for App {
                 &mut self.event_queue,
             ),
         }
+
+        self.profiler.ui(ui.ctx());
 
         self.render(dt);
 
@@ -201,7 +217,8 @@ pub fn wgpu_options() -> egui_wgpu::WgpuConfiguration {
             device_descriptor: Arc::new(|adapter| {
                 const OPTIONAL_FEATURES: wgpu::Features = wgpu::Features::POLYGON_MODE_LINE
                     .union(wgpu::Features::POLYGON_MODE_POINT)
-                    .union(wgpu::Features::FLOAT32_FILTERABLE);
+                    .union(wgpu::Features::FLOAT32_FILTERABLE)
+                    .union(wgpu::Features::TIMESTAMP_QUERY);
 
                 wgpu::DeviceDescriptor {
                     label: Some("rau device"),

@@ -42,6 +42,8 @@ impl Pane for ViewportPane {
         state: &mut StateSnapshot<'_>,
         ui: &mut egui::Ui,
     ) -> egui_tiles::UiResponse {
+        puffin::profile_function!();
+
         let Ok(viewport) = state.project.viewports.get(self.viewport_id) else {
             inspector::centered_error(ui, "This viewport no longer exists.");
             return egui_tiles::UiResponse::None;

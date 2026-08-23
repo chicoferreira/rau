@@ -161,6 +161,8 @@ impl SyncTracker {
     ) where
         R::Id: slotmap::Key,
     {
+        puffin::profile_function!(std::any::type_name::<R>());
+
         let ids = storage.list().map(|(id, _)| id).collect::<Vec<_>>();
 
         for id in ids {

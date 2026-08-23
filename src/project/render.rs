@@ -1,6 +1,7 @@
 use std::task::Poll;
 
 use slotmap::SecondaryMap;
+use wgpu_profiler::GpuProfiler;
 
 use crate::{
     error::{AppError, AppResult, RequiredFieldExt},
@@ -24,6 +25,7 @@ pub struct RenderContext<'a> {
     pub render_passes: &'a Storage<RenderPass>,
     pub runtime_render_passes: &'a RuntimeStorage<RenderPass>,
     pub runtime_texture_views: &'a RuntimeStorage<TextureView>,
+    pub gpu_profiler: &'a GpuProfiler,
 }
 
 pub struct ComputeDispatchContext<'a> {
@@ -33,6 +35,7 @@ pub struct ComputeDispatchContext<'a> {
     pub dimensions: &'a Storage<Dimension>,
     pub compute_accumulators: &'a mut SecondaryMap<ComputePassId, instant::Duration>,
     pub tracker: &'a SyncTracker,
+    pub gpu_profiler: &'a GpuProfiler,
     pub dt: instant::Duration,
 }
 
@@ -163,8 +166,13 @@ impl Presentation {
                 // own runtime cell so it surfaces like any other resource error. The
                 // error state only changes on an actual dispatch (or a rebuild), not
                 // every frame, since dispatches don't happen every frame.
-                let encode =
-                    compute_pass.encode(encoder, runtime, ctx.runtime_bind_groups, ctx.dimensions);
+                let encode = compute_pass.encode(
+                    encoder,
+                    ctx.gpu_profiler,
+                    runtime,
+                    ctx.runtime_bind_groups,
+                    ctx.dimensions,
+                );
                 if let Err(error) = encode {
                     ctx.runtime_compute_passes.mark_errored(id, error);
                 }
@@ -200,7 +208,12 @@ impl Presentation {
                 Ok(None) | Err(_) => return Ok(false),
             };
 
-            if !render_pass.execute(encoder, runtime, render_ctx.runtime_texture_views)? {
+            if !render_pass.execute(
+                encoder,
+                render_ctx.gpu_profiler,
+                runtime,
+                render_ctx.runtime_texture_views,
+            )? {
                 return Ok(false); // a target texture view is still pending
             }
         }
@@ -217,6 +230,7 @@ impl RenderPass {
     pub fn execute(
         &self,
         encoder: &mut wgpu::CommandEncoder,
+        gpu_profiler: &GpuProfiler,
         runtime: &RenderPassRuntime,
         runtime_texture_views: &RuntimeStorage<TextureView>,
     ) -> AppResult<bool> {
@@ -255,6 +269,8 @@ impl RenderPass {
             None => None,
         };
 
+        let query = gpu_profiler.begin_pass_query(self.label(), encoder);
+
         let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some(self.label()),
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
@@ -268,11 +284,14 @@ impl RenderPass {
             })],
             depth_stencil_attachment,
             occlusion_query_set: None,
-            timestamp_writes: None,
+            timestamp_writes: query.render_pass_timestamp_writes(),
             multiview_mask: None,
         });
 
         render_pass.execute_bundles([runtime.bundle()]);
+        drop(render_pass);
+
+        gpu_profiler.end_query(encoder, query);
 
         Ok(true)
     }

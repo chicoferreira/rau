@@ -1,3 +1,5 @@
+use egui_phosphor::regular;
+
 use crate::{
     file::file_system::ProjectFileSystem,
     ui::{components::field, pane::StateSnapshot, panels::error_panel::ErrorPanel},
@@ -5,6 +7,8 @@ use crate::{
 };
 
 pub fn ui(state: &mut StateSnapshot, ui: &mut egui::Ui, error_panel: &mut ErrorPanel) {
+    puffin::profile_function!();
+
     let is_rebuilding = state.runtime_project.is_rebuilding();
 
     ui.horizontal(|ui| {
@@ -34,10 +38,32 @@ fn frame_time_ui(ui: &mut egui::Ui, frame_time: &FrameTimeTracker) {
         0.0
     };
 
-    ui.colored_label(
-        ui.visuals().weak_text_color(),
-        format!("{frame_time_ms:.1}ms ({fps:.1} FPS)"),
-    );
+    let profiler_open = puffin::are_scopes_on();
+    let caret = match profiler_open {
+        true => regular::CARET_DOWN,
+        false => regular::CARET_UP,
+    };
+
+    let text = format!("{frame_time_ms:.1}ms ({fps:.1} FPS) {caret}");
+
+    let button = egui::Button::new(egui::RichText::new(text).color(ui.visuals().weak_text_color()))
+        .frame(false);
+
+    let response = ui.add(button).on_hover_ui(|ui| {
+        ui.strong("Frame Profiler");
+        ui.label("Breaks each frame down into the scopes that make it up.");
+        ui.label(
+            egui::RichText::new(match profiler_open {
+                true => "Click to close the profiler.",
+                false => "Click to open the profiler.",
+            })
+            .weak(),
+        );
+    });
+
+    if response.clicked() {
+        puffin::set_scopes_on(!profiler_open);
+    }
 }
 
 fn vsync_status_ui(ui: &mut egui::Ui, state: &mut StateSnapshot) {

@@ -293,6 +293,8 @@ impl FileStorage {
     }
 
     pub fn tick(&mut self, tracker: &mut SyncTracker) {
+        puffin::profile_function!();
+
         if !self.pending_changes.is_empty() {
             tracker.push_file_changes(self.pending_changes.drain(..));
         }

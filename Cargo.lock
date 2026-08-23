@@ -634,6 +634,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "byteorder"
+version = "1.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1fd0f2584146f6f2ef48085050886acf353beff7305ebd1ae69500e27c67f64b"
+
+[[package]]
 name = "byteorder-lite"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -987,9 +993,6 @@ name = "deranged"
 version = "0.5.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7cd812cc2bc1d69d4764bd80df88b4317eaef9e773c75226407d9bc0876b211c"
-dependencies = [
- "powerfmt",
-]
 
 [[package]]
 name = "derive_more"
@@ -1289,6 +1292,7 @@ dependencies = [
  "log",
  "mime_guess2",
  "profiling",
+ "serde",
  "syntect",
 ]
 
@@ -1382,6 +1386,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6866f3bfdf8207509a033af1a75a7b08abda06bbaaeae6669323fd5a097df2e9"
 dependencies = [
  "enum-map-derive",
+ "serde",
 ]
 
 [[package]]
@@ -2587,6 +2592,21 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0ceec5bc11778974d1bcb055b18002eba7f4b3518b6a0081b3af5f21666da9ad"
 
 [[package]]
+name = "log-once"
+version = "0.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6d8a05e3879b317b1b6dbf353e5bba7062bedcc59815267bb23eaa0c576cebf0"
+dependencies = [
+ "log",
+]
+
+[[package]]
+name = "lz4_flex"
+version = "0.13.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7ef0d4ed8669f8f8826eb00dc878084aa8f253506c4fd5e8f58f5bce72ddb97e"
+
+[[package]]
 name = "macro_rules_attribute"
 version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2761,6 +2781,12 @@ dependencies = [
  "serde",
  "thiserror 2.0.18",
 ]
+
+[[package]]
+name = "natord"
+version = "1.0.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "308d96db8debc727c3fd9744aac51751243420e46edf401010908da7f8d5e57c"
 
 [[package]]
 name = "ndk"
@@ -3551,6 +3577,41 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3d595e54a326bc53c1c197b32d295e14b169e3cfeaa8dc82b529f947fba6bcf5"
 
 [[package]]
+name = "puffin"
+version = "0.20.0"
+source = "git+https://github.com/EmbarkStudios/puffin?rev=911e9efbfa#911e9efbfa16d88c39970e41f11601f764644576"
+dependencies = [
+ "anyhow",
+ "bincode",
+ "byteorder",
+ "cfg-if",
+ "itertools 0.15.0",
+ "js-sys",
+ "lz4_flex",
+ "parking_lot",
+ "serde",
+ "web-time",
+]
+
+[[package]]
+name = "puffin_egui"
+version = "0.30.0"
+source = "git+https://github.com/EmbarkStudios/puffin?rev=911e9efbfa#911e9efbfa16d88c39970e41f11601f764644576"
+dependencies = [
+ "egui",
+ "egui_extras",
+ "indexmap",
+ "log",
+ "log-once",
+ "natord",
+ "parking_lot",
+ "puffin",
+ "time",
+ "vec1",
+ "web-time",
+]
+
+[[package]]
 name = "pulldown-cmark"
 version = "0.13.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3661,6 +3722,8 @@ dependencies = [
  "naga",
  "notify",
  "pollster 0.4.0",
+ "puffin",
+ "puffin_egui",
  "rfd",
  "serde",
  "serde_json",
@@ -3677,6 +3740,7 @@ dependencies = [
  "wasm-bindgen-futures",
  "web-sys",
  "wgpu",
+ "wgpu-profiler",
  "winresource",
 ]
 
@@ -4398,12 +4462,11 @@ dependencies = [
 
 [[package]]
 name = "time"
-version = "0.3.47"
+version = "0.3.55"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "743bd48c283afc0388f9b8827b976905fb217ad9e647fae3a379a9283c4def2c"
+checksum = "cdb87b95ec50ddfa440816d227a17b2ccbdda963a316a727fda0fc4334f7d134"
 dependencies = [
  "deranged",
- "itoa",
  "num-conv",
  "powerfmt",
  "serde_core",
@@ -4413,15 +4476,15 @@ dependencies = [
 
 [[package]]
 name = "time-core"
-version = "0.1.8"
+version = "0.1.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7694e1cfe791f8d31026952abf09c69ca6f6fa4e1a1229e18988f06a04a12dca"
+checksum = "9e1c906769ad99c88eaa54e728060edef082f8e358ff32030cb7c7d315e81109"
 
 [[package]]
 name = "time-macros"
-version = "0.2.27"
+version = "0.2.32"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2e70e4c5a0e0a8a4823ad65dfe1a6930e4f4d756dcd9dd7939022b5e8c501215"
+checksum = "7e689342a48d2ea927c87ea50cabf8594854bf940e9310208848d680d668ed85"
 dependencies = [
  "num-conv",
  "time-core",
@@ -5171,6 +5234,18 @@ source = "git+https://github.com/gfx-rs/wgpu?rev=55b3988ae1#55b3988ae136ec5372ad
 dependencies = [
  "naga",
  "wgpu-types",
+]
+
+[[package]]
+name = "wgpu-profiler"
+version = "0.28.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a15a635a2a2ec0b9787589f17dbbffaa7960e779bcf0348a67f73c3e7665f9eb"
+dependencies = [
+ "parking_lot",
+ "puffin",
+ "thiserror 2.0.18",
+ "wgpu",
 ]
 
 [[package]]

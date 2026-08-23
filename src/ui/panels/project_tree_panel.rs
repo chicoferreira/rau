@@ -159,6 +159,8 @@ fn count_suffix(count: usize) -> impl FnMut(&mut egui::Ui) {
 }
 
 pub fn ui(state: &mut StateSnapshot, ui: &mut egui::Ui) -> Response {
+    puffin::profile_function!();
+
     let (response, actions) = TreeView::new(ui.make_persistent_id("project_tree_view"))
         .allow_multi_selection(false)
         .row_layout(RowLayout::CompactAlignedLabels) // Align directory closers with leaf icons
