@@ -19,7 +19,7 @@ jobs:
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Install Rust (stable) and wasm32 target
         uses: dtolnay/rust-toolchain@stable
@@ -27,7 +27,9 @@ jobs:
           targets: wasm32-unknown-unknown
 
       - name: Install wasm-pack
-        uses: jetli/wasm-pack-action@v0.4.0
+        uses: taiki-e/install-action@v2
+        with:
+          tool: wasm-pack
 
       - name: Rust cache
         uses: Swatinem/rust-cache@v2
@@ -41,7 +43,7 @@ jobs:
           cp -R assets dist/assets
 
       - name: Deploy
-        uses: cloudflare/wrangler-action@v3
+        uses: cloudflare/wrangler-action@v4
         with:
           command: pages deploy dist --project-name rau
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
