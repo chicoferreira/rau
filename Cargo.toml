@@ -48,6 +48,10 @@ image = { version = "0.25", default-features = false, features = ["png", "jpeg",
 instant = "0.1"
 log = "0.4.29"
 naga = { version = "30.0.0", features = ["wgsl-in", "glsl-in"] }
+# Not used directly: `egui`, `eframe` and `wgpu` instrument themselves through the
+# `profiling` abstraction, and enabling this feature here routes all of their scopes
+# into the same `puffin::GlobalProfiler` singleton `puffin_egui` reads.
+profiling = { version = "1.0", features = ["profile-with-puffin"] }
 puffin = "0.20"
 # TODO: go back to a crates.io version once puffin releases for egui 0.36
 puffin_egui = { git = "https://github.com/EmbarkStudios/puffin", rev = "911e9efbfa" }

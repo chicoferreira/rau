@@ -157,8 +157,11 @@ impl eframe::App for App {
         ui::theme::CLEAR_COLOR.to_normalized_gamma_f32()
     }
 
-    fn ui(&mut self, ui: &mut egui::Ui, frame: &mut eframe::Frame) {
+    fn raw_input_hook(&mut self, _ctx: &egui::Context, _raw_input: &mut egui::RawInput) {
         puffin::GlobalProfiler::lock().new_frame();
+    }
+
+    fn ui(&mut self, ui: &mut egui::Ui, frame: &mut eframe::Frame) {
         puffin::profile_scope!("frame");
 
         let now = instant::Instant::now();
