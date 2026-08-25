@@ -140,9 +140,11 @@ impl Profiler {
             }
             Tab::Gpu => {
                 if !self.gpu_timings_supported {
+                    empty_tab_hint(ui, "This backend doesn't support timestamp queries.");
+                } else if cfg!(target_arch = "wasm32") {
                     empty_tab_hint(
                         ui,
-                        "This backend doesn't support timestamp queries, so there are no GPU timings. Vulkan, DirectX 12 and Metal do, and browsers only expose them with WebGPU developer features enabled currently.",
+                        "Enable WebGPU developer features flag for more granular timing.",
                     );
                 }
 
