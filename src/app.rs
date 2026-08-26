@@ -6,7 +6,10 @@ use crate::{
     file::file_system::AppFileSystem,
     main_menu::MainMenu,
     ui::{self},
-    utils::{event_queue::EventQueue, fps::FrameTimeTracker, wgpu_error_scope::WgpuErrorScope},
+    utils::{
+        event_queue::EventQueue, fps::FrameTimeTracker, render_settings::RenderSettings,
+        wgpu_error_scope::WgpuErrorScope,
+    },
     workspace::{AppContext, Workspace},
 };
 
@@ -206,9 +209,14 @@ fn setup_egui_context(egui_context: &egui::Context) {
     egui_context.all_styles_mut(|style| style.debug.warn_if_rect_changes_id = false);
 }
 
-pub fn wgpu_options() -> egui_wgpu::WgpuConfiguration {
+pub fn wgpu_options(render_settings: &RenderSettings) -> egui_wgpu::WgpuConfiguration {
     egui_wgpu::WgpuConfiguration {
-        surface: egui_wgpu::SurfaceConfig::HIGH_THROUGHPUT,
+        surface: egui_wgpu::SurfaceConfig {
+            present_mode: render_settings
+                .present_mode
+                .map_or(wgpu::PresentMode::AutoVsync, wgpu::PresentMode::from),
+            desired_maximum_frame_latency: Some(2),
+        },
         wgpu_setup: egui_wgpu::WgpuSetup::CreateNew(egui_wgpu::WgpuSetupCreateNew {
             instance_descriptor: wgpu::InstanceDescriptor {
                 backends: cfg_select! {

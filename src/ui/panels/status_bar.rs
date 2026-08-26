@@ -67,9 +67,18 @@ fn frame_time_ui(ui: &mut egui::Ui, frame_time: &FrameTimeTracker) {
 }
 
 fn vsync_status_ui(ui: &mut egui::Ui, state: &mut StateSnapshot) {
-    let vsync_on = matches!(state.present_mode, wgpu::PresentMode::AutoVsync);
+    let vsync_on = !matches!(
+        state.present_mode,
+        wgpu::PresentMode::AutoNoVsync | wgpu::PresentMode::Immediate
+    );
 
-    let title = if vsync_on { "VSync" } else { "Immediate" };
+    let title = match state.present_mode {
+        wgpu::PresentMode::AutoVsync => "VSync",
+        wgpu::PresentMode::AutoNoVsync | wgpu::PresentMode::Immediate => "Immediate",
+        wgpu::PresentMode::Fifo => "FIFO",
+        wgpu::PresentMode::FifoRelaxed => "FIFO Relaxed",
+        wgpu::PresentMode::Mailbox => "Mailbox",
+    };
 
     let button =
         egui::Button::new(egui::RichText::new(title).color(ui.visuals().weak_text_color()))

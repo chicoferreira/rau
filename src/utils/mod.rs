@@ -12,6 +12,7 @@ pub mod icon;
 pub mod key;
 pub mod obj;
 pub mod raw_scroll;
+pub mod render_settings;
 pub mod resizable_buffer;
 pub mod shader_preview;
 pub mod texture_capture;

@@ -1,17 +1,21 @@
 use std::path::PathBuf;
 
 use crate::{
-    StartupAction,
+    StartupAction, StartupSettings,
     error::AppResult,
     file::identifier::{ProjectIdentifier, ProjectSource},
     scene::{self, GenerateTemplate},
     ui::components::create_project_modal::{GithubProjectSource, ProjectCreationSource},
+    utils::render_settings::RenderSettings,
 };
 use clap::{Parser, Subcommand};
 
 #[derive(Parser)]
 #[command(version, about, long_about = None)]
 struct Cli {
+    #[command(flatten)]
+    render_settings: RenderSettings,
+
     #[command(subcommand)]
     command: Option<Command>,
 }
@@ -128,7 +132,9 @@ pub fn main() {
         .filter_level(log::LevelFilter::Info)
         .init();
 
-    let action = match Cli::parse().command {
+    let cli = Cli::parse();
+
+    let action = match cli.command {
         None => Ok(StartupAction::MainMenu),
         Some(Command::Open { project_folder }) => {
             ProjectIdentifier::extract_identifier(project_folder)
@@ -154,7 +160,12 @@ pub fn main() {
         }
     };
 
-    if let Err(e) = crate::run(startup_action) {
+    let settings = StartupSettings {
+        action: startup_action,
+        render_settings: cli.render_settings,
+    };
+
+    if let Err(e) = crate::run(settings) {
         log::error!("Failed to run: {}", e);
     }
 }

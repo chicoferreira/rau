@@ -5,6 +5,7 @@ use crate::{
         identifier::{ProjectIdentifier, ProjectSource},
     },
     ui::components::create_project_modal::ProjectCreationSource,
+    utils::render_settings::RenderSettings,
 };
 
 macro_rules! toasts_log_error {
@@ -45,8 +46,14 @@ pub enum StartupAction {
     },
 }
 
+#[derive(Default)]
+pub struct StartupSettings {
+    pub action: StartupAction,
+    pub render_settings: RenderSettings,
+}
+
 #[cfg(not(target_arch = "wasm32"))]
-pub fn run(startup_action: StartupAction) -> error::AppResult<()> {
+pub fn run(settings: StartupSettings) -> error::AppResult<()> {
     use pollster::FutureExt as _;
 
     let app_file_system = AppFileSystem::open().block_on()?;
@@ -58,11 +65,11 @@ pub fn run(startup_action: StartupAction) -> error::AppResult<()> {
                 .with_title("Rau")
                 .with_inner_size([1280.0, 800.0])
                 .with_icon(crate::utils::icon::load_icon()),
-            wgpu_options: app::wgpu_options(),
+            wgpu_options: app::wgpu_options(&settings.render_settings),
             ..Default::default()
         },
         Box::new(move |cc| {
-            let app = App::new(cc, startup_action, app_file_system);
+            let app = App::new(cc, settings.action, app_file_system);
             Ok(Box::new(app.map_err(|error| error.to_string())?))
         }),
     )?;
@@ -87,6 +94,7 @@ pub fn run_web() -> Result<(), wasm_bindgen::JsValue> {
         .dyn_into()
         .expect_throw("element is not a canvas");
 
+    let render_settings = RenderSettings::default();
     let startup_action = startup::url::startup_action_from_url();
 
     wasm_bindgen_futures::spawn_local(async move {
@@ -98,7 +106,7 @@ pub fn run_web() -> Result<(), wasm_bindgen::JsValue> {
             .start(
                 canvas,
                 eframe::WebOptions {
-                    wgpu_options: app::wgpu_options(),
+                    wgpu_options: app::wgpu_options(&render_settings),
                     ..Default::default()
                 },
                 Box::new(move |cc| {
