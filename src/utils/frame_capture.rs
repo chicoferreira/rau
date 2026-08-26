@@ -21,6 +21,8 @@ pub struct CaptureSettings {
     pub capture_warmup: usize,
 }
 
+const PROJECT_TIMEOUT: instant::Duration = instant::Duration::from_secs(30);
+
 pub struct FrameCapture {
     out: PathBuf,
     total_frames: usize,
@@ -31,7 +33,7 @@ pub struct FrameCapture {
 }
 
 enum Phase {
-    WaitingForProject,
+    WaitingForProject { waited: instant::Duration },
     Warmup { remaining: usize },
     Recording { frames: Vec<f32> },
     Done,
@@ -44,7 +46,9 @@ impl FrameCapture {
             total_frames: settings.capture_frames,
             warmup_frames: settings.capture_warmup,
             adapter_info: adapter_info.clone(),
-            phase: Phase::WaitingForProject,
+            phase: Phase::WaitingForProject {
+                waited: instant::Duration::ZERO,
+            },
             memory_before: None,
         })
     }
@@ -57,10 +61,10 @@ impl FrameCapture {
         events: &mut EventQueue<AppEvent>,
     ) {
         match &mut self.phase {
-            Phase::WaitingForProject => {
+            Phase::WaitingForProject { waited } => {
                 if matches!(state, State::Workspace(workspace) if !workspace.is_rebuilding()) {
                     log::info!(
-                        "Capture: discarding {} frames, then recording {}",
+                        "discarding {} frames, then recording {}",
                         self.warmup_frames,
                         self.total_frames
                     );
@@ -68,6 +72,14 @@ impl FrameCapture {
                     self.phase = Phase::Warmup {
                         remaining: self.warmup_frames,
                     };
+                } else {
+                    *waited += dt;
+                    if *waited >= PROJECT_TIMEOUT {
+                        let timeout = PROJECT_TIMEOUT.as_secs();
+                        log::error!("the project was still not ready after {timeout}s, giving up",);
+                        self.phase = Phase::Done;
+                        events.quit();
+                    }
                 }
             }
             Phase::Warmup { remaining } => {
@@ -96,15 +108,13 @@ impl FrameCapture {
         let memory = memory_bytes();
 
         let mean = frames.iter().sum::<f32>() / frames.len() as f32;
-        log::info!(
-            "Capture: {} frames, {mean:.3} ms on average ({:.1} FPS)",
-            frames.len(),
-            1000.0 / mean
-        );
+        let frames_count = frames.len();
+        let average_fps = 1000.0 / mean;
+        log::info!("{frames_count} frames, {mean:.3} ms on average ({average_fps:.1} FPS)",);
 
         match self.write_csv(frames, state, present_mode, memory) {
-            Ok(()) => log::info!("Capture: wrote {}", self.out.display()),
-            Err(error) => log::error!("Capture: failed to write {}: {error}", self.out.display()),
+            Ok(()) => log::info!("wrote {}", self.out.display()),
+            Err(error) => log::error!("failed to write {}: {error}", self.out.display()),
         }
     }
 
@@ -190,4 +200,4 @@ fn format_memory(bytes: Option<u64>) -> String {
         Some(bytes) => format!("{:.1} MiB", bytes as f64 / (1024.0 * 1024.0)),
         None => "unknown".to_owned(),
     }
-}f
+}
