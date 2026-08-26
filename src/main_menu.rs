@@ -160,7 +160,6 @@ impl MainMenu {
         files: Vec<(FilePath, Vec<u8>)>,
     ) {
         let workspace_job = Workspace::open_project_and_save_files(app_fs, source, files);
-        let workspace_job = AsyncJob::new(workspace_job);
         self.open_workspace_job = Some((instant::Instant::now(), AsyncJob::new(workspace_job)));
     }
 
