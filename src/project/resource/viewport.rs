@@ -55,6 +55,10 @@ impl Viewport {
         pub fn set_texture_view_id(texture_view_id: Option<TextureViewId>);
         pub fn set_dimension_id(dimension_id: Option<DimensionId>);
         pub fn set_controls_camera_id(controls_camera_id: Option<CameraId>);
+    }
+
+    resource_setters! {
+        increases: [];
         pub fn set_requested_ui_size(requested_ui_size: Option<Size2d>);
     }
 }
