@@ -5,16 +5,10 @@ use wgpu_profiler::{GpuProfiler, GpuProfilerSettings};
 
 use crate::{error::AppResult, ui::components::hint, utils::wgpu_utils::create_command_encoder};
 
-/// The profiler window, and the GPU timer queries that fill its GPU tab.
-///
-/// CPU and GPU timings can't share a timeline.
-/// GPU results only come back a few frames after the work that produced them, on a clock of their
-/// own, so they go to a separate [`puffin::GlobalProfiler`] instead of the CPU singleton.
 pub struct Profiler {
     tab: Tab,
     gpu: GpuTimeline,
     gpu_profiler: GpuProfiler,
-    /// Whether the device answers timestamp queries at all.
     gpu_timings_supported: bool,
 }
 
@@ -38,23 +32,15 @@ impl Profiler {
         })
     }
 
-    /// The profiler that render and compute passes open their GPU scopes on.
     pub fn gpu_profiler(&self) -> &GpuProfiler {
         &self.gpu_profiler
     }
 
     /// Whether the GPU is being timed this frame.
-    ///
-    /// The profiler's own settings are the source of truth, so this can't drift out of step with
-    /// the queries that were actually opened.
     fn timing_gpu(&self) -> bool {
         self.gpu_profiler.settings().enable_timer_queries
     }
 
-    /// Starts or stops timing the GPU, following whether the profiler window is open.
-    ///
-    /// Call this before anything is encoded, so the queries opened during the frame and the
-    /// resolve in [`Self::end_frame`] agree on whether the GPU is being timed.
     pub fn begin_frame(&mut self) {
         let should_time_gpu = puffin::are_scopes_on();
         if should_time_gpu == self.timing_gpu() {
@@ -71,12 +57,6 @@ impl Profiler {
         }
     }
 
-    /// Resolves this frame's queries and picks up the oldest finished frame.
-    ///
-    /// Call this once every encoder has been submitted.
-    /// The resolve gets an encoder of its own that is always submitted, because a dropped viewport
-    /// frame would otherwise leave queries unresolved, and [`GpuProfiler::end_frame`] won't close
-    /// a frame in that state.
     pub fn end_frame(&mut self, device: &wgpu::Device, queue: &wgpu::Queue) {
         if !self.timing_gpu() {
             return;
@@ -98,9 +78,6 @@ impl Profiler {
         }
     }
 
-    /// Shows the window for as long as [`puffin::are_scopes_on`].
-    ///
-    /// Closing it turns scopes back off, which is what the status bar's frame time button reads.
     pub fn ui(&mut self, ctx: &egui::Context) {
         puffin::profile_function!();
 
@@ -169,7 +146,6 @@ fn empty_tab_hint(ui: &mut egui::Ui, text: &str) {
     ui.add_space(4.0);
 }
 
-/// The GPU timeline: a [`puffin::GlobalProfiler`] that isn't the singleton, and the view it fills.
 struct GpuTimeline {
     profiler: puffin::GlobalProfiler,
     view: Arc<egui::mutex::Mutex<puffin::FrameView>>,
