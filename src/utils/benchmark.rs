@@ -142,7 +142,11 @@ impl Benchmark {
         } = &self.adapter_info;
 
         let version = built_info::PKG_VERSION;
-        let commit = built_info::GIT_COMMIT_HASH_SHORT.unwrap_or("unknown commit");
+        let commit = match (built_info::GIT_COMMIT_HASH_SHORT, built_info::GIT_DIRTY) {
+            (Some(commit), Some(true)) => format!("{commit}-dirty"),
+            (Some(commit), _) => commit.to_owned(),
+            (None, _) => "unknown commit".to_owned(),
+        };
 
         let memory = format_memory(memory);
         let memory_before = format_memory(self.memory_before);
