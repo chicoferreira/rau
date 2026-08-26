@@ -6,15 +6,18 @@
 //! ```text
 //! ?action=new&source=github&owner=chicoferreira&repo=rau&ref=main
 //! ?action=open&project=My%20Project
+//! ?action=open&project=Shadow%20Mapping&backend=webgl2
 //! ```
 
 use serde::Deserialize;
 
 use crate::{
-    StartupAction,
+    StartupAction, StartupSettings,
+    app::AppSettings,
     error::{AppError, AppResult},
     file::identifier::{ProjectIdentifier, ProjectSource},
     ui::components::create_project_modal::{GithubProjectSource, ProjectCreationSource},
+    utils::render_settings::{Backend, RenderSettings},
 };
 
 /// Open an existing project or create a new one.
@@ -42,7 +45,7 @@ enum Source {
 }
 
 /// Flat representation of the supported URL query parameters.
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Default, Deserialize)]
 struct UrlParams {
     action: Option<Action>,
     /// Project name to open, or the name of a persistent project to create.
@@ -62,6 +65,8 @@ struct UrlParams {
     git_ref: Option<String>,
     /// Folder within the repository to use as the project root.
     path: Option<String>,
+    /// Graphics backend to render with (defaults to whichever the browser prefers).
+    backend: Option<Backend>,
 }
 
 fn invalid(message: impl Into<String>) -> AppError {
@@ -148,25 +153,29 @@ impl UrlParams {
     }
 }
 
-/// Reads the startup action from the page URL, resetting the browser URL back to
-/// the base path afterwards. Any failure falls back to [`StartupAction::MainMenu`].
-pub fn startup_action_from_url() -> StartupAction {
-    match try_startup_action_from_url() {
-        Ok(action) => action,
-        Err(e) => {
-            log::error!("Failed to parse startup action from URL: {e}");
-            StartupAction::MainMenu
-        }
+pub fn startup_settings_from_url() -> StartupSettings {
+    let params = crate::utils::browser::take_query_string()
+        .and_then(|query| {
+            serde_urlencoded::from_str(&query.unwrap_or_default())
+                .map_err(|e| invalid(e.to_string()))
+        })
+        .unwrap_or_else(|e| {
+            log::error!("Failed to read the URL parameters: {e}");
+            UrlParams::default()
+        });
+
+    let backend = params.backend;
+
+    let action = params.into_startup_action().unwrap_or_else(|e| {
+        log::error!("Failed to read the startup action from the URL: {e}");
+        StartupAction::MainMenu
+    });
+
+    StartupSettings {
+        app: AppSettings { action },
+        render_settings: RenderSettings {
+            backend,
+            ..RenderSettings::default()
+        },
     }
-}
-
-fn try_startup_action_from_url() -> AppResult<StartupAction> {
-    let Some(query) = crate::utils::browser::take_query_string()? else {
-        return Ok(StartupAction::MainMenu);
-    };
-
-    let params: UrlParams =
-        serde_urlencoded::from_str(&query).map_err(|e| invalid(e.to_string()))?;
-
-    params.into_startup_action()
 }

@@ -97,10 +97,10 @@ pub fn run_web() -> Result<(), wasm_bindgen::JsValue> {
         .dyn_into()
         .expect_throw("element is not a canvas");
 
-    let render_settings = RenderSettings::default();
-    let app_settings = AppSettings {
-        action: startup::url::startup_action_from_url(),
-    };
+    let StartupSettings {
+        app: app_settings,
+        render_settings,
+    } = startup::url::startup_settings_from_url();
 
     wasm_bindgen_futures::spawn_local(async move {
         let app_file_system = AppFileSystem::open()

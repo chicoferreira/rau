@@ -9,7 +9,9 @@ use crate::{
     main_menu::MainMenu,
     ui::{self},
     utils::{
-        event_queue::EventQueue, fps::FrameTimeTracker, render_settings::RenderSettings,
+        event_queue::EventQueue,
+        fps::FrameTimeTracker,
+        render_settings::{self, RenderSettings},
         wgpu_error_scope::WgpuErrorScope,
     },
     workspace::{AppContext, Workspace},
@@ -241,10 +243,9 @@ pub fn wgpu_options(render_settings: &RenderSettings) -> egui_wgpu::WgpuConfigur
         },
         wgpu_setup: egui_wgpu::WgpuSetup::CreateNew(egui_wgpu::WgpuSetupCreateNew {
             instance_descriptor: wgpu::InstanceDescriptor {
-                backends: cfg_select! {
-                    target_arch = "wasm32" => wgpu::Backends::BROWSER_WEBGPU.union(wgpu::Backends::GL),
-                    _ => wgpu::Backends::PRIMARY,
-                },
+                backends: render_settings
+                    .backend
+                    .map_or(render_settings::DEFAULT_BACKENDS, wgpu::Backends::from),
                 ..egui_wgpu::WgpuSetupCreateNew::without_display_handle().instance_descriptor
             },
             device_descriptor: Arc::new(|adapter| {
