@@ -18,10 +18,25 @@ struct Cli {
     render_settings: RenderSettings,
 
     #[command(flatten)]
+    window_settings: WindowSettings,
+
+    #[command(flatten)]
     capture: CaptureSettings,
 
     #[command(subcommand)]
     command: Option<Command>,
+}
+
+/// Settings the window is created with.
+#[derive(clap::Args)]
+pub struct WindowSettings {
+    /// Window width at startup.
+    #[arg(long = "window-width", default_value_t = 1280, global = true)]
+    pub width: u32,
+
+    /// Window height at startup.
+    #[arg(long = "window-height", default_value_t = 800, global = true)]
+    pub height: u32,
 }
 
 #[derive(Subcommand)]
@@ -170,6 +185,7 @@ pub fn main() {
             capture: cli.capture,
         },
         render_settings: cli.render_settings,
+        window_settings: cli.window_settings,
     };
 
     if let Err(e) = crate::run(settings) {

@@ -46,10 +46,11 @@ pub enum StartupAction {
     },
 }
 
-#[derive(Default)]
 pub struct StartupSettings {
     pub app: AppSettings,
     pub render_settings: RenderSettings,
+    #[cfg(not(target_arch = "wasm32"))]
+    pub window_settings: startup::cli::WindowSettings,
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -58,12 +59,14 @@ pub fn run(settings: StartupSettings) -> error::AppResult<()> {
 
     let app_file_system = AppFileSystem::open().block_on()?;
 
+    let window_settings = &settings.window_settings;
+
     eframe::run_native(
         "Rau",
         eframe::NativeOptions {
             viewport: egui::ViewportBuilder::default()
                 .with_title("Rau")
-                .with_inner_size([1280.0, 800.0])
+                .with_inner_size([window_settings.width as f32, window_settings.height as f32])
                 .with_icon(crate::utils::icon::load_icon()),
             wgpu_options: app::wgpu_options(&settings.render_settings),
             ..Default::default()
