@@ -7,7 +7,7 @@ use crate::{
     file::identifier::{ProjectIdentifier, ProjectSource},
     scene::{self, GenerateTemplate},
     ui::components::create_project_modal::{GithubProjectSource, ProjectCreationSource},
-    utils::{frame_capture::CaptureSettings, render_settings::RenderSettings},
+    utils::{benchmark::BenchmarkSettings, render_settings::RenderSettings},
 };
 use clap::{Parser, Subcommand};
 
@@ -21,7 +21,7 @@ struct Cli {
     window_settings: WindowSettings,
 
     #[command(flatten)]
-    capture: CaptureSettings,
+    benchmark: BenchmarkSettings,
 
     #[command(subcommand)]
     command: Option<Command>,
@@ -182,7 +182,7 @@ pub fn main() {
     let settings = StartupSettings {
         app: AppSettings {
             action: startup_action,
-            capture: cli.capture,
+            benchmark: cli.benchmark,
         },
         render_settings: cli.render_settings,
         window_settings: cli.window_settings,

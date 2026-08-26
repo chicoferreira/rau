@@ -5,25 +5,25 @@ use crate::{
     utils::event_queue::EventQueue,
 };
 
-/// Settings for a scripted frame time capture.
+/// Settings for a scripted benchmark run.
 #[derive(Default, clap::Args)]
-pub struct CaptureSettings {
+pub struct BenchmarkSettings {
     /// Record frame times to this CSV file, then exit.
-    #[arg(long = "capture", value_name = "FILE", global = true)]
+    #[arg(long = "benchmark", value_name = "FILE", global = true)]
     pub out: Option<PathBuf>,
 
     /// How many frames to record.
     #[arg(long, global = true, default_value_t = 1000, requires = "out")]
-    pub capture_frames: usize,
+    pub benchmark_frames: usize,
 
     /// How many frames to discard after the project is ready, letting the frame rate settle.
     #[arg(long, global = true, default_value_t = 200, requires = "out")]
-    pub capture_warmup: usize,
+    pub benchmark_warmup: usize,
 }
 
 const PROJECT_TIMEOUT: instant::Duration = instant::Duration::from_secs(30);
 
-pub struct FrameCapture {
+pub struct Benchmark {
     out: PathBuf,
     total_frames: usize,
     warmup_frames: usize,
@@ -39,12 +39,12 @@ enum Phase {
     Done,
 }
 
-impl FrameCapture {
-    pub fn new(settings: CaptureSettings, adapter_info: &wgpu::AdapterInfo) -> Option<Self> {
+impl Benchmark {
+    pub fn new(settings: BenchmarkSettings, adapter_info: &wgpu::AdapterInfo) -> Option<Self> {
         Some(Self {
             out: settings.out?,
-            total_frames: settings.capture_frames,
-            warmup_frames: settings.capture_warmup,
+            total_frames: settings.benchmark_frames,
+            warmup_frames: settings.benchmark_warmup,
             adapter_info: adapter_info.clone(),
             phase: Phase::WaitingForProject {
                 waited: instant::Duration::ZERO,
@@ -147,8 +147,6 @@ impl FrameCapture {
         let memory = format_memory(memory);
         let memory_before = format_memory(self.memory_before);
 
-        // Metadata lives in comment lines so a capture stays readable on its own, while every
-        // CSV reader still sees just the two columns.
         writeln!(file, "# rau {version} ({commit})",)?;
         writeln!(file, "# profile: {}", built_info::PROFILE)?;
         writeln!(file, "# project: {project}")?;
@@ -157,7 +155,7 @@ impl FrameCapture {
         writeln!(file, "# cpu: {}", cpu_name())?;
         writeln!(file, "# present_mode: {present_mode:?}")?;
         writeln!(file, "# warmup_frames: {}", self.warmup_frames)?;
-        writeln!(file, "# memory: {memory} (before capture: {memory_before})",)?;
+        writeln!(file, "# memory: start: {memory_before}, end: {memory}",)?;
         writeln!(file, "frame,frame_ms")?;
 
         for (index, frame_ms) in frames.iter().enumerate() {

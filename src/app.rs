@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 #[cfg(not(target_arch = "wasm32"))]
-use crate::utils::frame_capture::{CaptureSettings, FrameCapture};
+use crate::utils::benchmark::{Benchmark, BenchmarkSettings};
 use crate::{
     StartupAction,
     error::AppResult,
@@ -21,7 +21,7 @@ use crate::{
 pub struct AppSettings {
     pub action: StartupAction,
     #[cfg(not(target_arch = "wasm32"))]
-    pub capture: CaptureSettings,
+    pub benchmark: BenchmarkSettings,
 }
 
 pub struct App {
@@ -37,7 +37,7 @@ pub struct App {
     frame_time: FrameTimeTracker,
     profiler: ui::profiler::Profiler,
     #[cfg(not(target_arch = "wasm32"))]
-    capture: Option<FrameCapture>,
+    benchmark: Option<Benchmark>,
 }
 
 pub enum AppEvent {
@@ -86,7 +86,7 @@ impl App {
         let state = State::MainMenu(main_menu);
 
         #[cfg(not(target_arch = "wasm32"))]
-        let capture = FrameCapture::new(settings.capture, &adapter_info);
+        let benchmark = Benchmark::new(settings.benchmark, &adapter_info);
 
         Ok(Self {
             device: render_state.device.clone(),
@@ -101,7 +101,7 @@ impl App {
             frame_time: FrameTimeTracker::new(),
             profiler: ui::profiler::Profiler::new(&render_state.device)?,
             #[cfg(not(target_arch = "wasm32"))]
-            capture,
+            benchmark,
         })
     }
 
@@ -215,8 +215,8 @@ impl eframe::App for App {
         self.render(dt);
 
         #[cfg(not(target_arch = "wasm32"))]
-        if let Some(capture) = &mut self.capture {
-            capture.tick(dt, &self.state, present_mode, &mut self.event_queue);
+        if let Some(benchmark) = &mut self.benchmark {
+            benchmark.tick(dt, &self.state, present_mode, &mut self.event_queue);
         }
 
         ui.ctx().request_repaint();
