@@ -62,9 +62,12 @@ impl Benchmark {
     ) {
         match &mut self.phase {
             Phase::WaitingForProject { waited } => {
+                *waited += dt;
+
                 if matches!(state, State::Workspace(workspace) if !workspace.is_rebuilding()) {
                     log::info!(
-                        "discarding {} frames, then recording {}",
+                        "Project ready after {:.1?}, discarding {} frames, then recording {}",
+                        waited,
                         self.warmup_frames,
                         self.total_frames
                     );
@@ -72,14 +75,11 @@ impl Benchmark {
                     self.phase = Phase::Warmup {
                         remaining: self.warmup_frames,
                     };
-                } else {
-                    *waited += dt;
-                    if *waited >= PROJECT_TIMEOUT {
-                        let timeout = PROJECT_TIMEOUT.as_secs();
-                        log::error!("the project was still not ready after {timeout}s, giving up",);
-                        self.phase = Phase::Done;
-                        events.quit();
-                    }
+                } else if *waited >= PROJECT_TIMEOUT {
+                    let timeout = PROJECT_TIMEOUT.as_secs();
+                    log::error!("Project still not ready after {timeout}s, giving up");
+                    self.phase = Phase::Done;
+                    events.quit();
                 }
             }
             Phase::Warmup { remaining } => {
@@ -113,8 +113,8 @@ impl Benchmark {
         log::info!("{frames_count} frames, {mean:.3} ms on average ({average_fps:.1} FPS)",);
 
         match self.write_csv(frames, state, present_mode, memory) {
-            Ok(()) => log::info!("wrote {}", self.out.display()),
-            Err(error) => log::error!("failed to write {}: {error}", self.out.display()),
+            Ok(()) => log::info!("Wrote {}", self.out.display()),
+            Err(error) => log::error!("Failed to write {}: {error}", self.out.display()),
         }
     }
 

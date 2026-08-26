@@ -150,8 +150,20 @@ impl Workspace {
     }
 
     async fn open_project(file_storage: FileStorage) -> AppResult<Self> {
+        let read_started = instant::Instant::now();
         let project_bytes = file_storage.read(&FilePath::project_json()).await?;
+        let read_elapsed = read_started.elapsed();
+
+        let deserialize_started = instant::Instant::now();
         let project: Project = serde_json::from_slice(&project_bytes)?;
+        let deserialize_elapsed = deserialize_started.elapsed();
+
+        log::debug!(
+            "Read project.json in {:.1?} ({} bytes), deserialized it in {:.1?}",
+            read_elapsed,
+            project_bytes.len(),
+            deserialize_elapsed,
+        );
 
         let inspector_tree_pane = TreePane::new("inspector");
         let mut viewport_tree_pane = TreePane::new("viewport");
