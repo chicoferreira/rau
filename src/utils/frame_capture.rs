@@ -27,6 +27,7 @@ pub struct FrameCapture {
     warmup_frames: usize,
     adapter_info: wgpu::AdapterInfo,
     phase: Phase,
+    memory_before: Option<u64>,
 }
 
 enum Phase {
@@ -44,6 +45,7 @@ impl FrameCapture {
             warmup_frames: settings.capture_warmup,
             adapter_info: adapter_info.clone(),
             phase: Phase::WaitingForProject,
+            memory_before: None,
         })
     }
 
@@ -62,6 +64,7 @@ impl FrameCapture {
                         self.warmup_frames,
                         self.total_frames
                     );
+                    self.memory_before = memory_bytes();
                     self.phase = Phase::Warmup {
                         remaining: self.warmup_frames,
                     };
@@ -90,6 +93,8 @@ impl FrameCapture {
     }
 
     fn finish(&self, frames: &[f32], state: &State, present_mode: wgpu::PresentMode) {
+        let memory = memory_bytes();
+
         let mean = frames.iter().sum::<f32>() / frames.len() as f32;
         log::info!(
             "Capture: {} frames, {mean:.3} ms on average ({:.1} FPS)",
@@ -97,7 +102,7 @@ impl FrameCapture {
             1000.0 / mean
         );
 
-        match self.write_csv(frames, state, present_mode) {
+        match self.write_csv(frames, state, present_mode, memory) {
             Ok(()) => log::info!("Capture: wrote {}", self.out.display()),
             Err(error) => log::error!("Capture: failed to write {}: {error}", self.out.display()),
         }
@@ -108,6 +113,7 @@ impl FrameCapture {
         frames: &[f32],
         state: &State,
         present_mode: wgpu::PresentMode,
+        memory: Option<u64>,
     ) -> std::io::Result<()> {
         use crate::built_info;
 
@@ -128,6 +134,9 @@ impl FrameCapture {
         let version = built_info::PKG_VERSION;
         let commit = built_info::GIT_COMMIT_HASH_SHORT.unwrap_or("unknown commit");
 
+        let memory = format_memory(memory);
+        let memory_before = format_memory(self.memory_before);
+
         // Metadata lives in comment lines so a capture stays readable on its own, while every
         // CSV reader still sees just the two columns.
         writeln!(file, "# rau {version} ({commit})",)?;
@@ -138,6 +147,7 @@ impl FrameCapture {
         writeln!(file, "# cpu: {}", cpu_name())?;
         writeln!(file, "# present_mode: {present_mode:?}")?;
         writeln!(file, "# warmup_frames: {}", self.warmup_frames)?;
+        writeln!(file, "# memory: {memory} (before capture: {memory_before})",)?;
         writeln!(file, "frame,frame_ms")?;
 
         for (index, frame_ms) in frames.iter().enumerate() {
@@ -161,3 +171,23 @@ fn cpu_name() -> String {
         .unwrap_or("unknown")
         .to_owned()
 }
+
+fn memory_bytes() -> Option<u64> {
+    let pid = sysinfo::get_current_pid().ok()?;
+
+    let mut system = sysinfo::System::new();
+    system.refresh_processes_specifics(
+        sysinfo::ProcessesToUpdate::Some(&[pid]),
+        true,
+        sysinfo::ProcessRefreshKind::nothing().with_memory(),
+    );
+
+    Some(system.process(pid)?.memory())
+}
+
+fn format_memory(bytes: Option<u64>) -> String {
+    match bytes {
+        Some(bytes) => format!("{:.1} MiB", bytes as f64 / (1024.0 * 1024.0)),
+        None => "unknown".to_owned(),
+    }
+}f
