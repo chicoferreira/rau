@@ -3,7 +3,6 @@ use egui_phosphor::regular;
 use crate::{
     file::file_system::ProjectFileSystem,
     ui::{components::field, pane::StateSnapshot, panels::error_panel::ErrorPanel},
-    utils::fps::FrameTimeTracker,
 };
 
 pub fn ui(state: &mut StateSnapshot, ui: &mut egui::Ui, error_panel: &mut ErrorPanel) {
@@ -25,20 +24,20 @@ pub fn ui(state: &mut StateSnapshot, ui: &mut egui::Ui, error_panel: &mut ErrorP
             ui.separator();
             vsync_status_ui(ui, state);
             ui.separator();
-            frame_time_ui(ui, state.frame_time);
+            frame_time_ui(ui, state);
         });
     });
 }
 
-fn frame_time_ui(ui: &mut egui::Ui, frame_time: &FrameTimeTracker) {
-    let frame_time_ms = frame_time.displayed_ms();
+fn frame_time_ui(ui: &mut egui::Ui, state: &mut StateSnapshot) {
+    let frame_time_ms = state.frame_time.displayed_ms();
     let fps = if frame_time_ms > 0.0 {
         1000.0 / frame_time_ms
     } else {
         0.0
     };
 
-    let profiler_open = puffin::are_scopes_on();
+    let profiler_open = state.profiler.is_open();
     let caret = match profiler_open {
         true => regular::CARET_DOWN,
         false => regular::CARET_UP,
@@ -62,7 +61,7 @@ fn frame_time_ui(ui: &mut egui::Ui, frame_time: &FrameTimeTracker) {
     });
 
     if response.clicked() {
-        puffin::set_scopes_on(!profiler_open);
+        state.profiler.set_open(!profiler_open);
     }
 }
 

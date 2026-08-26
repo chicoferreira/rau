@@ -141,6 +141,20 @@ impl App {
         }
     }
 
+    /// Ensures that puffin's scopes are only be enabled when
+    /// the profiler is open, or when benchmarking is active.
+    fn sync_profiler_scopes(&self) {
+        let benchmarking = cfg_select! {
+            target_arch = "wasm32" => false,
+            _ => self.benchmark.is_some(),
+        };
+
+        let scopes_on = benchmarking || self.profiler.is_open();
+        if scopes_on != puffin::are_scopes_on() {
+            puffin::set_scopes_on(scopes_on);
+        }
+    }
+
     fn render(&mut self, dt: instant::Duration) {
         puffin::profile_function!();
 
@@ -206,11 +220,13 @@ impl eframe::App for App {
                 self.adapter_info.backend,
                 present_mode,
                 &self.frame_time,
+                &mut self.profiler,
                 &mut self.event_queue,
             ),
         }
 
         self.profiler.ui(ui.ctx());
+        self.sync_profiler_scopes();
 
         self.render(dt);
 

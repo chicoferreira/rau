@@ -8,6 +8,7 @@ use crate::{
             error_panel::ErrorPanel, files_panel, inspector_pane::InspectorPane, menu_bar,
             project_tree_panel, status_bar, viewport_pane::ViewportPane,
         },
+        profiler::Profiler,
         rename::RenameState,
     },
     utils::{event_queue::EventQueue, fps::FrameTimeTracker},
@@ -24,6 +25,7 @@ pub struct StateSnapshot<'a> {
     pub backend: wgpu::Backend,
     pub present_mode: wgpu::PresentMode,
     pub frame_time: &'a FrameTimeTracker,
+    pub profiler: &'a mut Profiler,
 }
 
 impl StateSnapshot<'_> {

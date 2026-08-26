@@ -6,6 +6,7 @@ use wgpu_profiler::{GpuProfiler, GpuProfilerSettings};
 use crate::{error::AppResult, ui::components::hint, utils::wgpu_utils::create_command_encoder};
 
 pub struct Profiler {
+    open: bool,
     tab: Tab,
     gpu: GpuTimeline,
     gpu_profiler: GpuProfiler,
@@ -25,6 +26,7 @@ impl Profiler {
         log::info!("GPU timestamp queries supported: {gpu_timings_supported}");
 
         Ok(Self {
+            open: false,
             tab: Tab::default(),
             gpu: GpuTimeline::default(),
             gpu_profiler: GpuProfiler::new(device, GpuProfilerSettings::default())?,
@@ -34,6 +36,14 @@ impl Profiler {
 
     pub fn gpu_profiler(&self) -> &GpuProfiler {
         &self.gpu_profiler
+    }
+
+    pub fn is_open(&self) -> bool {
+        self.open
+    }
+
+    pub fn set_open(&mut self, open: bool) {
+        self.open = open;
     }
 
     /// Whether the GPU is being timed this frame.
@@ -79,21 +89,19 @@ impl Profiler {
     }
 
     pub fn ui(&mut self, ctx: &egui::Context) {
-        puffin::profile_function!();
-
-        if !puffin::are_scopes_on() {
+        if !self.open {
             return;
         }
 
-        let mut open = true;
+        puffin::profile_function!();
+
+        let mut open = self.open;
         egui::Window::new("Profiler")
             .default_size([1024.0, 600.0])
             .open(&mut open)
             .show(ctx, |ui| self.contents(ui));
 
-        if !open {
-            puffin::set_scopes_on(false);
-        }
+        self.open = open;
     }
 
     fn contents(&mut self, ui: &mut egui::Ui) {

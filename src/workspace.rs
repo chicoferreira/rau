@@ -325,6 +325,7 @@ impl Workspace {
         backend: wgpu::Backend,
         present_mode: wgpu::PresentMode,
         frame_time: &FrameTimeTracker,
+        profiler: &mut ui::profiler::Profiler,
         app_event_queue: &mut EventQueue<AppEvent>,
     ) {
         puffin::profile_function!();
@@ -341,6 +342,7 @@ impl Workspace {
             backend,
             present_mode,
             frame_time,
+            profiler,
         };
 
         snapshot.ui(
