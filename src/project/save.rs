@@ -48,9 +48,15 @@ impl ProjectSaveState {
 
         let revisions = self.last_observed_snapshot.clone();
 
+        let serialize_started = instant::Instant::now();
+
         match project.serialize() {
             Ok(bytes) => {
-                log::info!("Saving project file...");
+                log::info!(
+                    "Serialized project in {:.1?} ({} bytes), saving...",
+                    serialize_started.elapsed(),
+                    bytes.len()
+                );
                 file_storage.save_in_background(&FilePath::project_json(), bytes);
                 self.saved_snapshot = revisions;
                 self.save_deadline = None;

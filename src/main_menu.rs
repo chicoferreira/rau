@@ -28,7 +28,7 @@ const CONTENT_MARGIN: f32 = 36.0;
 #[derive(Default)]
 pub struct MainMenu {
     toasts: egui_notify::Toasts,
-    open_workspace_job: Option<AsyncJob<AppResult<Workspace>>>,
+    open_workspace_job: Option<(instant::Instant, AsyncJob<AppResult<Workspace>>)>,
     open_or_import_project: OpenOrImportProject,
     recent_projects_state: RecentProjectsState,
     create_project_modal: Option<CreateProjectModal>,
@@ -161,7 +161,7 @@ impl MainMenu {
     ) {
         let workspace_job = Workspace::open_project_and_save_files(app_fs, source, files);
         let workspace_job = AsyncJob::new(workspace_job);
-        self.open_workspace_job = Some(AsyncJob::new(workspace_job));
+        self.open_workspace_job = Some((instant::Instant::now(), AsyncJob::new(workspace_job)));
     }
 
     pub fn render(
@@ -193,11 +193,13 @@ impl MainMenu {
             }
         }
 
-        if let Some(job) = &mut self.open_workspace_job
+        if let Some((started, job)) = &mut self.open_workspace_job
             && let Poll::Ready(result) = job.try_resolve()
         {
+            let elapsed = started.elapsed();
             match result {
                 Ok(workspace) => {
+                    log::info!("Opened project in {elapsed:.1?}");
                     app_event_queue.add(AppEvent::SetState(State::Workspace(workspace)));
                 }
                 Err(error) => {
