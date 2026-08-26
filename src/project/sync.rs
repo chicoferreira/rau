@@ -244,6 +244,7 @@ impl SyncTracker {
         // unchanged runtime (e.g. a bind group over a uniform buffer that was
         // rewritten in place); record it so consumers downstream rerun.
         if !self.was_data_changed(id) && resource.forwards_data_changes(id, ctx, self) {
+            log::debug!("Data changed: {:?} (forwarded)", id);
             self.data_changes.push(id.into());
         }
 
@@ -271,6 +272,7 @@ impl SyncTracker {
             }
             Ok(SyncOutcome::DataChanged(runtime)) => {
                 *cell = RuntimeCell::Created { runtime, revision };
+                log::debug!("Data changed: {:?}", id);
                 self.data_changes.push(id.into());
             }
             Ok(SyncOutcome::Unchanged(runtime)) => {
