@@ -296,6 +296,11 @@ impl Workspace {
         self.file_storage.project_source().project_name()
     }
 
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn is_rebuilding(&self) -> bool {
+        self.runtime_project.is_rebuilding()
+    }
+
     pub fn on_frame_submitted(&mut self, job: AsyncJob<AppResult<()>>) {
         let current_snapshot = self.project.snapshot();
         self.runtime_project

@@ -7,6 +7,8 @@ pub mod derive_modal_material;
 pub mod dir_node;
 pub mod event_queue;
 pub mod fps;
+#[cfg(not(target_arch = "wasm32"))]
+pub mod frame_capture;
 pub mod github;
 pub mod icon;
 pub mod key;

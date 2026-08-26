@@ -1,5 +1,7 @@
 use std::sync::Arc;
 
+#[cfg(not(target_arch = "wasm32"))]
+use crate::utils::frame_capture::{CaptureSettings, FrameCapture};
 use crate::{
     StartupAction,
     error::AppResult,
@@ -13,18 +15,27 @@ use crate::{
     workspace::{AppContext, Workspace},
 };
 
+#[derive(Default)]
+pub struct AppSettings {
+    pub action: StartupAction,
+    #[cfg(not(target_arch = "wasm32"))]
+    pub capture: CaptureSettings,
+}
+
 pub struct App {
     device: wgpu::Device,
     queue: wgpu::Queue,
     last_render_time: instant::Instant,
     egui_renderer: Arc<egui::mutex::RwLock<egui_wgpu::Renderer>>,
-    backend: wgpu::Backend,
+    adapter_info: wgpu::AdapterInfo,
     downlevel_flags: wgpu::DownlevelFlags,
     app_file_system: AppFileSystem,
     state: State,
     event_queue: EventQueue<AppEvent>,
     frame_time: FrameTimeTracker,
     profiler: ui::profiler::Profiler,
+    #[cfg(not(target_arch = "wasm32"))]
+    capture: Option<FrameCapture>,
 }
 
 pub enum AppEvent {
@@ -51,7 +62,7 @@ impl State {
 impl App {
     pub fn new(
         cc: &eframe::CreationContext<'_>,
-        startup_action: StartupAction,
+        settings: AppSettings,
         app_file_system: AppFileSystem,
     ) -> AppResult<Self> {
         let render_state = cc
@@ -62,27 +73,33 @@ impl App {
         setup_egui_context(&cc.egui_ctx);
 
         let adapter = &render_state.adapter;
-        let backend = adapter.get_info().backend;
-        log::info!("Selected renderer backend: {backend:?}");
+        let adapter_info = adapter.get_info();
+        log::info!("Selected renderer backend: {:?}", adapter_info.backend);
+        log::info!("Selected adapter: {}", adapter_info.name);
         log::info!("Selected surface format: {:?}", render_state.target_format);
 
         let downlevel_flags = adapter.get_downlevel_capabilities().flags;
 
-        let main_menu = MainMenu::with_startup_action(app_file_system.clone(), startup_action);
+        let main_menu = MainMenu::with_startup_action(app_file_system.clone(), settings.action);
         let state = State::MainMenu(main_menu);
+
+        #[cfg(not(target_arch = "wasm32"))]
+        let capture = FrameCapture::new(settings.capture, &adapter_info);
 
         Ok(Self {
             device: render_state.device.clone(),
             queue: render_state.queue.clone(),
             last_render_time: instant::Instant::now(),
             egui_renderer: render_state.renderer.clone(),
-            backend,
+            adapter_info,
             downlevel_flags,
             app_file_system,
             state,
             event_queue: EventQueue::default(),
             frame_time: FrameTimeTracker::new(),
             profiler: ui::profiler::Profiler::new(&render_state.device)?,
+            #[cfg(not(target_arch = "wasm32"))]
+            capture,
         })
     }
 
@@ -184,7 +201,7 @@ impl eframe::App for App {
             State::MainMenu(main_menu) => main_menu.render_ui(ui, &self.app_file_system),
             State::Workspace(workspace) => workspace.render_ui(
                 ui,
-                self.backend,
+                self.adapter_info.backend,
                 present_mode,
                 &self.frame_time,
                 &mut self.event_queue,
@@ -194,6 +211,11 @@ impl eframe::App for App {
         self.profiler.ui(ui.ctx());
 
         self.render(dt);
+
+        #[cfg(not(target_arch = "wasm32"))]
+        if let Some(capture) = &mut self.capture {
+            capture.tick(dt, &self.state, present_mode, &mut self.event_queue);
+        }
 
         ui.ctx().request_repaint();
     }

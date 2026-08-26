@@ -1,5 +1,5 @@
 use crate::{
-    app::App,
+    app::{App, AppSettings},
     file::{
         file_system::AppFileSystem,
         identifier::{ProjectIdentifier, ProjectSource},
@@ -48,7 +48,7 @@ pub enum StartupAction {
 
 #[derive(Default)]
 pub struct StartupSettings {
-    pub action: StartupAction,
+    pub app: AppSettings,
     pub render_settings: RenderSettings,
 }
 
@@ -69,7 +69,7 @@ pub fn run(settings: StartupSettings) -> error::AppResult<()> {
             ..Default::default()
         },
         Box::new(move |cc| {
-            let app = App::new(cc, settings.action, app_file_system);
+            let app = App::new(cc, settings.app, app_file_system);
             Ok(Box::new(app.map_err(|error| error.to_string())?))
         }),
     )?;
@@ -95,7 +95,9 @@ pub fn run_web() -> Result<(), wasm_bindgen::JsValue> {
         .expect_throw("element is not a canvas");
 
     let render_settings = RenderSettings::default();
-    let startup_action = startup::url::startup_action_from_url();
+    let app_settings = AppSettings {
+        action: startup::url::startup_action_from_url(),
+    };
 
     wasm_bindgen_futures::spawn_local(async move {
         let app_file_system = AppFileSystem::open()
@@ -110,7 +112,7 @@ pub fn run_web() -> Result<(), wasm_bindgen::JsValue> {
                     ..Default::default()
                 },
                 Box::new(move |cc| {
-                    let app = App::new(cc, startup_action, app_file_system);
+                    let app = App::new(cc, app_settings, app_file_system);
                     Ok(Box::new(app.map_err(|error| error.to_string())?))
                 }),
             )

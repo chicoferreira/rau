@@ -2,11 +2,12 @@ use std::path::PathBuf;
 
 use crate::{
     StartupAction, StartupSettings,
+    app::AppSettings,
     error::AppResult,
     file::identifier::{ProjectIdentifier, ProjectSource},
     scene::{self, GenerateTemplate},
     ui::components::create_project_modal::{GithubProjectSource, ProjectCreationSource},
-    utils::render_settings::RenderSettings,
+    utils::{frame_capture::CaptureSettings, render_settings::RenderSettings},
 };
 use clap::{Parser, Subcommand};
 
@@ -15,6 +16,9 @@ use clap::{Parser, Subcommand};
 struct Cli {
     #[command(flatten)]
     render_settings: RenderSettings,
+
+    #[command(flatten)]
+    capture: CaptureSettings,
 
     #[command(subcommand)]
     command: Option<Command>,
@@ -161,7 +165,10 @@ pub fn main() {
     };
 
     let settings = StartupSettings {
-        action: startup_action,
+        app: AppSettings {
+            action: startup_action,
+            capture: cli.capture,
+        },
         render_settings: cli.render_settings,
     };
 
