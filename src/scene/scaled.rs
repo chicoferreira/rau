@@ -21,10 +21,8 @@ pub fn build(project: &mut Project, scene: SceneBuilder, copies: usize) -> AppRe
     // main viewport and the render passes in the presentation
     scene(project)?;
 
-    log::info!(
-        "Generated a scaled project of {copies} copies ({} resources)",
-        project.project_revisions().count()
-    );
+    let resource_count = project.project_revisions().count();
+    log::info!("Generated a scaled project of {copies} copies ({resource_count} resources)",);
 
     Ok(())
 }
@@ -49,6 +47,11 @@ fn add_background_copy(project: &mut Project, scene: SceneBuilder, copy: usize) 
 
                 let dimension = project.dimensions.get_mut(dimension_id)?;
                 dimension.set_size(small_dimension);
+            }
+            // Prevent copied viewports from resizing their dimensions when opened
+            ResourceId::Viewport(viewport_id) => {
+                let viewport = project.viewports.get_mut(viewport_id)?;
+                viewport.set_dimension_id(None);
             }
             _ => {}
         }
