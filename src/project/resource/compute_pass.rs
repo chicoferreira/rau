@@ -193,7 +193,6 @@ impl ComputePass {
 
     resource_setters! {
         increases: [runtime_revision, project_revision];
-        pub fn set_label(label: String);
         pub fn set_shader(shader: Option<ShaderId>);
         pub fn set_bind_groups(bind_groups: Vec<BindGroupId>);
         pub fn set_dispatch_size(dispatch_size: DispatchSize);
@@ -327,6 +326,11 @@ impl ProjectResource for ComputePass {
 
     fn label(&self) -> &str {
         &self.label
+    }
+
+    resource_setters! {
+        increases: [runtime_revision, project_revision];
+        fn set_label(label: String);
     }
 
     fn project_revision(&self) -> Revision {

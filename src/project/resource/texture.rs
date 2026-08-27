@@ -103,7 +103,6 @@ impl Texture {
 
     resource_setters! {
         increases: [runtime_revision, project_revision];
-        pub fn set_label(label: String);
         pub fn set_format(format: TextureFormat);
         pub fn set_usage(usage: wgpu::TextureUsages);
         pub fn set_source(source: TextureSource);
@@ -134,6 +133,11 @@ impl ProjectResource for Texture {
 
     fn label(&self) -> &str {
         &self.label
+    }
+
+    resource_setters! {
+        increases: [runtime_revision, project_revision];
+        fn set_label(label: String);
     }
 
     fn project_revision(&self) -> Revision {

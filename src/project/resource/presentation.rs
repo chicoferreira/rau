@@ -40,6 +40,8 @@ impl ProjectResource for Presentation {
         "Presentation"
     }
 
+    fn set_label(&mut self, _label: String) {}
+
     fn project_revision(&self) -> Revision {
         self.project_revision
     }

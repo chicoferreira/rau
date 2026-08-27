@@ -88,7 +88,6 @@ impl TextureView {
 
     resource_setters! {
         increases: [runtime_revision, project_revision];
-        pub fn set_label(label: String);
         pub fn set_texture_id(texture_id: Option<TextureId>);
         pub fn set_format(format: Option<TextureViewFormat>);
         pub fn set_dimension(dimension: Option<wgpu::TextureViewDimension>);
@@ -192,6 +191,11 @@ impl ProjectResource for TextureView {
 
     fn label(&self) -> &str {
         &self.label
+    }
+
+    resource_setters! {
+        increases: [runtime_revision, project_revision];
+        fn set_label(label: String);
     }
 
     fn project_revision(&self) -> Revision {

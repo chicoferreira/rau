@@ -169,7 +169,6 @@ impl Uniform {
 
     resource_setters! {
         increases: [runtime_revision, project_revision];
-        pub fn set_label(label: String);
         pub fn set_fields(fields: Vec<UniformField>);
     }
 
@@ -264,6 +263,11 @@ impl ProjectResource for Uniform {
 
     fn label(&self) -> &str {
         &self.label
+    }
+
+    resource_setters! {
+        increases: [runtime_revision, project_revision];
+        fn set_label(label: String);
     }
 
     fn project_revision(&self) -> Revision {

@@ -100,6 +100,12 @@ where
     pub fn get_label(&self, id: R::Id) -> AppResult<&str> {
         Ok(self.get(id)?.label())
     }
+
+    pub fn set_label(&mut self, id: R::Id, label: String) {
+        if let Some(resource) = self.map.get_mut(id) {
+            resource.set_label(label);
+        }
+    }
 }
 
 impl<R> Storage<R>

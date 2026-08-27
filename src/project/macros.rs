@@ -3,11 +3,11 @@ macro_rules! resource_setters {
     (
         increases: $revisions:tt;
         $(
-            pub fn $setter:ident($field:ident: $ty:ty);
+            $vis:vis fn $setter:ident($field:ident: $ty:ty);
         )*
     ) => {
         $(
-            pub fn $setter(&mut self, $field: $ty) {
+            $vis fn $setter(&mut self, $field: $ty) {
                 if self.$field != $field {
                     self.$field = $field;
                     resource_setters!(@increase self $revisions);

@@ -115,11 +115,6 @@ impl Model {
     }
 
     resource_setters! {
-        increases: [project_revision];
-        pub fn set_label(label: String);
-    }
-
-    resource_setters! {
         increases: [runtime_revision, project_revision];
         pub fn set_source(source: Option<FilePath>);
         pub fn set_material_bind_group_ids(material_bind_group_ids: Vec<Option<BindGroupId>>);
@@ -207,6 +202,11 @@ impl ProjectResource for Model {
 
     fn label(&self) -> &str {
         &self.label
+    }
+
+    resource_setters! {
+        increases: [project_revision];
+        fn set_label(label: String);
     }
 
     fn project_revision(&self) -> Revision {

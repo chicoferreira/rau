@@ -90,7 +90,6 @@ impl BindGroup {
 
     resource_setters! {
         increases: [project_revision, runtime_revision];
-        pub fn set_label(label: String);
         pub fn set_entries(entries: Vec<BindGroupEntry>);
     }
 
@@ -168,6 +167,11 @@ impl ProjectResource for BindGroup {
 
     fn label(&self) -> &str {
         &self.label
+    }
+
+    resource_setters! {
+        increases: [project_revision, runtime_revision];
+        fn set_label(label: String);
     }
 
     fn project_revision(&self) -> Revision {

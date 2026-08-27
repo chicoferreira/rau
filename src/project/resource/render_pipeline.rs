@@ -106,7 +106,6 @@ impl RenderPipeline {
 
     resource_setters! {
         increases: [runtime_revision, project_revision];
-        pub fn set_label(label: String);
         pub fn set_primitive_state(primitive_state: PrimitiveState);
         pub fn set_vertex_shader(vertex_shader: Option<ShaderId>);
         pub fn set_fragment_shader(fragment_shader: Option<ShaderId>);
@@ -175,6 +174,11 @@ impl ProjectResource for RenderPipeline {
 
     fn label(&self) -> &str {
         &self.label
+    }
+
+    resource_setters! {
+        increases: [runtime_revision, project_revision];
+        fn set_label(label: String);
     }
 
     fn project_revision(&self) -> Revision {

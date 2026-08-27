@@ -107,6 +107,25 @@ impl Project {
         label_err.ok()
     }
 
+    pub fn set_label(&mut self, id: impl Into<ResourceId>, label: String) {
+        match id.into() {
+            ResourceId::Shader(id) => self.shaders.set_label(id, label),
+            ResourceId::Viewport(id) => self.viewports.set_label(id, label),
+            ResourceId::Uniform(id) => self.uniforms.set_label(id, label),
+            ResourceId::BindGroup(id) => self.bind_groups.set_label(id, label),
+            ResourceId::Texture(id) => self.textures.set_label(id, label),
+            ResourceId::TextureView(id) => self.texture_views.set_label(id, label),
+            ResourceId::RenderPipeline(id) => self.render_pipelines.set_label(id, label),
+            ResourceId::RenderPass(id) => self.render_passes.set_label(id, label),
+            ResourceId::Sampler(id) => self.samplers.set_label(id, label),
+            ResourceId::Dimension(id) => self.dimensions.set_label(id, label),
+            ResourceId::Camera(id) => self.cameras.set_label(id, label),
+            ResourceId::Model(id) => self.models.set_label(id, label),
+            ResourceId::ComputePass(id) => self.compute_passes.set_label(id, label),
+            ResourceId::Presentation(_) => {}
+        }
+    }
+
     pub fn register_with_label(&mut self, kind: ResourceKind, label: String) -> Option<ResourceId> {
         let id = match kind {
             ResourceKind::Shader => self.shaders.create(label).into(),
@@ -305,6 +324,8 @@ pub trait ProjectResource {
     type Id: Into<ResourceId> + Copy + Eq + std::hash::Hash + std::fmt::Debug + Send + Sync;
 
     fn label(&self) -> &str;
+
+    fn set_label(&mut self, label: String);
 
     fn project_revision(&self) -> Revision;
 }

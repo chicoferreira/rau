@@ -117,76 +117,24 @@ impl RenameTarget {
                     file_storage.move_path_in_background(file_path, new_path);
                 }
             }
-            RenameTarget::Uniform(id) => {
-                if let Ok(uniform) = project.uniforms.get_mut(id) {
-                    uniform.set_label(new_name);
-                }
-            }
+            RenameTarget::Uniform(id) => project.set_label(id, new_name),
             RenameTarget::UniformField(id, index) => {
                 if let Ok(uniform) = project.uniforms.get_mut(id) {
                     uniform.set_field_label(index, new_name);
                 }
             }
-            RenameTarget::BindGroup(id) => {
-                if let Ok(bind_group) = project.bind_groups.get_mut(id) {
-                    bind_group.set_label(new_name);
-                }
-            }
-            RenameTarget::Viewport(id) => {
-                if let Ok(viewport) = project.viewports.get_mut(id) {
-                    viewport.set_label(new_name);
-                }
-            }
-            RenameTarget::Shader(id) => {
-                if let Ok(shader) = project.shaders.get_mut(id) {
-                    shader.set_label(new_name);
-                }
-            }
-            RenameTarget::Camera(id) => {
-                if let Ok(camera) = project.cameras.get_mut(id) {
-                    camera.set_label(new_name);
-                }
-            }
-            RenameTarget::Dimension(id) => {
-                if let Ok(dimension) = project.dimensions.get_mut(id) {
-                    dimension.set_label(new_name);
-                }
-            }
-            RenameTarget::Sampler(id) => {
-                if let Ok(sampler) = project.samplers.get_mut(id) {
-                    sampler.set_label(new_name);
-                }
-            }
-            RenameTarget::Texture(id) => {
-                if let Ok(texture) = project.textures.get_mut(id) {
-                    texture.set_label(new_name);
-                }
-            }
-            RenameTarget::TextureView(texture_view_id) => {
-                if let Ok(texture_view) = project.texture_views.get_mut(texture_view_id) {
-                    texture_view.set_label(new_name);
-                }
-            }
-            RenameTarget::Model(model_id) => {
-                if let Ok(model) = project.models.get_mut(model_id) {
-                    model.set_label(new_name);
-                }
-            }
-            RenameTarget::RenderPass(render_pass_id) => {
-                if let Ok(render_pass) = project.render_passes.get_mut(render_pass_id) {
-                    render_pass.set_label(new_name);
-                }
-            }
-            RenameTarget::RenderPipeline(render_pipeline_id) => {
-                if let Ok(render_pipeline) = project.render_pipelines.get_mut(render_pipeline_id) {
-                    render_pipeline.set_label(new_name);
-                }
-            }
-            RenameTarget::ComputePass(compute_pass_id) => {
-                if let Ok(compute_pass) = project.compute_passes.get_mut(compute_pass_id) {
-                    compute_pass.set_label(new_name);
-                }
-            }
+            RenameTarget::BindGroup(id) => project.set_label(id, new_name),
+            RenameTarget::Viewport(id) => project.set_label(id, new_name),
+            RenameTarget::Shader(id) => project.set_label(id, new_name),
+            RenameTarget::Camera(id) => project.set_label(id, new_name),
+            RenameTarget::Dimension(id) => project.set_label(id, new_name),
+            RenameTarget::Sampler(id) => project.set_label(id, new_name),
+            RenameTarget::Texture(id) => project.set_label(id, new_name),
+            RenameTarget::TextureView(id) => project.set_label(id, new_name),
+            RenameTarget::Model(id) => project.set_label(id, new_name),
+            RenameTarget::RenderPass(id) => project.set_label(id, new_name),
+            RenameTarget::RenderPipeline(id) => project.set_label(id, new_name),
+            RenameTarget::ComputePass(id) => project.set_label(id, new_name),
         }
     }
 }

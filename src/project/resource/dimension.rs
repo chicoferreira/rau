@@ -80,11 +80,6 @@ impl Dimension {
     }
 
     resource_setters! {
-        increases: [project_revision];
-        pub fn set_label(label: String);
-    }
-
-    resource_setters! {
         increases: [runtime_revision, project_revision];
         pub fn set_size(size: DimensionSize);
     }
@@ -131,6 +126,11 @@ impl ProjectResource for Dimension {
 
     fn label(&self) -> &str {
         &self.label
+    }
+
+    resource_setters! {
+        increases: [project_revision];
+        fn set_label(label: String);
     }
 
     fn project_revision(&self) -> Revision {

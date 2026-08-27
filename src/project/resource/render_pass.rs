@@ -96,6 +96,11 @@ impl ProjectResource for RenderPass {
         &self.label
     }
 
+    resource_setters! {
+        increases: [runtime_revision, project_revision];
+        fn set_label(label: String);
+    }
+
     fn project_revision(&self) -> Revision {
         self.project_revision
     }
@@ -125,7 +130,6 @@ impl RenderPass {
 
     resource_setters! {
         increases: [runtime_revision, project_revision];
-        pub fn set_label(label: String);
         pub fn set_target(target: RenderPassTarget<Color>);
         pub fn set_depth_target(depth_target: Option<RenderPassTarget<f32>>);
         pub fn set_pipelines(pipelines: Vec<RenderPipelineId>);

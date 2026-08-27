@@ -8,6 +8,7 @@ use crate::{
         Creatable, ProjectResource, SamplerId,
         sync::{Revision, SyncOutcome, SyncResource, SyncTracker},
     },
+    resource_setters,
     utils::{async_job::AsyncJob, wgpu_error_scope::WgpuErrorScope, wgpu_utils::AddressMode},
 };
 
@@ -62,12 +63,6 @@ impl Sampler {
         }
     }
 
-    pub fn set_label(&mut self, label: String) {
-        self.label = label;
-        self.runtime_revision.increase();
-        self.project_revision.increase();
-    }
-
     pub fn spec(&self) -> &SamplerSpec {
         &self.spec
     }
@@ -113,6 +108,11 @@ impl ProjectResource for Sampler {
 
     fn label(&self) -> &str {
         &self.label
+    }
+
+    resource_setters! {
+        increases: [runtime_revision, project_revision];
+        fn set_label(label: String);
     }
 
     fn project_revision(&self) -> Revision {

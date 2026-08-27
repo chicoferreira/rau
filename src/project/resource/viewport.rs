@@ -51,7 +51,6 @@ impl Viewport {
 
     resource_setters! {
         increases: [project_revision];
-        pub fn set_label(label: String);
         pub fn set_texture_view_id(texture_view_id: Option<TextureViewId>);
         pub fn set_dimension_id(dimension_id: Option<DimensionId>);
         pub fn set_controls_camera_id(controls_camera_id: Option<CameraId>);
@@ -74,6 +73,11 @@ impl ProjectResource for Viewport {
 
     fn label(&self) -> &str {
         &self.label
+    }
+
+    resource_setters! {
+        increases: [project_revision];
+        fn set_label(label: String);
     }
 
     fn project_revision(&self) -> Revision {

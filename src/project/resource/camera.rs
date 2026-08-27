@@ -295,11 +295,6 @@ impl Camera {
     }
 
     resource_setters! {
-        increases: [project_revision];
-        pub fn set_label(label: String);
-    }
-
-    resource_setters! {
         increases: [runtime_revision, project_revision];
         pub fn set_position(position: Vec3);
         pub fn set_dimension_id(dimension_id: Option<DimensionId>);
@@ -459,6 +454,11 @@ impl ProjectResource for Camera {
 
     fn label(&self) -> &str {
         &self.label
+    }
+
+    resource_setters! {
+        increases: [project_revision];
+        fn set_label(label: String);
     }
 
     fn project_revision(&self) -> Revision {
