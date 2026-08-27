@@ -51,9 +51,7 @@ const SEGMENTS: u32 = 5;
 /// Triangle-strip vertices per blade: two per segment plus the tip.
 const VERTS_PER_BLADE: u32 = SEGMENTS * 2 + 1;
 
-pub async fn create_scene() -> AppResult<Project> {
-    let mut project = Project::default();
-
+pub fn build(project: &mut Project) -> AppResult<()> {
     let grass_shader_id = project.shaders.register(Shader::new(
         "Grass Shader",
         FilePath::from_str("grass.wgsl")?,
@@ -221,5 +219,5 @@ pub async fn create_scene() -> AppResult<Project> {
     project.presentation.set_render_passes(vec![render_pass_id]);
     project.presentation.set_main_viewport(Some(viewport_id));
 
-    Ok(project)
+    Ok(())
 }

@@ -28,9 +28,11 @@ use crate::{
     },
 };
 
-pub async fn create_scene(device: &wgpu::Device, file_storage: &FileStorage) -> AppResult<Project> {
-    let mut project = Project::default();
-
+pub async fn build(
+    project: &mut Project,
+    device: &wgpu::Device,
+    file_storage: &FileStorage,
+) -> AppResult<()> {
     let shader_id = project.shaders.register(Shader::new(
         "Main Shader",
         FilePath::from_str("shader.wgsl")?,
@@ -126,7 +128,7 @@ pub async fn create_scene(device: &wgpu::Device, file_storage: &FileStorage) -> 
         ],
         sampler: SamplerSetting::Existing(material_sampler_id),
     }
-    .create_bind_groups(&mut project, model_runtime.materials(), model.label())?;
+    .create_bind_groups(project, model_runtime.materials(), model.label())?;
     model.set_material_bind_group_ids(material_bind_group_ids);
     let model_id = project.models.register(model);
 
@@ -206,5 +208,5 @@ pub async fn create_scene(device: &wgpu::Device, file_storage: &FileStorage) -> 
     project.presentation.set_render_passes(vec![render_pass_id]);
     project.presentation.set_main_viewport(Some(viewport_id));
 
-    Ok(project)
+    Ok(())
 }

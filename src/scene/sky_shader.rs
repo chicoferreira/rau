@@ -35,9 +35,7 @@ use crate::{
     utils::wgpu_utils::{PrimitiveState, TextureFormat},
 };
 
-pub async fn create_scene() -> AppResult<Project> {
-    let mut project = Project::default();
-
+pub fn build(project: &mut Project) -> AppResult<()> {
     let shader_id = project
         .shaders
         .register(Shader::new("Sky Shader", FilePath::from_str("sky.wgsl")?));
@@ -162,5 +160,5 @@ pub async fn create_scene() -> AppResult<Project> {
     project.presentation.set_render_passes(vec![render_pass_id]);
     project.presentation.set_main_viewport(Some(viewport_id));
 
-    Ok(project)
+    Ok(())
 }

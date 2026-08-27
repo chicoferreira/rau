@@ -1,6 +1,5 @@
 use crate::{
     error::AppResult,
-    file::file_storage::FileStorage,
     project::{
         Project,
         paths::FilePath,
@@ -8,7 +7,7 @@ use crate::{
             bindgroup::{BindGroup, BindGroupEntry, BindGroupResource},
             camera::{Camera, CameraMode, LookAt},
             dimension::Dimension,
-            model::{Model, ModelRuntime},
+            model::Model,
             render_pass::{Color, LoadOperation, RenderPass, RenderPassTarget},
             render_pipeline::{BindGroupTarget, RenderDrawStrategy, RenderPipeline},
             shader::Shader,
@@ -25,9 +24,7 @@ use crate::{
 
 const SHELL_COUNT: u32 = 48;
 
-pub async fn create_scene(device: &wgpu::Device, file_storage: &FileStorage) -> AppResult<Project> {
-    let mut project = Project::default();
-
+pub fn build(project: &mut Project) -> AppResult<()> {
     let shader_id = project
         .shaders
         .register(Shader::new("Fur Shader", FilePath::from_str("fur.wgsl")?));
@@ -112,13 +109,6 @@ pub async fn create_scene(device: &wgpu::Device, file_storage: &FileStorage) -> 
 
     let bunny_source = FilePath::from_str("bunny.obj")?;
     let bunny_model = Model::new("Bunny", bunny_source.clone());
-    let (_, _) = ModelRuntime::load_from_obj_file(
-        bunny_source,
-        file_storage,
-        bunny_model.vertex_buffer_spec().clone(),
-        device.clone(),
-    )
-    .await?;
     let bunny_model_id = project.models.register(bunny_model);
 
     let color_format = TextureFormat::Rgba8UnormSrgb;
@@ -200,5 +190,5 @@ pub async fn create_scene(device: &wgpu::Device, file_storage: &FileStorage) -> 
     project.presentation.set_render_passes(vec![render_pass_id]);
     project.presentation.set_main_viewport(Some(viewport_id));
 
-    Ok(project)
+    Ok(())
 }

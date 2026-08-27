@@ -36,9 +36,7 @@ use crate::{
     utils::wgpu_utils::{PrimitiveState, TextureFormat},
 };
 
-pub async fn create_scene() -> AppResult<Project> {
-    let mut project = Project::default();
-
+pub fn build(project: &mut Project) -> AppResult<()> {
     // Shaders: one per compute stage plus the display shader.
     let init_shader_id = project
         .shaders
@@ -248,5 +246,5 @@ pub async fn create_scene() -> AppResult<Project> {
         .set_compute_passes(vec![init_pass_id, simulate_pass_id, copy_pass_id]);
     project.presentation.set_main_viewport(Some(viewport_id));
 
-    Ok(project)
+    Ok(())
 }

@@ -55,9 +55,7 @@ const CUBE_VERTICES: u32 = 36;
 /// the light viewport's on-screen size. Higher = crisper shadow edges.
 const SHADOW_MAP_SIZE: u32 = 4096;
 
-pub async fn create_scene() -> AppResult<Project> {
-    let mut project = Project::default();
-
+pub fn build(project: &mut Project) -> AppResult<()> {
     let scene_shader_id = project.shaders.register(Shader::new(
         "Scene Shader",
         FilePath::from_str("scene.wgsl")?,
@@ -330,5 +328,5 @@ pub async fn create_scene() -> AppResult<Project> {
     // shadow pass's colour target and drives the light camera when focused.
     let _ = light_viewport_id;
 
-    Ok(project)
+    Ok(())
 }

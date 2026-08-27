@@ -30,9 +30,11 @@ use crate::{
     },
 };
 
-pub async fn create_scene(device: &wgpu::Device, file_storage: &FileStorage) -> AppResult<Project> {
-    let mut project = Project::default();
-
+pub async fn build(
+    project: &mut Project,
+    device: &wgpu::Device,
+    file_storage: &FileStorage,
+) -> AppResult<()> {
     let equirectangular_shader = Shader::new(
         "Equirectengular Shader",
         FilePath::from_str("equirectangular.wgsl")?,
@@ -171,7 +173,7 @@ pub async fn create_scene(device: &wgpu::Device, file_storage: &FileStorage) -> 
         sampler: SamplerSetting::Existing(image_texture_sampler_id),
     };
     let material_bind_group_ids = material_bind_groups_config.create_bind_groups(
-        &mut project,
+        project,
         cube_model_runtime.materials(),
         cube_model.label(),
     )?;
@@ -480,7 +482,7 @@ pub async fn create_scene(device: &wgpu::Device, file_storage: &FileStorage) -> 
         .set_compute_passes(vec![compute_pass_id]);
     project.presentation.set_main_viewport(Some(viewport_id));
 
-    Ok(project)
+    Ok(())
 }
 
 pub fn create_texture(path: FilePath, format: TextureFormat) -> AppResult<Texture> {

@@ -60,9 +60,7 @@ const CUBE_VERTICES: u32 = 36;
 const Z_NEAR: f32 = 0.1;
 const Z_FAR: f32 = 30.0;
 
-pub async fn create_scene() -> AppResult<Project> {
-    let mut project = Project::default();
-
+pub fn build(project: &mut Project) -> AppResult<()> {
     let cubes_shader_id = project.shaders.register(Shader::new(
         "Cubes Shader",
         FilePath::from_str("cubes.wgsl")?,
@@ -305,5 +303,5 @@ pub async fn create_scene() -> AppResult<Project> {
     // The depth viewport shares the camera; open it as a second pane.
     let _ = depth_viewport_id;
 
-    Ok(project)
+    Ok(())
 }

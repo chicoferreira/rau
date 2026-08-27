@@ -81,9 +81,7 @@ const AREA_LIGHTS: [AreaLightSpec; 3] = [
 /// Floor, ceiling, back, left and right, six vertices each.
 const ROOM_VERTICES: u32 = 5 * 6;
 
-pub async fn create_scene() -> AppResult<Project> {
-    let mut project = Project::default();
-
+pub fn build(project: &mut Project) -> AppResult<()> {
     let room_shader_id = project
         .shaders
         .register(Shader::new("Room Shader", FilePath::from_str("room.wgsl")?));
@@ -351,7 +349,7 @@ pub async fn create_scene() -> AppResult<Project> {
     project.presentation.set_render_passes(vec![render_pass_id]);
     project.presentation.set_main_viewport(Some(viewport_id));
 
-    Ok(project)
+    Ok(())
 }
 
 fn lut_texture(label: &str, path: FilePath) -> Texture {

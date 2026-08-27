@@ -5,10 +5,11 @@ use crate::{
     file::{
         absolute::AbsolutePathBuf,
         file_storage::FileStorage,
-        file_system::{AppFileSystem, ProjectFileSystemTrait},
+        file_system::{AppFileSystem, ProjectFileSystem, ProjectFileSystemTrait},
         identifier::{ProjectIdentifier, ProjectSource},
     },
-    project::paths::FilePath,
+    project::{Project, paths::FilePath},
+    scene::GenerateTemplate::*,
 };
 
 pub mod area_lights;
@@ -20,6 +21,7 @@ pub mod hdr_skybox;
 pub mod model;
 pub mod parallax_mapping;
 pub mod ray_tracing;
+pub mod scaled;
 pub mod shadow_mapping;
 pub mod sky_shader;
 pub mod ssao;
@@ -38,6 +40,10 @@ pub enum GenerateTemplate {
     Ssao,
     AreaLights,
     RayTracing,
+    #[value(name = "shadow-mapping-10-copies")]
+    ShadowMapping10Copies,
+    #[value(name = "shadow-mapping-100-copies")]
+    ShadowMapping100Copies,
 }
 
 pub fn generate_project(template: GenerateTemplate, target_folder: &Path) -> AppResult<()> {
@@ -46,29 +52,25 @@ pub fn generate_project(template: GenerateTemplate, target_folder: &Path) -> App
 
 async fn generate_project_async(template: GenerateTemplate, target_folder: &Path) -> AppResult<()> {
     let device = request_device().await?;
-    let app_file_system = AppFileSystem::open().await?;
+    let (file_system, file_storage) = request_file_system(target_folder).await?;
 
-    let project_id = ProjectIdentifier::new(
-        "generated-project",
-        AbsolutePathBuf::new(target_folder.to_path_buf())?,
-    );
-    let source = ProjectSource::Persistent(project_id);
-    let (file_system, file_watcher) = app_file_system.mount_project(source.clone()).await?;
-    let file_storage = FileStorage::new(source, file_system.clone(), file_watcher);
+    let mut project = Project::default();
 
-    let project = match template {
-        GenerateTemplate::HdrSkybox => hdr_skybox::create_scene(&device, &file_storage).await?,
-        GenerateTemplate::Model => model::create_scene(&device, &file_storage).await?,
-        GenerateTemplate::GameOfLife => game_of_life::create_scene().await?,
-        GenerateTemplate::FurShell => fur_shell::create_scene(&device, &file_storage).await?,
-        GenerateTemplate::ParallaxMapping => parallax_mapping::create_scene().await?,
-        GenerateTemplate::GrassField => grass_field::create_scene().await?,
-        GenerateTemplate::DepthTesting => depth_testing::create_scene().await?,
-        GenerateTemplate::ShadowMapping => shadow_mapping::create_scene().await?,
-        GenerateTemplate::SkyShader => sky_shader::create_scene().await?,
-        GenerateTemplate::Ssao => ssao::create_scene().await?,
-        GenerateTemplate::AreaLights => area_lights::create_scene().await?,
-        GenerateTemplate::RayTracing => ray_tracing::create_scene().await?,
+    match template {
+        HdrSkybox => hdr_skybox::build(&mut project, &device, &file_storage).await?,
+        Model => model::build(&mut project, &device, &file_storage).await?,
+        GameOfLife => game_of_life::build(&mut project)?,
+        FurShell => fur_shell::build(&mut project)?,
+        ParallaxMapping => parallax_mapping::build(&mut project)?,
+        GrassField => grass_field::build(&mut project)?,
+        DepthTesting => depth_testing::build(&mut project)?,
+        ShadowMapping => shadow_mapping::build(&mut project)?,
+        SkyShader => sky_shader::build(&mut project)?,
+        Ssao => ssao::build(&mut project)?,
+        AreaLights => area_lights::build(&mut project)?,
+        RayTracing => ray_tracing::build(&mut project)?,
+        ShadowMapping10Copies => scaled::build(&mut project, shadow_mapping::build, 10)?,
+        ShadowMapping100Copies => scaled::build(&mut project, shadow_mapping::build, 100)?,
     };
 
     file_system
@@ -77,6 +79,18 @@ async fn generate_project_async(template: GenerateTemplate, target_folder: &Path
 
     log::info!("Generated project.json into {}", target_folder.display());
     Ok(())
+}
+
+async fn request_file_system(target_folder: &Path) -> AppResult<(ProjectFileSystem, FileStorage)> {
+    let app_file_system = AppFileSystem::open().await?;
+    let project_id = ProjectIdentifier::new(
+        "generated-project",
+        AbsolutePathBuf::new(target_folder.to_path_buf())?,
+    );
+    let source = ProjectSource::Persistent(project_id);
+    let (file_system, file_watcher) = app_file_system.mount_project(source.clone()).await?;
+    let file_storage = FileStorage::new(source, file_system.clone(), file_watcher);
+    Ok((file_system, file_storage))
 }
 
 async fn request_device() -> AppResult<wgpu::Device> {

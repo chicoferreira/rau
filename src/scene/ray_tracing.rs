@@ -65,9 +65,7 @@ use crate::{
 
 const SCENE_CAPACITY: u32 = 512;
 
-pub async fn create_scene() -> AppResult<Project> {
-    let mut project = Project::default();
-
+pub fn build(project: &mut Project) -> AppResult<()> {
     let generate_shader_id = project.shaders.register(Shader::new(
         "Generate Shader",
         FilePath::from_str("generate.wgsl")?,
@@ -405,5 +403,5 @@ pub async fn create_scene() -> AppResult<Project> {
         .set_compute_passes(vec![generate_pass_id, reset_pass_id, trace_pass_id]);
     project.presentation.set_main_viewport(Some(viewport_id));
 
-    Ok(project)
+    Ok(())
 }

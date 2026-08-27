@@ -68,9 +68,7 @@ use crate::{
 /// Vertices in the procedural room cube: 6 faces * 2 triangles * 3 vertices.
 const CUBE_VERTICES: u32 = 36;
 
-pub async fn create_scene() -> AppResult<Project> {
-    let mut project = Project::default();
-
+pub fn build(project: &mut Project) -> AppResult<()> {
     // --- Shaders: room + backpack G-buffer fills, then the full-screen stages. ---
     let room_position_shader_id = project.shaders.register(Shader::new(
         "Room Position Shader",
@@ -593,5 +591,5 @@ pub async fn create_scene() -> AppResult<Project> {
     ]);
     project.presentation.set_main_viewport(Some(viewport_id));
 
-    Ok(project)
+    Ok(())
 }
