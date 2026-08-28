@@ -580,7 +580,7 @@
           { "static": { "idx": 1, "version": 1 } },
           { "static": { "idx": 2, "version": 1 } }
         ],
-        "colorFormat": "rgba16Float",
+        "colorFormats": [ "rgba16Float" ],
         "depthFormat": "depth32Float"
       },
       "version": 1
@@ -609,7 +609,7 @@
           { "static": { "idx": 2, "version": 1 } },
           { "static": { "idx": 7, "version": 1 } }
         ],
-        "colorFormat": "rgba16Float",
+        "colorFormats": [ "rgba16Float" ],
         "depthFormat": "depth32Float"
       },
       "version": 1
@@ -635,7 +635,7 @@
           { "static": { "idx": 1, "version": 1 } },
           { "static": { "idx": 7, "version": 1 } }
         ],
-        "colorFormat": "rgba16Float",
+        "colorFormats": [ "rgba16Float" ],
         "depthFormat": "depth32Float"
       },
       "version": 1
@@ -658,7 +658,7 @@
           "instances": { "start": 0, "end": 1 }
         },
         "bindGroups": [ { "static": { "idx": 4, "version": 1 } } ],
-        "colorFormat": "rgba8UnormSrgb",
+        "colorFormats": [ "rgba8UnormSrgb" ],
         "depthFormat": null
       },
       "version": 1
@@ -669,10 +669,15 @@
     {
       "value": {
         "label": "Main Render Pass",
-        "target": {
-          "textureViewId": { "idx": 3, "version": 1 },
-          "loadOperation": { "type": "clear", "value": [ 0.0, 0.0, 0.0, 1.0 ] }
-        },
+        "targets": [
+          {
+            "textureViewId": { "idx": 3, "version": 1 },
+            "loadOperation": {
+              "type": "clear",
+              "value": [ 0.0, 0.0, 0.0, 1.0 ]
+            }
+          }
+        ],
         "depthTarget": {
           "textureViewId": { "idx": 7, "version": 1 },
           "loadOperation": { "type": "clear", "value": 1.0 }
@@ -688,10 +693,15 @@
     {
       "value": {
         "label": "HDR render pass",
-        "target": {
-          "textureViewId": { "idx": 8, "version": 1 },
-          "loadOperation": { "type": "clear", "value": [ 0.0, 0.0, 0.0, 1.0 ] }
-        },
+        "targets": [
+          {
+            "textureViewId": { "idx": 8, "version": 1 },
+            "loadOperation": {
+              "type": "clear",
+              "value": [ 0.0, 0.0, 0.0, 1.0 ]
+            }
+          }
+        ],
         "depthTarget": null,
         "pipelines": [ { "idx": 4, "version": 1 } ]
       },

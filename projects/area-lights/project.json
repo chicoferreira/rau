@@ -446,7 +446,7 @@
           { "static": { "idx": 2, "version": 1 } },
           { "static": { "idx": 3, "version": 1 } }
         ],
-        "colorFormat": "rgba8UnormSrgb",
+        "colorFormats": [ "rgba8UnormSrgb" ],
         "depthFormat": "depth32Float"
       },
       "version": 1
@@ -473,7 +473,7 @@
           { "static": { "idx": 2, "version": 1 } },
           { "static": { "idx": 3, "version": 1 } }
         ],
-        "colorFormat": "rgba8UnormSrgb",
+        "colorFormats": [ "rgba8UnormSrgb" ],
         "depthFormat": "depth32Float"
       },
       "version": 1
@@ -484,10 +484,15 @@
     {
       "value": {
         "label": "Area Lights Render Pass",
-        "target": {
-          "textureViewId": { "idx": 3, "version": 1 },
-          "loadOperation": { "type": "clear", "value": [ 0.0, 0.0, 0.0, 1.0 ] }
-        },
+        "targets": [
+          {
+            "textureViewId": { "idx": 3, "version": 1 },
+            "loadOperation": {
+              "type": "clear",
+              "value": [ 0.0, 0.0, 0.0, 1.0 ]
+            }
+          }
+        ],
         "depthTarget": {
           "textureViewId": { "idx": 4, "version": 1 },
           "loadOperation": { "type": "clear", "value": 1.0 }

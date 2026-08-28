@@ -30,7 +30,7 @@ pub struct RenderPipeline {
     /// List of bind group targets to bind to the pipeline.
     /// Index corresponds to the bind group slot in the shader.
     bind_groups: Vec<BindGroupTarget>,
-    color_format: TextureFormat,
+    color_formats: Vec<TextureFormat>,
     depth_format: Option<TextureFormat>,
     #[serde(skip)]
     runtime_revision: Revision,
@@ -77,7 +77,7 @@ impl RenderPipeline {
         fragment_shader: Option<ShaderId>,
         draw_strategy: RenderDrawStrategy,
         bind_groups: Vec<BindGroupTarget>,
-        color_format: TextureFormat,
+        color_formats: Vec<TextureFormat>,
         depth_format: Option<TextureFormat>,
     ) -> Self {
         Self {
@@ -87,7 +87,7 @@ impl RenderPipeline {
             fragment_shader,
             draw_strategy,
             bind_groups,
-            color_format,
+            color_formats,
             depth_format,
             runtime_revision: Default::default(),
             project_revision: Default::default(),
@@ -100,7 +100,7 @@ impl RenderPipeline {
         pub fn vertex_shader() -> Option<ShaderId>;
         pub fn fragment_shader() -> Option<ShaderId>;
         pub fn draw_strategy() -> &RenderDrawStrategy;
-        pub fn color_format() -> TextureFormat;
+        pub fn color_formats() -> &[TextureFormat];
         pub fn depth_format() -> Option<TextureFormat>;
     }
 
@@ -111,7 +111,7 @@ impl RenderPipeline {
         pub fn set_fragment_shader(fragment_shader: Option<ShaderId>);
         pub fn set_draw_strategy(draw_strategy: RenderDrawStrategy);
         pub fn set_bind_groups(bind_groups: Vec<BindGroupTarget>);
-        pub fn set_color_format(color_format: TextureFormat);
+        pub fn set_color_formats(color_formats: Vec<TextureFormat>);
         pub fn set_depth_format(depth_format: Option<TextureFormat>);
     }
 
@@ -161,7 +161,7 @@ impl Creatable for RenderPipeline {
                 instances: 0..1,
             },
             bind_groups: Vec::new(),
-            color_format: TextureFormat::Rgba8UnormSrgb,
+            color_formats: vec![TextureFormat::Rgba8UnormSrgb],
             depth_format: None,
             runtime_revision: Revision::default(),
             project_revision: Revision::default(),
@@ -332,6 +332,21 @@ impl SyncResource for RenderPipeline {
                 immediate_size: 0,
             });
 
+        let targets = self
+            .color_formats
+            .iter()
+            .map(|format| {
+                Some(wgpu::ColorTargetState {
+                    format: format.to_wgpu(),
+                    blend: Some(wgpu::BlendState {
+                        alpha: wgpu::BlendComponent::REPLACE,
+                        color: wgpu::BlendComponent::REPLACE,
+                    }),
+                    write_mask: wgpu::ColorWrites::ALL,
+                })
+            })
+            .collect::<Vec<_>>();
+
         let render_pipeline_descriptor = wgpu::RenderPipelineDescriptor {
             label: Some(&self.label),
             layout: Some(&pipeline_layout),
@@ -344,14 +359,7 @@ impl SyncResource for RenderPipeline {
             fragment: Some(wgpu::FragmentState {
                 module: fragment_shader.inner(),
                 entry_point: None, // TODO: maybe allow for users to specify the entrypoint later?
-                targets: &[Some(wgpu::ColorTargetState {
-                    format: self.color_format.to_wgpu(),
-                    blend: Some(wgpu::BlendState {
-                        alpha: wgpu::BlendComponent::REPLACE,
-                        color: wgpu::BlendComponent::REPLACE,
-                    }),
-                    write_mask: wgpu::ColorWrites::ALL,
-                })],
+                targets: &targets,
                 compilation_options: Default::default(),
             }),
             primitive: self.primitive_state.to_wgpu(),

@@ -3,32 +3,24 @@
 //! Ported from Peter Shirley, Trevor David Black and Steve Hollasch's
 //! *Ray Tracing in One Weekend* (CC0): <https://raytracing.github.io>.
 //!
-//! The scene is rendered progressively with accumulation buffers that
-//! get reset when the scene inputs change (camera, scene properties, etc).
+//! The image accumulates progressively, resetting whenever a scene input changes:
 //!
-//! Three stages make that work:
+//! 1. `Generate Scene` bakes the spheres into a texture. It is `OnChange`, so it
+//!    only re-runs when the scene uniform changes.
+//! 2. `Reset Accumulation` clears the accumulation buffers. Also `OnChange`, and
+//!    it binds every uniform that affects the image, including the camera, so the
+//!    policy fires whenever one of them changes.
+//! 3. `Trace` adds one frame's worth of samples per pixel.
+//! 4. A render pass reassembles the channels onto a full-screen triangle, with
+//!    the book's gamma correction (a plain square root).
 //!
-//! 1. `Generate Scene` bakes the spheres into a texture. It is set to run
-//!    `OnChange`, so it only re-runs when the scene uniform changes.
-//! 2. `Reset Accumulation` clears the accumulation buffers. It is also
-//!    `OnChange` and it binds every uniform that affects the image, including
-//!    the camera, so that the policy fires whenever one of them changes.
-//! 3. `Trace` traces one frame's worth of samples per pixel and folds them into
-//!    the accumulation buffers.
+//! Accumulation uses four `R32Float` textures (three colour channels plus a
+//! count) rather than one `Rgba32Float`, because WebGPU only guarantees
+//! read-write storage access for single-channel 32-bit formats. Each invocation
+//! touches only its own texel, so no barriers are needed.
 //!
-//! There are four `R32Float` accumulation buffers in play here. Three for the RGB
-//! channels and one for the count. It would be neater if there were only a
-//! `Rgba32Float` texture (with the alpha being the count), but WebGPU only
-//! guarantees read-write storage access for the single-channel 32-bit formats,
-//! so a copy shader would be needed instead. This way, for each texel, the trace
-//! happens and the value is written directly. It also doesn't need any barriers,
-//! because one invocation only touches its own texel.
-//!
-//! Finally a render pass reassembles the three channels onto a full-screen
-//! triangle, applying the book's gamma correction (a plain square root).
-//!
-//! The scene data lives in a `Rgba32Float` texture three rows tall, one column
-//! per sphere, laid out as a structure of arrays:
+//! Scene data lives in a `Rgba32Float` texture three rows tall, one column per
+//! sphere, laid out as a structure of arrays:
 //!
 //! | row | rgba                                              |
 //! |-----|---------------------------------------------------|
@@ -36,8 +28,8 @@
 //! | 1   | `albedo.rgb`, fuzz (metal) or index of refraction |
 //! | 2   | material kind, unused                             |
 //!
-//! It would be neater as well to use storage buffers instead of storage textures
-//! for this, but Rau still doesn't support them.
+//! Storage buffers would suit both of these better, but rau does not support
+//! them yet.
 use crate::{
     error::AppResult,
     project::{
@@ -375,16 +367,16 @@ pub fn build(project: &mut Project) -> AppResult<()> {
             instances: 0..1,
         },
         vec![BindGroupTarget::Static(display_bind_group_id)],
-        color_format,
+        vec![color_format],
         None,
     ));
 
     let mut render_pass = RenderPass::new(
         "Display Render Pass",
-        RenderPassTarget::new(
+        vec![RenderPassTarget::new(
             Some(viewport_view_id),
             LoadOperation::Clear(Color([0.0, 0.0, 0.0, 1.0])),
-        ),
+        )],
         None,
     );
     render_pass.set_pipelines(vec![pipeline_id]);

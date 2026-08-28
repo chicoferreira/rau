@@ -317,7 +317,7 @@
           "instances": { "start": 0, "end": 5 }
         },
         "bindGroups": [ { "static": { "idx": 2, "version": 1 } } ],
-        "colorFormat": "rgba8UnormSrgb",
+        "colorFormats": [ "rgba8UnormSrgb" ],
         "depthFormat": "depth32Float"
       },
       "version": 1
@@ -344,7 +344,7 @@
           { "static": { "idx": 2, "version": 1 } },
           { "static": { "idx": 3, "version": 1 } }
         ],
-        "colorFormat": "rgba8UnormSrgb",
+        "colorFormats": [ "rgba8UnormSrgb" ],
         "depthFormat": "depth32Float"
       },
       "version": 1
@@ -355,13 +355,15 @@
     {
       "value": {
         "label": "Shadow Pass",
-        "target": {
-          "textureViewId": { "idx": 4, "version": 1 },
-          "loadOperation": {
-            "type": "clear",
-            "value": [ 0.16, 0.28, 0.42, 1.0 ]
+        "targets": [
+          {
+            "textureViewId": { "idx": 4, "version": 1 },
+            "loadOperation": {
+              "type": "clear",
+              "value": [ 0.16, 0.28, 0.42, 1.0 ]
+            }
           }
-        },
+        ],
         "depthTarget": {
           "textureViewId": { "idx": 3, "version": 1 },
           "loadOperation": { "type": "clear", "value": 1.0 }
@@ -373,13 +375,15 @@
     {
       "value": {
         "label": "Scene Pass",
-        "target": {
-          "textureViewId": { "idx": 1, "version": 1 },
-          "loadOperation": {
-            "type": "clear",
-            "value": [ 0.16, 0.28, 0.42, 1.0 ]
+        "targets": [
+          {
+            "textureViewId": { "idx": 1, "version": 1 },
+            "loadOperation": {
+              "type": "clear",
+              "value": [ 0.16, 0.28, 0.42, 1.0 ]
+            }
           }
-        },
+        ],
         "depthTarget": {
           "textureViewId": { "idx": 2, "version": 1 },
           "loadOperation": { "type": "clear", "value": 1.0 }

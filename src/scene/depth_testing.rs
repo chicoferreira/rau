@@ -1,27 +1,18 @@
 //! A depth-buffer visualisation: the same frame shown two ways side by side.
 //!
-//! An avenue of instanced cubes recedes into the distance in two staggered rows
-//! on a checkered floor, with the camera low and looking down the corridor.
+//! An avenue of instanced cubes recedes down a checkered floor. The **first
+//! pass** shades the scene into an sRGB target with a `Depth32Float` buffer
+//! created with `TEXTURE_BINDING`; the **second pass** samples that buffer on a
+//! full-screen triangle and linearises the `[0, 1]` depth back to eye-space
+//! distance (near = dark, far = bright). Two viewports share one camera, showing
+//! one result each.
 //!
-//! - The **first pass** draws the floor and the cubes into an sRGB colour target
-//!   with a `Depth32Float` depth buffer. The depth buffer is created with
-//!   `TEXTURE_BINDING`, so it can be sampled afterwards.
-//! - The **second pass** runs a full-screen triangle that samples that depth
-//!   buffer, linearises the non-linear `[0, 1]` depth back to eye-space distance,
-//!   and writes it as grayscale (near = dark, far = bright).
+//! The cubes are pure GPU instancing: no vertex buffers, geometry from
+//! `vertex_index` and placement from `instance_index`.
 //!
-//! Two viewports share the one camera: the main viewport shows the shaded scene,
-//! the second shows the linearised depth. Open both panes to see how depth
-//! testing decides what ends up in front.
-//!
-//! The cubes are pure GPU instancing — one mesh built procedurally in the vertex
-//! shader from `vertex_index`, placed on the grid from `instance_index`, no
-//! vertex buffers. [`CUBES_PER_ROW`] / [`ROWS`] here must match the constants in
-//! `cubes.wgsl`, which derive the instance count of the draw.
-//!
-//! The linearisation reads `near` / `far` from a uniform; they must match the
-//! camera's clip range ([`Z_NEAR`] / [`Z_FAR`]) or the grayscale ramp will be
-//! miscalibrated.
+//! Two things must stay in sync: [`CUBES_PER_ROW`] / [`ROWS`] with `cubes.wgsl`,
+//! which derive the draw's instance count, and [`Z_NEAR`] / [`Z_FAR`] with the
+//! `near` / `far` uniform, or the grayscale ramp is miscalibrated.
 
 use crate::{
     error::AppResult,
@@ -225,7 +216,7 @@ pub fn build(project: &mut Project) -> AppResult<()> {
             instances: 0..1,
         },
         vec![BindGroupTarget::Static(camera_bind_group_id)],
-        color_format,
+        vec![color_format],
         Some(depth_format),
     ));
 
@@ -241,7 +232,7 @@ pub fn build(project: &mut Project) -> AppResult<()> {
             instances: 0..CUBE_COUNT,
         },
         vec![BindGroupTarget::Static(camera_bind_group_id)],
-        color_format,
+        vec![color_format],
         Some(depth_format),
     ));
 
@@ -263,17 +254,17 @@ pub fn build(project: &mut Project) -> AppResult<()> {
             instances: 0..1,
         },
         vec![BindGroupTarget::Static(depth_sample_bind_group_id)],
-        color_format,
+        vec![color_format],
         None,
     ));
 
     // Pass 1: shade the scene and fill the depth buffer. Floor first, then cubes.
     let mut scene_pass = RenderPass::new(
         "Scene Render Pass",
-        RenderPassTarget::new(
+        vec![RenderPassTarget::new(
             Some(color_render_view_id),
             LoadOperation::Clear(Color([0.52, 0.70, 0.86, 1.0])),
-        ),
+        )],
         Some(RenderPassTarget::new(
             Some(depth_buffer_view_id),
             LoadOperation::Clear(1.0),
@@ -285,10 +276,10 @@ pub fn build(project: &mut Project) -> AppResult<()> {
     // Pass 2: sample the depth buffer into the grayscale view.
     let mut depth_view_pass = RenderPass::new(
         "Depth View Render Pass",
-        RenderPassTarget::new(
+        vec![RenderPassTarget::new(
             Some(depth_vis_render_view_id),
             LoadOperation::Clear(Color([0.0, 0.0, 0.0, 1.0])),
-        ),
+        )],
         None,
     );
     depth_view_pass.set_pipelines(vec![depth_view_pipeline_id]);

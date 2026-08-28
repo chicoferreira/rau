@@ -353,7 +353,7 @@
           { "static": { "idx": 1, "version": 1 } },
           { "static": { "idx": 2, "version": 1 } }
         ],
-        "colorFormat": "rgba8UnormSrgb",
+        "colorFormats": [ "rgba8UnormSrgb" ],
         "depthFormat": "depth32Float"
       },
       "version": 1
@@ -364,13 +364,15 @@
     {
       "value": {
         "label": "Model Render Pass",
-        "target": {
-          "textureViewId": { "idx": 4, "version": 1 },
-          "loadOperation": {
-            "type": "clear",
-            "value": [ 0.018, 0.025, 0.045, 1.0 ]
+        "targets": [
+          {
+            "textureViewId": { "idx": 4, "version": 1 },
+            "loadOperation": {
+              "type": "clear",
+              "value": [ 0.018, 0.025, 0.045, 1.0 ]
+            }
           }
-        },
+        ],
         "depthTarget": {
           "textureViewId": { "idx": 5, "version": 1 },
           "loadOperation": { "type": "clear", "value": 1.0 }

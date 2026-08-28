@@ -4,8 +4,7 @@
       { "idx": 1, "version": 1 },
       { "idx": 2, "version": 1 },
       { "idx": 3, "version": 1 },
-      { "idx": 4, "version": 1 },
-      { "idx": 5, "version": 1 }
+      { "idx": 4, "version": 1 }
     ],
     "computePasses": [ ],
     "mainViewport": { "idx": 1, "version": 1 }
@@ -14,29 +13,15 @@
     { "value": null, "version": 0 },
     {
       "value": {
-        "label": "Room Position Shader",
-        "source": "room_position.wgsl"
+        "label": "Room G-Buffer Shader",
+        "source": "room_gbuffer.wgsl"
       },
       "version": 1
     },
     {
       "value": {
-        "label": "Room Normal Shader",
-        "source": "room_normal.wgsl"
-      },
-      "version": 1
-    },
-    {
-      "value": {
-        "label": "Backpack Position Shader",
-        "source": "backpack_position.wgsl"
-      },
-      "version": 1
-    },
-    {
-      "value": {
-        "label": "Backpack Normal Shader",
-        "source": "backpack_normal.wgsl"
+        "label": "Backpack G-Buffer Shader",
+        "source": "backpack_gbuffer.wgsl"
       },
       "version": 1
     },
@@ -592,7 +577,7 @@
     { "value": null, "version": 0 },
     {
       "value": {
-        "label": "Room Position Pipeline",
+        "label": "Room G-Buffer Pipeline",
         "primitiveState": {
           "topology": "triangle-list",
           "stripIndexFormat": null,
@@ -608,41 +593,14 @@
           "instances": { "start": 0, "end": 1 }
         },
         "bindGroups": [ { "static": { "idx": 1, "version": 1 } } ],
-        "colorFormat": "rgba16Float",
+        "colorFormats": [ "rgba16Float", "rgba16Float" ],
         "depthFormat": "depth32Float"
       },
       "version": 1
     },
     {
       "value": {
-        "label": "Backpack Position Pipeline",
-        "primitiveState": {
-          "topology": "triangle-list",
-          "stripIndexFormat": null,
-          "frontFace": "ccw",
-          "cullMode": null,
-          "polygonMode": "fill"
-        },
-        "vertexShader": { "idx": 3, "version": 1 },
-        "fragmentShader": { "idx": 3, "version": 1 },
-        "drawStrategy": {
-          "type": "model",
-          "modelId": { "idx": 1, "version": 1 },
-          "instances": { "start": 0, "end": 1 },
-          "meshVertexSlot": 0
-        },
-        "bindGroups": [
-          { "static": { "idx": 1, "version": 1 } },
-          { "static": { "idx": 2, "version": 1 } }
-        ],
-        "colorFormat": "rgba16Float",
-        "depthFormat": "depth32Float"
-      },
-      "version": 1
-    },
-    {
-      "value": {
-        "label": "Room Normal Pipeline",
+        "label": "Backpack G-Buffer Pipeline",
         "primitiveState": {
           "topology": "triangle-list",
           "stripIndexFormat": null,
@@ -653,19 +611,50 @@
         "vertexShader": { "idx": 2, "version": 1 },
         "fragmentShader": { "idx": 2, "version": 1 },
         "drawStrategy": {
-          "type": "direct",
-          "vertices": { "start": 0, "end": 36 },
-          "instances": { "start": 0, "end": 1 }
+          "type": "model",
+          "modelId": { "idx": 1, "version": 1 },
+          "instances": { "start": 0, "end": 1 },
+          "meshVertexSlot": 0
         },
-        "bindGroups": [ { "static": { "idx": 1, "version": 1 } } ],
-        "colorFormat": "rgba16Float",
+        "bindGroups": [
+          { "static": { "idx": 1, "version": 1 } },
+          { "static": { "idx": 2, "version": 1 } }
+        ],
+        "colorFormats": [ "rgba16Float", "rgba16Float" ],
         "depthFormat": "depth32Float"
       },
       "version": 1
     },
     {
       "value": {
-        "label": "Backpack Normal Pipeline",
+        "label": "SSAO Pipeline",
+        "primitiveState": {
+          "topology": "triangle-list",
+          "stripIndexFormat": null,
+          "frontFace": "ccw",
+          "cullMode": null,
+          "polygonMode": "fill"
+        },
+        "vertexShader": { "idx": 3, "version": 1 },
+        "fragmentShader": { "idx": 3, "version": 1 },
+        "drawStrategy": {
+          "type": "direct",
+          "vertices": { "start": 0, "end": 3 },
+          "instances": { "start": 0, "end": 1 }
+        },
+        "bindGroups": [
+          { "static": { "idx": 1, "version": 1 } },
+          { "static": { "idx": 5, "version": 1 } },
+          { "static": { "idx": 3, "version": 1 } }
+        ],
+        "colorFormats": [ "rgba16Float" ],
+        "depthFormat": null
+      },
+      "version": 1
+    },
+    {
+      "value": {
+        "label": "SSAO Blur Pipeline",
         "primitiveState": {
           "topology": "triangle-list",
           "stripIndexFormat": null,
@@ -676,23 +665,19 @@
         "vertexShader": { "idx": 4, "version": 1 },
         "fragmentShader": { "idx": 4, "version": 1 },
         "drawStrategy": {
-          "type": "model",
-          "modelId": { "idx": 1, "version": 1 },
-          "instances": { "start": 0, "end": 1 },
-          "meshVertexSlot": 0
+          "type": "direct",
+          "vertices": { "start": 0, "end": 3 },
+          "instances": { "start": 0, "end": 1 }
         },
-        "bindGroups": [
-          { "static": { "idx": 1, "version": 1 } },
-          { "static": { "idx": 2, "version": 1 } }
-        ],
-        "colorFormat": "rgba16Float",
-        "depthFormat": "depth32Float"
+        "bindGroups": [ { "static": { "idx": 6, "version": 1 } } ],
+        "colorFormats": [ "rgba16Float" ],
+        "depthFormat": null
       },
       "version": 1
     },
     {
       "value": {
-        "label": "SSAO Pipeline",
+        "label": "Lighting Pipeline",
         "primitiveState": {
           "topology": "triangle-list",
           "stripIndexFormat": null,
@@ -709,60 +694,10 @@
         },
         "bindGroups": [
           { "static": { "idx": 1, "version": 1 } },
-          { "static": { "idx": 5, "version": 1 } },
-          { "static": { "idx": 3, "version": 1 } }
-        ],
-        "colorFormat": "rgba16Float",
-        "depthFormat": null
-      },
-      "version": 1
-    },
-    {
-      "value": {
-        "label": "SSAO Blur Pipeline",
-        "primitiveState": {
-          "topology": "triangle-list",
-          "stripIndexFormat": null,
-          "frontFace": "ccw",
-          "cullMode": null,
-          "polygonMode": "fill"
-        },
-        "vertexShader": { "idx": 6, "version": 1 },
-        "fragmentShader": { "idx": 6, "version": 1 },
-        "drawStrategy": {
-          "type": "direct",
-          "vertices": { "start": 0, "end": 3 },
-          "instances": { "start": 0, "end": 1 }
-        },
-        "bindGroups": [ { "static": { "idx": 6, "version": 1 } } ],
-        "colorFormat": "rgba16Float",
-        "depthFormat": null
-      },
-      "version": 1
-    },
-    {
-      "value": {
-        "label": "Lighting Pipeline",
-        "primitiveState": {
-          "topology": "triangle-list",
-          "stripIndexFormat": null,
-          "frontFace": "ccw",
-          "cullMode": null,
-          "polygonMode": "fill"
-        },
-        "vertexShader": { "idx": 7, "version": 1 },
-        "fragmentShader": { "idx": 7, "version": 1 },
-        "drawStrategy": {
-          "type": "direct",
-          "vertices": { "start": 0, "end": 3 },
-          "instances": { "start": 0, "end": 1 }
-        },
-        "bindGroups": [
-          { "static": { "idx": 1, "version": 1 } },
           { "static": { "idx": 4, "version": 1 } },
           { "static": { "idx": 7, "version": 1 } }
         ],
-        "colorFormat": "rgba8UnormSrgb",
+        "colorFormats": [ "rgba8UnormSrgb" ],
         "depthFormat": null
       },
       "version": 1
@@ -772,11 +707,23 @@
     { "value": null, "version": 0 },
     {
       "value": {
-        "label": "G-Buffer Position Pass",
-        "target": {
-          "textureViewId": { "idx": 1, "version": 1 },
-          "loadOperation": { "type": "clear", "value": [ 0.0, 0.0, 0.0, 0.0 ] }
-        },
+        "label": "G-Buffer Pass",
+        "targets": [
+          {
+            "textureViewId": { "idx": 1, "version": 1 },
+            "loadOperation": {
+              "type": "clear",
+              "value": [ 0.0, 0.0, 0.0, 0.0 ]
+            }
+          },
+          {
+            "textureViewId": { "idx": 2, "version": 1 },
+            "loadOperation": {
+              "type": "clear",
+              "value": [ 0.0, 0.0, 0.0, 0.0 ]
+            }
+          }
+        ],
         "depthTarget": {
           "textureViewId": { "idx": 3, "version": 1 },
           "loadOperation": { "type": "clear", "value": 1.0 }
@@ -787,55 +734,52 @@
     },
     {
       "value": {
-        "label": "G-Buffer Normal Pass",
-        "target": {
-          "textureViewId": { "idx": 2, "version": 1 },
-          "loadOperation": { "type": "clear", "value": [ 0.0, 0.0, 0.0, 0.0 ] }
-        },
-        "depthTarget": {
-          "textureViewId": { "idx": 3, "version": 1 },
-          "loadOperation": { "type": "clear", "value": 1.0 }
-        },
-        "pipelines": [ { "idx": 3, "version": 1 }, { "idx": 4, "version": 1 } ]
-      },
-      "version": 1
-    },
-    {
-      "value": {
         "label": "SSAO Pass",
-        "target": {
-          "textureViewId": { "idx": 4, "version": 1 },
-          "loadOperation": { "type": "clear", "value": [ 1.0, 1.0, 1.0, 1.0 ] }
-        },
+        "targets": [
+          {
+            "textureViewId": { "idx": 4, "version": 1 },
+            "loadOperation": {
+              "type": "clear",
+              "value": [ 1.0, 1.0, 1.0, 1.0 ]
+            }
+          }
+        ],
         "depthTarget": null,
-        "pipelines": [ { "idx": 5, "version": 1 } ]
+        "pipelines": [ { "idx": 3, "version": 1 } ]
       },
       "version": 1
     },
     {
       "value": {
         "label": "SSAO Blur Pass",
-        "target": {
-          "textureViewId": { "idx": 5, "version": 1 },
-          "loadOperation": { "type": "clear", "value": [ 1.0, 1.0, 1.0, 1.0 ] }
-        },
+        "targets": [
+          {
+            "textureViewId": { "idx": 5, "version": 1 },
+            "loadOperation": {
+              "type": "clear",
+              "value": [ 1.0, 1.0, 1.0, 1.0 ]
+            }
+          }
+        ],
         "depthTarget": null,
-        "pipelines": [ { "idx": 6, "version": 1 } ]
+        "pipelines": [ { "idx": 4, "version": 1 } ]
       },
       "version": 1
     },
     {
       "value": {
         "label": "Lighting Pass",
-        "target": {
-          "textureViewId": { "idx": 6, "version": 1 },
-          "loadOperation": {
-            "type": "clear",
-            "value": [ 0.05, 0.05, 0.05, 1.0 ]
+        "targets": [
+          {
+            "textureViewId": { "idx": 6, "version": 1 },
+            "loadOperation": {
+              "type": "clear",
+              "value": [ 0.05, 0.05, 0.05, 1.0 ]
+            }
           }
-        },
+        ],
         "depthTarget": null,
-        "pipelines": [ { "idx": 7, "version": 1 } ]
+        "pipelines": [ { "idx": 5, "version": 1 } ]
       },
       "version": 1
     }

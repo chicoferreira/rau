@@ -1,26 +1,21 @@
 //! A minimal shadow-mapping demo: a handful of boxes on a floor, lit by a single
 //! spot light that casts hard shadows.
 //!
-//! Shadow mapping is a two-pass technique:
+//! The **shadow pass** renders the geometry from the *light's* point of view into
+//! a depth texture, keeping only the depth of the nearest surface. The light is
+//! modelled as a second [`Camera`], so its light-space transform comes straight
+//! from the camera uniform machinery. The pass still needs a colour attachment it
+//! never reads, so it renders into a throwaway texture.
 //!
-//! - The **shadow pass** renders the scene geometry from the *light's* point of
-//!   view into a depth texture — the shadow map. Nothing is shaded; only the
-//!   depth of the nearest surface to the light is kept. The light is modelled as
-//!   a second [`Camera`], so its `ProjectionView` matrix (the light-space
-//!   transform) comes straight from the camera uniform machinery. The pass still
-//!   needs a colour attachment it never reads, so it renders into a throwaway
-//!   colour texture.
-//! - The **scene pass** renders from the real camera. For each fragment it
-//!   reprojects the world position into light space, looks the stored depth up in
-//!   the shadow map, and compares: if the fragment is further from the light than
-//!   whatever the light saw first, it is in shadow. A small slope-scaled bias
-//!   fights acne and a 3x3 PCF tap softens the edges.
+//! The **scene pass** renders from the real camera, reprojects each fragment into
+//! light space and compares its depth against the shadow map: further than what
+//! the light saw first means in shadow. A slope-scaled bias fights acne and a 3x3
+//! PCF tap softens the edges.
 //!
-//! All geometry is procedural — one unit cube built in the vertex shader from
-//! `vertex_index`, placed and scaled per `instance_index` (instance 0 is the
-//! flattened floor box, the rest are the shadow casters). [`OBJECT_COUNT`] here
-//! must match the object table in both `scene.wgsl` and `shadow.wgsl`, which
-//! derive the instance count of the draw and the transforms.
+//! All geometry is procedural: one unit cube from `vertex_index`, placed and
+//! scaled per `instance_index` (instance 0 is the flattened floor box, the rest
+//! are the casters). [`OBJECT_COUNT`] must match the object table in both
+//! `scene.wgsl` and `shadow.wgsl`.
 
 use crate::{
     error::AppResult,
@@ -266,7 +261,7 @@ pub fn build(project: &mut Project) -> AppResult<()> {
             instances: 0..OBJECT_COUNT,
         },
         vec![BindGroupTarget::Static(light_bind_group_id)],
-        color_format,
+        vec![color_format],
         Some(depth_format),
     ));
 
@@ -285,7 +280,7 @@ pub fn build(project: &mut Project) -> AppResult<()> {
             BindGroupTarget::Static(light_bind_group_id),
             BindGroupTarget::Static(shadow_sample_bind_group_id),
         ],
-        color_format,
+        vec![color_format],
         Some(depth_format),
     ));
 
@@ -293,10 +288,10 @@ pub fn build(project: &mut Project) -> AppResult<()> {
     // shadow map; the colour target feeds the light viewport.
     let mut shadow_pass = RenderPass::new(
         "Shadow Pass",
-        RenderPassTarget::new(
+        vec![RenderPassTarget::new(
             Some(light_view_render_view_id),
             LoadOperation::Clear(Color([0.16, 0.28, 0.42, 1.0])),
-        ),
+        )],
         Some(RenderPassTarget::new(
             Some(shadow_map_view_id),
             LoadOperation::Clear(1.0),
@@ -308,10 +303,10 @@ pub fn build(project: &mut Project) -> AppResult<()> {
     // Pass 2: shade the scene from the camera, sampling the shadow map.
     let mut scene_pass = RenderPass::new(
         "Scene Pass",
-        RenderPassTarget::new(
+        vec![RenderPassTarget::new(
             Some(color_render_view_id),
             LoadOperation::Clear(Color([0.16, 0.28, 0.42, 1.0])),
-        ),
+        )],
         Some(RenderPassTarget::new(
             Some(scene_depth_view_id),
             LoadOperation::Clear(1.0),

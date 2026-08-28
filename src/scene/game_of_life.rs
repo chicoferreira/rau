@@ -1,18 +1,16 @@
 //! Conway's Game of Life running entirely on the GPU.
 //!
-//! The simulation lives in two `Rgba8Unorm` storage textures (grid A and grid B)
-//! that are ping-ponged each simulation step:
+//! Two `Rgba8Unorm` storage textures (grid A and grid B) are ping-ponged each
+//! simulation step:
 //!
-//! 1. `Init` seeds a pseudo-random soup into grid A. It uses the `OnChange`
-//!    dispatch policy, so it runs exactly once.
-//! 2. `Simulate` reads grid A as a sampled texture, computes one generation, and
-//!    writes it into grid B as a storage texture.
-//! 3. `Copy` writes grid B back into grid A so the next step keeps advancing.
+//! 1. `Init` seeds a pseudo-random soup into grid A. It is `OnChange`, so it runs
+//!    exactly once.
+//! 2. `Simulate` reads grid A and computes one generation into grid B.
+//! 3. `Copy` writes grid B back into grid A.
 //! 4. A render pass samples grid A onto a full-screen triangle for display.
 //!
-//! `Simulate` and `Copy` use the `Periodic` dispatch policy at [`STEP_INTERVAL`],
-//! so the simulation advances at a steady rate independent of the framerate. The
-//! presentation's compute pass schedule runs them in the order above.
+//! `Simulate` and `Copy` are `Periodic` at [`STEP_INTERVAL`], so the simulation
+//! advances at a steady rate independent of the framerate.
 
 use crate::{
     error::AppResult,
@@ -217,16 +215,16 @@ pub fn build(project: &mut Project) -> AppResult<()> {
             instances: 0..1,
         },
         vec![BindGroupTarget::Static(render_bind_group_id)],
-        color_format,
+        vec![color_format],
         None,
     ));
 
     let mut render_pass = RenderPass::new(
         "Render Pass",
-        RenderPassTarget::new(
+        vec![RenderPassTarget::new(
             Some(viewport_texture_view_id),
             LoadOperation::Clear(Color([0.0, 0.0, 0.0, 1.0])),
-        ),
+        )],
         None,
     );
     render_pass.set_pipelines(vec![pipeline_id]);

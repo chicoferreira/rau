@@ -4,7 +4,7 @@ use crate::{
     project::{
         RenderPassId, RenderPipelineId, TextureViewId,
         resource::{
-            render_pass::{LoadOperation, RenderPass, RenderPassTarget},
+            render_pass::{Color, LoadOperation, RenderPass, RenderPassTarget},
             render_pipeline::RenderPipeline,
             texture_view::TextureView,
         },
@@ -58,31 +58,30 @@ impl StateSnapshot<'_> {
             return;
         };
 
-        inspector::section_doc(
+        inspector::section_doc_wide(
             ui,
-            "Color Target",
+            &format!("Color Targets ({})", render_pass.targets().len()),
             field_doc!(
-                "The color attachment this pass draws into: a Texture View and how its existing \
-                contents are treated at the start of the pass.\n\n\
-                [WebGPU spec](https://www.w3.org/TR/webgpu/#dictdef-gpurenderpasscolorattachment)"
+                r"The color attachments this pass draws into, in order. Each one is a Texture View and how its existing contents are treated at the start of the pass.
+
+Targets are numbered top to bottom: a fragment shader writes to target `n` at `@location(n)`. With a single target, return its value directly (`-> @location(0) vec4<f32>`). With more, return a struct with one field per target:
+
+```wgsl
+struct GBuffer {
+    @location(0) position: vec4<f32>, // Target 0
+    @location(1) normal: vec4<f32>,   // Target 1
+}
+
+@fragment
+fn fs_main(in: VertexOutput) -> GBuffer { ... }
+```
+
+Drag to reorder, right-click to remove.
+
+[WebGPU spec](https://www.w3.org/TR/webgpu/#dictdef-gpurenderpasscolorattachment)"
             ),
             |ui| {
-                let target = render_pass.target();
-                let mut texture_view_id = target.texture_view_id();
-                let mut load_op = target.load_operation();
-
-                if render_pass_target_ui(
-                    ui,
-                    "color_target",
-                    texture_views,
-                    &mut texture_view_id,
-                    &mut load_op,
-                    |ui, color| {
-                        color_edit_rgba(ui, &mut color.0);
-                    },
-                ) {
-                    render_pass.set_target(RenderPassTarget::new(texture_view_id, load_op));
-                }
+                render_pass_color_target_list_ui(ui, render_pass_id, render_pass, texture_views);
             },
         );
 
@@ -159,6 +158,82 @@ Drag to reorder, right-click to remove.
             },
         );
     }
+}
+
+fn render_pass_color_target_list_ui(
+    ui: &mut egui::Ui,
+    render_pass_id: RenderPassId,
+    render_pass: &mut RenderPass,
+    texture_views: &Storage<TextureView>,
+) {
+    let before = render_pass.targets().to_vec();
+    let mut targets = before.clone();
+
+    if targets.is_empty() {
+        ui.label("No color targets in render pass.");
+    }
+
+    let mut edits = draggable_list(
+        ui,
+        (render_pass_id, "render_pass_color_target_grid"),
+        &targets,
+        |ui, target, index, handle, edits| {
+            render_pass_color_target_row_ui(ui, handle, index, target, texture_views, edits);
+        },
+    );
+
+    ui.add_space(3.0);
+
+    if ui
+        .button(resource_icons::add_text(ui, "Add Color Target"))
+        .clicked()
+    {
+        edits.push_add_edit(RenderPassTarget::default());
+    }
+
+    edits.apply(&mut targets);
+
+    if targets != before {
+        render_pass.set_targets(targets);
+    }
+}
+
+fn render_pass_color_target_row_ui(
+    ui: &mut egui::Ui,
+    handle: egui_dnd::Handle<'_>,
+    index: usize,
+    target: &RenderPassTarget<Color>,
+    texture_views: &Storage<TextureView>,
+    edits: &mut ListEdits<RenderPassTarget<Color>>,
+) {
+    handle.ui(ui, |ui| {
+        let label = resource_icons::drag_handle_text(ui, &format!("Target {index}"));
+        ui.add(egui::Label::new(label).sense(egui::Sense::click()))
+            .context_menu(|ui| {
+                if ui.button("Remove Color Target").clicked() {
+                    edits.push_remove_edit(index);
+                    ui.close();
+                }
+            });
+    });
+
+    let mut texture_view_id = target.texture_view_id();
+    let mut load_op = target.load_operation();
+
+    ui.indent(("render_pass_color_target", index), |ui| {
+        if render_pass_target_ui(
+            ui,
+            "color_target",
+            texture_views,
+            &mut texture_view_id,
+            &mut load_op,
+            |ui, color| {
+                color_edit_rgba(ui, &mut color.0);
+            },
+        ) {
+            edits.push_set_edit(index, RenderPassTarget::new(texture_view_id, load_op));
+        }
+    });
 }
 
 fn render_pass_target_ui<T: Copy + PartialEq>(

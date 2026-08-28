@@ -3,14 +3,14 @@ use std::task::Poll;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    error::{AppResult, RequiredFieldExt},
+    error::{AppError, AppResult, RequiredFieldExt},
     project::{
         Creatable, ProjectResource, RenderPassId, RenderPipelineId, TextureViewId,
         resource::{
             bindgroup::BindGroup,
             model::Model,
             render_pipeline::{BindGroupTarget, RenderDrawStrategy, RenderPipeline},
-            texture_view::TextureView,
+            texture_view::{TextureView, TextureViewRuntime},
         },
         storage::{RuntimeStorage, Storage},
         sync::{Revision, SyncOutcome, SyncResource, SyncTracker},
@@ -33,7 +33,7 @@ pub struct Context<'a> {
 #[serde(rename_all = "camelCase")]
 pub struct RenderPass {
     label: String,
-    target: RenderPassTarget<Color>,
+    targets: Vec<RenderPassTarget<Color>>,
     depth_target: Option<RenderPassTarget<f32>>,
     pipelines: Vec<RenderPipelineId>,
     #[serde(skip)]
@@ -71,16 +71,11 @@ pub enum RenderPassJob {
     Validation(RenderPassRuntime, AsyncJob<AppResult<()>>),
 }
 
-struct AttachmentFormats {
-    color: wgpu::TextureFormat,
-    depth: Option<wgpu::TextureFormat>,
-}
-
 impl Creatable for RenderPass {
     fn create(label: String) -> Self {
         Self {
             label,
-            target: Default::default(),
+            targets: vec![RenderPassTarget::default()],
             depth_target: Default::default(),
             pipelines: Default::default(),
             runtime_revision: Default::default(),
@@ -109,12 +104,12 @@ impl ProjectResource for RenderPass {
 impl RenderPass {
     pub fn new(
         label: impl Into<String>,
-        target: RenderPassTarget<Color>,
+        targets: Vec<RenderPassTarget<Color>>,
         depth_target: Option<RenderPassTarget<f32>>,
     ) -> Self {
         Self {
             label: label.into(),
-            target,
+            targets,
             depth_target,
             pipelines: Default::default(),
             runtime_revision: Default::default(),
@@ -123,14 +118,14 @@ impl RenderPass {
     }
 
     resource_getters! {
-        pub fn target() -> RenderPassTarget<Color>;
+        pub fn targets() -> &[RenderPassTarget<Color>];
         pub fn depth_target() -> Option<RenderPassTarget<f32>>;
         pub fn pipelines() -> &[RenderPipelineId];
     }
 
     resource_setters! {
         increases: [runtime_revision, project_revision];
-        pub fn set_target(target: RenderPassTarget<Color>);
+        pub fn set_targets(targets: Vec<RenderPassTarget<Color>>);
         pub fn set_depth_target(depth_target: Option<RenderPassTarget<f32>>);
         pub fn set_pipelines(pipelines: Vec<RenderPipelineId>);
     }
@@ -138,47 +133,43 @@ impl RenderPass {
     /// The texture views this pass renders into, color first.
     fn target_texture_view_ids(&self) -> impl Iterator<Item = TextureViewId> {
         let depth = self.depth_target.as_ref();
-        self.target
-            .texture_view_id
+        self.targets
+            .iter()
+            .filter_map(|target| target.texture_view_id)
             .into_iter()
             .chain(depth.and_then(|target| target.texture_view_id))
     }
 
-    /// Resolves the formats of the attachments this pass renders into.
-    ///
-    /// Returns `Ok(None)` if a target view is still rebuilding.
-    fn attachment_formats(
+    pub fn map_color_targets<'a, R>(
         &self,
-        runtime_texture_views: &RuntimeStorage<TextureView>,
-    ) -> AppResult<Option<AttachmentFormats>> {
-        let color_id = self
-            .target
-            .texture_view_id
-            .ok_or_uninit_field("Color Target Texture")?;
+        runtime_texture_views: &'a RuntimeStorage<TextureView>,
+        f: impl Fn(&RenderPassTarget<Color>, &'a TextureViewRuntime) -> R,
+    ) -> AppResult<Option<Vec<Option<R>>>> {
+        self.targets
+            .iter()
+            .enumerate()
+            .map(|(index, target)| {
+                let field = || format!("Color Target Texture #{index}");
+                let view = target.resolve_view(runtime_texture_views, field)?;
 
-        let Some(color_view) = runtime_texture_views.get_init(color_id)? else {
-            return Ok(None); // pending: target texture view not ready
+                Ok(view.map(|view| Some(f(target, view))))
+            })
+            .collect()
+    }
+
+    pub fn map_depth_target<'a, R>(
+        &self,
+        runtime_texture_views: &'a RuntimeStorage<TextureView>,
+        f: impl FnOnce(&RenderPassTarget<f32>, &'a TextureViewRuntime) -> R,
+    ) -> AppResult<Option<Option<R>>> {
+        let Some(target) = &self.depth_target else {
+            return Ok(Some(None));
         };
 
-        let depth = match &self.depth_target {
-            Some(depth_target) => {
-                let depth_id = depth_target
-                    .texture_view_id
-                    .ok_or_uninit_field("Depth Target Texture")?;
+        let field = || "Depth Target Texture".to_string();
+        let view = target.resolve_view(runtime_texture_views, field)?;
 
-                let Some(depth_view) = runtime_texture_views.get_init(depth_id)? else {
-                    return Ok(None); // pending: depth texture view not ready
-                };
-
-                Some(depth_view.format())
-            }
-            None => None,
-        };
-
-        Ok(Some(AttachmentFormats {
-            color: color_view.format(),
-            depth,
-        }))
+        Ok(view.map(|view| Some(f(target, view))))
     }
 
     /// Records every pipeline's draw commands into `encoder`.
@@ -334,7 +325,20 @@ impl SyncResource for RenderPass {
             };
         }
 
-        let Some(formats) = self.attachment_formats(ctx.runtime_texture_views)? else {
+        let Some(color_formats) =
+            self.map_color_targets(ctx.runtime_texture_views, |_, view| view.format())?
+        else {
+            return Ok(SyncOutcome::Pending(RenderPassJob::Start));
+        };
+
+        let Some(depth_stencil) = self.map_depth_target(ctx.runtime_texture_views, |_, view| {
+            wgpu::RenderBundleDepthStencil {
+                format: view.format(),
+                depth_read_only: false,
+                stencil_read_only: true,
+            }
+        })?
+        else {
             return Ok(SyncOutcome::Pending(RenderPassJob::Start));
         };
 
@@ -344,12 +348,8 @@ impl SyncResource for RenderPass {
             ctx.device
                 .create_render_bundle_encoder(&wgpu::RenderBundleEncoderDescriptor {
                     label: Some(&self.label),
-                    color_formats: &[Some(formats.color)],
-                    depth_stencil: formats.depth.map(|format| wgpu::RenderBundleDepthStencil {
-                        format,
-                        depth_read_only: false,
-                        stencil_read_only: true,
-                    }),
+                    color_formats: &color_formats,
+                    depth_stencil,
                     sample_count: 1,
                     multiview: None,
                 });
@@ -369,6 +369,22 @@ impl SyncResource for RenderPass {
 }
 
 impl<T> RenderPassTarget<T> {
+    /// Resolves the texture view this target renders into, naming it `field` in
+    /// the error when it is unset.
+    ///
+    /// Returns `Ok(None)` if the view is still rebuilding.
+    fn resolve_view<'a>(
+        &self,
+        runtime_texture_views: &'a RuntimeStorage<TextureView>,
+        field: impl FnOnce() -> String,
+    ) -> AppResult<Option<&'a TextureViewRuntime>> {
+        let id = self
+            .texture_view_id
+            .ok_or_else(|| AppError::uninit_field(field()))?;
+
+        runtime_texture_views.get_init(id)
+    }
+
     pub fn new(texture_view_id: Option<TextureViewId>, load_operation: LoadOperation<T>) -> Self {
         Self {
             texture_view_id,
@@ -385,6 +401,12 @@ impl<T> RenderPassTarget<T> {
         T: Copy,
     {
         self.load_operation
+    }
+}
+
+impl<T> std::hash::Hash for RenderPassTarget<T> {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.texture_view_id.hash(state);
     }
 }
 

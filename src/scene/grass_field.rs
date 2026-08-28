@@ -1,22 +1,15 @@
-//! A field of procedurally generated, wind-swept grass — a pure GPU instancing
+//! A field of procedurally generated, wind-swept grass, a pure GPU instancing
 //! demo.
 //!
-//! The whole field is drawn with a single instanced draw call and **no vertex
-//! buffers at all**:
+//! The whole field is a single instanced draw with **no vertex buffers**:
+//! `instance_index` hashes each blade's grid position, height, orientation, sway
+//! phase and lean; `vertex_index` walks a tapered triangle strip up the blade; a
+//! `time` uniform drives a layered wind. A second single-quad pipeline draws the
+//! ground underneath.
 //!
-//! - `instance_index` selects the blade. Its base position on the grid, height,
-//!   orientation, sway phase, and lean are all hashed from that index in the
-//!   vertex shader, so every blade is unique without any per-blade CPU data.
-//! - `vertex_index` walks a tapered triangle strip up the blade.
-//! - A `time` uniform drives a layered wind that scrolls across the field.
-//!
-//! A second, single-quad pipeline draws the ground underneath so the blades have
-//! something to stand on. Both pipelines share the camera bind group and render
-//! into the same HDR-ish sRGB target with a depth buffer.
-//!
-//! The `grass.wgsl` constants (`BLADES_PER_ROW`, `SEGMENTS`) must stay in sync
-//! with [`BLADES_PER_ROW`] / [`SEGMENTS`] here — they decide the instance and
-//! vertex counts of the draw.
+//! `grass.wgsl`'s `BLADES_PER_ROW` / `SEGMENTS` must stay in sync with
+//! [`BLADES_PER_ROW`] / [`SEGMENTS`] here, since they decide the draw's instance
+//! and vertex counts.
 
 use crate::{
     error::AppResult,
@@ -172,7 +165,7 @@ pub fn build(project: &mut Project) -> AppResult<()> {
             instances: 0..1,
         },
         vec![BindGroupTarget::Static(camera_bind_group_id)],
-        color_format,
+        vec![color_format],
         Some(depth_format),
     ));
 
@@ -197,16 +190,16 @@ pub fn build(project: &mut Project) -> AppResult<()> {
             BindGroupTarget::Static(camera_bind_group_id),
             BindGroupTarget::Static(grass_bind_group_id),
         ],
-        color_format,
+        vec![color_format],
         Some(depth_format),
     ));
 
     let mut render_pass = RenderPass::new(
         "Grass Render Pass",
-        RenderPassTarget::new(
+        vec![RenderPassTarget::new(
             Some(render_texture_view_id),
             LoadOperation::Clear(Color([0.52, 0.70, 0.86, 1.0])),
-        ),
+        )],
         Some(RenderPassTarget::new(
             Some(depth_texture_view_id),
             LoadOperation::Clear(1.0),

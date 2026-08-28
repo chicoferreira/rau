@@ -4,7 +4,7 @@ use slotmap::SecondaryMap;
 use wgpu_profiler::GpuProfiler;
 
 use crate::{
-    error::{AppError, AppResult, RequiredFieldExt},
+    error::{AppError, AppResult},
     project::{
         ComputePassId, ProjectResource, ProjectRevisionSnapshot, RuntimeProject,
         resource::{
@@ -234,54 +234,42 @@ impl RenderPass {
         runtime: &RenderPassRuntime,
         runtime_texture_views: &RuntimeStorage<TextureView>,
     ) -> AppResult<bool> {
-        let color_target = self.target();
-        let target_texture_id = color_target
-            .texture_view_id()
-            .ok_or_uninit_field("Color Target Texture")?;
-
-        let Some(target_texture_view) = runtime_texture_views.get_init(target_texture_id)? else {
-            return Ok(false); // pending: target texture view not ready
+        let Some(color_attachments) =
+            self.map_color_targets(runtime_texture_views, |target, view| {
+                wgpu::RenderPassColorAttachment {
+                    view: view.inner(),
+                    ops: wgpu::Operations {
+                        load: target.load_operation().into(),
+                        store: wgpu::StoreOp::Store,
+                    },
+                    depth_slice: None,
+                    resolve_target: None,
+                }
+            })?
+        else {
+            return Ok(false); // pending: a target texture view is not ready
         };
 
-        let view = target_texture_view.inner();
-
-        let depth_stencil_attachment = match self.depth_target() {
-            Some(depth_target) => {
-                // TODO: solve this duplicated code from above
-                let depth_texture_id = depth_target
-                    .texture_view_id()
-                    .ok_or_uninit_field("Depth Target Texture")?;
-
-                let Some(depth_texture_view) = runtime_texture_views.get_init(depth_texture_id)?
-                else {
-                    return Ok(false); // pending: depth texture view not ready
-                };
-
-                Some(wgpu::RenderPassDepthStencilAttachment {
-                    view: depth_texture_view.inner(),
+        let Some(depth_stencil_attachment) =
+            self.map_depth_target(runtime_texture_views, |target, view| {
+                wgpu::RenderPassDepthStencilAttachment {
+                    view: view.inner(),
                     depth_ops: Some(wgpu::Operations {
-                        load: depth_target.load_operation().into(),
+                        load: target.load_operation().into(),
                         store: wgpu::StoreOp::Store,
                     }),
                     stencil_ops: None,
-                })
-            }
-            None => None,
+                }
+            })?
+        else {
+            return Ok(false); // pending: depth texture view not ready
         };
 
         let query = gpu_profiler.begin_pass_query(self.label(), encoder);
 
         let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some(self.label()),
-            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                view,
-                ops: wgpu::Operations {
-                    load: color_target.load_operation().into(),
-                    store: wgpu::StoreOp::Store,
-                },
-                depth_slice: None,
-                resolve_target: None,
-            })],
+            color_attachments: &color_attachments,
             depth_stencil_attachment,
             occlusion_query_set: None,
             timestamp_writes: query.render_pass_timestamp_writes(),

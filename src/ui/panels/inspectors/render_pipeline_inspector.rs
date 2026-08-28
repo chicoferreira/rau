@@ -237,53 +237,144 @@ fn target_formats_ui(
     render_pipeline_id: RenderPipelineId,
     render_pipeline: &mut RenderPipeline,
 ) {
-    let mut color_format = render_pipeline.color_format();
+    inspector::section_doc_wide(
+        ui,
+        &format!("Color Formats ({})", render_pipeline.color_formats().len()),
+        field_doc!(
+            r"The pixel format of each color attachment this pipeline writes to, in order.
+
+Formats line up with the Render Pass's Color Targets position by position: format `n` describes target `n`, the one the fragment shader writes at `@location(n)`. A pipeline whose formats do not match the pass it runs in fails validation.
+
+```wgsl
+struct GBuffer {
+    @location(0) position: vec4<f32>, // Target 0
+    @location(1) normal: vec4<f32>,   // Target 1
+}
+
+@fragment
+fn fs_main(in: VertexOutput) -> GBuffer { ... }
+```
+
+Drag to reorder, right-click to remove.
+
+[WebGPU spec](https://www.w3.org/TR/webgpu/#dictdef-gpucolortargetstate)"
+        ),
+        |ui| {
+            color_formats_list_ui(ui, render_pipeline_id, render_pipeline);
+        },
+    );
+
     let mut depth_format = render_pipeline.depth_format();
 
-    inspector::section(ui, "Target Formats", |ui| {
-        field::field_grid(ui, (render_pipeline_id, "target_formats"), |ui| {
-            inspector::combo_row_doc(
-                ui,
-                "Color Format",
-                field_doc!(
-                    "Pixel format of the color attachment this pipeline writes to. Must match \
-                    the Render Pass's color target.\n\n\
-                    [WebGPU spec](https://www.w3.org/TR/webgpu/#dictdef-gpucolortargetstate)"
-                ),
-                "render_pipeline_color_format",
-                TextureFormat::COLOR,
-                &mut color_format,
-            );
-
-            let mut depth_enabled = depth_format.is_some();
-            if inspector::checkbox_row_doc(
-                ui,
-                "Depth",
-                field_doc!("Whether this pipeline performs depth testing and writes depth."),
-                &mut depth_enabled,
-            ) {
-                depth_format = depth_enabled.then_some(TextureFormat::Depth32Float);
-            }
-
-            if let Some(format) = &mut depth_format {
-                inspector::combo_row_doc(
+    inspector::section_doc(
+        ui,
+        "Depth Format",
+        field_doc!(
+            "The optional depth attachment this pipeline tests against and writes to.\n\n\
+            [WebGPU spec](https://www.w3.org/TR/webgpu/#dictdef-gpudepthstencilstate)"
+        ),
+        |ui| {
+            field::field_grid(ui, (render_pipeline_id, "depth_format"), |ui| {
+                let mut depth_enabled = depth_format.is_some();
+                if inspector::checkbox_row_doc(
                     ui,
-                    "Depth Format",
-                    field_doc!(
-                        "Pixel format of the depth attachment. Must match the Render Pass's \
-                        depth target.\n\n\
-                        [WebGPU spec](https://www.w3.org/TR/webgpu/#dictdef-gpudepthstencilstate)"
-                    ),
-                    "render_pipeline_depth_format",
-                    TextureFormat::DEPTH,
-                    format,
-                );
-            }
-        });
+                    "Enabled",
+                    field_doc!("Whether this pipeline performs depth testing and writes depth."),
+                    &mut depth_enabled,
+                ) {
+                    depth_format = depth_enabled.then_some(TextureFormat::Depth32Float);
+                }
+
+                if let Some(format) = &mut depth_format {
+                    inspector::combo_row_doc(
+                        ui,
+                        "Format",
+                        field_doc!(
+                            "Pixel format of the depth attachment. Must match the Render Pass's \
+                            depth target.\n\n\
+                            [WebGPU spec](https://www.w3.org/TR/webgpu/#dictdef-gpudepthstencilstate)"
+                        ),
+                        "render_pipeline_depth_format",
+                        TextureFormat::DEPTH,
+                        format,
+                    );
+                }
+            });
+        },
+    );
+
+    render_pipeline.set_depth_format(depth_format);
+}
+
+fn color_formats_list_ui(
+    ui: &mut egui::Ui,
+    render_pipeline_id: RenderPipelineId,
+    render_pipeline: &mut RenderPipeline,
+) {
+    let before = render_pipeline.color_formats().to_vec();
+    let mut formats = before.clone();
+
+    if formats.is_empty() {
+        ui.label("No color formats in render pipeline.");
+    }
+
+    let mut edits = draggable_list(
+        ui,
+        (render_pipeline_id, "render_pipeline_color_format_grid"),
+        &formats,
+        |ui, format, index, handle, edits| {
+            color_format_row_ui(ui, handle, index, *format, edits);
+        },
+    );
+
+    ui.add_space(3.0);
+
+    if ui
+        .button(resource_icons::add_text(ui, "Add Color Format"))
+        .clicked()
+    {
+        edits.push_add_edit(TextureFormat::Rgba8UnormSrgb);
+    }
+
+    edits.apply(&mut formats);
+
+    if formats != before {
+        render_pipeline.set_color_formats(formats);
+    }
+}
+
+fn color_format_row_ui(
+    ui: &mut egui::Ui,
+    handle: egui_dnd::Handle<'_>,
+    index: usize,
+    format: TextureFormat,
+    edits: &mut ListEdits<TextureFormat>,
+) {
+    handle.ui(ui, |ui| {
+        let label = resource_icons::drag_handle_text(ui, &format!("Target {index}"));
+        ui.add(egui::Label::new(label).sense(egui::Sense::click()))
+            .context_menu(|ui| {
+                if ui.button("Remove Color Format").clicked() {
+                    edits.push_remove_edit(index);
+                    ui.close();
+                }
+            });
     });
 
-    render_pipeline.set_color_format(color_format);
-    render_pipeline.set_depth_format(depth_format);
+    let mut selected = format;
+
+    ui.indent(("render_pipeline_color_format", index), |ui| {
+        inspector::value_combo(
+            ui,
+            ("render_pipeline_color_format", index),
+            TextureFormat::COLOR,
+            &mut selected,
+        );
+    });
+
+    if selected != format {
+        edits.push_set_edit(index, selected);
+    }
 }
 
 fn primitive_state_ui(

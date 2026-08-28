@@ -198,7 +198,7 @@ fn pipeline_model_material_slot_derives_first_material_bind_group() {
             mesh_vertex_slot: 0,
         },
         vec![BindGroupTarget::ModelMaterial],
-        TextureFormat::Rgba8Unorm,
+        vec![TextureFormat::Rgba8Unorm],
         None,
     );
 

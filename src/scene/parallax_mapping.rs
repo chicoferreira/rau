@@ -1,21 +1,17 @@
 //! Parallax occlusion mapping on a single brick quad.
 //!
 //! A port of the LearnOpenGL "Parallax Mapping" chapter
-//! (<https://learnopengl.com/Advanced-Lighting/Parallax-Mapping>) using the same
-//! brick textures: a diffuse map, a tangent-space normal map, and a displacement
-//! (depth) map.
+//! (<https://learnopengl.com/Advanced-Lighting/Parallax-Mapping>), using its
+//! brick diffuse, tangent-space normal and displacement maps.
 //!
-//! There is no model — the quad is six vertices built procedurally in the vertex
-//! shader via [`RenderDrawStrategy::Direct`], with a fixed tangent frame
-//! (T = +X, B = -Y, N = +Z). The vertex shader transforms the camera, light, and
-//! fragment positions into tangent space; the fragment shader marches the view
-//! ray through the depth map (parallax occlusion mapping) to offset the texture
-//! coordinates before sampling the diffuse and normal maps and applying
-//! Blinn-Phong lighting.
+//! There is no model: the quad is six procedural vertices with a fixed tangent
+//! frame (T = +X, B = -Y, N = +Z). The vertex shader moves the camera, light and
+//! fragment into tangent space; the fragment shader marches the view ray through
+//! the depth map to offset the texture coordinates before sampling and shading
+//! with Blinn-Phong.
 //!
-//! The `height_scale` uniform controls how pronounced the displacement is — bump
-//! it up in the inspector to exaggerate the effect, or down to 0 to fall back to
-//! plain normal mapping.
+//! The `height_scale` uniform controls how pronounced the displacement is. Turn
+//! it up to exaggerate, or down to 0 to fall back to plain normal mapping.
 
 use crate::{
     error::AppResult,
@@ -245,16 +241,16 @@ pub fn build(project: &mut Project) -> AppResult<()> {
             BindGroupTarget::Static(light_bind_group_id),
             BindGroupTarget::Static(parallax_bind_group_id),
         ],
-        color_format,
+        vec![color_format],
         Some(depth_format),
     ));
 
     let mut render_pass = RenderPass::new(
         "Parallax Render Pass",
-        RenderPassTarget::new(
+        vec![RenderPassTarget::new(
             Some(render_texture_view_id),
             LoadOperation::Clear(Color([0.0, 0.0, 0.0, 0.0])),
-        ),
+        )],
         Some(RenderPassTarget::new(
             Some(depth_buffer_view_id),
             LoadOperation::Clear(1.0),

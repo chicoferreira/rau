@@ -1,8 +1,8 @@
 //! Three glowing panels in a dark room, lit with Linearly Transformed Cosines.
 //!
 //! Each panel is a real polygonal light: the shading integrates the whole
-//! rectangle instead of approximating it with point lights, so the floor picks
-//! up soft shadow edges and long glossy streaks that follow the panels around.
+//! rectangle instead of approximating it with point lights, so the floor picks up
+//! soft shadow edges and long glossy streaks that follow the panels around.
 //!
 //! Ported from LearnOpenGL's "Area Lights" guest article
 //! (<https://learnopengl.com/Guest-Articles/2022/Area-Lights>), which implements:
@@ -11,10 +11,9 @@
 //!   Eric Heitz, Jonathan Dupuy, Stephen Hill and David Neubelt.
 //!   ACM Transactions on Graphics (Proceedings of ACM SIGGRAPH 2016) 35(4), 2016.
 //!
-//! The room is ours — the paper's own figures use Crytek Sponza and an
-//! unpublished Unity scene, so this one is five procedural quads instead. The
-//! only assets are the two fitted lookup tables, stored as 32-bit float EXR
-//! because their values go negative and past 1.0.
+//! The room is five procedural quads of our own, since the paper's figures use
+//! scenes we do not have. The only assets are the two fitted lookup tables,
+//! stored as 32-bit float EXR because their values go negative and past 1.0.
 
 use crate::{
     error::AppResult,
@@ -310,7 +309,7 @@ pub fn build(project: &mut Project) -> AppResult<()> {
             BindGroupTarget::Static(lights_bind_group_id),
             BindGroupTarget::Static(material_bind_group_id),
         ],
-        color_format,
+        vec![color_format],
         Some(depth_format),
     ));
 
@@ -328,16 +327,16 @@ pub fn build(project: &mut Project) -> AppResult<()> {
             BindGroupTarget::Static(lights_bind_group_id),
             BindGroupTarget::Static(material_bind_group_id),
         ],
-        color_format,
+        vec![color_format],
         Some(depth_format),
     ));
 
     let mut render_pass = RenderPass::new(
         "Area Lights Render Pass",
-        RenderPassTarget::new(
+        vec![RenderPassTarget::new(
             Some(render_texture_view_id),
             LoadOperation::Clear(Color([0.0, 0.0, 0.0, 1.0])),
-        ),
+        )],
         Some(RenderPassTarget::new(
             Some(depth_buffer_view_id),
             LoadOperation::Clear(1.0),

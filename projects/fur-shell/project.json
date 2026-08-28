@@ -268,7 +268,7 @@
           { "static": { "idx": 2, "version": 1 } },
           { "static": { "idx": 3, "version": 1 } }
         ],
-        "colorFormat": "rgba8UnormSrgb",
+        "colorFormats": [ "rgba8UnormSrgb" ],
         "depthFormat": "depth32Float"
       },
       "version": 1
@@ -279,13 +279,15 @@
     {
       "value": {
         "label": "Fur Render Pass",
-        "target": {
-          "textureViewId": { "idx": 1, "version": 1 },
-          "loadOperation": {
-            "type": "clear",
-            "value": [ 0.53, 0.72, 0.9, 1.0 ]
+        "targets": [
+          {
+            "textureViewId": { "idx": 1, "version": 1 },
+            "loadOperation": {
+              "type": "clear",
+              "value": [ 0.53, 0.72, 0.9, 1.0 ]
+            }
           }
-        },
+        ],
         "depthTarget": {
           "textureViewId": { "idx": 2, "version": 1 },
           "loadOperation": { "type": "clear", "value": 1.0 }

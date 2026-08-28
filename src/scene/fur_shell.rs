@@ -162,16 +162,16 @@ pub fn build(project: &mut Project) -> AppResult<()> {
             BindGroupTarget::Static(light_bg_id),
             BindGroupTarget::Static(fur_bg_id),
         ],
-        color_format,
+        vec![color_format],
         Some(depth_format),
     ));
 
     let mut render_pass = RenderPass::new(
         "Fur Render Pass",
-        RenderPassTarget::new(
+        vec![RenderPassTarget::new(
             Some(render_view_id),
             LoadOperation::Clear(Color([0.53, 0.72, 0.90, 1.0])),
-        ),
+        )],
         Some(RenderPassTarget::new(
             Some(depth_view_id),
             LoadOperation::Clear(1.0),

@@ -381,7 +381,10 @@ pub async fn build(
 
     let mut main_render_pass = RenderPass::new(
         "Main Render Pass".to_string(),
-        RenderPassTarget::new(Some(hdr_texture_view_id), LoadOperation::default()),
+        vec![RenderPassTarget::new(
+            Some(hdr_texture_view_id),
+            LoadOperation::default(),
+        )],
         Some(RenderPassTarget::new(
             Some(depth_texture_view_id),
             LoadOperation::default(),
@@ -402,7 +405,7 @@ pub async fn build(
             BindGroupTarget::Static(camera_bind_group_id),
             BindGroupTarget::Static(light_bind_group_id),
         ],
-        hdr_texture_format,
+        vec![hdr_texture_format],
         Some(depth_texture_format),
     );
     let light_pipeline_id = project.render_pipelines.register(light_pipeline);
@@ -423,7 +426,7 @@ pub async fn build(
             BindGroupTarget::Static(light_bind_group_id),
             BindGroupTarget::Static(environment_bind_group_id),
         ],
-        hdr_texture_format,
+        vec![hdr_texture_format],
         Some(depth_texture_format),
     );
     let models_pipeline_id = project.render_pipelines.register(models_pipeline);
@@ -441,7 +444,7 @@ pub async fn build(
             BindGroupTarget::Static(camera_bind_group_id),
             BindGroupTarget::Static(environment_bind_group_id),
         ],
-        hdr_texture_format,
+        vec![hdr_texture_format],
         Some(depth_texture_format),
     );
     let sky_pipeline_id = project.render_pipelines.register(sky_pipeline);
@@ -451,7 +454,10 @@ pub async fn build(
 
     let mut hdr_render_pass = RenderPass::new(
         "HDR render pass",
-        RenderPassTarget::new(Some(output_viewport_view_id), LoadOperation::default()),
+        vec![RenderPassTarget::new(
+            Some(output_viewport_view_id),
+            LoadOperation::default(),
+        )],
         None,
     );
 
@@ -465,7 +471,7 @@ pub async fn build(
             instances: 0..1,
         },
         vec![BindGroupTarget::Static(hdr_bind_group_id)],
-        viewport_texture_format,
+        vec![viewport_texture_format],
         None,
     );
 

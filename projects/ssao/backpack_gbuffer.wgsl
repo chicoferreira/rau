@@ -1,7 +1,9 @@
-// Backpack G-buffer (normals). Same model draw as `backpack_position.wgsl`, but
-// writes view-space normals. The backpack transform is a rotation + translation
-// (uniform scale 1), so it is rigid and the normal can be transformed by the
-// model matrix directly — no inverse-transpose needed.
+// Backpack G-buffer. A model draw: the OBJ vertex buffer feeds positions and
+// normals, and the `model` matrix (built in src/scene/ssao.rs to match
+// `ssao.cpp`'s translate + -90° X rotation) places it on the floor. The
+// transform is rigid (uniform scale 1), so normals can go through the model
+// matrix directly, with no inverse-transpose. Writes view-space position and
+// normal to the pass's two targets.
 //
 // Ported from https://learnopengl.com/Advanced-Lighting/SSAO (CC BY-NC 4.0).
 
@@ -20,6 +22,7 @@ struct Transform {
 @group(1) @binding(0)
 var<uniform> transform: Transform;
 
+// Matches the standard rau model vertex layout (position and normal are used).
 struct VertexInput {
     @location(0) position: vec3<f32>,
     @location(1) tex_coords: vec2<f32>,
@@ -30,7 +33,14 @@ struct VertexInput {
 
 struct VertexOutput {
     @builtin(position) clip_position: vec4<f32>,
-    @location(0) view_normal: vec3<f32>,
+    @location(0) view_position: vec3<f32>,
+    @location(1) view_normal: vec3<f32>,
+}
+
+// The two color targets of the G-Buffer pass, in order.
+struct GBuffer {
+    @location(0) position: vec4<f32>,
+    @location(1) normal: vec4<f32>,
 }
 
 @vertex
@@ -40,11 +50,15 @@ fn vs_main(in: VertexInput) -> VertexOutput {
 
     var out: VertexOutput;
     out.clip_position = camera.projection_view * vec4<f32>(world, 1.0);
+    out.view_position = (camera.view * vec4<f32>(world, 1.0)).xyz;
     out.view_normal = (camera.view * vec4<f32>(world_normal, 0.0)).xyz;
     return out;
 }
 
 @fragment
-fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
-    return vec4<f32>(normalize(in.view_normal), 1.0);
+fn fs_main(in: VertexOutput) -> GBuffer {
+    var out: GBuffer;
+    out.position = vec4<f32>(in.view_position, 1.0);
+    out.normal = vec4<f32>(normalize(in.view_normal), 1.0);
+    return out;
 }

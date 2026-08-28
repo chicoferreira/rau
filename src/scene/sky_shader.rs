@@ -3,14 +3,10 @@
 //! Ported from Embark Studios' rust-gpu `sky-shader` example (dual MIT/
 //! Apache-2.0): <https://github.com/EmbarkStudios/rust-gpu>.
 //!
-//! There is no geometry and no depth buffer: the vertex shader emits an
-//! oversized triangle that covers the screen, and the fragment shader
-//! reconstructs a per-pixel view ray from the camera's inverse projection and
-//! inverse view matrices, then evaluates the sky in that direction. The sun
+//! No geometry and no depth buffer: the fragment shader reconstructs a per-pixel
+//! view ray from the camera's inverse projection and view matrices and evaluates
+//! the sky in that direction, so orbiting the viewport sweeps the sky. The sun
 //! position is a user-editable uniform.
-//!
-//! Because the ray comes from the bound camera, orbiting the viewport sweeps the
-//! sky just like a real one.
 
 use crate::{
     error::AppResult,
@@ -142,16 +138,16 @@ pub fn build(project: &mut Project) -> AppResult<()> {
             BindGroupTarget::Static(camera_bind_group_id),
             BindGroupTarget::Static(sky_bind_group_id),
         ],
-        color_format,
+        vec![color_format],
         None,
     ));
 
     let mut render_pass = RenderPass::new(
         "Sky Render Pass",
-        RenderPassTarget::new(
+        vec![RenderPassTarget::new(
             Some(viewport_texture_view_id),
             LoadOperation::Clear(Color([0.0, 0.0, 0.0, 1.0])),
-        ),
+        )],
         None,
     );
     render_pass.set_pipelines(vec![pipeline_id]);

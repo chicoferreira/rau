@@ -187,16 +187,16 @@ pub async fn build(
             BindGroupTarget::Static(camera_bind_group_id),
             BindGroupTarget::Static(light_bind_group_id),
         ],
-        color_format,
+        vec![color_format],
         Some(depth_format),
     ));
 
     let mut render_pass = RenderPass::new(
         "Model Render Pass",
-        RenderPassTarget::new(
+        vec![RenderPassTarget::new(
             Some(render_texture_view_id),
             LoadOperation::Clear(Color([0.018, 0.025, 0.045, 1.0])),
-        ),
+        )],
         Some(RenderPassTarget::new(
             Some(depth_texture_view_id),
             LoadOperation::Clear(1.0),

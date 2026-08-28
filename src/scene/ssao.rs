@@ -1,43 +1,21 @@
-//! Screen-space ambient occlusion (SSAO) — a deferred, multi-pass port of the
-//! LearnOpenGL tutorial <https://learnopengl.com/Advanced-Lighting/SSAO>
-//! (code under the CC BY-NC 4.0 licence). SSAO darkens creases, contact points
-//! and concavities by estimating, per pixel, how much of the surrounding
-//! hemisphere is blocked by nearby geometry.
+//! Screen-space ambient occlusion, a deferred port of the LearnOpenGL tutorial
+//! <https://learnopengl.com/Advanced-Lighting/SSAO> (code under CC BY-NC 4.0).
 //!
-//! The scene matches the tutorial's `ssao.cpp`: a backpack model sitting on the
-//! floor of an enclosed room (a large cube rendered from the *inside* with its
-//! normals flipped), lit by a single blue-ish point light.
+//! A backpack sits on the floor of an enclosed room (a cube seen from the inside,
+//! normals flipped) lit by one point light, matching the tutorial's `ssao.cpp`.
+//! Four passes:
 //!
-//! The pipeline is five passes (a render pass in rau has a single colour target,
-//! so the G-buffer is built one attachment per pass rather than with MRT):
+//! 1. **G-buffer**: draws the room and the backpack once into two targets,
+//!    view-space position at `@location(0)` and view-space normal at
+//!    `@location(1)`.
+//! 2. **SSAO**: per pixel, sweeps a hemisphere of samples around the fragment
+//!    and counts those hidden behind geometry, into `ssao_raw`.
+//! 3. **Blur**: a 4x4 box blur that washes out the sampling noise.
+//! 4. **Lighting**: deferred Blinn-Phong, ambient modulated by the occlusion.
 //!
-//! 1. **Position pass** — render the scene, writing *view-space position* into an
-//!    `Rgba16Float` G-buffer texture (`g_position`).
-//! 2. **Normal pass** — render the same geometry again, writing *view-space
-//!    normals* into `g_normal`.
-//! 3. **SSAO pass** — a full-screen pass that, for each pixel, builds a TBN frame
-//!    from the normal and a per-pixel random rotation, then sweeps a hemisphere
-//!    of sample points around the fragment. Each sample is projected back to
-//!    screen space and its depth compared against the stored position; samples
-//!    that land behind geometry count as occluders. The result is a raw
-//!    occlusion factor in `ssao_raw`.
-//! 4. **Blur pass** — a 4x4 box blur over `ssao_raw` to wash out the noise the
-//!    random rotation introduces, producing `ssao_blurred`.
-//! 5. **Lighting pass** — deferred Blinn-Phong shading reading the G-buffer, with
-//!    the ambient term modulated by the blurred occlusion.
-//!
-//! Each G-buffer pass runs two pipelines: one procedural draw for the room cube
-//! and one model draw for the backpack. They share a depth buffer.
-//!
-//! Two things differ from the tutorial because of rau's resource model: uniforms
-//! have no array type, so the 64-sample hemisphere kernel and the 4x4 rotation
-//! noise are generated procedurally in the shader (hash functions) instead of
-//! being uploaded from the CPU; and geometry is shaded with a flat grey albedo
-//! (no G-buffer albedo channel), which is the canonical way SSAO is shown off.
-//!
-//! The backpack model is **not** bundled — drop the LearnOpenGL `backpack.obj`
-//! (and its `backpack.mtl`) into `projects/ssao/`. Only its geometry (position +
-//! normal) is used; no material textures are sampled.
+//! Two deviations from the tutorial: uniforms have no array type, so the sample
+//! kernel and rotation noise are hashed in the shader instead of uploaded; and
+//! geometry is shaded with a flat grey albedo, as SSAO is usually shown.
 
 use crate::{
     error::AppResult,
@@ -70,21 +48,13 @@ const CUBE_VERTICES: u32 = 36;
 
 pub fn build(project: &mut Project) -> AppResult<()> {
     // --- Shaders: room + backpack G-buffer fills, then the full-screen stages. ---
-    let room_position_shader_id = project.shaders.register(Shader::new(
-        "Room Position Shader",
-        FilePath::from_str("room_position.wgsl")?,
+    let room_gbuffer_shader_id = project.shaders.register(Shader::new(
+        "Room G-Buffer Shader",
+        FilePath::from_str("room_gbuffer.wgsl")?,
     ));
-    let room_normal_shader_id = project.shaders.register(Shader::new(
-        "Room Normal Shader",
-        FilePath::from_str("room_normal.wgsl")?,
-    ));
-    let backpack_position_shader_id = project.shaders.register(Shader::new(
-        "Backpack Position Shader",
-        FilePath::from_str("backpack_position.wgsl")?,
-    ));
-    let backpack_normal_shader_id = project.shaders.register(Shader::new(
-        "Backpack Normal Shader",
-        FilePath::from_str("backpack_normal.wgsl")?,
+    let backpack_gbuffer_shader_id = project.shaders.register(Shader::new(
+        "Backpack G-Buffer Shader",
+        FilePath::from_str("backpack_gbuffer.wgsl")?,
     ));
     let ssao_shader_id = project
         .shaders
@@ -273,8 +243,7 @@ pub fn build(project: &mut Project) -> AppResult<()> {
         None,
     ));
 
-    // Shared depth buffer: both G-buffer passes draw identical geometry, each
-    // clearing and rewriting it, so a single depth texture is enough.
+    // Depth buffer for the G-buffer pass, shared by both attachments.
     let depth_texture_id = project.textures.register(Texture::new(
         "G-Buffer Depth",
         depth_format,
@@ -395,8 +364,6 @@ pub fn build(project: &mut Project) -> AppResult<()> {
         ],
     ));
 
-    // Geometry is drawn double-sided: the room is viewed from the inside, and
-    // this keeps the procedural cube winding from mattering for the backpack too.
     let geometry_primitive = PrimitiveState {
         topology: wgpu::PrimitiveTopology::TriangleList,
         strip_index_format: None,
@@ -406,25 +373,29 @@ pub fn build(project: &mut Project) -> AppResult<()> {
     };
     let fullscreen_primitive = geometry_primitive;
 
-    // --- Geometry pipelines (two per G-buffer pass: room + backpack). ---
-    let room_position_pipeline_id = project.render_pipelines.register(RenderPipeline::new(
-        "Room Position Pipeline",
+    // --- Geometry pipelines (room + backpack), each filling both G-buffer
+    // attachments in one draw. The formats line up with the pass's targets:
+    // position at `@location(0)`, normal at `@location(1)`. ---
+    let gbuffer_formats = vec![gbuffer_format, gbuffer_format];
+
+    let room_gbuffer_pipeline_id = project.render_pipelines.register(RenderPipeline::new(
+        "Room G-Buffer Pipeline",
         geometry_primitive,
-        Some(room_position_shader_id),
-        Some(room_position_shader_id),
+        Some(room_gbuffer_shader_id),
+        Some(room_gbuffer_shader_id),
         RenderDrawStrategy::Direct {
             vertices: 0..CUBE_VERTICES,
             instances: 0..1,
         },
         vec![BindGroupTarget::Static(camera_bind_group_id)],
-        gbuffer_format,
+        gbuffer_formats.clone(),
         Some(depth_format),
     ));
-    let backpack_position_pipeline_id = project.render_pipelines.register(RenderPipeline::new(
-        "Backpack Position Pipeline",
+    let backpack_gbuffer_pipeline_id = project.render_pipelines.register(RenderPipeline::new(
+        "Backpack G-Buffer Pipeline",
         geometry_primitive,
-        Some(backpack_position_shader_id),
-        Some(backpack_position_shader_id),
+        Some(backpack_gbuffer_shader_id),
+        Some(backpack_gbuffer_shader_id),
         RenderDrawStrategy::Model {
             model_id: Some(backpack_model_id),
             instances: 0..1,
@@ -434,37 +405,7 @@ pub fn build(project: &mut Project) -> AppResult<()> {
             BindGroupTarget::Static(camera_bind_group_id),
             BindGroupTarget::Static(backpack_transform_bind_group_id),
         ],
-        gbuffer_format,
-        Some(depth_format),
-    ));
-    let room_normal_pipeline_id = project.render_pipelines.register(RenderPipeline::new(
-        "Room Normal Pipeline",
-        geometry_primitive,
-        Some(room_normal_shader_id),
-        Some(room_normal_shader_id),
-        RenderDrawStrategy::Direct {
-            vertices: 0..CUBE_VERTICES,
-            instances: 0..1,
-        },
-        vec![BindGroupTarget::Static(camera_bind_group_id)],
-        gbuffer_format,
-        Some(depth_format),
-    ));
-    let backpack_normal_pipeline_id = project.render_pipelines.register(RenderPipeline::new(
-        "Backpack Normal Pipeline",
-        geometry_primitive,
-        Some(backpack_normal_shader_id),
-        Some(backpack_normal_shader_id),
-        RenderDrawStrategy::Model {
-            model_id: Some(backpack_model_id),
-            instances: 0..1,
-            mesh_vertex_slot: 0,
-        },
-        vec![
-            BindGroupTarget::Static(camera_bind_group_id),
-            BindGroupTarget::Static(backpack_transform_bind_group_id),
-        ],
-        gbuffer_format,
+        gbuffer_formats,
         Some(depth_format),
     ));
 
@@ -483,7 +424,7 @@ pub fn build(project: &mut Project) -> AppResult<()> {
             BindGroupTarget::Static(gbuffer_sample_bind_group_id),
             BindGroupTarget::Static(ssao_params_bind_group_id),
         ],
-        gbuffer_format,
+        vec![gbuffer_format],
         None,
     ));
     let blur_pipeline_id = project.render_pipelines.register(RenderPipeline::new(
@@ -496,7 +437,7 @@ pub fn build(project: &mut Project) -> AppResult<()> {
             instances: 0..1,
         },
         vec![BindGroupTarget::Static(blur_sample_bind_group_id)],
-        gbuffer_format,
+        vec![gbuffer_format],
         None,
     ));
     let lighting_pipeline_id = project.render_pipelines.register(RenderPipeline::new(
@@ -513,48 +454,39 @@ pub fn build(project: &mut Project) -> AppResult<()> {
             BindGroupTarget::Static(light_bind_group_id),
             BindGroupTarget::Static(lighting_sample_bind_group_id),
         ],
-        color_format,
+        vec![color_format],
         None,
     ));
 
     // --- Passes, in execution order. ---
-    let mut position_pass = RenderPass::new(
-        "G-Buffer Position Pass",
-        RenderPassTarget::new(
-            Some(g_position_view_id),
-            LoadOperation::Clear(Color([0.0, 0.0, 0.0, 0.0])),
-        ),
+    // Position and normal are written together, one target each, by a single
+    // draw of the geometry.
+    let mut gbuffer_pass = RenderPass::new(
+        "G-Buffer Pass",
+        vec![
+            RenderPassTarget::new(
+                Some(g_position_view_id),
+                LoadOperation::Clear(Color([0.0, 0.0, 0.0, 0.0])),
+            ),
+            RenderPassTarget::new(
+                Some(g_normal_view_id),
+                LoadOperation::Clear(Color([0.0, 0.0, 0.0, 0.0])),
+            ),
+        ],
         Some(RenderPassTarget::new(
             Some(depth_view_id),
             LoadOperation::Clear(1.0),
         )),
     );
-    position_pass.set_pipelines(vec![
-        room_position_pipeline_id,
-        backpack_position_pipeline_id,
-    ]);
-    let position_pass_id = project.render_passes.register(position_pass);
-
-    let mut normal_pass = RenderPass::new(
-        "G-Buffer Normal Pass",
-        RenderPassTarget::new(
-            Some(g_normal_view_id),
-            LoadOperation::Clear(Color([0.0, 0.0, 0.0, 0.0])),
-        ),
-        Some(RenderPassTarget::new(
-            Some(depth_view_id),
-            LoadOperation::Clear(1.0),
-        )),
-    );
-    normal_pass.set_pipelines(vec![room_normal_pipeline_id, backpack_normal_pipeline_id]);
-    let normal_pass_id = project.render_passes.register(normal_pass);
+    gbuffer_pass.set_pipelines(vec![room_gbuffer_pipeline_id, backpack_gbuffer_pipeline_id]);
+    let gbuffer_pass_id = project.render_passes.register(gbuffer_pass);
 
     let mut ssao_pass = RenderPass::new(
         "SSAO Pass",
-        RenderPassTarget::new(
+        vec![RenderPassTarget::new(
             Some(ssao_raw_view_id),
             LoadOperation::Clear(Color([1.0, 1.0, 1.0, 1.0])),
-        ),
+        )],
         None,
     );
     ssao_pass.set_pipelines(vec![ssao_pipeline_id]);
@@ -562,10 +494,10 @@ pub fn build(project: &mut Project) -> AppResult<()> {
 
     let mut blur_pass = RenderPass::new(
         "SSAO Blur Pass",
-        RenderPassTarget::new(
+        vec![RenderPassTarget::new(
             Some(ssao_blurred_view_id),
             LoadOperation::Clear(Color([1.0, 1.0, 1.0, 1.0])),
-        ),
+        )],
         None,
     );
     blur_pass.set_pipelines(vec![blur_pipeline_id]);
@@ -573,18 +505,17 @@ pub fn build(project: &mut Project) -> AppResult<()> {
 
     let mut lighting_pass = RenderPass::new(
         "Lighting Pass",
-        RenderPassTarget::new(
+        vec![RenderPassTarget::new(
             Some(color_render_view_id),
             LoadOperation::Clear(Color([0.05, 0.05, 0.05, 1.0])),
-        ),
+        )],
         None,
     );
     lighting_pass.set_pipelines(vec![lighting_pipeline_id]);
     let lighting_pass_id = project.render_passes.register(lighting_pass);
 
     project.presentation.set_render_passes(vec![
-        position_pass_id,
-        normal_pass_id,
+        gbuffer_pass_id,
         ssao_pass_id,
         blur_pass_id,
         lighting_pass_id,

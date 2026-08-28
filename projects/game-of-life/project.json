@@ -269,7 +269,7 @@
           "instances": { "start": 0, "end": 1 }
         },
         "bindGroups": [ { "static": { "idx": 4, "version": 1 } } ],
-        "colorFormat": "rgba8Unorm",
+        "colorFormats": [ "rgba8Unorm" ],
         "depthFormat": null
       },
       "version": 1
@@ -280,10 +280,15 @@
     {
       "value": {
         "label": "Render Pass",
-        "target": {
-          "textureViewId": { "idx": 3, "version": 1 },
-          "loadOperation": { "type": "clear", "value": [ 0.0, 0.0, 0.0, 1.0 ] }
-        },
+        "targets": [
+          {
+            "textureViewId": { "idx": 3, "version": 1 },
+            "loadOperation": {
+              "type": "clear",
+              "value": [ 0.0, 0.0, 0.0, 1.0 ]
+            }
+          }
+        ],
         "depthTarget": null,
         "pipelines": [ { "idx": 1, "version": 1 } ]
       },
