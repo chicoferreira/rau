@@ -15,25 +15,48 @@ use crate::{
 /// Settings for a scripted benchmark run.
 #[derive(Default, clap::Args)]
 pub struct BenchmarkSettings {
-    /// Record every `puffin` span of a fixed number of frames to this CSV file, then exit.
+    /// Record every `puffin` span of a fixed window of time to this CSV file, then exit.
     #[arg(long = "benchmark", value_name = "FILE", global = true)]
     pub out: Option<PathBuf>,
 
-    /// How many frames to record.
-    #[arg(long, global = true, default_value_t = 1000, requires = "out")]
-    pub benchmark_frames: usize,
+    /// How many seconds to record.
+    #[arg(
+        long,
+        global = true,
+        value_name = "SECONDS",
+        value_parser = seconds,
+        default_value = "30",
+        requires = "out"
+    )]
+    pub benchmark_seconds: instant::Duration,
 
-    /// How many frames to discard after the project is ready, letting the frame rate settle.
-    #[arg(long, global = true, default_value_t = 200, requires = "out")]
-    pub benchmark_warmup: usize,
+    /// How many seconds to wait after the project is ready for the benchmark to start.
+    #[arg(
+        long,
+        global = true,
+        value_name = "SECONDS",
+        value_parser = seconds,
+        default_value = "10",
+        requires = "out"
+    )]
+    pub benchmark_warmup_seconds: instant::Duration,
+}
+
+fn seconds(value: &str) -> Result<instant::Duration, String> {
+    let seconds: f64 = value
+        .parse()
+        .map_err(|_| format!("`{value}` is not a number"))?;
+
+    instant::Duration::try_from_secs_f64(seconds)
+        .map_err(|error| format!("`{value}` is not a valid number of seconds: {error}"))
 }
 
 const PROJECT_TIMEOUT: instant::Duration = instant::Duration::from_secs(30);
 
 pub struct Benchmark {
     out: PathBuf,
-    total_frames: usize,
-    warmup_frames: usize,
+    record_duration: instant::Duration,
+    warmup_duration: instant::Duration,
     adapter_info: wgpu::AdapterInfo,
     phase: Phase,
     sender: Sender<Arc<puffin::FrameData>>,
@@ -42,8 +65,8 @@ pub struct Benchmark {
 
 enum Phase {
     WaitingForProject { waited: instant::Duration },
-    Warmup { remaining: usize },
-    Recording { remaining: usize },
+    Warmup { elapsed: instant::Duration },
+    Recording { elapsed: instant::Duration },
     Done,
 }
 
@@ -57,8 +80,8 @@ impl Benchmark {
 
         Some(Self {
             out,
-            total_frames: settings.benchmark_frames,
-            warmup_frames: settings.benchmark_warmup,
+            record_duration: settings.benchmark_seconds,
+            warmup_duration: settings.benchmark_warmup_seconds,
             adapter_info: adapter_info.clone(),
             phase: Phase::WaitingForProject {
                 waited: instant::Duration::ZERO,
@@ -81,13 +104,13 @@ impl Benchmark {
 
                 if matches!(state, State::Workspace(workspace) if !workspace.is_rebuilding()) {
                     log::info!(
-                        "Project ready after {:.1?}, discarding {} frames, then running {}",
+                        "Project ready after {:.1?}, discarding {:.1?}, then recording {:.1?}",
                         waited,
-                        self.warmup_frames,
-                        self.total_frames
+                        self.warmup_duration,
+                        self.record_duration
                     );
                     self.phase = Phase::Warmup {
-                        remaining: self.warmup_frames,
+                        elapsed: instant::Duration::ZERO,
                     };
                 } else if *waited >= PROJECT_TIMEOUT {
                     let timeout = PROJECT_TIMEOUT.as_secs();
@@ -96,20 +119,21 @@ impl Benchmark {
                     events.quit();
                 }
             }
-            Phase::Warmup { remaining } => {
-                *remaining = remaining.saturating_sub(1);
-                if *remaining == 0 {
+            Phase::Warmup { elapsed } => {
+                *elapsed += dt;
+
+                if *elapsed >= self.warmup_duration {
                     self.begin_recording();
 
                     self.phase = Phase::Recording {
-                        remaining: self.total_frames,
+                        elapsed: instant::Duration::ZERO,
                     };
                 }
             }
-            Phase::Recording { remaining } => {
-                *remaining = remaining.saturating_sub(1);
+            Phase::Recording { elapsed } => {
+                *elapsed += dt;
 
-                if *remaining == 0 {
+                if *elapsed >= self.record_duration {
                     self.phase = Phase::Done;
                     self.finish(state, present_mode);
                     events.quit();
@@ -162,8 +186,8 @@ impl Benchmark {
             (None, _) => "unknown commit".to_owned(),
         };
 
-        let frames = self.total_frames;
-        let warmup = self.warmup_frames;
+        let duration = self.record_duration;
+        let warmup = self.warmup_duration;
 
         writeln!(file, "# rau {version} ({commit})")?;
         writeln!(file, "# profile: {profile}")?;
@@ -172,7 +196,7 @@ impl Benchmark {
         writeln!(file, "# gpu: {gpu_name} ({driver_info})")?;
         writeln!(file, "# cpu: {}", cpu_name())?;
         writeln!(file, "# present_mode: {present_mode:?}")?;
-        writeln!(file, "# frames: {frames}, after a warm-up of {warmup}")?;
+        writeln!(file, "# duration: {duration:.1?} (warmup: {warmup:.1?})")?;
         writeln!(file, "frame,thread,depth,scope,start_ns,duration_ns")?;
 
         let mut scopes = puffin::ScopeCollection::default();
