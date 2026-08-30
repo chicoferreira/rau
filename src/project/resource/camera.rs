@@ -1,7 +1,10 @@
 use std::f32::consts::FRAC_PI_2;
 
 use derive_more::{Add, AddAssign, Deref};
-use glam::{Mat4, Vec3, Vec4};
+use glam::{
+    Mat4, Vec3,
+    camera::rh::{proj::directx::perspective, view::look_at_mat4},
+};
 use serde::{Deserialize, Serialize};
 use strum::{Display, EnumIter};
 
@@ -16,13 +19,6 @@ use crate::{
     resource_getters, resource_setters,
     utils::key::{Key, KeyboardState},
 };
-
-pub const OPENGL_TO_WGPU_MATRIX: Mat4 = Mat4::from_cols(
-    Vec4::new(1.0, 0.0, 0.0, 0.0),
-    Vec4::new(0.0, 1.0, 0.0, 0.0),
-    Vec4::new(0.0, 0.0, 0.5, 0.0),
-    Vec4::new(0.0, 0.0, 0.5, 1.0),
-);
 
 const MIN_ZNEAR: f32 = 0.0001;
 const Z_CLIP_GAP: f32 = 0.001;
@@ -522,9 +518,9 @@ impl CameraMatrix {
         aspect: f32,
         ClipRange { zfar, znear }: ClipRange,
     ) -> Self {
-        let projection = OPENGL_TO_WGPU_MATRIX * Mat4::perspective_rh_gl(fovy, aspect, znear, zfar);
+        let projection = perspective(fovy, aspect, znear, zfar);
         let view_direction = direction_from_angles(yaw, pitch);
-        let view = Mat4::look_at_rh(position, position + view_direction, Vec3::Y);
+        let view = look_at_mat4(position, position + view_direction, Vec3::Y);
 
         let projection_view = projection * view;
         let inv_proj = projection.inverse();
