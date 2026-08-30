@@ -13,11 +13,11 @@ pub fn renameable_label<'a>(
     default_label: impl Widget + 'a,
     event_queue: &'a mut EventQueue<StateEvent>,
     rename_state: &'a mut Option<RenameState>,
-    rename_target: RenameTarget,
+    rename_target: &'a RenameTarget,
 ) -> impl Widget + 'a {
     move |ui: &mut egui::Ui| {
         if let Some(rename_state) = rename_state
-            && rename_state.target == rename_target
+            && rename_state.target == *rename_target
         {
             let text_edit_id = ui.id().with("rename").with(rename_target);
 

@@ -14,8 +14,10 @@ use crate::{
 
 type LabelColorFn<'a> = dyn Fn(&egui::Visuals) -> egui::Color32 + 'a;
 type LabelSuffixFn<'a> = dyn FnMut(&mut egui::Ui) + 'a;
+/// Placeholder for nodes without a context menu.
+type NoContextMenu = fn(&mut ContextMenu<'_>);
 
-pub struct TreeNode<'a, T> {
+pub struct TreeNode<'a, T, F = NoContextMenu> {
     tree_id: T,
     label: &'a str,
     /// Resolves the label color from the current theme at render time.
@@ -25,7 +27,8 @@ pub struct TreeNode<'a, T> {
     label_suffix: Option<Box<LabelSuffixFn<'a>>>,
     /// Tooltip shown when hovering the node label.
     hover_text: Option<egui::WidgetText>,
-    events: Vec<ContextMenuEntity<'a>>,
+    /// UI function to fill the context menu.
+    context_menu: Option<F>,
     rename_target: Option<RenameTarget>,
     is_folder: bool,
 }
@@ -47,7 +50,7 @@ pub fn pending_create_node<T>(
     };
 
     TreeNode::new(tree_id, &current_label)
-        .with_rename_target_only(rename_target)
+        .with_rename_target(rename_target)
         .build_to(builder, event_queue, rename_state);
 }
 
@@ -64,19 +67,47 @@ enum NodeGlyph<'a> {
     },
 }
 
-enum ContextMenuEntity<'a> {
-    Separator,
-    Action {
-        label: &'a str,
-        event: StateEvent,
-    },
-    DisabledAction {
-        label: &'a str,
-        reason: Option<&'a str>,
-    },
+/// The context menu of an open node, rendered entry by entry.
+pub struct ContextMenu<'a> {
+    ui: &'a mut egui::Ui,
+    event_queue: &'a mut EventQueue<StateEvent>,
 }
 
-impl<'a, T> TreeNode<'a, T>
+impl ContextMenu<'_> {
+    pub fn event(&mut self, label: &str, event: StateEvent) {
+        if self.ui.button(label).clicked() {
+            self.event_queue.add(event);
+        }
+    }
+
+    pub fn event_if<'r>(
+        &mut self,
+        condition: bool,
+        label: &str,
+        reason: impl Into<Option<&'r str>>,
+        event: StateEvent,
+    ) {
+        if condition {
+            self.event(label, event);
+            return;
+        }
+
+        let response = self.ui.add_enabled(false, egui::Button::new(label));
+        if let Some(reason) = reason.into() {
+            response.on_disabled_hover_text(reason);
+        }
+    }
+
+    pub fn rename(&mut self, label: &str, rename_target: RenameTarget) {
+        self.event(label, StateEvent::StartRename(rename_target));
+    }
+
+    pub fn separator(&mut self) {
+        self.ui.separator();
+    }
+}
+
+impl<'a, T> TreeNode<'a, T, NoContextMenu>
 where
     T: NodeId + 'a,
 {
@@ -88,7 +119,7 @@ where
             glyph: None,
             label_suffix: None,
             hover_text: None,
-            events: Vec::new(),
+            context_menu: None,
             rename_target: None,
             is_folder: false,
         }
@@ -102,12 +133,18 @@ where
             glyph: None,
             label_suffix: None,
             hover_text: None,
-            events: Vec::new(),
+            context_menu: None,
             rename_target: None,
             is_folder: true,
         }
     }
+}
 
+impl<'a, T, F> TreeNode<'a, T, F>
+where
+    T: NodeId + 'a,
+    F: FnMut(&mut ContextMenu<'_>) + 'a,
+{
     pub fn with_icon(mut self, icon: Icon) -> Self {
         self.glyph = Some(NodeGlyph::Icon(icon));
         self
@@ -147,42 +184,28 @@ where
         self
     }
 
-    pub fn with_event(mut self, label: &'a str, event: StateEvent) -> Self {
-        self.events.push(ContextMenuEntity::Action { label, event });
-        self
-    }
-
-    pub fn with_event_if(
-        mut self,
-        condition: bool,
-        label: &'a str,
-        reason: impl Into<Option<&'a str>>,
-        event: StateEvent,
-    ) -> Self {
-        let reason = reason.into();
-        let action = match condition {
-            true => ContextMenuEntity::Action { label, event },
-            false => ContextMenuEntity::DisabledAction { label, reason },
-        };
-        self.events.push(action);
-        self
-    }
-
-    pub fn with_separator(mut self) -> Self {
-        self.events.push(ContextMenuEntity::Separator);
-        self
-    }
-
-    pub fn with_rename_event(mut self, label: &'a str, rename_target: RenameTarget) -> Self {
-        self.rename_target = Some(rename_target.clone());
-        let event = StateEvent::StartRename(rename_target);
-        self.with_event(label, event)
-    }
-
-    /// Inline rename UI without a context-menu entry (e.g. naming a resource before it exists).
-    pub fn with_rename_target_only(mut self, rename_target: RenameTarget) -> Self {
+    /// Allow the node to be renamed inline. Add a [`ContextMenu::rename`] entry
+    /// to also offer it in the context menu.
+    pub fn with_rename_target(mut self, rename_target: RenameTarget) -> Self {
         self.rename_target = Some(rename_target);
         self
+    }
+
+    pub fn with_context_menu<G>(self, context_menu: G) -> TreeNode<'a, T, G>
+    where
+        G: FnMut(&mut ContextMenu<'_>) + 'a,
+    {
+        TreeNode {
+            tree_id: self.tree_id,
+            label: self.label,
+            label_color: self.label_color,
+            glyph: self.glyph,
+            label_suffix: self.label_suffix,
+            hover_text: self.hover_text,
+            context_menu: Some(context_menu),
+            rename_target: self.rename_target,
+            is_folder: self.is_folder,
+        }
     }
 
     fn into_node_config(
@@ -217,15 +240,18 @@ where
             None => node,
         };
 
+        let label = self.label;
+        let label_color = self.label_color;
+        let rename_target = self.rename_target;
         let mut label_suffix = self.label_suffix;
         let hover_text = self.hover_text;
-        let mut node = node.label(self.label).label_ui(move |ui| {
+        let mut node = node.label(label).label_ui(move |ui| {
             if has_glyph {
                 ui.add_space(2.0);
             }
 
-            let mut label_text = egui::RichText::new(self.label);
-            if let Some(resolve) = &self.label_color {
+            let mut label_text = egui::RichText::new(label);
+            if let Some(resolve) = &label_color {
                 label_text = label_text.color(resolve(ui.visuals()));
             }
             let default_label = Label::new(label_text);
@@ -234,7 +260,7 @@ where
                 .scope(|ui| {
                     ui.style_mut().spacing.item_spacing.x = 0.0;
 
-                    if let Some(rename_target) = self.rename_target.clone() {
+                    if let Some(rename_target) = &rename_target {
                         let mut event_queue = label_event_queue.borrow_mut();
                         ui.add(renameable_label(
                             default_label,
@@ -257,28 +283,14 @@ where
             }
         });
 
-        if !self.events.is_empty() {
+        if let Some(mut context_menu) = self.context_menu {
             node = node.context_menu(move |ui| {
                 let mut event_queue = context_event_queue.borrow_mut();
-
-                for event in self.events.iter() {
-                    match event {
-                        ContextMenuEntity::Separator => {
-                            ui.separator();
-                        }
-                        ContextMenuEntity::Action { label, event } => {
-                            if ui.button(*label).clicked() {
-                                event_queue.add(event.clone());
-                            }
-                        }
-                        ContextMenuEntity::DisabledAction { label, reason } => {
-                            let response = ui.add_enabled(false, egui::Button::new(*label));
-                            if let Some(reason) = reason {
-                                response.on_disabled_hover_text(*reason);
-                            }
-                        }
-                    }
-                }
+                let mut menu = ContextMenu {
+                    ui,
+                    event_queue: &mut event_queue,
+                };
+                context_menu(&mut menu);
             });
         }
 

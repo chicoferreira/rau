@@ -221,7 +221,7 @@ fn ui_uniform_field_title(
         Label::new(label).sense(Sense::click()),
         ctx.event_queue,
         ctx.rename_state,
-        rename_target.clone(),
+        &rename_target,
     ))
     .context_menu(|ui| {
         if ui.button("Rename Field").clicked() {

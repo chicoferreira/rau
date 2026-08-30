@@ -86,13 +86,15 @@ pub fn ui(state: &mut StateSnapshot, ui: &mut egui::Ui) -> Response {
                     egui_phosphor::regular::FOLDER_OPEN,
                     FOLDER_COLOR,
                 )
-                .with_event("Create File", StateEvent::CreateFile(FilePath::default()))
-                .with_event(
-                    "Create Folder",
-                    StateEvent::CreateFolder(FilePath::default()),
-                )
-                .with_separator()
-                .with_event("Import File", StateEvent::ImportFile(FilePath::default()))
+                .with_context_menu(|menu| {
+                    menu.event("Create File", StateEvent::CreateFile(FilePath::default()));
+                    menu.event(
+                        "Create Folder",
+                        StateEvent::CreateFolder(FilePath::default()),
+                    );
+                    menu.separator();
+                    menu.event("Import File", StateEvent::ImportFile(FilePath::default()));
+                })
                 .build_to(builder, event_queue, rename_state);
 
             pending_file_node(builder, event_queue, rename_state, root_path.clone());
@@ -169,13 +171,16 @@ fn render_dir_nodes(
                 egui_phosphor::regular::FOLDER_OPEN,
                 FOLDER_COLOR,
             )
-            .with_event("Create File", StateEvent::CreateFile(path.clone()))
-            .with_event("Create Folder", StateEvent::CreateFolder(path.clone()))
-            .with_rename_event("Rename Folder", RenameTarget::FileOrFolder(path.clone()))
-            .with_separator()
-            .with_event("Delete Folder", StateEvent::DeleteFolder(path.clone()))
-            .with_separator()
-            .with_event("Import File", StateEvent::ImportFile(path.clone()))
+            .with_rename_target(RenameTarget::FileOrFolder(path.clone()))
+            .with_context_menu(|menu| {
+                menu.event("Create File", StateEvent::CreateFile(path.clone()));
+                menu.event("Create Folder", StateEvent::CreateFolder(path.clone()));
+                menu.rename("Rename Folder", RenameTarget::FileOrFolder(path.clone()));
+                menu.separator();
+                menu.event("Delete Folder", StateEvent::DeleteFolder(path.clone()));
+                menu.separator();
+                menu.event("Import File", StateEvent::ImportFile(path.clone()));
+            })
             .build_to(builder, event_queue, rename_state);
 
         pending_file_node(builder, event_queue, rename_state, path.clone());
@@ -191,28 +196,29 @@ fn render_dir_nodes(
             unreachable!("A file path can't be the root")
         };
 
-        let file_node = TreeNode::new(FileTreeNodeId::File(file_path.clone()), file_name)
+        TreeNode::new(FileTreeNodeId::File(file_path.clone()), file_name)
             .with_icon(resource_icons::file_icon(file_path))
-            .with_event("Open File", StateEvent::OpenFile(file_path.clone()));
+            .with_rename_target(RenameTarget::FileOrFolder(file_path.clone()))
+            .with_context_menu(|menu| {
+                menu.event("Open File", StateEvent::OpenFile(file_path.clone()));
 
-        #[cfg(target_arch = "wasm32")]
-        let file_node =
-            file_node.with_event("Download File", StateEvent::DownloadFile(file_path.clone()));
+                #[cfg(target_arch = "wasm32")]
+                menu.event("Download File", StateEvent::DownloadFile(file_path.clone()));
 
-        file_node
-            .with_event("Create File", StateEvent::CreateFile(path.clone()))
-            .with_event("Create Folder", StateEvent::CreateFolder(path.clone()))
-            .with_rename_event("Rename File", RenameTarget::FileOrFolder(file_path.clone()))
-            .with_separator()
-            .with_event_if(
-                !file_path.is_project_json(),
-                "Delete File",
-                "You can't delete the project.json file",
-                StateEvent::DeleteFile(file_path.clone()),
-            )
-            .with_separator()
-            .with_event("Import File", StateEvent::ImportFile(path.clone()))
-            .with_event("Replace File", StateEvent::ReplaceFile(file_path.clone()))
+                menu.event("Create File", StateEvent::CreateFile(path.clone()));
+                menu.event("Create Folder", StateEvent::CreateFolder(path.clone()));
+                menu.rename("Rename File", RenameTarget::FileOrFolder(file_path.clone()));
+                menu.separator();
+                menu.event_if(
+                    !file_path.is_project_json(),
+                    "Delete File",
+                    "You can't delete the project.json file",
+                    StateEvent::DeleteFile(file_path.clone()),
+                );
+                menu.separator();
+                menu.event("Import File", StateEvent::ImportFile(path.clone()));
+                menu.event("Replace File", StateEvent::ReplaceFile(file_path.clone()));
+            })
             .build_to(builder, event_queue, rename_state);
     }
 }
