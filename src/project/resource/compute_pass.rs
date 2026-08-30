@@ -235,6 +235,8 @@ impl ComputePass {
             bind_groups.push(bind_group);
         }
 
+        let (x, y, z) = self.dispatch_size().into_work_groups(dimensions)?;
+
         let label = format!("{} (Compute Pass)", self.label);
         let query = gpu_profiler.begin_pass_query(label.clone(), encoder);
 
@@ -248,7 +250,6 @@ impl ComputePass {
             pass.set_bind_group(index as u32, bind_group.inner(), &[]);
         }
 
-        let (x, y, z) = self.dispatch_size().into_work_groups(dimensions)?;
         pass.dispatch_workgroups(x, y, z);
         drop(pass);
 

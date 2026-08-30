@@ -116,11 +116,15 @@ impl Presentation {
     ///
     /// The build step (pipeline creation in [`ComputePass`]'s `sync`) is separate;
     /// this only emits the dispatches.
+    ///
+    /// Returns whether at least one dispatch was encoded into `encoder`.
     pub fn dispatch_computes(
         &self,
         encoder: &mut wgpu::CommandEncoder,
         ctx: &mut ComputeDispatchContext<'_>,
-    ) {
+    ) -> bool {
+        let mut encoded_any = false;
+
         for compute_pass_id in self.compute_passes() {
             let id = *compute_pass_id;
 
@@ -173,11 +177,14 @@ impl Presentation {
                     ctx.runtime_bind_groups,
                     ctx.dimensions,
                 );
-                if let Err(error) = encode {
-                    ctx.runtime_compute_passes.mark_errored(id, error);
+                match encode {
+                    Ok(encoded) => encoded_any |= encoded,
+                    Err(error) => ctx.runtime_compute_passes.mark_errored(id, error),
                 }
             }
         }
+
+        encoded_any
     }
 
     /// Begins every render pass and replays its recorded bundle into `encoder`.

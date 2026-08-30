@@ -232,13 +232,7 @@ impl Workspace {
 
         let resources_changed = self.tick_objects(ctx);
 
-        // Compute dispatches get their own encoder, which is *always* submitted. The viewport
-        // render below uses a separate, droppable encoder: when a render pass bails out on a
-        // still-rebuilding or errored resource, that whole encoder is discarded without being
-        // finished. If the compute dispatches shared it, a dropped viewport frame would silently
-        // drop them too, and an `OnChange` pass, which only dispatches on the frame its inputs
-        // change, would miss that one dispatch and never re-run, leaving its output stuck.
-        {
+        if !self.project.presentation.compute_passes().is_empty() {
             puffin::profile_scope!("compute dispatch");
 
             let mut compute_encoder = create_command_encoder(ctx.device, "Compute Encoder");
@@ -252,11 +246,14 @@ impl Workspace {
                 gpu_profiler: ctx.gpu_profiler,
                 dt: ctx.dt,
             };
-            self.project
+            let encoded_any = self
+                .project
                 .presentation
                 .dispatch_computes(&mut compute_encoder, &mut compute_ctx);
 
-            ctx.queue.submit(std::iter::once(compute_encoder.finish()));
+            if encoded_any {
+                ctx.queue.submit(std::iter::once(compute_encoder.finish()));
+            }
         }
 
         // Now that the compute dispatch has consumed this frame's change set, it can be cleared.
