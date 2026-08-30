@@ -1,4 +1,3 @@
-use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use slotmap::{SecondaryMap, SlotMap};
 
@@ -16,6 +15,8 @@ where
     R::Id: slotmap::Key,
 {
     map: SlotMap<R::Id, R>,
+    // cache for sorted ids
+    sorted: Vec<R::Id>,
 }
 
 impl<R> Default for Storage<R>
@@ -26,6 +27,7 @@ where
     fn default() -> Self {
         Self {
             map: SlotMap::default(),
+            sorted: Vec::new(),
         }
     }
 }
@@ -39,10 +41,19 @@ where
         self.map.len()
     }
 
+    fn resort(&mut self) {
+        self.sorted.clear();
+        self.sorted.extend(self.map.keys());
+
+        let map = &self.map;
+        self.sorted
+            .sort_by_cached_key(|id| map[*id].label().to_lowercase());
+    }
+
     pub fn list_sorted(&self) -> impl Iterator<Item = (R::Id, &R)> + '_ {
-        self.map
+        self.sorted
             .iter()
-            .sorted_by_key(|(_, res)| res.label().to_lowercase())
+            .filter_map(|id| Some((*id, self.map.get(*id)?)))
     }
 
     pub fn list(&self) -> impl Iterator<Item = (R::Id, &R)> {
@@ -59,7 +70,9 @@ where
     }
 
     pub fn register(&mut self, value: R) -> R::Id {
-        self.map.insert(value)
+        let id = self.map.insert(value);
+        self.resort();
+        id
     }
 
     pub fn has_label(&self, label: &str) -> bool {
@@ -82,7 +95,9 @@ where
     }
 
     pub fn unregister(&mut self, id: R::Id) {
-        self.map.remove(id);
+        if self.map.remove(id).is_some() {
+            self.sorted.retain(|sorted_id| *sorted_id != id);
+        }
     }
 
     pub fn get(&self, id: R::Id) -> AppResult<&R> {
@@ -104,6 +119,7 @@ where
     pub fn set_label(&mut self, id: R::Id, label: String) {
         if let Some(resource) = self.map.get_mut(id) {
             resource.set_label(label);
+            self.resort();
         }
     }
 }
@@ -140,9 +156,12 @@ where
     where
         D: serde::Deserializer<'a>,
     {
-        Ok(Self {
+        let mut storage = Self {
             map: SlotMap::deserialize(deserializer)?,
-        })
+            sorted: Vec::new(),
+        };
+        storage.resort();
+        Ok(storage)
     }
 }
 
