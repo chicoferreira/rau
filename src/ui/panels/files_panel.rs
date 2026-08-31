@@ -6,12 +6,12 @@ use crate::{
     ui::{
         components::{
             resource_icons::{self, FOLDER_COLOR},
-            tree_node::{TreeNode, pending_create_node},
+            tree_node::{TreeContext, TreeNode, pending_create_node},
         },
         pane::StateSnapshot,
         rename::{RenameState, RenameTarget},
     },
-    utils::{dir_node::DirNode, event_queue::EventQueue},
+    utils::dir_node::DirNode,
     workspace::StateEvent,
 };
 
@@ -25,14 +25,12 @@ enum FileTreeNodeId {
 
 fn pending_file_node(
     builder: &mut egui_ltreeview::TreeViewBuilder<'_, FileTreeNodeId>,
-    event_queue: &mut EventQueue<StateEvent>,
-    rename_state: &mut Option<RenameState>,
+    ctx: &mut TreeContext<'_>,
     parent_path: FilePath,
 ) {
     pending_create_node(
         builder,
-        event_queue,
-        rename_state,
+        ctx,
         FileTreeNodeId::Pending(parent_path.clone()),
         RenameTarget::CreateFile(parent_path),
     );
@@ -40,14 +38,12 @@ fn pending_file_node(
 
 fn pending_folder_node(
     builder: &mut egui_ltreeview::TreeViewBuilder<'_, FileTreeNodeId>,
-    event_queue: &mut EventQueue<StateEvent>,
-    rename_state: &mut Option<RenameState>,
+    ctx: &mut TreeContext<'_>,
     parent_path: FilePath,
 ) {
     pending_create_node(
         builder,
-        event_queue,
-        rename_state,
+        ctx,
         FileTreeNodeId::Pending(parent_path.clone()),
         RenameTarget::CreateFolder(parent_path),
     );
@@ -77,10 +73,12 @@ pub fn ui(state: &mut StateSnapshot, ui: &mut egui::Ui) -> Response {
         .override_indent(Some(25.0))
         .show_state(ui, &mut tree_view_state, |builder| {
             let root_path = FilePath::default();
-            let event_queue = &mut *state.event_queue;
-            let rename_state = &mut *state.rename_state;
+            let ctx = &mut TreeContext {
+                event_queue: state.event_queue,
+                rename_state: state.rename_state,
+            };
 
-            TreeNode::folder(FileTreeNodeId::Root, &project_name)
+            TreeNode::folder(ctx, FileTreeNodeId::Root, &project_name)
                 .with_closer_icons(
                     egui_phosphor::regular::FOLDER,
                     egui_phosphor::regular::FOLDER_OPEN,
@@ -95,12 +93,12 @@ pub fn ui(state: &mut StateSnapshot, ui: &mut egui::Ui) -> Response {
                     menu.separator();
                     menu.event("Import File", StateEvent::ImportFile(FilePath::default()));
                 })
-                .build_to(builder, event_queue, rename_state);
+                .build_to(builder);
 
-            pending_file_node(builder, event_queue, rename_state, root_path.clone());
-            pending_folder_node(builder, event_queue, rename_state, root_path.clone());
+            pending_file_node(builder, ctx, root_path.clone());
+            pending_folder_node(builder, ctx, root_path.clone());
 
-            render_dir_nodes(event_queue, rename_state, file_tree, builder, root_path);
+            render_dir_nodes(ctx, file_tree, builder, root_path);
 
             builder.close_dir();
         });
@@ -154,8 +152,7 @@ fn open_pending_create_parent(
 }
 
 fn render_dir_nodes(
-    event_queue: &mut EventQueue<StateEvent>,
-    rename_state: &mut Option<RenameState>,
+    ctx: &mut TreeContext<'_>,
     dir_node: &DirNode,
     builder: &mut egui_ltreeview::TreeViewBuilder<'_, FileTreeNodeId>,
     path: FilePath,
@@ -165,7 +162,7 @@ fn render_dir_nodes(
             .join(dir_name.clone())
             .expect("a dir from list_entries is be valid");
 
-        TreeNode::folder(FileTreeNodeId::Folder(path.clone()), dir_name)
+        TreeNode::folder(ctx, FileTreeNodeId::Folder(path.clone()), dir_name)
             .with_closer_icons(
                 egui_phosphor::regular::FOLDER,
                 egui_phosphor::regular::FOLDER_OPEN,
@@ -181,18 +178,18 @@ fn render_dir_nodes(
                 menu.separator();
                 menu.event("Import File", StateEvent::ImportFile(path.clone()));
             })
-            .build_to(builder, event_queue, rename_state);
+            .build_to(builder);
 
-        pending_file_node(builder, event_queue, rename_state, path.clone());
-        pending_folder_node(builder, event_queue, rename_state, path.clone());
+        pending_file_node(builder, ctx, path.clone());
+        pending_folder_node(builder, ctx, path.clone());
 
-        render_dir_nodes(event_queue, rename_state, dir_node, builder, path);
+        render_dir_nodes(ctx, dir_node, builder, path);
 
         builder.close_dir();
     }
 
     for (file_name, file_path) in dir_node.files() {
-        TreeNode::new(FileTreeNodeId::File(file_path.clone()), file_name)
+        TreeNode::new(ctx, FileTreeNodeId::File(file_path.clone()), file_name)
             .with_icon(resource_icons::file_icon(file_path))
             .with_rename_target(RenameTarget::FileOrFolder(file_path.clone()))
             .with_context_menu(|menu| {
@@ -217,7 +214,7 @@ fn render_dir_nodes(
                 menu.event("Import File", StateEvent::ImportFile(path.clone()));
                 menu.event("Replace File", StateEvent::ReplaceFile(file_path.clone()));
             })
-            .build_to(builder, event_queue, rename_state);
+            .build_to(builder);
     }
 }
 

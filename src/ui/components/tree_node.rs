@@ -1,7 +1,5 @@
-use std::{cell::RefCell, rc::Rc};
-
 use egui::Label;
-use egui_ltreeview::{NodeBuilder, NodeConfig, NodeId, TreeViewBuilder};
+use egui_ltreeview::{CloserState, NodeConfig, NodeId, TreeViewBuilder};
 use egui_phosphor::regular;
 
 use crate::{
@@ -16,11 +14,20 @@ use crate::{
 
 type LabelColorFn = fn(&egui::Visuals) -> egui::Color32;
 /// Placeholder for nodes without a context menu.
-type NoContextMenu = fn(&mut ContextMenu<'_>);
+pub type NoContextMenu = fn(&mut ContextMenu<'_>);
+/// Placeholder for nodes without a tooltip.
+pub type NoHoverUi = fn(&mut egui::Ui);
 
-pub struct TreeNode<'a, T, F = NoContextMenu> {
+pub struct TreeContext<'a> {
+    pub event_queue: &'a mut EventQueue<StateEvent>,
+    pub rename_state: &'a mut Option<RenameState>,
+}
+
+pub struct TreeNode<'a, T, F = NoContextMenu, H = NoHoverUi> {
     tree_id: T,
     label: &'a str,
+    event_queue: &'a mut EventQueue<StateEvent>,
+    rename_state: &'a mut Option<RenameState>,
     /// Resolves the label color from the current theme at render time.
     label_color: Option<LabelColorFn>,
     glyph: Option<NodeGlyph<'a>>,
@@ -28,8 +35,8 @@ pub struct TreeNode<'a, T, F = NoContextMenu> {
     count: Option<usize>,
     /// Error whose badge is rendered after the label.
     error: Option<&'a AppError>,
-    /// Tooltip shown when hovering the node label.
-    hover_text: Option<egui::WidgetText>,
+    /// UI function filling the tooltip shown when hovering the node label.
+    hover_ui: Option<H>,
     /// UI function to fill the context menu.
     context_menu: Option<F>,
     rename_target: Option<RenameTarget>,
@@ -38,23 +45,22 @@ pub struct TreeNode<'a, T, F = NoContextMenu> {
 
 pub fn pending_create_node<T>(
     builder: &mut TreeViewBuilder<'_, T>,
-    event_queue: &mut EventQueue<StateEvent>,
-    rename_state: &mut Option<RenameState>,
+    ctx: &mut TreeContext<'_>,
     tree_id: T,
     rename_target: RenameTarget,
 ) where
     T: NodeId,
 {
-    let current_label = match rename_state.as_ref() {
+    let current_label = match ctx.rename_state.as_ref() {
         Some(rename_state) if rename_state.target == rename_target => {
             rename_state.current_label.clone()
         }
         _ => return,
     };
 
-    TreeNode::new(tree_id, &current_label)
+    TreeNode::new(ctx, tree_id, &current_label)
         .with_rename_target(rename_target)
-        .build_to(builder, event_queue, rename_state);
+        .build_to(builder);
 }
 
 /// The glyph rendered before a node's label. A node has either a fixed leaf
@@ -110,34 +116,38 @@ impl ContextMenu<'_> {
     }
 }
 
-impl<'a, T> TreeNode<'a, T, NoContextMenu>
+impl<'a, T> TreeNode<'a, T, NoContextMenu, NoHoverUi>
 where
     T: NodeId + 'a,
 {
-    pub fn new(tree_id: T, label: &'a str) -> Self {
+    pub fn new(ctx: &'a mut TreeContext<'_>, tree_id: T, label: &'a str) -> Self {
         Self {
             tree_id,
             label,
+            event_queue: &mut *ctx.event_queue,
+            rename_state: &mut *ctx.rename_state,
             label_color: None,
             glyph: None,
             count: None,
             error: None,
-            hover_text: None,
+            hover_ui: None,
             context_menu: None,
             rename_target: None,
             is_folder: false,
         }
     }
 
-    pub fn folder(tree_id: T, label: &'a str) -> Self {
+    pub fn folder(ctx: &'a mut TreeContext<'_>, tree_id: T, label: &'a str) -> Self {
         Self {
             tree_id,
             label,
+            event_queue: &mut *ctx.event_queue,
+            rename_state: &mut *ctx.rename_state,
             label_color: None,
             glyph: None,
             count: None,
             error: None,
-            hover_text: None,
+            hover_ui: None,
             context_menu: None,
             rename_target: None,
             is_folder: true,
@@ -145,10 +155,11 @@ where
     }
 }
 
-impl<'a, T, F> TreeNode<'a, T, F>
+impl<'a, T, F, H> TreeNode<'a, T, F, H>
 where
     T: NodeId + 'a,
     F: FnMut(&mut ContextMenu<'_>) + 'a,
+    H: FnMut(&mut egui::Ui) + 'a,
 {
     pub fn with_icon(mut self, icon: Icon) -> Self {
         self.glyph = Some(NodeGlyph::Icon(icon));
@@ -181,9 +192,25 @@ where
         self
     }
 
-    pub fn with_hover_text(mut self, text: impl Into<egui::WidgetText>) -> Self {
-        self.hover_text = Some(text.into());
-        self
+    /// Fill the tooltip shown when hovering the node label.
+    pub fn with_hover_ui<G>(self, hover_ui: Option<G>) -> TreeNode<'a, T, F, G>
+    where
+        G: FnMut(&mut egui::Ui) + 'a,
+    {
+        TreeNode {
+            tree_id: self.tree_id,
+            label: self.label,
+            event_queue: self.event_queue,
+            rename_state: self.rename_state,
+            label_color: self.label_color,
+            glyph: self.glyph,
+            count: self.count,
+            error: self.error,
+            hover_ui,
+            context_menu: self.context_menu,
+            rename_target: self.rename_target,
+            is_folder: self.is_folder,
+        }
     }
 
     /// Tint the label text with a color resolved from the theme at render time.
@@ -199,88 +226,114 @@ where
         self
     }
 
-    pub fn with_context_menu<G>(self, context_menu: G) -> TreeNode<'a, T, G>
+    pub fn with_context_menu<G>(self, context_menu: G) -> TreeNode<'a, T, G, H>
     where
         G: FnMut(&mut ContextMenu<'_>) + 'a,
     {
         TreeNode {
             tree_id: self.tree_id,
             label: self.label,
+            event_queue: self.event_queue,
+            rename_state: self.rename_state,
             label_color: self.label_color,
             glyph: self.glyph,
             count: self.count,
             error: self.error,
-            hover_text: self.hover_text,
+            hover_ui: self.hover_ui,
             context_menu: Some(context_menu),
             rename_target: self.rename_target,
             is_folder: self.is_folder,
         }
     }
 
-    fn into_node_config(
-        self,
-        event_queue: &'a mut EventQueue<StateEvent>,
-        rename_state: &'a mut Option<RenameState>,
-    ) -> impl NodeConfig<T> + 'a {
-        let event_queue = Rc::new(RefCell::new(event_queue));
-        let context_event_queue = Rc::clone(&event_queue);
-        let label_event_queue = Rc::clone(&event_queue);
-        let node = if self.is_folder {
-            NodeBuilder::dir(self.tree_id)
-        } else {
-            NodeBuilder::leaf(self.tree_id)
+    pub fn build_to(self, builder: &mut TreeViewBuilder<'_, T>) -> bool {
+        builder.node(self)
+    }
+}
+
+impl<T, F, H> NodeConfig<T> for TreeNode<'_, T, F, H>
+where
+    T: NodeId,
+    F: FnMut(&mut ContextMenu<'_>),
+    H: FnMut(&mut egui::Ui),
+{
+    fn id(&self) -> &T {
+        &self.tree_id
+    }
+
+    fn is_dir(&self) -> bool {
+        self.is_folder
+    }
+
+    fn has_custom_icon(&self) -> bool {
+        matches!(self.glyph, Some(NodeGlyph::Icon(_)))
+    }
+
+    fn icon(&mut self, ui: &mut egui::Ui) {
+        if let Some(NodeGlyph::Icon(icon)) = &self.glyph {
+            ui.add(Label::new(
+                egui::RichText::new(icon.glyph).color(icon.color),
+            ));
+        }
+    }
+
+    fn has_custom_closer(&self) -> bool {
+        matches!(self.glyph, Some(NodeGlyph::Closer { .. }))
+    }
+
+    fn closer(&mut self, ui: &mut egui::Ui, closer_state: CloserState) {
+        if let Some(NodeGlyph::Closer {
+            closed,
+            open,
+            color,
+        }) = &self.glyph
+        {
+            let glyph = if closer_state.is_open { open } else { closed };
+            ui.add(Label::new(egui::RichText::new(*glyph).color(*color)));
+        }
+    }
+
+    fn label(&mut self, ui: &mut egui::Ui) {
+        let Self {
+            label,
+            label_color,
+            glyph,
+            count,
+            error,
+            hover_ui,
+            rename_target,
+            event_queue,
+            rename_state,
+            ..
+        } = self;
+
+        if glyph.is_some() {
+            ui.add_space(2.0);
+        }
+
+        let mut label_text = egui::RichText::new(*label);
+        if let Some(resolve) = *label_color {
+            label_text = label_text.color(resolve(ui.visuals()));
+        }
+        let default_label = Label::new(label_text);
+
+        let add_label = |ui: &mut egui::Ui| match &*rename_target {
+            Some(rename_target) => ui.add(renameable_label(
+                default_label,
+                event_queue,
+                rename_state,
+                rename_target,
+            )),
+            None => ui.add(default_label),
         };
 
-        let has_glyph = self.glyph.is_some();
-        let node = match self.glyph {
-            Some(NodeGlyph::Icon(icon)) => node.icon(move |ui| {
-                ui.add(Label::new(
-                    egui::RichText::new(icon.glyph).color(icon.color),
-                ));
-            }),
-            Some(NodeGlyph::Closer {
-                closed,
-                open,
-                color,
-            }) => node.closer(move |ui, state| {
-                let glyph = if state.is_open { open } else { closed };
-                ui.add(Label::new(egui::RichText::new(glyph).color(color)));
-            }),
-            None => node,
-        };
-
-        let label = self.label;
-        let label_color = self.label_color;
-        let rename_target = self.rename_target;
-        let count = self.count;
-        let error = self.error;
-        let hover_text = self.hover_text;
-        let mut node = node.label(label).label_ui(move |ui| {
-            if has_glyph {
-                ui.add_space(2.0);
-            }
-
-            let mut label_text = egui::RichText::new(label);
-            if let Some(resolve) = label_color {
-                label_text = label_text.color(resolve(ui.visuals()));
-            }
-            let default_label = Label::new(label_text);
-
-            let response = ui
-                .scope(|ui| {
+        let response = match (*count, *error) {
+            (None, None) => add_label(ui),
+            (count, error) => {
+                ui.scope(|ui| {
                     ui.style_mut().spacing.item_spacing.x = 0.0;
 
-                    if let Some(rename_target) = &rename_target {
-                        let mut event_queue = label_event_queue.borrow_mut();
-                        ui.add(renameable_label(
-                            default_label,
-                            &mut event_queue,
-                            rename_state,
-                            rename_target,
-                        ));
-                    } else {
-                        ui.add(default_label);
-                    }
+                    add_label(ui);
 
                     if let Some(count) = count {
                         field::weak_label(ui, format!(" ({count})"));
@@ -296,33 +349,30 @@ where
                             });
                     }
                 })
-                .response;
-
-            if let Some(hover_text) = &hover_text {
-                response.on_hover_text(hover_text.clone());
+                .response
             }
-        });
+        };
 
-        if let Some(mut context_menu) = self.context_menu {
-            node = node.context_menu(move |ui| {
-                let mut event_queue = context_event_queue.borrow_mut();
-                let mut menu = ContextMenu {
-                    ui,
-                    event_queue: &mut event_queue,
-                };
-                context_menu(&mut menu);
-            });
+        if let Some(hover_ui) = hover_ui {
+            response.on_hover_ui(|ui| hover_ui(ui));
         }
-
-        node
     }
 
-    pub fn build_to(
-        self,
-        builder: &mut TreeViewBuilder<'_, T>,
-        event_queue: &'a mut EventQueue<StateEvent>,
-        rename_state: &'a mut Option<RenameState>,
-    ) -> bool {
-        builder.node(self.into_node_config(event_queue, rename_state))
+    fn has_context_menu(&self) -> bool {
+        self.context_menu.is_some()
+    }
+
+    fn context_menu(&mut self, ui: &mut egui::Ui) {
+        let Self {
+            context_menu,
+            event_queue,
+            ..
+        } = self;
+        let Some(context_menu) = context_menu else {
+            return;
+        };
+
+        let mut menu = ContextMenu { ui, event_queue };
+        context_menu(&mut menu);
     }
 }
