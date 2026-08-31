@@ -192,14 +192,12 @@ fn render_dir_nodes(
     }
 
     for (file_name, file_path) in dir_node.files() {
-        let Some(path) = file_path.parent() else {
-            unreachable!("A file path can't be the root")
-        };
-
         TreeNode::new(FileTreeNodeId::File(file_path.clone()), file_name)
             .with_icon(resource_icons::file_icon(file_path))
             .with_rename_target(RenameTarget::FileOrFolder(file_path.clone()))
             .with_context_menu(|menu| {
+                let path = file_path.parent().expect("a file path can't be the root");
+
                 menu.event("Open File", StateEvent::OpenFile(file_path.clone()));
 
                 #[cfg(target_arch = "wasm32")]

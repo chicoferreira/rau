@@ -11,7 +11,7 @@ use crate::{
     },
     ui::{
         components::{
-            field, resource_icons,
+            resource_icons,
             tree_node::{TreeNode, pending_create_node},
         },
         pane::StateSnapshot,
@@ -130,7 +130,7 @@ fn resource_folder(id: TreeNodeId, label: &str) -> TreeNode<'_, TreeNodeId> {
 fn resource_leaf<'a>(
     id: TreeNodeId,
     label: &'a str,
-    error: Option<&AppError>,
+    error: Option<&'a AppError>,
 ) -> TreeNode<'a, TreeNodeId> {
     let node = TreeNode::new(id, label).with_icon(resource_icon(id));
     let node = match node_resource_id(id) {
@@ -138,23 +138,10 @@ fn resource_leaf<'a>(
         None => node,
     };
     match error {
-        Some(error) => {
-            let message = error.to_string();
-            node.with_label_color(|visuals| visuals.error_fg_color)
-                .with_label_suffix(move |ui| {
-                    let error_color = ui.visuals().error_fg_color;
-                    ui.add_space(4.0);
-                    ui.colored_label(error_color, regular::WARNING)
-                        .on_hover_text(egui::RichText::new(&message).color(error_color));
-                })
-        }
+        Some(error) => node
+            .with_label_color(|visuals| visuals.error_fg_color)
+            .with_error(error),
         None => node,
-    }
-}
-
-fn count_suffix(count: usize) -> impl FnMut(&mut egui::Ui) {
-    move |ui| {
-        field::weak_label(ui, format!(" ({count})"));
     }
 }
 
@@ -181,7 +168,7 @@ pub fn ui(state: &mut StateSnapshot, ui: &mut egui::Ui) -> Response {
             .build_to(builder, state.event_queue, state.rename_state);
 
             resource_folder(TreeNodeId::RenderPassFolder, "Render Passes")
-                .with_label_suffix(count_suffix(state.project.render_passes.len()))
+                .with_count(state.project.render_passes.len())
                 .with_context_menu(|menu| {
                     menu.event(
                         "Create New Render Pass",
@@ -209,7 +196,7 @@ pub fn ui(state: &mut StateSnapshot, ui: &mut egui::Ui) -> Response {
             builder.close_dir();
 
             resource_folder(TreeNodeId::ComputePassFolder, "Compute Passes")
-                .with_label_suffix(count_suffix(state.project.compute_passes.len()))
+                .with_count(state.project.compute_passes.len())
                 .with_context_menu(|menu| {
                     menu.event(
                         "Create New Compute Pass",
@@ -237,7 +224,7 @@ pub fn ui(state: &mut StateSnapshot, ui: &mut egui::Ui) -> Response {
             builder.close_dir();
 
             resource_folder(TreeNodeId::RenderPipelineFolder, "Render Pipelines")
-                .with_label_suffix(count_suffix(state.project.render_pipelines.len()))
+                .with_count(state.project.render_pipelines.len())
                 .with_context_menu(|menu| {
                     menu.event(
                         "Create New Render Pipeline",
@@ -265,7 +252,7 @@ pub fn ui(state: &mut StateSnapshot, ui: &mut egui::Ui) -> Response {
             builder.close_dir();
 
             resource_folder(TreeNodeId::ShaderFolder, "Shaders")
-                .with_label_suffix(count_suffix(state.project.shaders.len()))
+                .with_count(state.project.shaders.len())
                 .with_context_menu(|menu| {
                     menu.event(
                         "Create New Shader",
@@ -293,7 +280,7 @@ pub fn ui(state: &mut StateSnapshot, ui: &mut egui::Ui) -> Response {
             builder.close_dir();
 
             resource_folder(TreeNodeId::BindGroupFolder, "Bind Groups")
-                .with_label_suffix(count_suffix(state.project.bind_groups.len()))
+                .with_count(state.project.bind_groups.len())
                 .with_context_menu(|menu| {
                     menu.event(
                         "Create New Bind Group",
@@ -321,7 +308,7 @@ pub fn ui(state: &mut StateSnapshot, ui: &mut egui::Ui) -> Response {
             builder.close_dir();
 
             resource_folder(TreeNodeId::UniformFolder, "Uniforms")
-                .with_label_suffix(count_suffix(state.project.uniforms.len()))
+                .with_count(state.project.uniforms.len())
                 .with_context_menu(|menu| {
                     menu.event(
                         "Create New Uniform",
@@ -349,7 +336,7 @@ pub fn ui(state: &mut StateSnapshot, ui: &mut egui::Ui) -> Response {
             builder.close_dir();
 
             resource_folder(TreeNodeId::TextureFolder, "Textures")
-                .with_label_suffix(count_suffix(state.project.textures.len()))
+                .with_count(state.project.textures.len())
                 .with_context_menu(|menu| {
                     menu.event(
                         "Create New Texture",
@@ -379,7 +366,7 @@ pub fn ui(state: &mut StateSnapshot, ui: &mut egui::Ui) -> Response {
             builder.close_dir();
 
             resource_folder(TreeNodeId::TextureViewFolder, "Texture Views")
-                .with_label_suffix(count_suffix(state.project.texture_views.len()))
+                .with_count(state.project.texture_views.len())
                 .with_context_menu(|menu| {
                     menu.event(
                         "Create New Texture View",
@@ -407,7 +394,7 @@ pub fn ui(state: &mut StateSnapshot, ui: &mut egui::Ui) -> Response {
             builder.close_dir();
 
             resource_folder(TreeNodeId::SamplerFolder, "Samplers")
-                .with_label_suffix(count_suffix(state.project.samplers.len()))
+                .with_count(state.project.samplers.len())
                 .with_context_menu(|menu| {
                     menu.event(
                         "Create New Sampler",
@@ -435,7 +422,7 @@ pub fn ui(state: &mut StateSnapshot, ui: &mut egui::Ui) -> Response {
             builder.close_dir();
 
             resource_folder(TreeNodeId::ModelFolder, "Models")
-                .with_label_suffix(count_suffix(state.project.models.len()))
+                .with_count(state.project.models.len())
                 .with_context_menu(|menu| {
                     menu.event(
                         "Create New Model",
@@ -467,7 +454,7 @@ pub fn ui(state: &mut StateSnapshot, ui: &mut egui::Ui) -> Response {
             builder.close_dir();
 
             resource_folder(TreeNodeId::CameraFolder, "Cameras")
-                .with_label_suffix(count_suffix(state.project.cameras.len()))
+                .with_count(state.project.cameras.len())
                 .with_context_menu(|menu| {
                     menu.event(
                         "Create New Camera",
@@ -495,7 +482,7 @@ pub fn ui(state: &mut StateSnapshot, ui: &mut egui::Ui) -> Response {
             builder.close_dir();
 
             resource_folder(TreeNodeId::ViewportFolder, "Viewports")
-                .with_label_suffix(count_suffix(state.project.viewports.len()))
+                .with_count(state.project.viewports.len())
                 .with_context_menu(|menu| {
                     menu.event(
                         "Create New Viewport",
@@ -532,7 +519,7 @@ pub fn ui(state: &mut StateSnapshot, ui: &mut egui::Ui) -> Response {
             builder.close_dir();
 
             resource_folder(TreeNodeId::DimensionFolder, "Dimensions")
-                .with_label_suffix(count_suffix(state.project.dimensions.len()))
+                .with_count(state.project.dimensions.len())
                 .with_context_menu(|menu| {
                     menu.event(
                         "Create New Dimension",

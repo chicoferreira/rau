@@ -61,13 +61,13 @@ impl StateSnapshot<'_> {
                     .resizable(true)
                     .default_size(half_height)
                     .show(ui, |ui| {
-                        section_panel(ui, "File Explorer", |ui| files_panel::ui(self, ui));
+                        section_panel(ui, "FILE EXPLORER", |ui| files_panel::ui(self, ui));
                     });
 
                 egui::CentralPanel::default()
                     .frame(egui::Frame::new().inner_margin(egui::Margin::symmetric(4, 0)))
                     .show(ui, |ui| {
-                        section_panel(ui, "Project Resources", |ui| {
+                        section_panel(ui, "PROJECT RESOURCES", |ui| {
                             project_tree_panel::ui(self, ui)
                         });
                     });
@@ -116,7 +116,7 @@ fn section_header(ui: &mut egui::Ui, title: &str) {
             })
             .show(ui, |ui| {
                 ui.add(egui::Label::new(
-                    egui::RichText::new(title.to_uppercase())
+                    egui::RichText::new(title)
                         .size(11.0)
                         .variation("wght", 600.0),
                 ));

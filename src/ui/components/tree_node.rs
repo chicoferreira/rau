@@ -2,18 +2,19 @@ use std::{cell::RefCell, rc::Rc};
 
 use egui::Label;
 use egui_ltreeview::{NodeBuilder, NodeConfig, NodeId, TreeViewBuilder};
+use egui_phosphor::regular;
 
 use crate::{
+    error::AppError,
     ui::{
-        components::{renameable_label::renameable_label, resource_icons::Icon},
+        components::{field, renameable_label::renameable_label, resource_icons::Icon},
         rename::{RenameState, RenameTarget},
     },
     utils::event_queue::EventQueue,
     workspace::StateEvent,
 };
 
-type LabelColorFn<'a> = dyn Fn(&egui::Visuals) -> egui::Color32 + 'a;
-type LabelSuffixFn<'a> = dyn FnMut(&mut egui::Ui) + 'a;
+type LabelColorFn = fn(&egui::Visuals) -> egui::Color32;
 /// Placeholder for nodes without a context menu.
 type NoContextMenu = fn(&mut ContextMenu<'_>);
 
@@ -21,10 +22,12 @@ pub struct TreeNode<'a, T, F = NoContextMenu> {
     tree_id: T,
     label: &'a str,
     /// Resolves the label color from the current theme at render time.
-    label_color: Option<Box<LabelColorFn<'a>>>,
+    label_color: Option<LabelColorFn>,
     glyph: Option<NodeGlyph<'a>>,
-    /// Extra content rendered after the label (e.g. a child count).
-    label_suffix: Option<Box<LabelSuffixFn<'a>>>,
+    /// Child count rendered after the label.
+    count: Option<usize>,
+    /// Error whose badge is rendered after the label.
+    error: Option<&'a AppError>,
     /// Tooltip shown when hovering the node label.
     hover_text: Option<egui::WidgetText>,
     /// UI function to fill the context menu.
@@ -117,7 +120,8 @@ where
             label,
             label_color: None,
             glyph: None,
-            label_suffix: None,
+            count: None,
+            error: None,
             hover_text: None,
             context_menu: None,
             rename_target: None,
@@ -131,7 +135,8 @@ where
             label,
             label_color: None,
             glyph: None,
-            label_suffix: None,
+            count: None,
+            error: None,
             hover_text: None,
             context_menu: None,
             rename_target: None,
@@ -164,9 +169,15 @@ where
         self
     }
 
-    /// Render extra content after the label (e.g. a child count or badge).
-    pub fn with_label_suffix(mut self, add: impl FnMut(&mut egui::Ui) + 'a) -> Self {
-        self.label_suffix = Some(Box::new(add));
+    /// Render the number of children after the label.
+    pub fn with_count(mut self, count: usize) -> Self {
+        self.count = Some(count);
+        self
+    }
+
+    /// Render a warning badge after the label, with the error as its tooltip.
+    pub fn with_error(mut self, error: &'a AppError) -> Self {
+        self.error = Some(error);
         self
     }
 
@@ -176,11 +187,8 @@ where
     }
 
     /// Tint the label text with a color resolved from the theme at render time.
-    pub fn with_label_color(
-        mut self,
-        color: impl Fn(&egui::Visuals) -> egui::Color32 + 'a,
-    ) -> Self {
-        self.label_color = Some(Box::new(color));
+    pub fn with_label_color(mut self, color: LabelColorFn) -> Self {
+        self.label_color = Some(color);
         self
     }
 
@@ -200,7 +208,8 @@ where
             label: self.label,
             label_color: self.label_color,
             glyph: self.glyph,
-            label_suffix: self.label_suffix,
+            count: self.count,
+            error: self.error,
             hover_text: self.hover_text,
             context_menu: Some(context_menu),
             rename_target: self.rename_target,
@@ -243,7 +252,8 @@ where
         let label = self.label;
         let label_color = self.label_color;
         let rename_target = self.rename_target;
-        let mut label_suffix = self.label_suffix;
+        let count = self.count;
+        let error = self.error;
         let hover_text = self.hover_text;
         let mut node = node.label(label).label_ui(move |ui| {
             if has_glyph {
@@ -251,7 +261,7 @@ where
             }
 
             let mut label_text = egui::RichText::new(label);
-            if let Some(resolve) = &label_color {
+            if let Some(resolve) = label_color {
                 label_text = label_text.color(resolve(ui.visuals()));
             }
             let default_label = Label::new(label_text);
@@ -272,8 +282,18 @@ where
                         ui.add(default_label);
                     }
 
-                    if let Some(suffix) = &mut label_suffix {
-                        suffix(ui);
+                    if let Some(count) = count {
+                        field::weak_label(ui, format!(" ({count})"));
+                    }
+
+                    if let Some(error) = error {
+                        let error_color = ui.visuals().error_fg_color;
+                        ui.add_space(4.0);
+                        ui.colored_label(error_color, regular::WARNING)
+                            .on_hover_ui(|ui| {
+                                ui.set_max_width(ui.spacing().tooltip_width);
+                                ui.label(egui::RichText::new(error.to_string()).color(error_color));
+                            });
                     }
                 })
                 .response;
