@@ -26,20 +26,23 @@ jobs:
         with:
           targets: wasm32-unknown-unknown
 
-      - name: Install wasm-pack
-        uses: taiki-e/install-action@v2
+      - name: Install wasm-opt
+        uses: sigoden/install-binary@v1
         with:
-          tool: wasm-pack
+          repo: WebAssembly/binaryen
+          tag: version_132
+          name: wasm-opt
 
       - name: Rust cache
         uses: Swatinem/rust-cache@v2
 
       - name: Build web target
-        run: wasm-pack build --release --target web --out-dir web/pkg
+        run: ./web/build-web.sh
 
       - name: Assemble site
         run: |
           cp -R web dist
+          rm dist/build-web.sh
           cp -R assets dist/assets
 
       - name: Deploy
