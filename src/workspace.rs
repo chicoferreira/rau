@@ -232,7 +232,19 @@ impl Workspace {
 
         let resources_changed = self.tick_objects(ctx);
 
-        if !self.project.presentation.compute_passes().is_empty() {
+        {
+            puffin::profile_scope!("poll presentation errors");
+
+            let snapshot = self.project.snapshot();
+            if !self
+                .runtime_project
+                .poll_presentation_errors(snapshot, resources_changed)
+            {
+                return;
+            }
+        }
+
+        let compute_command_buffer = if !self.project.presentation.compute_passes().is_empty() {
             puffin::profile_scope!("compute dispatch");
 
             let mut compute_encoder = create_command_encoder(ctx.device, "Compute Encoder");
@@ -251,25 +263,13 @@ impl Workspace {
                 .presentation
                 .dispatch_computes(&mut compute_encoder, &mut compute_ctx);
 
-            if encoded_any {
-                ctx.queue.submit(std::iter::once(compute_encoder.finish()));
-            }
-        }
+            encoded_any.then(|| compute_encoder.finish())
+        } else {
+            None
+        };
 
         // Now that the compute dispatch has consumed this frame's change set, it can be cleared.
         self.tracker.clear_changes();
-
-        {
-            puffin::profile_scope!("poll presentation errors");
-
-            let snapshot = self.project.snapshot();
-            if !self
-                .runtime_project
-                .poll_presentation_errors(snapshot, resources_changed)
-            {
-                return;
-            }
-        }
 
         puffin::profile_scope!("viewport render");
 
@@ -288,16 +288,24 @@ impl Workspace {
         let mut viewport_encoder = create_command_encoder(ctx.device, "Viewport Render Encoder");
 
         let presentation = &self.project.presentation;
-        match presentation.render(&mut viewport_encoder, &render_ctx) {
-            Ok(true) => {
-                ctx.queue.submit([viewport_encoder.finish()]);
-            }
-            Ok(false) => {} // A resource is still pending, drop the encoder without submitting
+        let viewport_command_buffer = match presentation.render(&mut viewport_encoder, &render_ctx)
+        {
+            Ok(true) => Some(viewport_encoder.finish()),
+            Ok(false) => None, // A resource is still pending, drop the encoder without submitting
             Err(error) => {
                 let snapshot = self.project.snapshot();
                 let error = PresentationRender::Errored { error, snapshot };
                 self.runtime_project.presentation_render = error;
+                None
             }
+        };
+
+        if compute_command_buffer.is_some() || viewport_command_buffer.is_some() {
+            let buffers = [compute_command_buffer, viewport_command_buffer]
+                .into_iter()
+                .flatten();
+
+            ctx.queue.submit(buffers);
         }
     }
 
