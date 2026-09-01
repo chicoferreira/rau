@@ -18,7 +18,7 @@ use crate::{
     workspace::Workspace,
 };
 
-use egui::{Color32, RichText};
+use egui::RichText;
 use egui_phosphor::regular;
 use std::task::Poll;
 
@@ -141,7 +141,7 @@ impl MainMenu {
                     resource_icons::monochrome_icon_text(
                         ui,
                         regular::PLUS,
-                        Color32::WHITE,
+                        ui.visuals().selection.stroke.color,
                         "New Project",
                     ),
                 );

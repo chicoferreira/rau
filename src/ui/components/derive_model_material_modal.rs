@@ -239,7 +239,7 @@ impl MaterialBindGroupsModal {
                         let label = resource_icons::monochrome_icon_text(
                             ui,
                             regular::MAGIC_WAND,
-                            egui::Color32::WHITE,
+                            ui.visuals().selection.stroke.color,
                             "Create",
                         );
                         if menu_widgets::primary_action_button_sized(ui, label, size)

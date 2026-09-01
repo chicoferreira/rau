@@ -72,6 +72,10 @@ fn rau_menu(_state: &mut StateSnapshot, ui: &mut egui::Ui) {
             info_row(ui, "Compiler", built_info::RUSTC_VERSION);
         });
 
+    ui.separator();
+
+    theme_menu(ui);
+
     #[cfg(not(target_arch = "wasm32"))]
     {
         ui.separator();
@@ -79,6 +83,31 @@ fn rau_menu(_state: &mut StateSnapshot, ui: &mut egui::Ui) {
             _state.app_event_queue.quit();
         }
     }
+}
+
+fn theme_menu(ui: &mut egui::Ui) {
+    const THEMES: [(egui::ThemePreference, &str, &str); 3] = [
+        (
+            egui::ThemePreference::System,
+            regular::DESKTOP_TOWER,
+            "System",
+        ),
+        (egui::ThemePreference::Light, regular::SUN, "Light"),
+        (egui::ThemePreference::Dark, regular::MOON, "Dark"),
+    ];
+
+    let current = ui.options(|options| options.theme_preference);
+
+    ui.menu_button(format!("{} Theme", regular::PALETTE), |ui| {
+        for (preference, icon, label) in THEMES {
+            if ui
+                .radio(current == preference, format!("{icon} {label}"))
+                .clicked()
+            {
+                ui.ctx().set_theme(preference);
+            }
+        }
+    });
 }
 
 fn info_row(ui: &mut egui::Ui, key: &str, value: &str) {

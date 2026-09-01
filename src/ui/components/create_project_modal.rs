@@ -224,7 +224,7 @@ impl CreateProjectModal {
                         let label = resource_icons::monochrome_icon_text(
                             ui,
                             regular::PLUS,
-                            egui::Color32::WHITE,
+                            ui.visuals().selection.stroke.color,
                             "Create Project",
                         );
                         if menu_widgets::primary_action_button_sized(ui, label, size).clicked() {
