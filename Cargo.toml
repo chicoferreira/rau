@@ -99,6 +99,7 @@ mimalloc = { version = "0.1.52", optional = true }
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 console_error_panic_hook = "0.1.6"
 console_log = "1.0"
+zip = { version = "8.6", default-features = false }
 wasm-bindgen = "0.2"
 wasm-bindgen-futures = "0.4.30"
 serde_urlencoded = "0.7.1"

@@ -109,6 +109,8 @@ pub enum StateEvent {
     ReplaceFile(FilePath),
     #[cfg(target_arch = "wasm32")]
     DownloadFile(FilePath),
+    #[cfg(target_arch = "wasm32")]
+    DownloadProject,
     MoveFileSystemEntry {
         old_path: FilePath,
         new_path: FilePath,
@@ -219,7 +221,7 @@ impl Workspace {
         self.project_save_state
             .tick(&self.project, &mut self.file_storage);
 
-        self.file_storage.tick(&mut self.tracker);
+        self.file_storage.tick(&mut self.tracker, &mut self.toasts);
 
         self.texture_captures.tick(
             &self.project,
@@ -466,6 +468,15 @@ impl Workspace {
                 StateEvent::DownloadFile(file_path) => {
                     self.file_storage.download_file_in_background(file_path);
                 }
+                #[cfg(target_arch = "wasm32")]
+                StateEvent::DownloadProject => match self.project.serialize() {
+                    Ok(project_json) => self
+                        .file_storage
+                        .download_project_in_background(project_json),
+                    Err(error) => {
+                        toasts_log_error!(self.toasts, "Failed to download project: {error}");
+                    }
+                },
                 StateEvent::MoveFileSystemEntry { old_path, new_path } => {
                     self.file_storage
                         .move_path_in_background(old_path, new_path);

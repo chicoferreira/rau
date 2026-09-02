@@ -92,6 +92,8 @@ pub fn ui(state: &mut StateSnapshot, ui: &mut egui::Ui) -> Response {
                     );
                     menu.separator();
                     menu.event("Import File", StateEvent::ImportFile(FilePath::default()));
+                    #[cfg(target_arch = "wasm32")]
+                    menu.event("Download Project", StateEvent::DownloadProject);
                 })
                 .build_to(builder);
 

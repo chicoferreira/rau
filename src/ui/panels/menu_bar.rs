@@ -117,20 +117,29 @@ fn info_row(ui: &mut egui::Ui, key: &str, value: &str) {
 }
 
 fn project_menu(state: &mut StateSnapshot, ui: &mut egui::Ui) {
-    if ui.button("New File").clicked() {
-        state
-            .event_queue
-            .add(StateEvent::CreateFile(FilePath::default()));
+    let mut emit_event = |event: StateEvent| state.event_queue.add(event);
+
+    let new_file = ui.button(format!("{} New File", regular::FILE_PLUS));
+    if new_file.clicked() {
+        emit_event(StateEvent::CreateFile(FilePath::default()));
     }
-    if ui.button("New Folder").clicked() {
-        state
-            .event_queue
-            .add(StateEvent::CreateFolder(FilePath::default()));
+
+    let new_folder = ui.button(format!("{} New Folder", regular::FOLDER_PLUS));
+    if new_folder.clicked() {
+        emit_event(StateEvent::CreateFolder(FilePath::default()));
     }
-    if ui.button("Import File…").clicked() {
-        state
-            .event_queue
-            .add(StateEvent::ImportFile(FilePath::default()));
+
+    let import_file = ui.button(format!("{} Import File…", regular::UPLOAD_SIMPLE));
+    if import_file.clicked() {
+        emit_event(StateEvent::ImportFile(FilePath::default()));
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    {
+        let download_project = ui.button(format!("{} Download Project", regular::DOWNLOAD_SIMPLE));
+        if download_project.clicked() {
+            emit_event(StateEvent::DownloadProject);
+        }
     }
 
     ui.separator();

@@ -1,3 +1,5 @@
+#[cfg(target_arch = "wasm32")]
+use std::io::{Cursor, Write};
 use std::{
     collections::{HashMap, hash_map::DefaultHasher},
     hash::{Hash, Hasher},
@@ -85,6 +87,10 @@ enum FileStorageTask {
     },
     #[cfg(target_arch = "wasm32")]
     DownloadFile {
+        task: AsyncJob<AppResult<()>>,
+    },
+    #[cfg(target_arch = "wasm32")]
+    DownloadProject {
         task: AsyncJob<AppResult<()>>,
     },
 }
@@ -248,6 +254,57 @@ impl FileStorage {
             .push(FileStorageTask::DownloadFile { task });
     }
 
+    #[cfg(target_arch = "wasm32")]
+    pub fn download_project_in_background(&mut self, project_json: Vec<u8>) {
+        let file_system = self.file_system.clone();
+        let project_name = self.source.project_name().to_owned();
+        let task = AsyncJob::new(async move {
+            let mut entries = file_system.list_entries().await?;
+
+            // sorting to ensure zip file determinism
+            entries.files.sort_by_key(|path| path.segments().to_vec());
+            entries
+                .directories
+                .sort_by_key(|path| path.segments().to_vec());
+
+            let root = project_name.replace(['/', '\\'], "_");
+            let options = zip::write::SimpleFileOptions::default()
+                .compression_method(zip::CompressionMethod::Stored);
+            let mut archive = zip::ZipWriter::new(Cursor::new(Vec::new()));
+            let zip_error = |error: zip::result::ZipError| {
+                crate::error::AppError::BrowserError(error.to_string())
+            };
+
+            archive
+                .add_directory(format!("{root}/"), options)
+                .map_err(zip_error)?;
+
+            for path in entries.directories {
+                archive
+                    .add_directory(format!("{root}/{path}/"), options)
+                    .map_err(zip_error)?;
+            }
+
+            for path in entries.files {
+                let bytes = if path.is_project_json() {
+                    project_json.clone()
+                } else {
+                    file_system.read(&path).await?
+                };
+                archive
+                    .start_file(format!("{root}/{path}"), options)
+                    .map_err(zip_error)?;
+                archive.write_all(&bytes)?;
+            }
+
+            let archive = archive.finish().map_err(zip_error)?.into_inner();
+            crate::utils::browser::download_file(&format!("{root}.zip"), archive)
+        });
+
+        self.current_tasks
+            .push(FileStorageTask::DownloadProject { task });
+    }
+
     pub fn get_open_file(&self, path: &FilePath) -> Option<&OpenFileState> {
         self.open_files.get(path)
     }
@@ -298,7 +355,7 @@ impl FileStorage {
         });
     }
 
-    pub fn tick(&mut self, tracker: &mut SyncTracker) {
+    pub fn tick(&mut self, tracker: &mut SyncTracker, _toasts: &mut egui_notify::Toasts) {
         puffin::profile_function!();
 
         if !self.pending_changes.is_empty() {
@@ -372,6 +429,15 @@ impl FileStorage {
             FileStorageTask::DownloadFile { task } => {
                 consume_if_ready(task, "download file", |_| {})
             }
+            #[cfg(target_arch = "wasm32")]
+            FileStorageTask::DownloadProject { task } => match task.try_resolve() {
+                Poll::Ready(Ok(())) => false,
+                Poll::Ready(Err(error)) => {
+                    toasts_log_error!(_toasts, "Failed to download project: {error}");
+                    false
+                }
+                Poll::Pending => true,
+            },
         });
 
         if refresh_file_system && !self.has_list_file_files_pending() {
