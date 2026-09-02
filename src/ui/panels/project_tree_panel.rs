@@ -513,6 +513,7 @@ pub fn ui(state: &mut StateSnapshot, ui: &mut egui::Ui) -> Response {
                     .with_rename_target(RenameTarget::Viewport(id))
                     .with_context_menu(move |menu| {
                         menu.event("View", StateEvent::OpenViewport(id));
+                        menu.event("Focus", StateEvent::EnterFocusView(id));
                         menu.event("Inspect", StateEvent::InspectResource(id.into()));
                         menu.rename("Rename", RenameTarget::Viewport(id));
                         menu.event("Delete", StateEvent::DeleteResource(id.into()));

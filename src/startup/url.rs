@@ -7,6 +7,7 @@
 //! ?action=new&source=github&owner=chicoferreira&repo=rau&ref=main
 //! ?action=open&project=My%20Project
 //! ?action=open&project=Shadow%20Mapping&backend=webgl2
+//! ?action=open&project=Grass%20Field&focused
 //! ```
 
 use serde::Deserialize;
@@ -67,6 +68,8 @@ struct UrlParams {
     path: Option<String>,
     /// Graphics backend to render with (defaults to whichever the browser prefers).
     backend: Option<Backend>,
+    /// Open the project's main viewport in the focus view (`?focused` is enough).
+    focused: Option<String>,
 }
 
 fn invalid(message: impl Into<String>) -> AppError {
@@ -165,6 +168,7 @@ pub fn startup_settings_from_url() -> StartupSettings {
         });
 
     let backend = params.backend;
+    let focused = params.focused.is_some();
 
     let action = params.into_startup_action().unwrap_or_else(|e| {
         log::error!("Failed to read the startup action from the URL: {e}");
@@ -172,7 +176,7 @@ pub fn startup_settings_from_url() -> StartupSettings {
     });
 
     StartupSettings {
-        app: AppSettings { action },
+        app: AppSettings { action, focused },
         render_settings: RenderSettings {
             backend,
             ..RenderSettings::default()

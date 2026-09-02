@@ -20,6 +20,8 @@ use crate::{
 #[derive(Default)]
 pub struct AppSettings {
     pub action: StartupAction,
+    /// Open a project's main viewport in the focus view, hiding the rest of the editor.
+    pub focused: bool,
     #[cfg(not(target_arch = "wasm32"))]
     pub benchmark: BenchmarkSettings,
 }
@@ -82,7 +84,11 @@ impl App {
 
         let downlevel_flags = adapter.get_downlevel_capabilities().flags;
 
-        let main_menu = MainMenu::with_startup_action(app_file_system.clone(), settings.action);
+        let main_menu = MainMenu::with_startup_action(
+            app_file_system.clone(),
+            settings.action,
+            settings.focused,
+        );
         let state = State::MainMenu(main_menu);
 
         #[cfg(not(target_arch = "wasm32"))]

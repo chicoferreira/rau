@@ -1,39 +1,18 @@
 use crate::{
-    project::{
-        ProjectResource, ResourceKind, ViewportId,
-        resource::texture_view::previewable_formats_label,
-    },
+    project::{ProjectResource, ResourceKind, ViewportId},
     ui::{
         components::{
-            field, inspector,
             resource_icons::{icon_tab_title, resource_kind_icon},
             tiles::Pane,
+            viewport,
         },
         pane::StateSnapshot,
     },
-    utils::event_queue::EventQueue,
-    workspace::StateEvent,
 };
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub struct ViewportPane {
     pub viewport_id: ViewportId,
-}
-
-fn viewport_error(
-    ui: &mut egui::Ui,
-    event_queue: &mut EventQueue<StateEvent>,
-    viewport_id: ViewportId,
-    message: impl Into<egui::RichText>,
-) {
-    let message = message.into();
-    inspector::centered_block(ui, |ui| {
-        field::error_label(ui, message.clone());
-        ui.add_space(8.0);
-        if ui.button("Open Inspector").clicked() {
-            event_queue.inspect_resource(viewport_id);
-        }
-    });
 }
 
 impl Pane for ViewportPane {
@@ -42,67 +21,7 @@ impl Pane for ViewportPane {
         state: &mut StateSnapshot<'_>,
         ui: &mut egui::Ui,
     ) -> egui_tiles::UiResponse {
-        puffin::profile_function!();
-
-        let Ok(viewport) = state.project.viewports.get(self.viewport_id) else {
-            inspector::centered_error(ui, "This viewport no longer exists.");
-            return egui_tiles::UiResponse::None;
-        };
-
-        let Some(texture_view_id) = viewport.texture_view_id() else {
-            viewport_error(
-                ui,
-                state.event_queue,
-                self.viewport_id,
-                "No texture view is assigned to this viewport.\nAssign one to display its contents here.",
-            );
-            return egui_tiles::UiResponse::None;
-        };
-
-        let runtime_texture_view = state
-            .runtime_project
-            .texture_views
-            .get_init(texture_view_id);
-
-        let runtime_texture_view = match runtime_texture_view {
-            Ok(Some(runtime)) => runtime,
-            Ok(None) => {
-                field::centered(ui, field::spinner);
-                return egui_tiles::UiResponse::None;
-            }
-            Err(err) => {
-                viewport_error(
-                    ui,
-                    state.event_queue,
-                    self.viewport_id,
-                    format!("Couldn't initialize the texture view:\n{err}"),
-                );
-                return egui_tiles::UiResponse::None;
-            }
-        };
-
-        let Some(egui_id) = runtime_texture_view.egui_id() else {
-            viewport_error(
-                ui,
-                state.event_queue,
-                self.viewport_id,
-                format!(
-                    "This texture view can't be displayed.\n\
-                     Only filterable RGBA formats ({}) are supported in viewports.",
-                    previewable_formats_label()
-                ),
-            );
-            return egui_tiles::UiResponse::None;
-        };
-
-        let events = crate::ui::components::viewport::ui(
-            ui,
-            self.viewport_id,
-            egui_id,
-            viewport.requested_ui_size(),
-        );
-        state.event_queue.add_all(events);
-
+        viewport::ui(state, ui, self.viewport_id);
         egui_tiles::UiResponse::None
     }
 

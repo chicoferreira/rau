@@ -23,6 +23,10 @@ struct Cli {
     #[command(flatten)]
     benchmark: BenchmarkSettings,
 
+    /// Makes the project's main viewport focused by default, hiding the rest of the editor.
+    #[arg(long, global = true)]
+    focused: bool,
+
     #[command(subcommand)]
     command: Option<Command>,
 }
@@ -182,6 +186,7 @@ pub fn main() {
     let settings = StartupSettings {
         app: AppSettings {
             action: startup_action,
+            focused: cli.focused,
             benchmark: cli.benchmark,
         },
         render_settings: cli.render_settings,

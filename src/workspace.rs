@@ -58,6 +58,8 @@ pub struct Workspace {
     inspector_tree_pane: TreePane<InspectorPane>,
     viewport_tree_pane: TreePane<ViewportPane>,
     error_panel: ErrorPanel,
+    /// The viewport currently shown fullscreen, hiding the rest of the editor.
+    focus_view: Option<ViewportId>,
     dimension_owners: SecondaryMap<DimensionId, ViewportId>,
     /// The model `.mtl` files each model depended on at its last successful load.
     /// Needed because model `.mtl` files are not part of the runtime state and
@@ -112,6 +114,10 @@ pub enum StateEvent {
         new_path: FilePath,
     },
     SetMainViewport(ViewportId),
+    /// Show the given viewport fullscreen, hiding the rest of the editor.
+    EnterFocusView(ViewportId),
+    /// Leave the fullscreen viewport view and go back to the editor.
+    ExitFocusView,
     DownloadTextureImage(TextureId),
     OpenMaterialBindGroupsModal(ModelId),
     /// Create a new texture view backed by the given texture.
@@ -190,6 +196,7 @@ impl Workspace {
             inspector_tree_pane,
             viewport_tree_pane,
             error_panel: ErrorPanel::default(),
+            focus_view: None,
             project,
             runtime_project: RuntimeProject::default(),
             tracker: SyncTracker::default(),
@@ -309,6 +316,10 @@ impl Workspace {
         }
     }
 
+    pub fn focus_main_viewport(&mut self) {
+        self.focus_view = self.project.presentation.main_viewport();
+    }
+
     pub fn project_name(&self) -> &str {
         self.file_storage.project_source().project_name()
     }
@@ -344,6 +355,7 @@ impl Workspace {
             runtime_project: &mut self.runtime_project,
             rename_state: &mut self.rename_state,
             file_storage: &mut self.file_storage,
+            focus_view: self.focus_view,
             backend,
             present_mode,
             frame_time,
@@ -543,6 +555,13 @@ impl Workspace {
                             }
                         }
                     }
+                }
+                StateEvent::EnterFocusView(viewport_id) => {
+                    self.focus_view = Some(viewport_id);
+                    self.toasts.info("Press Esc to leave the focused viewport");
+                }
+                StateEvent::ExitFocusView => {
+                    self.focus_view = None;
                 }
                 StateEvent::SetMainViewport(viewport_id) => {
                     let presentation = &mut self.project.presentation;

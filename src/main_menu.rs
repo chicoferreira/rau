@@ -33,11 +33,19 @@ pub struct MainMenu {
     recent_projects_state: RecentProjectsState,
     create_project_modal: Option<CreateProjectModal>,
     logo_texture: Option<egui::TextureHandle>,
+    focused: bool,
 }
 
 impl MainMenu {
-    pub fn with_startup_action(app_fs: AppFileSystem, startup_action: StartupAction) -> Self {
-        let mut main_menu = Self::default();
+    pub fn with_startup_action(
+        app_fs: AppFileSystem,
+        startup_action: StartupAction,
+        focused: bool,
+    ) -> Self {
+        let mut main_menu = Self {
+            focused,
+            ..Self::default()
+        };
 
         match startup_action {
             StartupAction::MainMenu => {}
@@ -197,8 +205,11 @@ impl MainMenu {
         {
             let elapsed = started.elapsed();
             match result {
-                Ok(workspace) => {
+                Ok(mut workspace) => {
                     log::info!("Opened project in {elapsed:.1?}");
+                    if self.focused {
+                        workspace.focus_main_viewport();
+                    }
                     app_event_queue.add(AppEvent::SetState(State::Workspace(workspace)));
                 }
                 Err(error) => {

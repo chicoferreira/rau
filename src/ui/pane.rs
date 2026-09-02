@@ -1,9 +1,9 @@
 use crate::{
     app::AppEvent,
     file::file_storage::FileStorage,
-    project::{Project, RuntimeProject},
+    project::{Project, RuntimeProject, ViewportId},
     ui::{
-        components::tiles::TreePane,
+        components::{tiles::TreePane, viewport},
         panels::{
             error_panel::ErrorPanel, files_panel, inspector_pane::InspectorPane, menu_bar,
             project_tree_panel, status_bar, viewport_pane::ViewportPane,
@@ -22,6 +22,7 @@ pub struct StateSnapshot<'a> {
     pub runtime_project: &'a mut RuntimeProject,
     pub rename_state: &'a mut Option<RenameState>,
     pub file_storage: &'a mut FileStorage,
+    pub focus_view: Option<ViewportId>,
     pub backend: wgpu::Backend,
     pub present_mode: wgpu::PresentMode,
     pub frame_time: &'a FrameTimeTracker,
@@ -37,6 +38,18 @@ impl StateSnapshot<'_> {
         error_panel: &mut ErrorPanel,
     ) {
         puffin::profile_function!();
+
+        if let Some(viewport_id) = self.focus_view {
+            if ui.input(|i| i.key_pressed(egui::Key::Escape)) {
+                self.event_queue.add(StateEvent::ExitFocusView);
+            }
+
+            egui::CentralPanel::default()
+                .frame(egui::Frame::new().inner_margin(0))
+                .show(ui, |ui| viewport::ui(self, ui, viewport_id));
+
+            return;
+        }
 
         error_panel.tick(self.runtime_project);
 

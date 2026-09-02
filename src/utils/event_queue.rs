@@ -22,10 +22,6 @@ impl<T> EventQueue<T> {
         self.events.push(event);
     }
 
-    pub fn add_all(&mut self, events: impl IntoIterator<Item = T>) {
-        self.events.extend(events);
-    }
-
     pub fn drain(&mut self) -> std::vec::Drain<'_, T> {
         self.events.drain(..)
     }
