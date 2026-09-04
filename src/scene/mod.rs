@@ -44,6 +44,8 @@ pub enum GenerateTemplate {
     ShadowMapping10Copies,
     #[value(name = "shadow-mapping-100-copies")]
     ShadowMapping100Copies,
+    #[value(name = "shadow-mapping-1000-copies")]
+    ShadowMapping1000Copies,
 }
 
 pub fn generate_project(template: GenerateTemplate, target_folder: &Path) -> AppResult<()> {
@@ -71,6 +73,7 @@ async fn generate_project_async(template: GenerateTemplate, target_folder: &Path
         RayTracing => ray_tracing::build(&mut project)?,
         ShadowMapping10Copies => scaled::build(&mut project, shadow_mapping::build, 10)?,
         ShadowMapping100Copies => scaled::build(&mut project, shadow_mapping::build, 100)?,
+        ShadowMapping1000Copies => scaled::build(&mut project, shadow_mapping::build, 1000)?,
     };
 
     file_system
