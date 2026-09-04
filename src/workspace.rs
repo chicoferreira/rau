@@ -92,6 +92,7 @@ pub enum ViewportEvent {
 
 #[derive(Debug, Clone)]
 pub enum StateEvent {
+    SaveProject,
     ViewportEvent(ViewportId, ViewportEvent),
     OpenFile(FilePath),
     InspectResource(ResourceId),
@@ -393,6 +394,10 @@ impl Workspace {
         for event in self.event_queue.drain() {
             log::debug!("Handling event {event:?}");
             match event {
+                StateEvent::SaveProject => {
+                    self.project_save_state
+                        .save(&self.project, &mut self.file_storage);
+                }
                 StateEvent::OpenFile(file_path) => {
                     let pane = InspectorPane::File(file_path);
                     self.inspector_tree_pane.add_pane(pane);

@@ -22,6 +22,9 @@ const CREATABLE_RESOURCES: &[(ResourceKind, &str)] = &[
     (ResourceKind::Dimension, "Dimension"),
 ];
 
+pub const SAVE_SHORTCUT: egui::KeyboardShortcut =
+    egui::KeyboardShortcut::new(egui::Modifiers::COMMAND, egui::Key::S);
+
 pub fn ui(state: &mut StateSnapshot, ui: &mut egui::Ui) {
     puffin::profile_function!();
 
@@ -118,6 +121,15 @@ fn info_row(ui: &mut egui::Ui, key: &str, value: &str) {
 
 fn project_menu(state: &mut StateSnapshot, ui: &mut egui::Ui) {
     let mut emit_event = |event: StateEvent| state.event_queue.add(event);
+
+    let save = egui::Button::new(format!("{} Save Now", regular::FLOPPY_DISK))
+        .shortcut_text(ui.ctx().format_shortcut(&SAVE_SHORTCUT));
+    if ui.add(save).clicked() {
+        emit_event(StateEvent::SaveProject);
+    }
+    ui.label(egui::RichText::new("Changes are saved automatically.").weak());
+
+    ui.separator();
 
     let new_file = ui.button(format!("{} New File", regular::FILE_PLUS));
     if new_file.clicked() {

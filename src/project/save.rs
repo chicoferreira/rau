@@ -46,8 +46,12 @@ impl ProjectSaveState {
             return;
         }
 
-        let revisions = self.last_observed_snapshot.clone();
+        self.save(project, file_storage);
+    }
 
+    /// Immediately saves the current project, bypassing the autosave debounce.
+    pub fn save(&mut self, project: &Project, file_storage: &mut FileStorage) {
+        let revisions: ProjectRevisionSnapshot = project.project_revisions().collect();
         let serialize_started = instant::Instant::now();
 
         match project.serialize() {
@@ -58,12 +62,13 @@ impl ProjectSaveState {
                     bytes.len()
                 );
                 file_storage.save_in_background(&FilePath::project_json(), bytes);
+                self.last_observed_snapshot = revisions.clone();
                 self.saved_snapshot = revisions;
                 self.save_deadline = None;
             }
             Err(error) => {
                 log::error!("Failed to serialize project for save: {error}");
-                self.save_deadline = Some(now + PROJECT_SAVE_DEBOUNCE);
+                self.save_deadline = Some(instant::Instant::now() + PROJECT_SAVE_DEBOUNCE);
             }
         }
     }

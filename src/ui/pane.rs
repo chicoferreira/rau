@@ -39,6 +39,10 @@ impl StateSnapshot<'_> {
     ) {
         puffin::profile_function!();
 
+        if ui.input_mut(|input| input.consume_shortcut(&menu_bar::SAVE_SHORTCUT)) {
+            self.event_queue.add(StateEvent::SaveProject);
+        }
+
         if let Some(viewport_id) = self.focus_view {
             if ui.input(|i| i.key_pressed(egui::Key::Escape)) {
                 self.event_queue.add(StateEvent::ExitFocusView);
