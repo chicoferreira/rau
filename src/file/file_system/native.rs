@@ -257,6 +257,8 @@ impl ProjectFileSystemTrait for ProjectFileSystem {
         let path = self.resolve(path);
 
         self.run_blocking(|| {
+            puffin::profile_scope!("write file");
+
             if let Some(parent) = path.parent() {
                 std::fs::create_dir_all(parent)?;
             }

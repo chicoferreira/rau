@@ -76,8 +76,6 @@ enum FileStorageTask {
     },
     SaveFile {
         task: AsyncJob<AppResult<()>>,
-        path: FilePath,
-        started: instant::Instant,
     },
     ImportFile {
         task: AsyncJob<AppResult<bool>>,
@@ -176,11 +174,7 @@ impl FileStorage {
 
     pub fn save_in_background(&mut self, path: &FilePath, bytes: Vec<u8>) {
         let task = self.file_system.write(path, bytes);
-        self.current_tasks.push(FileStorageTask::SaveFile {
-            task,
-            path: path.clone(),
-            started: instant::Instant::now(),
-        });
+        self.current_tasks.push(FileStorageTask::SaveFile { task });
     }
 
     pub fn save_open_file(&mut self, path: &FilePath, contents: String) {
@@ -404,13 +398,7 @@ impl FileStorage {
             FileStorageTask::MovePath { task } => consume_if_ready(task, "move path", |_| {
                 refresh_file_system = true;
             }),
-            FileStorageTask::SaveFile {
-                task,
-                path,
-                started,
-            } => consume_if_ready(task, "save file", |_| {
-                log::info!("Saved {path} in {:.1?}", started.elapsed());
-            }),
+            FileStorageTask::SaveFile { task } => consume_if_ready(task, "save file", |_| {}),
             FileStorageTask::ImportFile { task } => {
                 consume_if_ready(task, "import file", |imported| {
                     if imported {
@@ -534,6 +522,8 @@ fn content_hash(bytes: &[u8]) -> u64 {
 }
 
 fn consume_if_ready<T>(job: &mut AsyncJob<AppResult<T>>, name: &str, f: impl FnOnce(T)) -> bool {
+    puffin::profile_scope!("consume task", name);
+
     match job.try_resolve() {
         Poll::Ready(result) => {
             match result {

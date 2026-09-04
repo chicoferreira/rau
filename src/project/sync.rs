@@ -236,7 +236,10 @@ impl SyncTracker {
         };
 
         if let Some((previous, job)) = action {
-            let sync_result = resource.sync(id, ctx, previous, job);
+            let sync_result = {
+                puffin::profile_scope!("build resource", std::any::type_name::<R>());
+                resource.sync(id, ctx, previous, job)
+            };
             self.apply_sync_result::<R>(id, cell, current_revision, sync_result);
         }
 

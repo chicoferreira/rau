@@ -1,6 +1,6 @@
 use std::{
     io::Write as _,
-    path::PathBuf,
+    path::{Path, PathBuf},
     sync::{
         Arc,
         mpsc::{Receiver, Sender},
@@ -63,6 +63,11 @@ pub struct Benchmark {
     recorded: Receiver<Arc<puffin::FrameData>>,
 }
 
+enum Capture {
+    Load,
+    Frames,
+}
+
 enum Phase {
     WaitingForProject { waited: instant::Duration },
     Warmup { elapsed: instant::Duration },
@@ -78,7 +83,7 @@ impl Benchmark {
 
         let (sender, recorded) = std::sync::mpsc::channel();
 
-        Some(Self {
+        let mut benchmark = Self {
             out,
             record_duration: settings.benchmark_seconds,
             warmup_duration: settings.benchmark_warmup_seconds,
@@ -88,7 +93,11 @@ impl Benchmark {
             },
             sender,
             recorded,
-        })
+        };
+
+        benchmark.begin_recording();
+
+        Some(benchmark)
     }
 
     pub fn tick(
@@ -104,14 +113,16 @@ impl Benchmark {
 
                 if matches!(state, State::Workspace(workspace) if !workspace.is_rebuilding()) {
                     log::info!(
-                        "Project ready after {:.1?}, discarding {:.1?}, then recording {:.1?}",
-                        waited,
+                        "Recorded the load in {waited:.1?}, then discarding {:.1?} and recording {:.1?}",
                         self.warmup_duration,
                         self.record_duration
                     );
+
                     self.phase = Phase::Warmup {
                         elapsed: instant::Duration::ZERO,
                     };
+
+                    self.finish(Capture::Load, state, present_mode);
                 } else if *waited >= PROJECT_TIMEOUT {
                     let timeout = PROJECT_TIMEOUT.as_secs();
                     log::error!("Project still not ready after {timeout}s, giving up");
@@ -123,7 +134,9 @@ impl Benchmark {
                 *elapsed += dt;
 
                 if *elapsed >= self.warmup_duration {
-                    self.begin_recording();
+                    // Clear the recorded frames so the CSV only contains the frames after the warmup.
+                    self.recorded.try_iter().for_each(drop);
+                    puffin::GlobalProfiler::lock().emit_scope_snapshot();
 
                     self.phase = Phase::Recording {
                         elapsed: instant::Duration::ZERO,
@@ -135,7 +148,7 @@ impl Benchmark {
 
                 if *elapsed >= self.record_duration {
                     self.phase = Phase::Done;
-                    self.finish(state, present_mode);
+                    self.finish(Capture::Frames, state, present_mode);
                     events.quit();
                 }
             }
@@ -154,17 +167,37 @@ impl Benchmark {
         profiler.emit_scope_snapshot();
     }
 
-    fn finish(&self, state: &State, present_mode: wgpu::PresentMode) {
-        match self.write_csv(state, present_mode) {
-            Ok(()) => log::info!("Wrote the spans to {:?}", self.out),
-            Err(error) => log::error!("Failed to write {:?}: {error}", self.out),
+    fn finish(&self, capture: Capture, state: &State, present_mode: wgpu::PresentMode) {
+        let out = match capture {
+            Capture::Load => self.out.with_extension("loading.csv"),
+            Capture::Frames => self.out.clone(),
+        };
+
+        let covers = match capture {
+            Capture::Load => "the load".to_owned(),
+            Capture::Frames => {
+                let record_dur = self.record_duration;
+                let warmup_dur = self.warmup_duration;
+                format!("{record_dur:.1?} of frames after {warmup_dur:.1?} of warm-up")
+            }
+        };
+
+        match self.write_csv(&out, &covers, state, present_mode) {
+            Ok(()) => log::info!("Wrote the spans to {out:?}"),
+            Err(error) => log::error!("Failed to write {out:?}: {error}"),
         }
     }
 
-    fn write_csv(&self, state: &State, present_mode: wgpu::PresentMode) -> anyhow::Result<()> {
+    fn write_csv(
+        &self,
+        out: &Path,
+        covers: &str,
+        state: &State,
+        present_mode: wgpu::PresentMode,
+    ) -> anyhow::Result<()> {
         use crate::built_info;
 
-        let mut file = std::io::BufWriter::new(std::fs::File::create(&self.out)?);
+        let mut file = std::io::BufWriter::new(std::fs::File::create(out)?);
 
         let project = match state {
             State::Workspace(workspace) => workspace.project_name(),
@@ -186,9 +219,6 @@ impl Benchmark {
             (None, _) => "unknown commit".to_owned(),
         };
 
-        let duration = self.record_duration;
-        let warmup = self.warmup_duration;
-
         writeln!(file, "# rau {version} ({commit})")?;
         writeln!(file, "# profile: {profile}")?;
         writeln!(file, "# project: {project}")?;
@@ -196,8 +226,9 @@ impl Benchmark {
         writeln!(file, "# gpu: {gpu_name} ({driver_info})")?;
         writeln!(file, "# cpu: {}", cpu_name())?;
         writeln!(file, "# present_mode: {present_mode:?}")?;
-        writeln!(file, "# duration: {duration:.1?} (warmup: {warmup:.1?})")?;
-        writeln!(file, "frame,thread,depth,scope,start_ns,duration_ns")?;
+        writeln!(file, "# covers: {covers}")?;
+
+        writeln!(file, "frame,thread,depth,scope,data,start_ns,duration_ns")?;
 
         let mut scopes = puffin::ScopeCollection::default();
 
@@ -250,12 +281,12 @@ fn write_spans(
         let puffin::ScopeRecord {
             start_ns,
             duration_ns,
-            ..
+            data,
         } = scope.record;
 
         writeln!(
             file,
-            r#"{frame},"{thread}",{depth},"{name}",{start_ns},{duration_ns}"#
+            r#"{frame},"{thread}",{depth},"{name}","{data}",{start_ns},{duration_ns}"#
         )?;
 
         write_spans(

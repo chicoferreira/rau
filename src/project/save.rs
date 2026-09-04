@@ -51,16 +51,12 @@ impl ProjectSaveState {
 
     /// Immediately saves the current project, bypassing the autosave debounce.
     pub fn save(&mut self, project: &Project, file_storage: &mut FileStorage) {
+        puffin::profile_function!();
+
         let revisions: ProjectRevisionSnapshot = project.project_revisions().collect();
-        let serialize_started = instant::Instant::now();
 
         match project.serialize() {
             Ok(bytes) => {
-                log::info!(
-                    "Serialized project in {:.1?} ({} bytes), saving...",
-                    serialize_started.elapsed(),
-                    bytes.len()
-                );
                 file_storage.save_in_background(&FilePath::project_json(), bytes);
                 self.last_observed_snapshot = revisions.clone();
                 self.saved_snapshot = revisions;

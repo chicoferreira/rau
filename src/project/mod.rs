@@ -191,6 +191,8 @@ impl Project {
     }
 
     pub fn serialize(&self) -> AppResult<Vec<u8>> {
+        puffin::profile_function!();
+
         let formatter = json_pretty_compact::PrettyCompactFormatter::new().with_max_line_length(80);
         let mut bytes = Vec::new();
         let mut serializer = serde_json::Serializer::with_formatter(&mut bytes, formatter);

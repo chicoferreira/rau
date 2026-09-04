@@ -180,22 +180,30 @@ pub fn compile_shader(
     source: &str,
     kind: ShaderSourceKind,
 ) -> AppResult<wgpu::ShaderModule> {
-    let module = match kind {
-        ShaderSourceKind::Wgsl => naga::front::wgsl::parse_str(source)
-            .map_err(|err| AppError::ShaderParseError(err.emit_to_string(source)))?,
-        ShaderSourceKind::Glsl(stage) => naga::front::glsl::Frontend::default()
-            .parse(&naga::front::glsl::Options::from(stage), source)
-            .map_err(|errors| AppError::ShaderParseError(errors.emit_to_string(source)))?,
+    let module = {
+        puffin::profile_scope!("parse shader");
+
+        match kind {
+            ShaderSourceKind::Wgsl => naga::front::wgsl::parse_str(source)
+                .map_err(|err| AppError::ShaderParseError(err.emit_to_string(source)))?,
+            ShaderSourceKind::Glsl(stage) => naga::front::glsl::Frontend::default()
+                .parse(&naga::front::glsl::Options::from(stage), source)
+                .map_err(|errors| AppError::ShaderParseError(errors.emit_to_string(source)))?,
+        }
     };
 
-    let _module_info: naga::valid::ModuleInfo = naga::valid::Validator::new(
-        naga::valid::ValidationFlags::all(),
-        naga::valid::Capabilities::all(),
-    )
-    .subgroup_stages(naga::valid::ShaderStages::all())
-    .subgroup_operations(naga::valid::SubgroupOperationSet::all())
-    .validate(&module)
-    .map_err(|err| AppError::ShaderCompilationError(err.emit_to_string(source)))?;
+    let _module_info: naga::valid::ModuleInfo = {
+        puffin::profile_scope!("validate shader");
+
+        naga::valid::Validator::new(
+            naga::valid::ValidationFlags::all(),
+            naga::valid::Capabilities::all(),
+        )
+        .subgroup_stages(naga::valid::ShaderStages::all())
+        .subgroup_operations(naga::valid::SubgroupOperationSet::all())
+        .validate(&module)
+        .map_err(|err| AppError::ShaderCompilationError(err.emit_to_string(source)))?
+    };
 
     Ok(device.create_shader_module(wgpu::ShaderModuleDescriptor {
         label: Some(label),

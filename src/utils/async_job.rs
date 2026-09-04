@@ -30,6 +30,8 @@ impl<T> AsyncJob<T> {
     }
 
     pub fn try_resolve(&mut self) -> Poll<T> {
+        puffin::profile_scope!("poll job");
+
         let mut cx = Context::from_waker(Waker::noop());
         self.inner.as_mut().poll(&mut cx)
     }
