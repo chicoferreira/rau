@@ -19,6 +19,16 @@ pub struct BenchmarkSettings {
     #[arg(long = "benchmark", value_name = "FILE", global = true)]
     pub out: Option<PathBuf>,
 
+    /// Also record the project loading, from the application starting until
+    /// nothing is left to build, to this CSV file.
+    #[arg(
+        long = "benchmark-load",
+        value_name = "FILE",
+        global = true,
+        requires = "out"
+    )]
+    pub load_out: Option<PathBuf>,
+
     /// How many seconds to record.
     #[arg(
         long,
@@ -55,6 +65,7 @@ const PROJECT_TIMEOUT: instant::Duration = instant::Duration::from_secs(30);
 
 pub struct Benchmark {
     out: PathBuf,
+    load_out: Option<PathBuf>,
     record_duration: instant::Duration,
     warmup_duration: instant::Duration,
     adapter_info: wgpu::AdapterInfo,
@@ -85,6 +96,7 @@ impl Benchmark {
 
         let mut benchmark = Self {
             out,
+            load_out: settings.load_out,
             record_duration: settings.benchmark_seconds,
             warmup_duration: settings.benchmark_warmup_seconds,
             adapter_info: adapter_info.clone(),
@@ -169,7 +181,10 @@ impl Benchmark {
 
     fn finish(&self, capture: Capture, state: &State, present_mode: wgpu::PresentMode) {
         let out = match capture {
-            Capture::Load => self.out.with_extension("loading.csv"),
+            Capture::Load => match &self.load_out {
+                Some(out) => out.clone(),
+                None => return,
+            },
             Capture::Frames => self.out.clone(),
         };
 
