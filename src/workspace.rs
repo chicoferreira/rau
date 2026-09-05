@@ -333,6 +333,8 @@ impl Workspace {
     }
 
     pub fn on_frame_submitted(&mut self, job: AsyncJob<AppResult<()>>) {
+        puffin::profile_function!();
+
         let current_snapshot = self.project.snapshot();
         self.runtime_project
             .on_frame_submitted(current_snapshot, job);
