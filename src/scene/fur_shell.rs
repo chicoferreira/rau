@@ -59,12 +59,6 @@ pub fn build(project: &mut Project) -> AppResult<()> {
             ),
         ],
     ));
-    let camera_bg_id = project.bind_groups.register(BindGroup::new(
-        "Camera Bind Group",
-        vec![BindGroupEntry::new_vertex_fragment(
-            BindGroupResource::Uniform(Some(camera_uniform_id)),
-        )],
-    ));
 
     let light_uniform_id = project.uniforms.register(Uniform::new(
         "Light",
@@ -78,12 +72,6 @@ pub fn build(project: &mut Project) -> AppResult<()> {
                 UniformFieldSource::new_user_defined(UniformFieldData::Rgb([1.0, 0.95, 0.85])),
             ),
         ],
-    ));
-    let light_bg_id = project.bind_groups.register(BindGroup::new(
-        "Light Bind Group",
-        vec![BindGroupEntry::new_vertex_fragment(
-            BindGroupResource::Uniform(Some(light_uniform_id)),
-        )],
     ));
 
     let fur_uniform_id = project.uniforms.register(Uniform::new(
@@ -102,9 +90,13 @@ pub fn build(project: &mut Project) -> AppResult<()> {
     ));
     let fur_bg_id = project.bind_groups.register(BindGroup::new(
         "Fur Bind Group",
-        vec![BindGroupEntry::new_vertex_fragment(
-            BindGroupResource::Uniform(Some(fur_uniform_id)),
-        )],
+        vec![
+            BindGroupEntry::new_vertex_fragment(BindGroupResource::Uniform(Some(
+                camera_uniform_id,
+            ))),
+            BindGroupEntry::new_vertex_fragment(BindGroupResource::Uniform(Some(light_uniform_id))),
+            BindGroupEntry::new_vertex_fragment(BindGroupResource::Uniform(Some(fur_uniform_id))),
+        ],
     ));
 
     let bunny_source = FilePath::from_str("bunny.obj")?;
@@ -157,11 +149,7 @@ pub fn build(project: &mut Project) -> AppResult<()> {
             instances: 0..SHELL_COUNT,
             mesh_vertex_slot: 0,
         },
-        vec![
-            BindGroupTarget::Static(camera_bg_id),
-            BindGroupTarget::Static(light_bg_id),
-            BindGroupTarget::Static(fur_bg_id),
-        ],
+        vec![BindGroupTarget::Static(fur_bg_id)],
         vec![color_format],
         Some(depth_format),
     ));

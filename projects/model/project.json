@@ -78,7 +78,7 @@
     { "value": null, "version": 0 },
     {
       "value": {
-        "label": "Camera Bind Group",
+        "label": "Scene Bind Group",
         "entries": [
           {
             "visibility": "VERTEX | FRAGMENT",
@@ -86,15 +86,7 @@
               "type": "uniform",
               "value": { "idx": 1, "version": 1 }
             }
-          }
-        ]
-      },
-      "version": 1
-    },
-    {
-      "value": {
-        "label": "Point Light Bind Group",
-        "entries": [
+          },
           {
             "visibility": "VERTEX | FRAGMENT",
             "resource": {
@@ -313,7 +305,7 @@
       "value": {
         "label": "Metal Barrel",
         "source": "metal_barrel/metal_barrel.obj",
-        "materialBindGroupIds": [ { "idx": 3, "version": 1 } ],
+        "materialBindGroupIds": [ { "idx": 2, "version": 1 } ],
         "meshMaterialSelections": [ ],
         "vertexBufferSpec": {
           "fields": [
@@ -350,8 +342,7 @@
         },
         "bindGroups": [
           "modelMaterial",
-          { "static": { "idx": 1, "version": 1 } },
-          { "static": { "idx": 2, "version": 1 } }
+          { "static": { "idx": 1, "version": 1 } }
         ],
         "colorFormats": [ "rgba8UnormSrgb" ],
         "depthFormat": "depth32Float"

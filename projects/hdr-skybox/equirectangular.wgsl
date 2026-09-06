@@ -18,8 +18,8 @@ struct SkyColor {
     tint: vec3<f32>,
 }
 
-@group(1)
-@binding(0)
+@group(0)
+@binding(2)
 var<uniform> sky_color: SkyColor;
 
 @compute

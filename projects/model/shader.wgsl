@@ -11,7 +11,7 @@ struct Light {
     color: vec3<f32>,
 }
 
-@group(2) @binding(0)
+@group(1) @binding(1)
 var<uniform> light: Light;
 
 struct VertexInput {

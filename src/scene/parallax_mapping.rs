@@ -73,12 +73,6 @@ pub fn build(project: &mut Project) -> AppResult<()> {
             ),
         ],
     ));
-    let camera_bind_group_id = project.bind_groups.register(BindGroup::new(
-        "Camera Bind Group",
-        vec![BindGroupEntry::new_vertex_fragment(
-            BindGroupResource::Uniform(Some(camera_uniform_id)),
-        )],
-    ));
 
     let light_uniform_id = project.uniforms.register(Uniform::new(
         "Point Light",
@@ -93,11 +87,14 @@ pub fn build(project: &mut Project) -> AppResult<()> {
             ),
         ],
     ));
-    let light_bind_group_id = project.bind_groups.register(BindGroup::new(
-        "Point Light Bind Group",
-        vec![BindGroupEntry::new_vertex_fragment(
-            BindGroupResource::Uniform(Some(light_uniform_id)),
-        )],
+    let scene_bind_group_id = project.bind_groups.register(BindGroup::new(
+        "Scene Bind Group",
+        vec![
+            BindGroupEntry::new_vertex_fragment(BindGroupResource::Uniform(Some(
+                camera_uniform_id,
+            ))),
+            BindGroupEntry::new_vertex_fragment(BindGroupResource::Uniform(Some(light_uniform_id))),
+        ],
     ));
 
     // The strength of the parallax displacement. 0.1 matches the LearnOpenGL
@@ -107,12 +104,6 @@ pub fn build(project: &mut Project) -> AppResult<()> {
         vec![UniformField::new(
             "height_scale",
             UniformFieldSource::new_user_defined(UniformFieldData::Float(0.1)),
-        )],
-    ));
-    let parallax_bind_group_id = project.bind_groups.register(BindGroup::new(
-        "Parallax Bind Group",
-        vec![BindGroupEntry::new_vertex_fragment(
-            BindGroupResource::Uniform(Some(parallax_uniform_id)),
         )],
     ));
 
@@ -182,6 +173,9 @@ pub fn build(project: &mut Project) -> AppResult<()> {
                 sampler_id: Some(material_sampler_id),
                 sampler_binding_type: wgpu::SamplerBindingType::Filtering,
             }),
+            BindGroupEntry::new_vertex_fragment(BindGroupResource::Uniform(Some(
+                parallax_uniform_id,
+            ))),
         ],
     ));
 
@@ -237,9 +231,7 @@ pub fn build(project: &mut Project) -> AppResult<()> {
         },
         vec![
             BindGroupTarget::Static(material_bind_group_id),
-            BindGroupTarget::Static(camera_bind_group_id),
-            BindGroupTarget::Static(light_bind_group_id),
-            BindGroupTarget::Static(parallax_bind_group_id),
+            BindGroupTarget::Static(scene_bind_group_id),
         ],
         vec![color_format],
         Some(depth_format),

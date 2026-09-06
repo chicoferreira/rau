@@ -34,10 +34,10 @@ struct Material {
 @group(0) @binding(0)
 var<uniform> camera: Camera;
 
-@group(1) @binding(0)
+@group(0) @binding(1)
 var<uniform> lights: Lights;
 
-@group(2) @binding(0)
+@group(1) @binding(0)
 var<uniform> material: Material;
 
 struct VertexOutput {

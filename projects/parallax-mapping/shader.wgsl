@@ -23,10 +23,10 @@ struct Light {
     color: vec3<f32>,
 }
 
-@group(2) @binding(0)
+@group(1) @binding(1)
 var<uniform> light: Light;
 
-@group(3) @binding(0)
+@group(0) @binding(4)
 var<uniform> parallax_height_scale: f32;
 
 struct VertexOutput {

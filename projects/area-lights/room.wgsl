@@ -57,10 +57,10 @@ var ltc_sampler: sampler;
 @group(1) @binding(0)
 var<uniform> camera: Camera;
 
-@group(2) @binding(0)
+@group(1) @binding(1)
 var<uniform> lights: Lights;
 
-@group(3) @binding(0)
+@group(2) @binding(0)
 var<uniform> material: Material;
 
 struct VertexOutput {

@@ -205,7 +205,7 @@
     { "value": null, "version": 0 },
     {
       "value": {
-        "label": "Camera Bind Group",
+        "label": "Scene Bind Group",
         "entries": [
           {
             "visibility": "VERTEX | FRAGMENT",
@@ -213,15 +213,7 @@
               "type": "uniform",
               "value": { "idx": 1, "version": 1 }
             }
-          }
-        ]
-      },
-      "version": 1
-    },
-    {
-      "value": {
-        "label": "Area Lights Bind Group",
-        "entries": [
+          },
           {
             "visibility": "VERTEX | FRAGMENT",
             "resource": {
@@ -441,10 +433,9 @@
           "instances": { "start": 0, "end": 1 }
         },
         "bindGroups": [
-          { "static": { "idx": 4, "version": 1 } },
+          { "static": { "idx": 3, "version": 1 } },
           { "static": { "idx": 1, "version": 1 } },
-          { "static": { "idx": 2, "version": 1 } },
-          { "static": { "idx": 3, "version": 1 } }
+          { "static": { "idx": 2, "version": 1 } }
         ],
         "colorFormats": [ "rgba8UnormSrgb" ],
         "depthFormat": "depth32Float"
@@ -470,8 +461,7 @@
         },
         "bindGroups": [
           { "static": { "idx": 1, "version": 1 } },
-          { "static": { "idx": 2, "version": 1 } },
-          { "static": { "idx": 3, "version": 1 } }
+          { "static": { "idx": 2, "version": 1 } }
         ],
         "colorFormats": [ "rgba8UnormSrgb" ],
         "depthFormat": "depth32Float"

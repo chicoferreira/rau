@@ -68,12 +68,6 @@ pub async fn build(
             ),
         ],
     ));
-    let camera_bind_group_id = project.bind_groups.register(BindGroup::new(
-        "Camera Bind Group",
-        vec![BindGroupEntry::new_vertex_fragment(
-            BindGroupResource::Uniform(Some(camera_uniform_id)),
-        )],
-    ));
 
     let light_uniform_id = project.uniforms.register(Uniform::new(
         "Point Light",
@@ -88,11 +82,14 @@ pub async fn build(
             ),
         ],
     ));
-    let light_bind_group_id = project.bind_groups.register(BindGroup::new(
-        "Point Light Bind Group",
-        vec![BindGroupEntry::new_vertex_fragment(
-            BindGroupResource::Uniform(Some(light_uniform_id)),
-        )],
+    let scene_bind_group_id = project.bind_groups.register(BindGroup::new(
+        "Scene Bind Group",
+        vec![
+            BindGroupEntry::new_vertex_fragment(BindGroupResource::Uniform(Some(
+                camera_uniform_id,
+            ))),
+            BindGroupEntry::new_vertex_fragment(BindGroupResource::Uniform(Some(light_uniform_id))),
+        ],
     ));
 
     let material_sampler_id = project.samplers.register(Sampler::new(
@@ -184,8 +181,7 @@ pub async fn build(
         },
         vec![
             BindGroupTarget::ModelMaterial,
-            BindGroupTarget::Static(camera_bind_group_id),
-            BindGroupTarget::Static(light_bind_group_id),
+            BindGroupTarget::Static(scene_bind_group_id),
         ],
         vec![color_format],
         Some(depth_format),

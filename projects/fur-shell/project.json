@@ -100,7 +100,7 @@
     { "value": null, "version": 0 },
     {
       "value": {
-        "label": "Camera Bind Group",
+        "label": "Fur Bind Group",
         "entries": [
           {
             "visibility": "VERTEX | FRAGMENT",
@@ -108,30 +108,14 @@
               "type": "uniform",
               "value": { "idx": 1, "version": 1 }
             }
-          }
-        ]
-      },
-      "version": 1
-    },
-    {
-      "value": {
-        "label": "Light Bind Group",
-        "entries": [
+          },
           {
             "visibility": "VERTEX | FRAGMENT",
             "resource": {
               "type": "uniform",
               "value": { "idx": 2, "version": 1 }
             }
-          }
-        ]
-      },
-      "version": 1
-    },
-    {
-      "value": {
-        "label": "Fur Bind Group",
-        "entries": [
+          },
           {
             "visibility": "VERTEX | FRAGMENT",
             "resource": {
@@ -263,11 +247,7 @@
           "instances": { "start": 0, "end": 48 },
           "meshVertexSlot": 0
         },
-        "bindGroups": [
-          { "static": { "idx": 1, "version": 1 } },
-          { "static": { "idx": 2, "version": 1 } },
-          { "static": { "idx": 3, "version": 1 } }
-        ],
+        "bindGroups": [ { "static": { "idx": 1, "version": 1 } } ],
         "colorFormats": [ "rgba8UnormSrgb" ],
         "depthFormat": "depth32Float"
       },

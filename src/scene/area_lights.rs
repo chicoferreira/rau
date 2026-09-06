@@ -120,16 +120,9 @@ pub fn build(project: &mut Project) -> AppResult<()> {
             ),
         ],
     ));
-    let camera_bind_group_id = project.bind_groups.register(BindGroup::new(
-        "Camera Bind Group",
-        vec![BindGroupEntry::new_vertex_fragment(
-            BindGroupResource::Uniform(Some(camera_uniform_id)),
-        )],
-    ));
 
-    // All three lights share one uniform — the shaders read them as an array,
-    // and a pipeline only gets four bind groups. Field order and types have to
-    // match `AreaLight` in the shaders.
+    // All three lights share one uniform — the shaders read them as an array.
+    // Field order and types have to match `AreaLight` in the shaders.
     let mut light_fields = Vec::new();
     for (index, light) in AREA_LIGHTS.iter().enumerate() {
         light_fields.push(UniformField::new(
@@ -149,11 +142,16 @@ pub fn build(project: &mut Project) -> AppResult<()> {
     let lights_uniform_id = project
         .uniforms
         .register(Uniform::new("Area Lights", light_fields));
-    let lights_bind_group_id = project.bind_groups.register(BindGroup::new(
-        "Area Lights Bind Group",
-        vec![BindGroupEntry::new_vertex_fragment(
-            BindGroupResource::Uniform(Some(lights_uniform_id)),
-        )],
+    let scene_bind_group_id = project.bind_groups.register(BindGroup::new(
+        "Scene Bind Group",
+        vec![
+            BindGroupEntry::new_vertex_fragment(BindGroupResource::Uniform(Some(
+                camera_uniform_id,
+            ))),
+            BindGroupEntry::new_vertex_fragment(BindGroupResource::Uniform(Some(
+                lights_uniform_id,
+            ))),
+        ],
     ));
 
     // A glossy floor and rougher walls. `specular` is the reflectance the
@@ -305,8 +303,7 @@ pub fn build(project: &mut Project) -> AppResult<()> {
         },
         vec![
             BindGroupTarget::Static(ltc_bind_group_id),
-            BindGroupTarget::Static(camera_bind_group_id),
-            BindGroupTarget::Static(lights_bind_group_id),
+            BindGroupTarget::Static(scene_bind_group_id),
             BindGroupTarget::Static(material_bind_group_id),
         ],
         vec![color_format],
@@ -323,8 +320,7 @@ pub fn build(project: &mut Project) -> AppResult<()> {
             instances: 0..1,
         },
         vec![
-            BindGroupTarget::Static(camera_bind_group_id),
-            BindGroupTarget::Static(lights_bind_group_id),
+            BindGroupTarget::Static(scene_bind_group_id),
             BindGroupTarget::Static(material_bind_group_id),
         ],
         vec![color_format],

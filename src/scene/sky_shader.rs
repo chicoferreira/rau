@@ -78,12 +78,6 @@ pub fn build(project: &mut Project) -> AppResult<()> {
             ),
         ],
     ));
-    let camera_bind_group_id = project.bind_groups.register(BindGroup::new(
-        "camera bind group",
-        vec![BindGroupEntry::new_vertex_fragment(
-            BindGroupResource::Uniform(Some(camera_uniform_id)),
-        )],
-    ));
 
     let sky_uniform_id = project.uniforms.register(Uniform::new(
         "Sky",
@@ -93,10 +87,13 @@ pub fn build(project: &mut Project) -> AppResult<()> {
         )],
     ));
     let sky_bind_group_id = project.bind_groups.register(BindGroup::new(
-        "sky bind group",
-        vec![BindGroupEntry::new_vertex_fragment(
-            BindGroupResource::Uniform(Some(sky_uniform_id)),
-        )],
+        "Sky Bind Group",
+        vec![
+            BindGroupEntry::new_vertex_fragment(BindGroupResource::Uniform(Some(
+                camera_uniform_id,
+            ))),
+            BindGroupEntry::new_vertex_fragment(BindGroupResource::Uniform(Some(sky_uniform_id))),
+        ],
     ));
 
     let color_format = TextureFormat::Rgba8UnormSrgb;
@@ -134,10 +131,7 @@ pub fn build(project: &mut Project) -> AppResult<()> {
             vertices: 0..3,
             instances: 0..1,
         },
-        vec![
-            BindGroupTarget::Static(camera_bind_group_id),
-            BindGroupTarget::Static(sky_bind_group_id),
-        ],
+        vec![BindGroupTarget::Static(sky_bind_group_id)],
         vec![color_format],
         None,
     ));
