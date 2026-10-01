@@ -338,10 +338,7 @@ impl SyncResource for RenderPipeline {
             .map(|format| {
                 Some(wgpu::ColorTargetState {
                     format: format.to_wgpu(),
-                    blend: Some(wgpu::BlendState {
-                        alpha: wgpu::BlendComponent::REPLACE,
-                        color: wgpu::BlendComponent::REPLACE,
-                    }),
+                    blend: None,
                     write_mask: wgpu::ColorWrites::ALL,
                 })
             })
