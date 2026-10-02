@@ -19,6 +19,8 @@
 
 Rau is a tool for building and experimenting with rendering techniques. You create the GPU objects a technique needs, such as shaders, textures, uniforms, bind groups, pipelines and passes, and connect them together.
 
+It runs on Windows, macOS, Linux, and in the browser at [rau.chicoferreira.dev](https://rau.chicoferreira.dev).
+
 Everything happens in an appealing interface. Resources are configured through inspectors, shaders can be created and edited in the built-in code editor, with the result updating in real time across tiled viewports that can show any intermediary texture. Errors, such as a shader that fails to compile, are caught and shown in the interface.
 
 Rau is built in Rust with [wgpu](https://wgpu.rs), and its interface with [egui](https://github.com/emilk/egui).
