@@ -48,6 +48,33 @@
         "controlsCameraId": { "idx": 1, "version": 1 }
       },
       "version": 1
+    },
+    {
+      "value": {
+        "label": "Blurred Viewport",
+        "textureViewId": { "idx": 5, "version": 1 },
+        "dimensionId": { "idx": 1, "version": 1 },
+        "controlsCameraId": { "idx": 1, "version": 1 }
+      },
+      "version": 3
+    },
+    {
+      "value": {
+        "label": "Normal Viewport",
+        "textureViewId": { "idx": 2, "version": 1 },
+        "dimensionId": { "idx": 1, "version": 1 },
+        "controlsCameraId": { "idx": 1, "version": 1 }
+      },
+      "version": 1
+    },
+    {
+      "value": {
+        "label": "Position Viewport",
+        "textureViewId": { "idx": 1, "version": 1 },
+        "dimensionId": { "idx": 1, "version": 1 },
+        "controlsCameraId": { "idx": 1, "version": 1 }
+      },
+      "version": 1
     }
   ],
   "uniforms": [
