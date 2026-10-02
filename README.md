@@ -44,7 +44,7 @@ Each project below opens directly in the web version. They also appear under **F
     <td width="33%" valign="top">
       <img src="projects/area-lights/thumbnail.png" alt="Area Lights" />
       <br /><b>Area Lights</b><br />
-      Ported from the <a href="https://learnopengl.com/Guest-Articles/2022/Area-Lights">Area Lights</a> guest article of LearnOpenGL.
+      Ported from the <a href="https://learnopengl.com/Guest-Articles/2022/Area-Lights">Area Lights</a> article of LearnOpenGL.
       <br /><a href="https://rau.chicoferreira.dev/?action=new&amp;owner=chicoferreira&amp;repo=rau&amp;ref=main&amp;path=projects/area-lights&amp;name=Area%20Lights">Open in browser</a> · <a href="projects/area-lights">Source</a>
     </td>
   </tr>
@@ -52,7 +52,7 @@ Each project below opens directly in the web version. They also appear under **F
     <td width="33%" valign="top">
       <img src="projects/fur-shell/thumbnail.png" alt="Fur Shell" />
       <br /><b>Fur Shell</b><br />
-      Based on <a href="https://hhoppe.com/fur.pdf"><i>Real-Time Fur over Arbitrary Surfaces</i></a>, applied to the Stanford Bunny.
+      Based on <a href="https://hhoppe.com/fur.pdf"><i>Real-Time Fur over Arbitrary Surfaces</i></a>.
       <br /><a href="https://rau.chicoferreira.dev/?action=new&amp;owner=chicoferreira&amp;repo=rau&amp;ref=main&amp;path=projects/fur-shell&amp;name=Fur%20Shell">Open in browser</a> · <a href="projects/fur-shell">Source</a>
     </td>
     <td width="33%" valign="top">
@@ -64,7 +64,7 @@ Each project below opens directly in the web version. They also appear under **F
     <td width="33%" valign="top">
       <img src="projects/game-of-life/thumbnail.png" alt="Game of Life" />
       <br /><b>Game of Life</b><br />
-      Conway's Game of Life implemented with compute shaders.
+      Conway's Game of Life with compute shaders.
       <br /><a href="https://rau.chicoferreira.dev/?action=new&amp;owner=chicoferreira&amp;repo=rau&amp;ref=main&amp;path=projects/game-of-life&amp;name=Game%20of%20Life">Open in browser</a> · <a href="projects/game-of-life">Source</a>
     </td>
   </tr>
@@ -78,13 +78,13 @@ Each project below opens directly in the web version. They also appear under **F
     <td width="33%" valign="top">
       <img src="projects/grass-field/thumbnail.png" alt="Grass Field" />
       <br /><b>Grass Field</b><br />
-      A million blades, drawn in a single instanced draw call.
+      A million grass blades drawn in a single instanced draw call.
       <br /><a href="https://rau.chicoferreira.dev/?action=new&amp;owner=chicoferreira&amp;repo=rau&amp;ref=main&amp;path=projects/grass-field&amp;name=Grass%20Field">Open in browser</a> · <a href="projects/grass-field">Source</a>
     </td>
     <td width="33%" valign="top">
       <img src="projects/hdr-skybox/thumbnail.png" alt="HDR Skybox" />
       <br /><b>HDR Skybox</b><br />
-      Ported from <a href="https://sotrh.github.io/learn-wgpu/intermediate/tutorial13-hdr/">Learn WGPU</a>.
+      Ported from the <a href="https://sotrh.github.io/learn-wgpu/intermediate/tutorial13-hdr/">HDR</a> chapter of Learn WGPU.
       <br /><a href="https://rau.chicoferreira.dev/?action=new&amp;owner=chicoferreira&amp;repo=rau&amp;ref=main&amp;path=projects/hdr-skybox&amp;name=HDR%20Skybox">Open in browser</a> · <a href="projects/hdr-skybox">Source</a>
     </td>
   </tr>
@@ -96,11 +96,10 @@ More examples can be found in [`projects/`](projects).
 
 ### In the browser
 
-Open [rau.chicoferreira.dev](https://rau.chicoferreira.dev).
+Open [rau.chicoferreira.dev](https://rau.chicoferreira.dev). User projects are stored in the browser through IndexedDB.
 
-Some projects require WebGPU. Check the [WebGPU implementation status](https://github.com/gpuweb/gpuweb/wiki/Implementation-Status) for your browser and platform.
-
-Projects are stored in the browser through IndexedDB.
+> [!NOTE]
+> Some projects require WebGPU. Check the [WebGPU implementation status](https://github.com/gpuweb/gpuweb/wiki/Implementation-Status) for your browser and platform.
 
 ### Download
 
@@ -172,4 +171,4 @@ The dissertation also includes a performance analysis that compares Rau's CPU ti
 
 Rau is released under the [MIT License](LICENSE.md).
 
-Some [example projects](projects) include third-party code or assets under their own licenses, so check each project's folder for details.
+Some [example projects](projects) include third-party code or assets under their own licenses, listed in the Credits section of each project's README.
