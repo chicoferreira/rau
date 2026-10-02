@@ -1,0 +1,98 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build (${{ matrix.name }})
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: windows
+            os: windows-latest
+          - name: macos
+            os: macos-latest
+            targets: aarch64-apple-darwin,x86_64-apple-darwin
+          - name: linux
+            os: ubuntu-22.04
+
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install Rust (stable)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.targets }}
+
+      - name: Rust cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.name }}
+
+      - name: Install cargo-bundle
+        if: matrix.name != 'windows'
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-bundle@0.12.0
+
+      - name: Build (Windows)
+        if: matrix.name == 'windows'
+        run: |
+          cargo build --profile dist --bin rau-bin
+          mkdir -p dist staging
+          cp target/dist/rau-bin.exe staging/rau.exe
+          (cd staging && 7z a "../dist/rau-${GITHUB_REF_NAME}-windows-x86_64.zip" .)
+
+      - name: Build (macOS)
+        if: matrix.name == 'macos'
+        run: |
+          cargo bundle --profile dist --bin rau-bin --format osx \
+            --target aarch64-apple-darwin --target x86_64-apple-darwin
+          mkdir -p dist
+          ditto -c -k --keepParent target/universal/dist/bundle/osx/Rau.app "dist/rau-${GITHUB_REF_NAME}-macos-universal.zip"
+
+      - name: Build (Linux)
+        if: matrix.name == 'linux'
+        run: |
+          cargo bundle --profile dist --bin rau-bin --format appimage
+          mkdir -p dist
+          cp target/dist/bundle/appimage/*.AppImage "dist/rau-${GITHUB_REF_NAME}-linux-x86_64.AppImage"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rau-${{ matrix.name }}
+          path: dist/*
+          if-no-files-found: error
+
+  release:
+    name: Draft release
+    needs: build
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Create draft release
+        uses: softprops/action-gh-release@v2
+        with:
+          draft: true
+          generate_release_notes: true
+          files: dist/*
