@@ -102,23 +102,41 @@ Some projects require WebGPU. Check the [WebGPU implementation status](https://g
 
 Projects are stored in the browser through IndexedDB.
 
-### Native
+### Download
+
+Download the latest build for your platform from the [releases page](https://github.com/chicoferreira/rau/releases/latest). The builds are not signed, so each platform needs an extra step on first launch:
+
+- **Windows:** unzip and run `rau.exe`. If SmartScreen warns about it, click **More info** → **Run anyway**.
+- **macOS:** unzip and move `Rau.app` to Applications. On first launch, macOS blocks the app. Go to **System Settings** → **Privacy & Security** and click **Open Anyway**, or run `xattr -dr com.apple.quarantine /Applications/Rau.app` once.
+- **Linux:** make the AppImage executable with `chmod +x rau-*.AppImage`, then run it.
+
+### From source
+
+With a [Rust toolchain](https://rustup.rs) installed, you can build and install the application with:
+
+```bash
+cargo install --git https://github.com/chicoferreira/rau --locked
+
+# Run the application
+rau
+
+# Show all available commands
+rau --help
+
+# Open an existing project folder
+rau open projects/ssao
+
+# Create a new project on disk from a folder in a GitHub repository
+rau new persistent ./my-ssao github --owner chicoferreira --repo rau --ref main --path projects/ssao
+```
+
+To work on Rau itself:
 
 ```bash
 git clone https://github.com/chicoferreira/rau
 cd rau
 cargo run --release
 ```
-
-```bash
-# Open an existing project folder
-cargo run --release -- open projects/ssao
-
-# Create a new project on disk from a folder in a GitHub repository
-cargo run --release -- new persistent ./my-ssao github --owner chicoferreira --repo rau --ref main --path projects/ssao
-```
-
-Run `cargo run --release -- --help` for the full list of options.
 
 ### Building the web version
 
@@ -136,11 +154,9 @@ Rau was built as part of the MSc dissertation *Nau to WGPU* (Master's in Informa
 
 The dissertation covers the design in depth: the resource model, how changes propagate through resources, the storage backends shared by the native and web builds, and the example projects.
 
-## License
+### Benchmarks
 
-Rau is released under the [MIT License](LICENSE.md).
-
-Some [example projects](projects) include third-party code or assets under their own licenses, so check each project's folder for details.
+The dissertation also includes a performance analysis that compares Rau's CPU time, GPU time and memory usage against similar tools like [Nau3D](https://github.com/Nau3D/nau) and [SHADERed](https://github.com/dfranx/SHADERed). The benchmarks and their results can be found in the [rau-benchmarks](https://github.com/chicoferreira/rau-benchmarks) repository.
 
 ## Screenshots
 
@@ -151,3 +167,9 @@ Some [example projects](projects) include third-party code or assets under their
 ![The Ray Tracing example with a shader compile error listed in the error panel.](.github/readme/erroring.png)
 
 ![Inspectors for the camera, texture, texture view, bind group and the presentation resources.](.github/readme/inspector-gallery.png)
+
+## License
+
+Rau is released under the [MIT License](LICENSE.md).
+
+Some [example projects](projects) include third-party code or assets under their own licenses, so check each project's folder for details.
