@@ -32,7 +32,7 @@ fi
 
 rm -f web/pkg/rau_bg.wasm
 
-cargo build --profile "$profile" --lib --target wasm32-unknown-unknown
+cargo rustc --profile "$profile" --lib --crate-type cdylib --target wasm32-unknown-unknown
 
 wasm-bindgen \
     --target web \
