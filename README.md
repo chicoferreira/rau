@@ -6,7 +6,7 @@
 
 **Build real-time rendering techniques on the desktop and in the browser**
 
-[![Build](https://github.com/chicoferreira/rau/actions/workflows/build.yml/badge.svg)](https://github.com/chicoferreira/rau/actions/workflows/build.yml)
+[![Release](https://img.shields.io/github/v/release/chicoferreira/rau)](https://github.com/chicoferreira/rau/releases/latest)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE.md)
 
 [**Try it in the browser →**](https://rau.chicoferreira.dev)
