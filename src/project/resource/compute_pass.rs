@@ -123,7 +123,8 @@ mod duration_secs {
     }
 
     pub fn deserialize<'de, D: Deserializer<'de>>(deserializer: D) -> Result<Duration, D::Error> {
-        Ok(Duration::from_secs_f32(f32::deserialize(deserializer)?))
+        Duration::try_from_secs_f32(f32::deserialize(deserializer)?)
+            .map_err(serde::de::Error::custom)
     }
 }
 
