@@ -143,9 +143,10 @@ impl FilePath {
 }
 
 fn normalize_segment(segment: String) -> AppResult<String> {
-    match segment_invalid(&segment) {
-        true => Err(AppError::InvalidPathSegment(segment)),
-        false => Ok(segment.trim().to_string()),
+    let segment = segment.trim();
+    match segment_invalid(segment) {
+        true => Err(AppError::InvalidPathSegment(segment.to_string())),
+        false => Ok(segment.to_string()),
     }
 }
 
