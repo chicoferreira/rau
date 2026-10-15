@@ -174,12 +174,7 @@ impl ShaderSourceKind {
     }
 }
 
-pub fn compile_shader(
-    device: &wgpu::Device,
-    label: &str,
-    source: &str,
-    kind: ShaderSourceKind,
-) -> AppResult<wgpu::ShaderModule> {
+pub fn parse_shader(source: &str, kind: ShaderSourceKind) -> AppResult<naga::Module> {
     let module = {
         puffin::profile_scope!("parse shader");
 
@@ -205,10 +200,7 @@ pub fn compile_shader(
         .map_err(|err| AppError::ShaderCompilationError(err.emit_to_string(source)))?
     };
 
-    Ok(device.create_shader_module(wgpu::ShaderModuleDescriptor {
-        label: Some(label),
-        source: wgpu::ShaderSource::Naga(std::borrow::Cow::Owned(module)),
-    }))
+    Ok(module)
 }
 
 pub fn create_command_encoder(device: &wgpu::Device, label: &str) -> wgpu::CommandEncoder {

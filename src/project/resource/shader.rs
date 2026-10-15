@@ -150,8 +150,15 @@ impl SyncResource for Shader {
         let kind = ShaderSourceKind::from_extension(extension)
             .ok_or_else(|| AppError::UnsupportedShaderExtension(extension.to_string()))?;
 
+        let module = utils::wgpu_utils::parse_shader(&source, kind)?;
+
         let scope = WgpuErrorScope::push(ctx.device);
-        let inner = utils::wgpu_utils::compile_shader(ctx.device, &self.label, &source, kind)?;
+        let inner = ctx
+            .device
+            .create_shader_module(wgpu::ShaderModuleDescriptor {
+                label: Some(&self.label),
+                source: wgpu::ShaderSource::Naga(std::borrow::Cow::Owned(module)),
+            });
 
         let runtime = ShaderRuntime { inner };
         self.sync(_id, ctx, None, ShaderJob::Validation(runtime, scope.pop()))

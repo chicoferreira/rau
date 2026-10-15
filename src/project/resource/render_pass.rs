@@ -1,4 +1,4 @@
-use std::task::Poll;
+use std::{ops::Range, task::Poll};
 
 use serde::{Deserialize, Serialize};
 
@@ -8,7 +8,7 @@ use crate::{
         Creatable, ProjectResource, RenderPassId, RenderPipelineId, TextureViewId,
         resource::{
             bindgroup::BindGroup,
-            model::Model,
+            model::{Mesh, Model},
             render_pipeline::{BindGroupTarget, RenderDrawStrategy, RenderPipeline},
             texture_view::{TextureView, TextureViewRuntime},
         },
@@ -172,15 +172,11 @@ impl RenderPass {
         Ok(view.map(|view| Some(f(target, view))))
     }
 
-    /// Records every pipeline's draw commands into `encoder`.
+    /// Collects every runtime resource the pipelines record with.
     ///
     /// Returns `Ok(None)` if a runtime resource (pipeline, bind group, model) is
     /// still rebuilding.
-    fn record<'enc>(
-        &self,
-        encoder: &mut wgpu::RenderBundleEncoder<'enc>,
-        ctx: &Context<'enc>,
-    ) -> AppResult<bool> {
+    fn collect_draws<'a>(&self, ctx: &Context<'a>) -> AppResult<Option<Vec<PipelineDraw<'a>>>> {
         let Context {
             models,
             render_pipelines,
@@ -190,26 +186,24 @@ impl RenderPass {
             ..
         } = *ctx;
 
+        let mut draws = vec![];
         for id in &self.pipelines {
             let pipeline = render_pipelines.get(*id)?;
             let Some(pipeline_runtime) = runtime_render_pipelines.get_init(*id)? else {
-                return Ok(false); // pending: pipeline still rebuilding
+                return Ok(None); // pending: pipeline still rebuilding
             };
 
-            encoder.set_pipeline(&pipeline_runtime.inner);
-
+            let mut bind_groups = vec![];
             let mut material_bind_group_slots = vec![];
             for (slot, bind_group_target) in pipeline.bind_groups().iter().enumerate() {
                 let slot = slot as u32;
                 match bind_group_target {
-                    BindGroupTarget::Empty => {
-                        encoder.set_bind_group(slot, None, &[]);
-                    }
+                    BindGroupTarget::Empty => bind_groups.push((slot, None)),
                     BindGroupTarget::Static(id) => {
                         let Some(bind_group) = runtime_bind_groups.get_init(*id)? else {
-                            return Ok(false); // pending: static bind group not ready
+                            return Ok(None); // pending: static bind group not ready
                         };
-                        encoder.set_bind_group(slot, bind_group.inner(), &[]);
+                        bind_groups.push((slot, Some(bind_group.inner())));
                     }
                     BindGroupTarget::ModelMaterial => {
                         material_bind_group_slots.push(slot);
@@ -217,7 +211,7 @@ impl RenderPass {
                 }
             }
 
-            match pipeline.draw_strategy() {
+            let kind = match pipeline.draw_strategy() {
                 RenderDrawStrategy::Model {
                     model_id,
                     instances,
@@ -228,41 +222,92 @@ impl RenderPass {
 
                     let model = models.get(model_id)?;
                     let Some(model_runtime) = runtime_models.get_init(model_id)? else {
-                        return Ok(false); // pending: model not ready
+                        return Ok(None); // pending: model not ready
                     };
 
+                    let mut meshes = vec![];
                     for (mesh_index, mesh) in model_runtime.meshes().iter().enumerate() {
+                        if material_bind_group_slots.is_empty() {
+                            meshes.push((mesh, None));
+                            continue;
+                        }
+
+                        let material_index = model
+                            .selected_material_index(mesh_index, mesh)
+                            .ok_or_uninit_field(format!(
+                                "Pipeline {} Model {} Mesh {mesh_index} Selected Material",
+                                pipeline.label(),
+                                model.label(),
+                            ))?;
+                        // TODO: Maybe this should be changed to a chain of `ok_or_uninit_field` calls?
+
+                        let bind_group_id = model
+                        .material_bind_group_id(material_index)
+                        .ok_or_uninit_field(format!(
+                            "Pipeline {} Model {} Mesh {mesh_index} Material {material_index} Bind Group Id",
+                            pipeline.label(),
+                            model.label(),
+                        ))?;
+
+                        let Some(bind_group) = runtime_bind_groups.get_init(bind_group_id)? else {
+                            return Ok(None); // pending: material bind group not ready
+                        };
+
+                        meshes.push((mesh, Some(bind_group.inner())));
+                    }
+
+                    DrawKind::Model {
+                        meshes,
+                        material_slots: material_bind_group_slots,
+                        mesh_vertex_slot: *mesh_vertex_slot,
+                        instances: instances.clone(),
+                    }
+                }
+                RenderDrawStrategy::Direct {
+                    vertices,
+                    instances,
+                } => DrawKind::Direct {
+                    vertices: vertices.clone(),
+                    instances: instances.clone(),
+                },
+            };
+
+            draws.push(PipelineDraw {
+                inner: &pipeline_runtime.inner,
+                bind_groups,
+                kind,
+            });
+        }
+
+        Ok(Some(draws))
+    }
+
+    /// Records every pipeline's draw commands into `encoder`.
+    fn record<'enc>(draws: &[PipelineDraw<'enc>], encoder: &mut wgpu::RenderBundleEncoder<'enc>) {
+        for draw in draws {
+            encoder.set_pipeline(draw.inner);
+
+            for (slot, bind_group) in &draw.bind_groups {
+                encoder.set_bind_group(*slot, *bind_group, &[]);
+            }
+
+            match &draw.kind {
+                DrawKind::Model {
+                    meshes,
+                    material_slots,
+                    mesh_vertex_slot,
+                    instances,
+                } => {
+                    for (mesh, material_bind_group) in meshes {
                         let vertex_buffer = mesh.vertex_buffer().inner().slice(..);
                         encoder.set_vertex_buffer(*mesh_vertex_slot, vertex_buffer);
 
                         let index_buffer = mesh.index_buffer().inner().slice(..);
                         encoder.set_index_buffer(index_buffer, wgpu::IndexFormat::Uint32);
 
-                        if !material_bind_group_slots.is_empty() {
-                            let material_index = model
-                                .selected_material_index(mesh_index, mesh)
-                                .ok_or_uninit_field(format!(
-                                    "Pipeline {} Model {} Mesh {mesh_index} Selected Material",
-                                    pipeline.label(),
-                                    model.label(),
-                                ))?;
-                            // TODO: Maybe this should be changed to a chain of `ok_or_uninit_field` calls?
-
-                            let bind_group_id = model
-                                .material_bind_group_id(material_index)
-                                .ok_or_uninit_field(format!(
-                                    "Pipeline {} Model {} Mesh {mesh_index} Material {material_index} Bind Group Id",
-                                    pipeline.label(),
-                                    model.label(),
-                                ))?;
-
-                            let Some(bind_group) = runtime_bind_groups.get_init(bind_group_id)?
-                            else {
-                                return Ok(false); // pending: material bind group not ready
-                            };
-
-                            for slot in &material_bind_group_slots {
-                                encoder.set_bind_group(*slot, bind_group.inner(), &[]);
+                        if let Some(bind_group) = material_bind_group {
+                            for slot in material_slots {
+                                encoder.set_bind_group(*slot, *bind_group, &[]);
                             }
                         }
 
@@ -270,15 +315,32 @@ impl RenderPass {
                         encoder.draw_indexed(0..index_num, 0, instances.clone());
                     }
                 }
-                RenderDrawStrategy::Direct {
+                DrawKind::Direct {
                     vertices,
                     instances,
                 } => encoder.draw(vertices.clone(), instances.clone()),
             }
         }
-
-        Ok(true)
     }
+}
+
+struct PipelineDraw<'a> {
+    inner: &'a wgpu::RenderPipeline,
+    bind_groups: Vec<(u32, Option<&'a wgpu::BindGroup>)>,
+    kind: DrawKind<'a>,
+}
+
+enum DrawKind<'a> {
+    Model {
+        meshes: Vec<(&'a Mesh, Option<&'a wgpu::BindGroup>)>,
+        material_slots: Vec<u32>,
+        mesh_vertex_slot: u32,
+        instances: Range<u32>,
+    },
+    Direct {
+        vertices: Range<u32>,
+        instances: Range<u32>,
+    },
 }
 
 impl RenderPassRuntime {
@@ -342,6 +404,10 @@ impl SyncResource for RenderPass {
             return Ok(SyncOutcome::Pending(RenderPassJob::Start));
         };
 
+        let Some(draws) = self.collect_draws(ctx)? else {
+            return Ok(SyncOutcome::Pending(RenderPassJob::Start));
+        };
+
         let scope = WgpuErrorScope::push(ctx.device);
 
         let mut encoder =
@@ -354,9 +420,7 @@ impl SyncResource for RenderPass {
                     multiview: None,
                 });
 
-        if !self.record(&mut encoder, ctx)? {
-            return Ok(SyncOutcome::Pending(RenderPassJob::Start));
-        }
+        Self::record(&draws, &mut encoder);
 
         let bundle = encoder.finish(&wgpu::RenderBundleDescriptor {
             label: Some(&self.label),
