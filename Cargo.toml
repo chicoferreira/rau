@@ -33,8 +33,7 @@ egui = "0.36.1"
 egui-wgpu = "0.36.1"
 egui_dnd = "0.17.0"
 egui_extras = { version = "0.36.1", features = ["syntect", "http", "image"] }
-# TODO: go back to a crates.io version once this releases for egui 0.36
-egui_ltreeview = { git = "https://github.com/LennysLounge/egui_ltreeview", rev = "59b32c9645" }
+egui_ltreeview = "0.9.0"
 egui_table = "0.10.0"
 egui_tiles = "0.17.1"
 enumset = "1.1.10"
@@ -42,7 +41,7 @@ enum_dispatch = "0.3.13"
 env_logger = "0.11.8"
 fastrand = "2.3.0"
 futures-lite = "2.6.0"
-glam = { version = "0.33.0", features = ["serde"] }
+glam = { version = "0.34.1", features = ["serde"] }
 half = "2.7.1"
 heck = "0.5.0"
 image = { version = "0.25", default-features = false, features = ["png", "jpeg", "hdr", "exr"] }
@@ -70,10 +69,8 @@ url = "2.5.8"
 rfd = "0.17.2"
 serde = "1.0.228"
 ehttp = { version = "0.7.1", features = ["json", "native-async"] }
-# TODO: go back to a crates.io version once this releases for egui 0.36
-egui-notify = { git = "https://github.com/UnknownSuperficialNight/egui-notify.git", rev = "ae98ed7cb5" }
-# TODO: go back to a crates.io version once this releases for egui 0.36
-egui-phosphor = { git = "https://github.com/UnknownSuperficialNight/egui-phosphor.git", rev = "d392183fe3" }
+egui-notify = "0.23.0"
+egui-phosphor = "0.14.0"
 egui_commonmark = { version = "0.25.0", features = ["macros"] }
 chrono = { version = "0.4", features = ["serde"] }
 json-pretty-compact = "0.1.2"
@@ -83,14 +80,14 @@ clap = { version = "4.5", features = ["derive"] }
 pollster = "1.0.1"
 notify = "8.2.0"
 toml = "1.1"
-dirs = "6.0"
+dirs = "7.0"
 sysinfo = { version = "0.39.6", default-features = false, features = ["system"] }
 mimalloc = { version = "0.1.52", optional = true }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 console_error_panic_hook = "0.1.6"
 console_log = "1.0"
-zip = { version = "8.6", default-features = false }
+zip = { version = "9.0", default-features = false }
 wasm-bindgen = "0.2"
 wasm-bindgen-futures = "0.4.30"
 serde_urlencoded = "0.7.1"
