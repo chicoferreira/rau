@@ -1,6 +1,5 @@
 pub mod async_job;
 pub mod background_task;
-#[cfg(not(target_arch = "wasm32"))]
 pub mod benchmark;
 #[cfg(target_arch = "wasm32")]
 pub mod browser;

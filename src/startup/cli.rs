@@ -21,7 +21,7 @@ struct Cli {
     window_settings: WindowSettings,
 
     #[command(flatten)]
-    benchmark: BenchmarkSettings,
+    benchmark: BenchmarkArgs,
 
     /// Makes the project's main viewport focused by default, hiding the rest of the editor.
     #[arg(long, global = true)]
@@ -41,6 +41,47 @@ pub struct WindowSettings {
     /// Window height at startup.
     #[arg(long = "window-height", default_value_t = 800, global = true)]
     pub height: u32,
+}
+
+#[derive(clap::Args)]
+struct BenchmarkArgs {
+    /// Record every `puffin` span of a fixed window of time to this CSV file, then exit.
+    #[arg(long = "benchmark", value_name = "FILE", global = true)]
+    out: Option<PathBuf>,
+
+    /// Also record the project loading, from the application starting until
+    /// nothing is left to build, to this CSV file.
+    #[arg(long = "benchmark-load", value_name = "FILE", global = true)]
+    load_out: Option<PathBuf>,
+
+    /// How many seconds to record [default: 30].
+    #[arg(long, global = true, value_name = "SECONDS", value_parser = parse_seconds)]
+    benchmark_seconds: Option<instant::Duration>,
+
+    /// How many seconds to wait after the project is ready for the benchmark to start [default: 10].
+    #[arg(long, global = true, value_name = "SECONDS", value_parser = parse_seconds)]
+    benchmark_warmup_seconds: Option<instant::Duration>,
+}
+
+fn parse_seconds(value: &str) -> Result<instant::Duration, String> {
+    let seconds: f64 = value
+        .parse()
+        .map_err(|_| format!("`{value}` is not a number"))?;
+
+    instant::Duration::try_from_secs_f64(seconds)
+        .map_err(|error| format!("`{value}` is not a valid number of seconds: {error}"))
+}
+
+impl BenchmarkArgs {
+    fn into_settings(self) -> Option<BenchmarkSettings> {
+        let out = self.out?;
+        Some(BenchmarkSettings::new(
+            out,
+            self.load_out,
+            self.benchmark_seconds,
+            self.benchmark_warmup_seconds,
+        ))
+    }
 }
 
 #[derive(Subcommand)]
@@ -187,7 +228,7 @@ pub fn main() {
         app: AppSettings {
             action: startup_action,
             focused: cli.focused,
-            benchmark: cli.benchmark,
+            benchmark: cli.benchmark.into_settings(),
         },
         render_settings: cli.render_settings,
         window_settings: cli.window_settings,

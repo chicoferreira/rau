@@ -1,7 +1,5 @@
 use std::sync::Arc;
 
-#[cfg(not(target_arch = "wasm32"))]
-use crate::utils::benchmark::{Benchmark, BenchmarkSettings};
 use crate::{
     StartupAction,
     error::AppResult,
@@ -9,6 +7,7 @@ use crate::{
     main_menu::MainMenu,
     ui::{self},
     utils::{
+        benchmark::{Benchmark, BenchmarkSettings},
         event_queue::EventQueue,
         fps::FrameTimeTracker,
         render_settings::{self, RenderSettings},
@@ -22,8 +21,7 @@ pub struct AppSettings {
     pub action: StartupAction,
     /// Open a project's main viewport in the focus view, hiding the rest of the editor.
     pub focused: bool,
-    #[cfg(not(target_arch = "wasm32"))]
-    pub benchmark: BenchmarkSettings,
+    pub benchmark: Option<BenchmarkSettings>,
 }
 
 pub struct App {
@@ -38,7 +36,6 @@ pub struct App {
     event_queue: EventQueue<AppEvent>,
     frame_time: FrameTimeTracker,
     profiler: ui::profiler::Profiler,
-    #[cfg(not(target_arch = "wasm32"))]
     benchmark: Option<Benchmark>,
 }
 
@@ -91,8 +88,9 @@ impl App {
         );
         let state = State::MainMenu(main_menu);
 
-        #[cfg(not(target_arch = "wasm32"))]
-        let benchmark = Benchmark::new(settings.benchmark, &adapter_info);
+        let benchmark = settings
+            .benchmark
+            .map(|benchmark| Benchmark::new(benchmark, adapter_info.clone()));
 
         Ok(Self {
             device: render_state.device.clone(),
@@ -106,7 +104,6 @@ impl App {
             event_queue: EventQueue::default(),
             frame_time: FrameTimeTracker::new(),
             profiler: ui::profiler::Profiler::new(&render_state.device)?,
-            #[cfg(not(target_arch = "wasm32"))]
             benchmark,
         })
     }
@@ -150,12 +147,7 @@ impl App {
     /// Ensures that puffin's scopes are only be enabled when
     /// the profiler is open, or when benchmarking is active.
     fn sync_profiler_scopes(&self) {
-        let benchmarking = cfg_select! {
-            target_arch = "wasm32" => false,
-            _ => self.benchmark.is_some(),
-        };
-
-        let scopes_on = benchmarking || self.profiler.is_open();
+        let scopes_on = self.benchmark.is_some() || self.profiler.is_open();
         if scopes_on != puffin::are_scopes_on() {
             puffin::set_scopes_on(scopes_on);
         }
@@ -236,9 +228,15 @@ impl eframe::App for App {
 
         self.render(dt);
 
-        #[cfg(not(target_arch = "wasm32"))]
         if let Some(benchmark) = &mut self.benchmark {
-            benchmark.tick(dt, &self.state, present_mode, &mut self.event_queue);
+            benchmark.tick(dt, &self.state, present_mode);
+
+            if benchmark.is_done() {
+                log::info!("Benchmark finished");
+                self.benchmark = None;
+                #[cfg(not(target_arch = "wasm32"))]
+                self.event_queue.quit();
+            }
         }
 
         ui.ctx().request_repaint();

@@ -327,7 +327,6 @@ impl Workspace {
         self.file_storage.project_source().project_name()
     }
 
-    #[cfg(not(target_arch = "wasm32"))]
     pub fn is_rebuilding(&self) -> bool {
         self.runtime_project.is_rebuilding()
     }

@@ -1,76 +1,47 @@
 use std::{
     io::Write as _,
-    path::{Path, PathBuf},
+    path::PathBuf,
     sync::{
         Arc,
         mpsc::{Receiver, Sender},
     },
 };
 
-use crate::{
-    app::{AppEvent, State},
-    utils::event_queue::EventQueue,
-};
+use crate::app::State;
 
 /// Settings for a scripted benchmark run.
-#[derive(Default, clap::Args)]
 pub struct BenchmarkSettings {
-    /// Record every `puffin` span of a fixed window of time to this CSV file, then exit.
-    #[arg(long = "benchmark", value_name = "FILE", global = true)]
-    pub out: Option<PathBuf>,
-
-    /// Also record the project loading, from the application starting until
-    /// nothing is left to build, to this CSV file.
-    #[arg(
-        long = "benchmark-load",
-        value_name = "FILE",
-        global = true,
-        requires = "out"
-    )]
+    /// Where to write every `puffin` span of a fixed window of frames.
+    pub out: PathBuf,
+    /// Where to write the spans of the project loading, if anywhere.
     pub load_out: Option<PathBuf>,
-
-    /// How many seconds to record.
-    #[arg(
-        long,
-        global = true,
-        value_name = "SECONDS",
-        value_parser = seconds,
-        default_value = "30",
-        requires = "out"
-    )]
-    pub benchmark_seconds: instant::Duration,
-
-    /// How many seconds to wait after the project is ready for the benchmark to start.
-    #[arg(
-        long,
-        global = true,
-        value_name = "SECONDS",
-        value_parser = seconds,
-        default_value = "10",
-        requires = "out"
-    )]
-    pub benchmark_warmup_seconds: instant::Duration,
+    pub record_duration: instant::Duration,
+    pub warmup_duration: instant::Duration,
 }
 
-fn seconds(value: &str) -> Result<instant::Duration, String> {
-    let seconds: f64 = value
-        .parse()
-        .map_err(|_| format!("`{value}` is not a number"))?;
-
-    instant::Duration::try_from_secs_f64(seconds)
-        .map_err(|error| format!("`{value}` is not a valid number of seconds: {error}"))
+impl BenchmarkSettings {
+    pub fn new(
+        out: PathBuf,
+        load_out: Option<PathBuf>,
+        record_duration: Option<instant::Duration>,
+        warmup_duration: Option<instant::Duration>,
+    ) -> Self {
+        Self {
+            out,
+            load_out,
+            record_duration: record_duration.unwrap_or(instant::Duration::from_secs(30)),
+            warmup_duration: warmup_duration.unwrap_or(instant::Duration::from_secs(10)),
+        }
+    }
 }
 
 const PROJECT_TIMEOUT: instant::Duration = instant::Duration::from_secs(30);
 
 pub struct Benchmark {
-    out: PathBuf,
-    load_out: Option<PathBuf>,
-    record_duration: instant::Duration,
-    warmup_duration: instant::Duration,
+    settings: BenchmarkSettings,
     adapter_info: wgpu::AdapterInfo,
     phase: Phase,
-    sender: Sender<Arc<puffin::FrameData>>,
+    sink: puffin::FrameSinkId,
     recorded: Receiver<Arc<puffin::FrameData>>,
 }
 
@@ -87,38 +58,24 @@ enum Phase {
 }
 
 impl Benchmark {
-    pub fn new(settings: BenchmarkSettings, adapter_info: &wgpu::AdapterInfo) -> Option<Self> {
-        let out = settings.out?;
-
+    pub fn new(settings: BenchmarkSettings, adapter_info: wgpu::AdapterInfo) -> Self {
         puffin::set_scopes_on(true);
 
         let (sender, recorded) = std::sync::mpsc::channel();
+        let sink = record_into(sender);
 
-        let mut benchmark = Self {
-            out,
-            load_out: settings.load_out,
-            record_duration: settings.benchmark_seconds,
-            warmup_duration: settings.benchmark_warmup_seconds,
-            adapter_info: adapter_info.clone(),
+        Self {
+            settings,
+            adapter_info,
             phase: Phase::WaitingForProject {
                 waited: instant::Duration::ZERO,
             },
-            sender,
+            sink,
             recorded,
-        };
-
-        benchmark.begin_recording();
-
-        Some(benchmark)
+        }
     }
 
-    pub fn tick(
-        &mut self,
-        dt: instant::Duration,
-        state: &State,
-        present_mode: wgpu::PresentMode,
-        events: &mut EventQueue<AppEvent>,
-    ) {
+    pub fn tick(&mut self, dt: instant::Duration, state: &State, present_mode: wgpu::PresentMode) {
         match &mut self.phase {
             Phase::WaitingForProject { waited } => {
                 *waited += dt;
@@ -126,8 +83,8 @@ impl Benchmark {
                 if matches!(state, State::Workspace(workspace) if !workspace.is_rebuilding()) {
                     log::info!(
                         "Recorded the load in {waited:.1?}, then discarding {:.1?} and recording {:.1?}",
-                        self.warmup_duration,
-                        self.record_duration
+                        self.settings.warmup_duration,
+                        self.settings.record_duration
                     );
 
                     self.phase = Phase::Warmup {
@@ -139,13 +96,12 @@ impl Benchmark {
                     let timeout = PROJECT_TIMEOUT.as_secs();
                     log::error!("Project still not ready after {timeout}s, giving up");
                     self.phase = Phase::Done;
-                    events.quit();
                 }
             }
             Phase::Warmup { elapsed } => {
                 *elapsed += dt;
 
-                if *elapsed >= self.warmup_duration {
+                if *elapsed >= self.settings.warmup_duration {
                     // Clear the recorded frames so the CSV only contains the frames after the warmup.
                     self.recorded.try_iter().for_each(drop);
                     puffin::GlobalProfiler::lock().emit_scope_snapshot();
@@ -158,46 +114,42 @@ impl Benchmark {
             Phase::Recording { elapsed } => {
                 *elapsed += dt;
 
-                if *elapsed >= self.record_duration {
+                if *elapsed >= self.settings.record_duration {
                     self.phase = Phase::Done;
                     self.finish(Capture::Frames, state, present_mode);
-                    events.quit();
                 }
             }
             Phase::Done => {}
         }
     }
 
-    fn begin_recording(&mut self) {
-        let sender = self.sender.clone();
-
-        let mut profiler = puffin::GlobalProfiler::lock();
-        profiler.add_sink(Box::new(move |frame| {
-            let _ = sender.send(frame);
-        }));
-
-        profiler.emit_scope_snapshot();
+    pub fn is_done(&self) -> bool {
+        matches!(self.phase, Phase::Done)
     }
 
     fn finish(&self, capture: Capture, state: &State, present_mode: wgpu::PresentMode) {
         let out = match capture {
-            Capture::Load => match &self.load_out {
+            Capture::Load => match &self.settings.load_out {
                 Some(out) => out.clone(),
                 None => return,
             },
-            Capture::Frames => self.out.clone(),
+            Capture::Frames => self.settings.out.clone(),
         };
 
         let covers = match capture {
             Capture::Load => "the load".to_owned(),
             Capture::Frames => {
-                let record_dur = self.record_duration;
-                let warmup_dur = self.warmup_duration;
+                let record_dur = self.settings.record_duration;
+                let warmup_dur = self.settings.warmup_duration;
                 format!("{record_dur:.1?} of frames after {warmup_dur:.1?} of warm-up")
             }
         };
 
-        match self.write_csv(&out, &covers, state, present_mode) {
+        let result = self
+            .write_csv(&covers, state, present_mode)
+            .and_then(|csv| save(&out, csv));
+
+        match result {
             Ok(()) => log::info!("Wrote the spans to {out:?}"),
             Err(error) => log::error!("Failed to write {out:?}: {error}"),
         }
@@ -205,14 +157,13 @@ impl Benchmark {
 
     fn write_csv(
         &self,
-        out: &Path,
         covers: &str,
         state: &State,
         present_mode: wgpu::PresentMode,
-    ) -> anyhow::Result<()> {
+    ) -> anyhow::Result<Vec<u8>> {
         use crate::built_info;
 
-        let mut file = std::io::BufWriter::new(std::fs::File::create(out)?);
+        let mut bytes = Vec::new();
 
         let project = match state {
             State::Workspace(workspace) => workspace.project_name(),
@@ -234,16 +185,16 @@ impl Benchmark {
             (None, _) => "unknown commit".to_owned(),
         };
 
-        writeln!(file, "# rau {version} ({commit})")?;
-        writeln!(file, "# profile: {profile}")?;
-        writeln!(file, "# project: {project}")?;
-        writeln!(file, "# backend: {backend:?}")?;
-        writeln!(file, "# gpu: {gpu_name} ({driver_info})")?;
-        writeln!(file, "# cpu: {}", cpu_name())?;
-        writeln!(file, "# present_mode: {present_mode:?}")?;
-        writeln!(file, "# covers: {covers}")?;
+        writeln!(bytes, "# rau {version} ({commit})")?;
+        writeln!(bytes, "# profile: {profile}")?;
+        writeln!(bytes, "# project: {project}")?;
+        writeln!(bytes, "# backend: {backend:?}")?;
+        writeln!(bytes, "# gpu: {gpu_name} ({driver_info})")?;
+        writeln!(bytes, "# cpu: {}", cpu_name())?;
+        writeln!(bytes, "# present_mode: {present_mode:?}")?;
+        writeln!(bytes, "# covers: {covers}")?;
 
-        writeln!(file, "frame,thread,depth,scope,data,start_ns,duration_ns")?;
+        writeln!(bytes, "frame,thread,depth,scope,data,start_ns,duration_ns")?;
 
         let mut scopes = puffin::ScopeCollection::default();
 
@@ -258,7 +209,7 @@ impl Benchmark {
 
             for (thread, stream) in &unpacked.thread_streams {
                 write_spans(
-                    &mut file,
+                    &mut bytes,
                     &stream.stream,
                     0,
                     0,
@@ -269,7 +220,31 @@ impl Benchmark {
             }
         }
 
-        Ok(())
+        Ok(bytes)
+    }
+}
+
+impl Drop for Benchmark {
+    fn drop(&mut self) {
+        puffin::GlobalProfiler::lock().remove_sink(self.sink);
+    }
+}
+
+fn record_into(sender: Sender<Arc<puffin::FrameData>>) -> puffin::FrameSinkId {
+    let mut profiler = puffin::GlobalProfiler::lock();
+    let sink = profiler.add_sink(Box::new(move |frame| {
+        let _ = sender.send(frame);
+    }));
+
+    profiler.emit_scope_snapshot();
+    sink
+}
+
+fn save(out: &std::path::Path, csv: Vec<u8>) -> anyhow::Result<()> {
+    cfg_select! {
+        target_arch = "wasm32" => crate::utils::browser::download_file(&out.to_string_lossy(), csv)
+            .map_err(|error| anyhow::anyhow!("{error}")),
+        _ => Ok(std::fs::write(out, csv)?),
     }
 }
 

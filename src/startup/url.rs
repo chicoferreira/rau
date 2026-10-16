@@ -8,9 +8,12 @@
 //! ?action=open&project=My%20Project
 //! ?action=open&project=Shadow%20Mapping&backend=webgl2
 //! ?action=open&project=Grass%20Field&focused
+//! ?action=open&project=Grass%20Field&benchmark=frames.csv&benchmark-load=load.csv
 //! ```
 
-use serde::Deserialize;
+use std::path::PathBuf;
+
+use serde::{Deserialize, Deserializer};
 
 use crate::{
     StartupAction, StartupSettings,
@@ -18,7 +21,10 @@ use crate::{
     error::{AppError, AppResult},
     file::identifier::{ProjectIdentifier, ProjectSource},
     ui::components::create_project_modal::{GithubProjectSource, ProjectCreationSource},
-    utils::render_settings::{Backend, RenderSettings},
+    utils::{
+        benchmark::BenchmarkSettings,
+        render_settings::{Backend, RenderSettings},
+    },
 };
 
 /// Open an existing project or create a new one.
@@ -70,6 +76,27 @@ struct UrlParams {
     backend: Option<Backend>,
     /// Open the project's main viewport in the focus view (`?focused` is enough).
     focused: Option<String>,
+    /// Same as the desktop `--benchmark`, with the CSVs saved as downloads.
+    benchmark: Option<PathBuf>,
+    #[serde(rename = "benchmark-load")]
+    benchmark_load: Option<PathBuf>,
+    #[serde(rename = "benchmark-seconds", default, deserialize_with = "seconds")]
+    benchmark_seconds: Option<instant::Duration>,
+    #[serde(
+        rename = "benchmark-warmup-seconds",
+        default,
+        deserialize_with = "seconds"
+    )]
+    benchmark_warmup_seconds: Option<instant::Duration>,
+}
+
+fn seconds<'de, D: Deserializer<'de>>(
+    deserializer: D,
+) -> Result<Option<instant::Duration>, D::Error> {
+    let seconds = f64::deserialize(deserializer)?;
+    instant::Duration::try_from_secs_f64(seconds)
+        .map(Some)
+        .map_err(serde::de::Error::custom)
 }
 
 fn invalid(message: impl Into<String>) -> AppError {
@@ -109,6 +136,15 @@ impl UrlParams {
             git_ref,
             path: self.path.clone().unwrap_or_default(),
         }))
+    }
+
+    fn benchmark(&self) -> Option<BenchmarkSettings> {
+        Some(BenchmarkSettings::new(
+            self.benchmark.clone()?,
+            self.benchmark_load.clone(),
+            self.benchmark_seconds,
+            self.benchmark_warmup_seconds,
+        ))
     }
 
     fn into_startup_action(self) -> AppResult<StartupAction> {
@@ -169,6 +205,7 @@ pub fn startup_settings_from_url() -> StartupSettings {
 
     let backend = params.backend;
     let focused = params.focused.is_some();
+    let benchmark = params.benchmark();
 
     let action = params.into_startup_action().unwrap_or_else(|e| {
         log::error!("Failed to read the startup action from the URL: {e}");
@@ -176,7 +213,11 @@ pub fn startup_settings_from_url() -> StartupSettings {
     });
 
     StartupSettings {
-        app: AppSettings { action, focused },
+        app: AppSettings {
+            action,
+            focused,
+            benchmark,
+        },
         render_settings: RenderSettings {
             backend,
             ..RenderSettings::default()
